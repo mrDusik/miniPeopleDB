@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jira-mock": {
+      "command": "node",
+      "args": ["-e", "console.log('MCP Mock Jira ready')"]
+    }
+  }
+}
