@@ -1,6 +1,7 @@
 import { createServer as createHttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import express from 'express';
 import {
   CatalogoInvalidoError,
   CatalogoNoDisponibleError,
@@ -12,6 +13,7 @@ import {
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
+const publicDirectory = resolve(projectRoot, 'public');
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -53,8 +55,10 @@ async function readJsonBody(request) {
 
 export function createServer({ catalogPath = defaultCatalogPath } = {}) {
   const repository = new MinifigurasRepository(catalogPath);
+  const app = express();
 
-  return createHttpServer(async (request, response) => {
+  app.use(express.static(publicDirectory));
+  app.use(async (request, response) => {
     const requestUrl = new URL(request.url, 'http://localhost');
 
     if (requestUrl.pathname === '/minifiguras') {
@@ -131,8 +135,14 @@ export function createServer({ catalogPath = defaultCatalogPath } = {}) {
 
     const match = requestUrl.pathname.match(/^\/minifiguras\/(.+)$/);
     if (match) {
-      const id = decodeURIComponent(match[1]);
-
+      let id;
+      try{
+        id = decodeURIComponent(match[1]);
+      } catch (err) {
+        sendJson(response, 400, { error: 'ID_INVALIDO', mensaje: 'El ID proporcionado no tiene un formato URI válido' });
+        return;
+      }
+    
       if (request.method === 'PUT') {
         try {
           const payload = await readJsonBody(request);
@@ -189,6 +199,8 @@ export function createServer({ catalogPath = defaultCatalogPath } = {}) {
 
     sendJson(response, 404, { error: 'RUTA_NO_ENCONTRADA' });
   });
+
+  return createHttpServer(app);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
