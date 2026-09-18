@@ -72,3 +72,57 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     assert.match(script, /No se pudo cargar el catalogo/);
   });
 });
+
+test('la pagina referencia los modales, las acciones por fila y el contenedor de toasts', async () => {
+  await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/`)).text();
+
+    for (const expected of [
+      'id="new-minifigura"',
+      'id="form-dialog"',
+      'id="minifigura-form"',
+      'name="id"',
+      'name="nombre"',
+      'name="descripcion"',
+      'name="tematica"',
+      'name="anio"',
+      'name="estadoColeccion"',
+      'id="delete-dialog"',
+      'id="delete-confirm"',
+      'id="delete-cancel"',
+      'id="toast-region"',
+    ]) {
+      assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+  });
+});
+
+test('app.js gestiona alta, edicion y eliminacion mediante POST, PUT y DELETE', async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/app.js`)).text();
+
+    assert.match(script, /method:\s*isEdit \? 'PUT' : 'POST'/);
+    assert.match(script, /method:\s*'DELETE'/);
+    assert.match(script, /\/minifiguras\/\$\{encodeURIComponent\(/);
+    assert.match(script, /showToast/);
+    assert.match(script, /badgeClassFor/);
+    assert.match(script, /openDeleteDialog/);
+  });
+});
+
+test('El servidor expone correctamente los elementos del formulario y la integracion de la API web', async () => {
+  await withServer(async (baseUrl) => {
+    const htmlResponse = await fetch(`${baseUrl}/`);
+    assert.equal(htmlResponse.status, 200);
+    const html = await htmlResponse.text();
+
+    assert.match(html, /id="minifigura-form"/, 'El HTML servido debe incluir el formulario minifigura-form');
+    assert.match(html, /id="form-dialog"/, 'El HTML servido debe incluir el modal form-dialog');
+    assert.match(html, /id="toast-region"/, 'El HTML servido debe incluir el contenedor de toasts');
+
+    const appJsResponse = await fetch(`${baseUrl}/app.js`);
+    assert.equal(appJsResponse.status, 200);
+    const script = await appJsResponse.text();
+
+    assert.match(script, /fetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
+});

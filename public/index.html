@@ -49,7 +49,10 @@
           <p class="eyebrow">Inventario</p>
           <h2 id="results-title">Resultados</h2>
         </div>
-        <p id="result-count" class="result-count" aria-live="polite"></p>
+        <div class="results-heading-actions">
+          <p id="result-count" class="result-count" aria-live="polite"></p>
+          <button type="button" id="new-minifigura" class="button button-primary">Nueva minifigura</button>
+        </div>
       </div>
       <p id="status" class="status" role="status" aria-live="polite">Cargando catalogo...</p>
       <div class="table-wrap">
@@ -62,12 +65,59 @@
               <th scope="col">Tematica</th>
               <th scope="col">Anio</th>
               <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
           </thead>
           <tbody id="catalog-body"></tbody>
         </table>
       </div>
     </section>
+
+    <dialog id="form-dialog" class="modal">
+      <form id="minifigura-form" novalidate>
+        <h2 id="form-dialog-title">Nueva minifigura</h2>
+        <label>
+          Id
+          <input id="form-id" name="id" required>
+        </label>
+        <label>
+          Nombre
+          <input id="form-nombre" name="nombre" required>
+        </label>
+        <label>
+          Descripcion
+          <textarea id="form-descripcion" name="descripcion" rows="3"></textarea>
+        </label>
+        <label>
+          Tematica
+          <input id="form-tematica" name="tematica" required>
+        </label>
+        <label>
+          Anio
+          <input id="form-anio" name="anio" type="number" step="1" required>
+        </label>
+        <label>
+          Estado de coleccion
+          <input id="form-estadoColeccion" name="estadoColeccion">
+        </label>
+        <p id="form-error" class="form-error" role="alert"></p>
+        <div class="form-actions">
+          <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
+          <button type="button" id="form-cancel" class="button button-secondary">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="delete-dialog" class="modal">
+      <h2>Eliminar minifigura</h2>
+      <p id="delete-message"></p>
+      <div class="form-actions">
+        <button type="button" id="delete-confirm" class="button button-danger">Eliminar</button>
+        <button type="button" id="delete-cancel" class="button button-secondary">Cancelar</button>
+      </div>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </main>
 </body>
 </html>
