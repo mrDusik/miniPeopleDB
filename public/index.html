@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catalogo de minifiguras</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <p class="eyebrow">LEGO Mini API</p>
+      <h1>Catalogo de minifiguras</h1>
+      <p class="intro">Explora las figuras disponibles y encuentra rapidamente la pieza que buscas.</p>
+    </header>
+
+    <section class="search-panel" aria-labelledby="search-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Consulta</p>
+          <h2 id="search-title">Filtrar catalogo</h2>
+        </div>
+        <span class="panel-mark" aria-hidden="true">+</span>
+      </div>
+      <form id="filters-form" class="filters-form">
+        <label>
+          Tema
+          <input id="tema" name="tema" type="search" placeholder="Ej. Espacio">
+        </label>
+        <label>
+          Anio
+          <input id="anio" name="anio" type="number" min="0" step="1" placeholder="Ej. 2023">
+        </label>
+        <label>
+          Estado de coleccion
+          <input id="estadoColeccion" name="estadoColeccion" type="search" placeholder="Ej. Coleccion">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="button button-primary">Buscar</button>
+          <button type="button" id="show-all" class="button button-secondary">Mostrar todo</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="results-panel" aria-labelledby="results-title">
+      <div class="results-heading">
+        <div>
+          <p class="eyebrow">Inventario</p>
+          <h2 id="results-title">Resultados</h2>
+        </div>
+        <p id="result-count" class="result-count" aria-live="polite"></p>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite">Cargando catalogo...</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Nombre</th>
+              <th scope="col">Descripcion</th>
+              <th scope="col">Tematica</th>
+              <th scope="col">Anio</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="catalog-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
