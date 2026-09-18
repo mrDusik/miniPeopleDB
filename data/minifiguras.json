@@ -3,7 +3,7 @@
     "id": "mf-001",
     "nombre": "Explorador espacial",
     "descripcion": "Minifigura con traje para explorar nuevos planetas",
-    "tema": "Espacio",
+    "tematica": "Espacio",
     "anio": 2023,
     "estadoColeccion": "coleccion"
   },
@@ -11,7 +11,7 @@
     "id": "mf-002",
     "nombre": "Constructora",
     "descripcion": "Minifigura con casco y herramientas de construccion",
-    "tema": "Ciudad",
+    "tematica": "Ciudad",
     "anio": 2024,
     "estadoColeccion": "venta"
   },
@@ -19,7 +19,7 @@
     "id": "mf-003",
     "nombre": "Aventurero",
     "descripcion": "Minifigura preparada para descubrir tesoros",
-    "tema": "Aventura",
+    "tematica": "Aventura",
     "anio": 2023,
     "estadoColeccion": "coleccion"
   }
