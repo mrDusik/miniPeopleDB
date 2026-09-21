@@ -32,19 +32,36 @@ Desarrollado siguiendo la metodología **Spec-Driven Development (SDD)** asistid
 
 ## 📦 Estructura del Proyecto
 
+```text
 mi-proyecto/
-├── openspec/            # Especificaciones SDD (specs activas y archivo histórico)
-├── public/              # Aplicación Web Frontend Estática
-│   ├── app.js           # Lógica cliente, manipulación DOM, modales y toasts
-│   ├── index.html       # Estructura del dashboard y componentes modal
-│   └── styles.css       # Estilos visuales, badges y animaciones
-├── reviews/             # Informes de auditoría de código de cada tarea (LEGO-1 a 5)
-├── src/                 # Código fuente Backend
-│   ├── minifiguras-repository.js # Capa de persistencia JSON
-│   └── server.js        # Servidor Express y definición de endpoints
-├── test/                # Suites de pruebas automatizadas
-│   ├── minifiguras.test.js # Unit tests de API Backend
-│   └── web.test.js      # Pruebas de integración del frontend estático
-├── EFICIENCIA.md        # Informe de productividad y metodología SDD + IA
-├── package.json         # Configuración del proyecto y scripts
-└── README.md            # Documentación general
+├── .github/                  # Configuración y prompts del flujo OpenSpec/IA
+│   ├── prompts/
+│   └── skills/
+├── data/                     # Datos persistentes del proyecto
+│   └── minifiguras.json      # Base local de minifiguras
+├── openspec/                 # Especificaciones OpenSpec y cambios activos/archivados
+│   ├── changes/
+│   ├── config.yaml
+│   └── specs/
+├── public/                   # Aplicación web frontend estática
+│   ├── app.js                # Lógica del cliente, filtros, modales y toasts
+│   ├── index.html            # Estructura del dashboard
+│   └── styles.css            # Estilos visuales, badges y animaciones
+├── reviews/                  # Informes de revisión de cada iteración del proyecto
+│   ├── lego-1-review.md
+│   ├── lego-2-review.md
+│   ├── lego-3-review.md
+│   ├── lego-4-review.md
+│   └── lego-5-review.md
+├── src/                      # Código fuente del backend
+│   ├── minifiguras-repository.js
+│   └── server.js
+├── test/                     # Pruebas automatizadas
+│   ├── minifiguras.test.js
+│   └── web.test.js
+├── AGENTS.md                 # Guía del flujo del proyecto
+├── EFICIENCIA.md             # Informe de productividad y metodología SDD + IA
+├── package.json              # Configuración del proyecto y scripts
+├── README.md                 # Documentación general
+└── .gitignore                # Archivos ignorados por Git
+```
