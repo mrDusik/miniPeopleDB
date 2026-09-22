@@ -45,7 +45,7 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 * **Backend:** Node.js, Express.
 * **Frontend:** HTML5 (semántico y `<dialog>`), CSS3 (Flexbox/Grid y variables CSS), JavaScript ES6+ (`fetch`, manipulación reactiva del DOM).
-* **Testing:** Módulo nativo `node:test` y `node:assert`.
+* **Testing:** Módulo nativo `node:test`/`node:assert` y `jsdom` para pruebas reales del DOM.
 * **Metodología:** Spec-Driven Development (OpenSpec / SDD).
 
 ---
@@ -72,7 +72,8 @@ mi-proyecto/
 │   ├── lego-2-review.md
 │   ├── lego-3-review.md
 │   ├── lego-4-review.md
-│   └── lego-5-review.md
+│   ├── lego-5-review.md
+│   └── lego-6-review.md
 ├── src/                      # Código fuente del backend
 │   ├── brickset-scraper.js    # Scraping público y parseo de precios Brickset
 │   ├── minifiguras-repository.js
@@ -84,6 +85,7 @@ mi-proyecto/
 ├── AGENTS.md                 # Guía del flujo del proyecto
 ├── EFICIENCIA.md             # Informe de productividad y metodología SDD + IA
 ├── package.json              # Configuración del proyecto y scripts
+├── package-lock.json         # Versiones bloqueadas de dependencias
 ├── README.md                 # Documentación general
 └── .gitignore                # Archivos ignorados por Git
 ```
@@ -99,3 +101,7 @@ npm start
 La aplicación queda disponible en `http://localhost:3000`.
 
 La concurrencia de la sincronización masiva puede ajustarse con `BRICKSET_CONCURRENCY`; por defecto es `4`.
+
+## 📚 Historial OpenSpec
+
+El cambio LEGO-6 está archivado en `openspec/changes/archive/2026-09-22-lego-6-valoracion-coleccion-brickset/`, junto con su propuesta, diseño, tareas y specs sincronizadas.
