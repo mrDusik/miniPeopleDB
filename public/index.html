@@ -13,6 +13,20 @@
       <p class="eyebrow">LEGO Mini API</p>
       <h1>Catalogo de minifiguras</h1>
       <p class="intro">Explora las figuras disponibles y encuentra rapidamente la pieza que buscas.</p>
+      <div class="collection-summary" aria-live="polite">
+        <span>Valor Total de la Colección (<span id="collection-count">0 minifiguras</span>):</span>
+        <strong id="collection-total">€0,00</strong>
+        <span id="wanted-count">Total de figuras buscadas: 0</span>
+        <button type="button" id="sync-prices" class="button button-primary">Actualizar precios desde Brickset</button>
+      </div>
+      <section class="top-five" aria-labelledby="top-five-title">
+        <h2 id="top-five-title">Top 5 minifiguras en colección por precio</h2>
+        <ol id="top-five-list"></ol>
+      </section>
+      <section class="top-five" aria-labelledby="oldest-five-title">
+        <h2 id="oldest-five-title">Top 5 minifiguras más antiguas</h2>
+        <ol id="oldest-five-list"></ol>
+      </section>
     </header>
 
     <section class="search-panel" aria-labelledby="search-title">
@@ -34,7 +48,10 @@
         </label>
         <label>
           Estado de coleccion
-          <input id="estadoColeccion" name="estadoColeccion" type="search" placeholder="Ej. Coleccion">
+          <select id="estadoColeccion" name="estadoColeccion">
+            <option value="COLECCIÓN" selected>COLECCIÓN</option>
+            <option value="BUSCADA">BUSCADA</option>
+          </select>
         </label>
         <div class="form-actions">
           <button type="submit" class="button button-primary">Buscar</button>
@@ -63,8 +80,10 @@
               <th scope="col">Nombre</th>
               <th scope="col">Descripcion</th>
               <th scope="col">Tematica</th>
-              <th scope="col">Anio</th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="anio">Año</button></th>
               <th scope="col">Estado</th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
+              <th scope="col">Diferencia</th>
               <th scope="col">Acciones</th>
             </tr>
           </thead>
@@ -98,8 +117,24 @@
         </label>
         <label>
           Estado de coleccion
-          <input id="form-estadoColeccion" name="estadoColeccion">
+          <select id="form-estadoColeccion" name="estadoColeccion">
+            <option value="COLECCIÓN" selected>COLECCIÓN</option>
+            <option value="BUSCADA">BUSCADA</option>
+          </select>
         </label>
+        <label>
+          Precio de compra (€)
+          <input id="form-precioCompra" name="precioCompra" type="number" min="0" step="0.01">
+        </label>
+        <label>
+          Fecha de compra
+          <input id="form-fechaCompra" name="fechaCompra" type="date">
+        </label>
+        <label>
+          Precio Brickset (€)
+          <input id="form-precio" name="precio" type="number" min="0" step="0.01" readonly>
+        </label>
+        <button type="button" id="lookup-price" class="button button-secondary">Consultar precio en Brickset</button>
         <p id="form-error" class="form-error" role="alert"></p>
         <div class="form-actions">
           <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
