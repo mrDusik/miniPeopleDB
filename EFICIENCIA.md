@@ -1,7 +1,7 @@
 # 📊 Informe de Eficiencia y Productividad (Spec-Driven Development + IA)
 
 ## 1. Resumen Ejecutivo
-El desarrollo de la aplicación **`lego-mini-api`** se ha completado ejecutando 5 ciclos iterativos de desarrollo (LEGO-1 a LEGO-5) guiados bajo la metodología **Spec-Driven Development (SDD)** mediante la herramienta **OpenSpec (`/opsx`)** y asistidos por modelos de lenguaje (IA).
+El desarrollo de la aplicación **`lego-mini-api`** se ha completado ejecutando 6 ciclos iterativos de desarrollo (LEGO-1 a LEGO-6) guiados bajo la metodología **Spec-Driven Development (SDD)** mediante la herramienta **OpenSpec (`/opsx`)** y asistidos por modelos de lenguaje (IA).
 
 Esta aproximación ha permitido construir una API REST completa en Node.js/Express, persistencia JSON y una interfaz gráfica interactiva en tiempo récord, manteniendo una cobertura de pruebas automatizadas y un control de calidad constante a través de auditorías estructuradas.
 
@@ -18,7 +18,7 @@ Esta aproximación ha permitido construir una API REST completa en Node.js/Expre
 
 ---
 
-## 3. Desglose de Eficiencia por Tarea (LEGO-1 a LEGO-5)
+## 3. Desglose de Eficiencia por Tarea (LEGO-1 a LEGO-6)
 
 * **LEGO-1 (Estructura base y GET `/minifiguras`):**
   * *Sin IA:* Diseño manual del servidor, configuración de dependencias, definición de estructuras JSON y tests. (~3h)
@@ -35,6 +35,9 @@ Esta aproximación ha permitido construir una API REST completa en Node.js/Expre
 * **LEGO-5 (Dashboard Interactivo Completo - CRUD Visual):**
   * *Sin IA:* Desarrollo de modales HTML `<dialog>`, delegación de eventos en tabla, lógica de notificaciones *toast*, mapeo de clases para *badges* y captura de errores HTTP. (~6h)
   * *Con SDD + IA:* Implementación reactiva asistida por IA y corrección guiada de suite de tests en Node.js. (~45 min)
+* **LEGO-6 (Valoración, Brickset y rankings):**
+  * *Sin IA:* Diseño del modelo plano en Euros, integración de scraping público, parseo tolerante del HTML, sincronización resiliente, cálculo de totales y desarrollo de los rankings y controles de interfaz. (Estimación: varias horas de implementación y pruebas).
+  * *Con SDD + IA:* Evolución guiada por especificaciones, tests automatizados para scraper/API/UI, validación de errores y revisiones iterativas hasta cubrir el comportamiento completo.
 
 ---
 
@@ -44,7 +47,7 @@ El uso de los comandos `/opsx-propose`, `/opsx-apply`, `/revisar` y `/opsx-archi
 
 1. **Alineación de Requisitos en Fase de Propuesta:** Redacción de contratos claros en `openspec/changes/` antes de tocar una sola línea de código, evitando el *scope creep*.
 2. **Auditoría Automatizada (`/revisar`):** Identificación temprana de hallazgos críticos (como problemas de alcance de variables o referencias a entornos sin DOM en Node.js) guardados sistemáticamente en la carpeta `reviews/`.
-3. **Trazabilidad Absoluta:** Cada incremento funcional cuenta con su respectiva especificación archivada y un veredicto formal (`PASS` / `WARNINGS`).
+3. **Trazabilidad Absoluta:** Cada incremento funcional cuenta con su respectiva especificación, tareas, tests y un veredicto formal (`PASS` / `WARNINGS`). LEGO-6 añade además la trazabilidad de la valoración en Euros y la sincronización con Brickset.
 
 ---
 

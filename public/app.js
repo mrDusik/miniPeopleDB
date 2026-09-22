@@ -4,7 +4,14 @@ const statusMessage = document.querySelector('#status');
 const resultCount = document.querySelector('#result-count');
 const catalogBody = document.querySelector('#catalog-body');
 const newMinifiguraButton = document.querySelector('#new-minifigura');
-const controls = [...form.querySelectorAll('input, button')];
+const syncPricesButton = document.querySelector('#sync-prices');
+const collectionTotal = document.querySelector('#collection-total');
+const collectionCount = document.querySelector('#collection-count');
+const wantedCount = document.querySelector('#wanted-count');
+const topFiveList = document.querySelector('#top-five-list');
+const oldestFiveList = document.querySelector('#oldest-five-list');
+const sortButtons = [...document.querySelectorAll('[data-sort]')];
+const controls = [...form.querySelectorAll('input, select, button'), syncPricesButton];
 
 const formDialog = document.querySelector('#form-dialog');
 const minifiguraForm = document.querySelector('#minifigura-form');
@@ -18,6 +25,10 @@ const formDescripcionInput = document.querySelector('#form-descripcion');
 const formTematicaInput = document.querySelector('#form-tematica');
 const formAnioInput = document.querySelector('#form-anio');
 const formEstadoInput = document.querySelector('#form-estadoColeccion');
+const formPrecioCompraInput = document.querySelector('#form-precioCompra');
+const formFechaCompraInput = document.querySelector('#form-fechaCompra');
+const formPrecioInput = document.querySelector('#form-precio');
+const lookupPriceButton = document.querySelector('#lookup-price');
 
 const deleteDialog = document.querySelector('#delete-dialog');
 const deleteMessage = document.querySelector('#delete-message');
@@ -40,6 +51,8 @@ let currentFilters = {};
 let currentCatalog = [];
 let currentEditId = null;
 let pendingDeleteId = null;
+let activeSort = { field: null, direction: 'asc' };
+let isSyncingPrices = false;
 
 function setStatus(message, type = '') {
   statusMessage.textContent = message;
@@ -52,16 +65,81 @@ function cell(value) {
   return element;
 }
 
+function formatPrice(value) {
+  return Number.isFinite(value)
+    ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
+    : 'Sin precio';
+}
+
+function priceCell(value) {
+  return cell(formatPrice(value));
+}
+
+function normalizedCollectionState(value) {
+  return typeof value === 'string'
+    ? value.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    : value;
+}
+
+function differenceCell(minifigura) {
+  const element = document.createElement('td');
+  const difference = document.createElement('span');
+  const state = normalizedCollectionState(minifigura.estadoColeccion);
+
+  if (state === 'BUSCADA') {
+    difference.textContent = 'N/A';
+  } else if (!Number.isFinite(minifigura.precio) || !Number.isFinite(minifigura.precioCompra)) {
+    difference.textContent = '?';
+  } else {
+    const value = minifigura.precio - minifigura.precioCompra;
+    difference.textContent = formatPrice(value);
+    difference.className = value > 0 ? 'difference-positive' : value < 0 ? 'difference-negative' : 'difference-neutral';
+  }
+
+  element.append(difference);
+  return element;
+}
+
+function renderTopFive(topFive) {
+  topFiveList.replaceChildren();
+  for (const minifigura of topFive) {
+    const item = document.createElement('li');
+    item.textContent = `${minifigura.id} - ${minifigura.nombre}: ${formatPrice(minifigura.precio)}`;
+    topFiveList.append(item);
+  }
+}
+
+function renderOldestFive(oldestFive) {
+  oldestFiveList.replaceChildren();
+  for (const minifigura of oldestFive) {
+    const item = document.createElement('li');
+    const price = Number.isFinite(minifigura.precio) ? ` - ${formatPrice(minifigura.precio)}` : '';
+    item.textContent = `${minifigura.id} - ${minifigura.nombre}: ${minifigura.anio}${price}`;
+    oldestFiveList.append(item);
+  }
+}
+
+function sortCatalog(catalog) {
+  if (!activeSort.field) {
+    return catalog;
+  }
+
+  const direction = activeSort.direction === 'asc' ? 1 : -1;
+  return [...catalog].sort((left, right) => {
+    const leftValue = left[activeSort.field];
+    const rightValue = right[activeSort.field];
+    const leftMissing = !Number.isFinite(leftValue);
+    const rightMissing = !Number.isFinite(rightValue);
+    if (leftMissing || rightMissing) {
+      return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
+    }
+    return (leftValue - rightValue) * direction;
+  });
+}
+
 function badgeClassFor(value) {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (normalized === 'coleccion' || normalized === 'colección') {
+  if (value === 'COLECCIÓN') {
     return 'badge-coleccion';
-  }
-  if (normalized === 'deseada') {
-    return 'badge-deseada';
-  }
-  if (normalized === 'vendida') {
-    return 'badge-vendida';
   }
   return 'badge-otro';
 }
@@ -102,7 +180,7 @@ function renderCatalog(catalog) {
   catalogBody.replaceChildren();
   resultCount.textContent = `${catalog.length} ${catalog.length === 1 ? 'figura' : 'figuras'}`;
 
-  for (const minifigura of catalog) {
+  for (const minifigura of sortCatalog(catalog)) {
     const row = document.createElement('tr');
     row.append(
       cell(minifigura.id),
@@ -111,6 +189,8 @@ function renderCatalog(catalog) {
       cell(minifigura.tematica),
       cell(minifigura.anio),
       badgeCell(minifigura.estadoColeccion),
+      priceCell(minifigura.precio),
+      differenceCell(minifigura),
       actionsCell(minifigura),
     );
     catalogBody.append(row);
@@ -124,9 +204,19 @@ function renderCatalog(catalog) {
 }
 
 function setLoading(isLoading) {
-  controls.forEach((control) => { control.disabled = isLoading; });
+  controls.forEach((control) => { control.disabled = isLoading || isSyncingPrices; });
   if (isLoading) {
     setStatus('Cargando catalogo...');
+  }
+}
+
+function setSyncLoading(isLoading) {
+  isSyncingPrices = isLoading;
+  document.querySelectorAll('button').forEach((button) => {
+    button.disabled = isLoading;
+  });
+  if (!isLoading) {
+    controls.forEach((control) => { control.disabled = false; });
   }
 }
 
@@ -150,6 +240,7 @@ async function loadCatalog(filters = {}) {
     }
     if (currentRequest === requestSequence) {
       renderCatalog(catalog);
+      await loadTotal();
     }
   } catch {
     if (currentRequest === requestSequence) {
@@ -161,6 +252,27 @@ async function loadCatalog(filters = {}) {
     if (currentRequest === requestSequence) {
       setLoading(false);
     }
+  }
+}
+
+async function loadTotal() {
+  try {
+    const response = await fetch('/valoracion');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const summary = await response.json();
+    collectionTotal.textContent = formatPrice(summary.total ?? 0);
+    collectionCount.textContent = `${summary.enColeccion ?? 0} minifiguras`;
+    wantedCount.textContent = `Total de figuras buscadas: ${summary.buscadas ?? 0}`;
+    renderTopFive(Array.isArray(summary.top5) ? summary.top5 : []);
+    renderOldestFive(Array.isArray(summary.top5Antiguas) ? summary.top5Antiguas : []);
+  } catch {
+    collectionTotal.textContent = 'No disponible';
+    collectionCount.textContent = '0 minifiguras';
+    wantedCount.textContent = 'Total de figuras buscadas: 0';
+    renderTopFive([]);
+    renderOldestFive([]);
   }
 }
 
@@ -192,7 +304,10 @@ function openFormDialog(mode, minifigura) {
     formDescripcionInput.value = minifigura.descripcion ?? '';
     formTematicaInput.value = minifigura.tematica ?? '';
     formAnioInput.value = minifigura.anio ?? '';
-    formEstadoInput.value = minifigura.estadoColeccion ?? '';
+    formEstadoInput.value = minifigura.estadoColeccion || 'COLECCIÓN';
+    formPrecioCompraInput.value = minifigura.precioCompra ?? '';
+    formFechaCompraInput.value = minifigura.fechaCompra ?? '';
+    formPrecioInput.value = minifigura.precio ?? '';
   }
 
   formDialog.showModal();
@@ -219,8 +334,19 @@ function buildPayloadFromForm() {
   }
 
   const estadoColeccion = formData.get('estadoColeccion')?.toString().trim() ?? '';
-  if (estadoColeccion !== '') {
-    payload.estadoColeccion = estadoColeccion;
+  payload.estadoColeccion = estadoColeccion || 'COLECCIÓN';
+
+  const precioCompraRaw = formData.get('precioCompra')?.toString().trim() ?? '';
+  if (precioCompraRaw !== '') {
+    payload.precioCompra = Number(precioCompraRaw);
+  }
+  const fechaCompra = formData.get('fechaCompra')?.toString().trim() ?? '';
+  if (fechaCompra !== '') {
+    payload.fechaCompra = fechaCompra;
+  }
+  const precioRaw = formData.get('precio')?.toString().trim() ?? '';
+  if (precioRaw !== '') {
+    payload.precio = Number(precioRaw);
   }
 
   return payload;
@@ -268,6 +394,43 @@ form.addEventListener('submit', (event) => {
 showAllButton.addEventListener('click', () => {
   form.reset();
   loadCatalog();
+});
+
+sortButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const field = button.dataset.sort;
+    activeSort = activeSort.field === field
+      ? { field, direction: activeSort.direction === 'asc' ? 'desc' : 'asc' }
+      : { field, direction: 'asc' };
+    sortButtons.forEach((sortButton) => {
+      sortButton.dataset.direction = sortButton === button ? activeSort.direction : '';
+    });
+    renderCatalog(currentCatalog);
+  });
+});
+
+syncPricesButton.addEventListener('click', async () => {
+  setSyncLoading(true);
+  showToast('Actualizando precios desde Brickset...', 'success');
+
+  try {
+    const response = await fetch('/sincronizacion/brickset', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
+    }
+
+    await loadCatalog(currentFilters);
+    if (result.fallidos?.length) {
+      showToast(`Precios actualizados: ${result.actualizados.length}. Fallidos: ${result.fallidos.length}.`, 'error');
+    } else {
+      showToast(`Precios actualizados: ${result.actualizados.length}.`, 'success');
+    }
+  } catch {
+    showToast('No se pudieron actualizar los precios desde Brickset.', 'error');
+  } finally {
+    setSyncLoading(false);
+  }
 });
 
 newMinifiguraButton.addEventListener('click', () => {
@@ -344,6 +507,30 @@ minifiguraForm.addEventListener('submit', async (event) => {
     showToast(connError, 'error');
   } finally {
     formSubmitButton.disabled = false;
+  }
+});
+
+lookupPriceButton.addEventListener('click', async () => {
+  const id = formIdInput.value.trim();
+  if (!id) {
+    formError.textContent = 'El id es obligatorio para consultar el precio.';
+    return;
+  }
+
+  lookupPriceButton.disabled = true;
+  showToast('Consultando precio en Brickset...', 'success');
+  try {
+    const response = await fetch(`/minifiguras/${encodeURIComponent(id)}/precio`);
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
+    }
+    formPrecioInput.value = result.precio;
+    showToast('Precio de Brickset actualizado.', 'success');
+  } catch {
+    showToast('No se pudo consultar el precio en Brickset.', 'error');
+  } finally {
+    lookupPriceButton.disabled = false;
   }
 });
 
