@@ -53,4 +53,17 @@ El uso de los comandos `/opsx-propose`, `/opsx-apply`, `/revisar` y `/opsx-archi
 
 ## 5. Conclusión
 
-La combinación de **Spec-Driven Development** con asistencia de IA no solo ha incrementado la velocidad de entrega en un **80%**, sino que ha garantizado un código limpio, mantenible, probado de extremo a extremo y con una documentación técnica impecable.
+La combinación de **Spec-Driven Development** con asistencia de IA no solo ha incrementado la velocidad de entrega en un **80%**, sino que ha garantizado un código limpio, mantenible, probado de extremo a extremo y con una documentación técnica actualizada.
+
+### Estado final de LEGO-6
+
+LEGO-6 quedó implementado y archivado en OpenSpec el 22 de septiembre de 2026. El cambio incorporó:
+
+* Valoración plana en Euros con `precioCompra`, `fechaCompra` y `precio`.
+* Scraping público de Brickset sin credenciales ni API Key, con timeout, reintentos y diagnóstico de errores.
+* Sincronización masiva con concurrencia limitada mediante `BRICKSET_CONCURRENCY`.
+* Total de colección, contadores, top 5 por precio y top 5 por antigüedad.
+* Diferencia económica, ordenación de tabla y estados canónicos `COLECCIÓN`/`BUSCADA`.
+* Pruebas de API, scraper y DOM con `jsdom`.
+
+La revisión final de LEGO-6 se conserva en `reviews/lego-6-review.md`, y la suite verificada alcanzó 42 pruebas superadas.
