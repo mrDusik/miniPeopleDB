@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { JSDOM } from 'jsdom';
 import { createServer } from '../src/server.js';
 
 async function withServer(callback) {
@@ -15,7 +16,7 @@ async function withServer(callback) {
       descripcion: 'Figura para probar la interfaz',
       tematica: 'Espacio',
       anio: 2023,
-      estadoColeccion: 'coleccion',
+      estadoColeccion: 'COLECCIÓN',
     },
   ]));
 
@@ -54,7 +55,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
       descripcion: 'Figura para probar la interfaz',
       tematica: 'Espacio',
       anio: 2023,
-      estadoColeccion: 'coleccion',
+      estadoColeccion: 'COLECCIÓN',
     }]);
   });
 });
@@ -64,7 +65,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
 
-    for (const expected of ['name="tema"', 'name="anio"', 'name="estadoColeccion"', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
+    for (const expected of ['name="tema"', 'name="anio"', 'name="estadoColeccion"', '<option value="COLECCIÓN" selected>COLECCIÓN</option>', '<option value="BUSCADA">BUSCADA</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
     assert.match(script, /URLSearchParams/);
@@ -87,6 +88,23 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
       'name="tematica"',
       'name="anio"',
       'name="estadoColeccion"',
+      '<select id="form-estadoColeccion" name="estadoColeccion">',
+      'name="precioCompra"',
+      'name="fechaCompra"',
+      'name="precio"',
+      'id="lookup-price"',
+      'id="sync-prices"',
+      'id="collection-total"',
+      'id="collection-count"',
+      'id="wanted-count"',
+      'id="top-five-list"',
+      'Top 5 minifiguras en colección por precio',
+      'id="oldest-five-list"',
+      'Top 5 minifiguras más antiguas',
+      'Diferencia',
+      'data-sort="anio"',
+      'data-sort="precio"',
+      'Valor Total de la Colección',
       'id="delete-dialog"',
       'id="delete-confirm"',
       'id="delete-cancel"',
@@ -107,6 +125,18 @@ test('app.js gestiona alta, edicion y eliminacion mediante POST, PUT y DELETE', 
     assert.match(script, /showToast/);
     assert.match(script, /badgeClassFor/);
     assert.match(script, /openDeleteDialog/);
+    assert.match(script, /\/sincronizacion\/brickset/);
+    assert.match(script, /\/minifiguras\/\$\{encodeURIComponent\(id\)\}\/precio/);
+    assert.match(script, /collectionTotal/);
+    assert.match(script, /differenceCell/);
+    assert.match(script, /difference-positive/);
+    assert.match(script, /difference-negative/);
+    assert.match(script, /N\/A/);
+    assert.match(script, /data-sort/);
+    assert.match(script, /sortCatalog/);
+    assert.match(script, /querySelectorAll\('input, select, button'\)/);
+    assert.match(script, /setSyncLoading/);
+    assert.doesNotMatch(script, /normalized === 'deseada'|normalized === 'vendida'/);
   });
 });
 
@@ -125,4 +155,110 @@ test('El servidor expone correctamente los elementos del formulario y la integra
     const script = await appJsResponse.text();
 
     assert.match(script, /fetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
+});
+
+test('la interfaz renderiza diferencias, ordena columnas y conserva el estado por defecto en edición', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const catalog = [
+    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'T', anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15 },
+    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'T', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50 },
+    { id: 'c', nombre: 'C', descripcion: 'C', tematica: 'T', anio: 2023, precioCompra: 20 },
+  ];
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  const valuation = { total: 15, enColeccion: 2, buscadas: 1, top5: [], top5Antiguas: [] };
+  window.fetch = async (url) => {
+    if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => catalog };
+    if (url === '/valoracion') return { ok: true, json: async () => valuation };
+    return { ok: false, json: async () => ({}) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
+  assert.equal(rows()[0].children[7].textContent, '5,00 €');
+  assert.equal(rows()[1].children[7].textContent, 'N/A');
+  assert.equal(rows()[2].children[7].textContent, '?');
+  assert.ok(rows()[0].children[7].querySelector('.difference-positive'));
+
+  window.document.querySelector('[data-sort="anio"]').click();
+  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['b', 'c', 'a']);
+  window.document.querySelector('[data-sort="precio"]').click();
+  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['a', 'b', 'c']);
+  window.document.querySelector('[data-sort="precio"]').click();
+  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['b', 'a', 'c']);
+
+  const editButton = rows().find((row) => row.children[0].textContent === 'c').querySelector('[data-action="edit"]');
+  editButton.click();
+  assert.equal(window.document.querySelector('#form-estadoColeccion').value, 'COLECCIÓN');
+  dom.window.close();
+});
+
+test('la sincronización deshabilita los botones mientras está en curso', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  let releaseSync;
+  const syncPending = new Promise((resolve) => { releaseSync = resolve; });
+  window.fetch = async (url) => {
+    if (url === '/sincronizacion/brickset') return syncPending;
+    if (url === '/minifiguras' || url === '/valoracion') return { ok: true, json: async () => url === '/valoracion' ? { total: 0, enColeccion: 0, buscadas: 0 } : [] };
+    return { ok: true, json: async () => ({}) };
+  };
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const syncPromise = window.document.querySelector('#sync-prices').click();
+  void syncPromise;
+  assert.ok([...window.document.querySelectorAll('button')].every((button) => button.disabled));
+  releaseSync({ ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 0 }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok([...window.document.querySelectorAll('button')].some((button) => !button.disabled));
+  dom.window.close();
+});
+
+test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  let submittedPayload;
+  window.fetch = async (url, options = {}) => {
+    if (url === '/minifiguras' && options.method === 'POST') {
+      submittedPayload = JSON.parse(options.body);
+      return { ok: true, status: 201, json: async () => submittedPayload };
+    }
+    if (url === '/minifiguras' || url.startsWith('/minifiguras?')) {
+      return { ok: true, json: async () => [] };
+    }
+    if (url === '/valoracion') {
+      return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.document.querySelector('#new-minifigura').click();
+  window.document.querySelector('#form-id').value = 'new-figure';
+  window.document.querySelector('#form-nombre').value = 'Nueva';
+  window.document.querySelector('#form-tematica').value = 'Espacio';
+  window.document.querySelector('#form-anio').value = '2024';
+  window.document.querySelector('#form-estadoColeccion').value = '';
+  window.document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(submittedPayload.estadoColeccion, 'COLECCIÓN');
+  dom.window.close();
 });

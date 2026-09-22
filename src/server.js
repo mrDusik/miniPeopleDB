@@ -10,6 +10,7 @@ import {
   MinifiguraNoEncontradaError,
   MinifigurasRepository,
 } from './minifiguras-repository.js';
+import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
@@ -29,6 +30,17 @@ function sendEmpty(response, statusCode) {
     'content-length': '0',
   });
   response.end();
+}
+
+function normalizeEstadoFilter(value) {
+  const normalized = value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (normalized === 'coleccion') {
+    return 'COLECCIÓN';
+  }
+  if (normalized === 'buscada') {
+    return 'BUSCADA';
+  }
+  return null;
 }
 
 async function readJsonBody(request) {
@@ -53,8 +65,9 @@ async function readJsonBody(request) {
   }
 }
 
-export function createServer({ catalogPath = defaultCatalogPath } = {}) {
+export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scraper } = {}) {
   const repository = new MinifigurasRepository(catalogPath);
+  const brickset = scraper ?? new BricksetScraper({ fetchImpl });
   const app = express();
 
   app.use(express.static(publicDirectory));
@@ -82,7 +95,12 @@ export function createServer({ catalogPath = defaultCatalogPath } = {}) {
 
           const estadoColeccion = requestUrl.searchParams.get('estadoColeccion');
           if (estadoColeccion !== null && estadoColeccion.trim() !== '') {
-            filters.estadoColeccion = estadoColeccion.trim();
+            const normalizedEstado = normalizeEstadoFilter(estadoColeccion);
+            if (normalizedEstado === null) {
+              sendJson(response, 400, { error: 'PARAMETRO_INVALIDO', parametro: 'estadoColeccion' });
+              return;
+            }
+            filters.estadoColeccion = normalizedEstado;
           }
 
           const minifiguras = await repository.list(filters);
@@ -130,6 +148,97 @@ export function createServer({ catalogPath = defaultCatalogPath } = {}) {
 
       response.setHeader('allow', 'GET, POST');
       sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+
+    if (requestUrl.pathname === '/valoracion' || requestUrl.pathname === '/valor-total') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      try {
+        const summary = await repository.valuationSummary();
+        sendJson(response, 200, summary);
+      } catch (error) {
+        if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    const priceMatch = requestUrl.pathname.match(/^\/minifiguras\/(.+)\/precio$/);
+    if (priceMatch) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      let id;
+      try {
+        id = decodeURIComponent(priceMatch[1]);
+      } catch {
+        sendJson(response, 400, { error: 'ID_INVALIDO' });
+        return;
+      }
+
+      try {
+        sendJson(response, 200, { id, precio: await brickset.getPrice(id) });
+      } catch (error) {
+        if (error instanceof BricksetPriceError) {
+          sendJson(response, 502, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/sincronizacion/brickset') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      try {
+        const catalogo = await repository.readCatalog();
+        const actualizaciones = new Map();
+        const fallidos = [];
+        const concurrency = Math.max(1, Math.min(Number(process.env.BRICKSET_CONCURRENCY) || 4, catalogo.length || 1));
+        let nextIndex = 0;
+        const worker = async () => {
+          while (nextIndex < catalogo.length) {
+            const minifigura = catalogo[nextIndex++];
+            try {
+              actualizaciones.set(minifigura.id, await brickset.getPrice(minifigura.id));
+            } catch (error) {
+              fallidos.push({ id: minifigura.id, error: error instanceof BricksetPriceError ? error.code : 'BRICKSET_NO_DISPONIBLE' });
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: concurrency }, worker));
+
+        if (actualizaciones.size > 0) {
+          await repository.updatePrices(actualizaciones);
+        }
+        sendJson(response, 200, {
+          actualizados: [...actualizaciones.keys()],
+          fallidos,
+          total: catalogo.length,
+        });
+      } catch (error) {
+        if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
       return;
     }
 
