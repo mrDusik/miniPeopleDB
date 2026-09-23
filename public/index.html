@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Catalogo de minifiguras</title>
+  <title>Catálogo de minifiguras</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
 </head>
@@ -11,8 +11,8 @@
   <main class="page-shell">
     <header class="page-header">
       <p class="eyebrow">LEGO Mini API</p>
-      <h1>Catalogo de minifiguras</h1>
-      <p class="intro">Explora las figuras disponibles y encuentra rapidamente la pieza que buscas.</p>
+      <h1>Catálogo de minifiguras</h1>
+      <p class="intro">Explora las figuras disponibles y encuentra rápidamente la pieza que buscas.</p>
       <div class="collection-summary" aria-live="polite">
         <span>Valor Total de la Colección (<span id="collection-count">0 minifiguras</span>):</span>
         <strong id="collection-total">€0,00</strong>
@@ -21,11 +21,11 @@
       </div>
       <section class="top-five" aria-labelledby="top-five-title">
         <h2 id="top-five-title">Top 5 minifiguras en colección por precio</h2>
-        <ol id="top-five-list"></ol>
+        <div id="top-five-list" class="ranking-row"></div>
       </section>
       <section class="top-five" aria-labelledby="oldest-five-title">
         <h2 id="oldest-five-title">Top 5 minifiguras más antiguas</h2>
-        <ol id="oldest-five-list"></ol>
+        <div id="oldest-five-list" class="ranking-row"></div>
       </section>
     </header>
 
@@ -33,23 +33,26 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">Consulta</p>
-          <h2 id="search-title">Filtrar catalogo</h2>
+          <h2 id="search-title">Filtrar catálogo</h2>
         </div>
         <span class="panel-mark" aria-hidden="true">+</span>
       </div>
       <form id="filters-form" class="filters-form">
         <label>
           Tema
-          <input id="tema" name="tema" type="search" placeholder="Ej. Espacio">
+          <select id="tema" name="tema">
+            <option value="" selected>Todos los temas</option>
+          </select>
         </label>
         <label>
-          Anio
-          <input id="anio" name="anio" type="number" min="0" step="1" placeholder="Ej. 2023">
+          Año
+          <input id="anio" name="anio" type="number" min="1978" step="1" placeholder="Ej. 2023">
         </label>
         <label>
-          Estado de coleccion
+          Estado de colección
           <select id="estadoColeccion" name="estadoColeccion">
-            <option value="COLECCIÓN" selected>COLECCIÓN</option>
+            <option value="" selected>Todos los estados</option>
+            <option value="COLECCIÓN">COLECCIÓN</option>
             <option value="BUSCADA">BUSCADA</option>
           </select>
         </label>
@@ -71,15 +74,16 @@
           <button type="button" id="new-minifigura" class="button button-primary">Nueva minifigura</button>
         </div>
       </div>
-      <p id="status" class="status" role="status" aria-live="polite">Cargando catalogo...</p>
+      <p id="status" class="status" role="status" aria-live="polite">Cargando catálogo...</p>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th scope="col">Imagen</th>
               <th scope="col">ID</th>
               <th scope="col">Nombre</th>
-              <th scope="col">Descripcion</th>
-              <th scope="col">Tematica</th>
+              <th scope="col">Descripción</th>
+              <th scope="col">Temática</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="anio">Año</button></th>
               <th scope="col">Estado</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
@@ -104,19 +108,19 @@
           <input id="form-nombre" name="nombre" required>
         </label>
         <label>
-          Descripcion
+          Descripción
           <textarea id="form-descripcion" name="descripcion" rows="3"></textarea>
         </label>
         <label>
-          Tematica
+          Temática
           <input id="form-tematica" name="tematica" required>
         </label>
         <label>
-          Anio
-          <input id="form-anio" name="anio" type="number" step="1" required>
+          Año
+          <input id="form-anio" name="anio" type="number" min="1978" step="1" required>
         </label>
         <label>
-          Estado de coleccion
+          Estado de colección
           <select id="form-estadoColeccion" name="estadoColeccion">
             <option value="COLECCIÓN" selected>COLECCIÓN</option>
             <option value="BUSCADA">BUSCADA</option>
@@ -142,6 +146,14 @@
         </div>
       </form>
     </dialog>
+
+    <div id="image-modal" class="modal-overlay" hidden>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
+        <h2 id="image-modal-title">Minifigura</h2>
+        <img id="image-modal-image" alt="">
+        <button type="button" id="image-modal-close" class="button button-secondary">Cerrar</button>
+      </div>
+    </div>
 
     <dialog id="delete-dialog" class="modal">
       <h2>Eliminar minifigura</h2>

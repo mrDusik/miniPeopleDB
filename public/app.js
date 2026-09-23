@@ -10,6 +10,9 @@ const collectionCount = document.querySelector('#collection-count');
 const wantedCount = document.querySelector('#wanted-count');
 const topFiveList = document.querySelector('#top-five-list');
 const oldestFiveList = document.querySelector('#oldest-five-list');
+const temaInput = document.querySelector('#tema');
+const anioInput = document.querySelector('#anio');
+const currentYear = new Date().getFullYear();
 const sortButtons = [...document.querySelectorAll('[data-sort]')];
 const controls = [...form.querySelectorAll('input, select, button'), syncPricesButton];
 
@@ -35,15 +38,20 @@ const deleteMessage = document.querySelector('#delete-message');
 const deleteConfirmButton = document.querySelector('#delete-confirm');
 const deleteCancelButton = document.querySelector('#delete-cancel');
 
+const imageModal = document.querySelector('#image-modal');
+const imageModalTitle = document.querySelector('#image-modal-title');
+const imageModalImage = document.querySelector('#image-modal-image');
+const imageModalCloseButton = document.querySelector('#image-modal-close');
+
 const toastRegion = document.querySelector('#toast-region');
 
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
-  MINIFIGURA_INVALIDA: 'Los datos de la minifigura no son validos.',
+  MINIFIGURA_INVALIDA: 'Los datos de la minifigura no son válidos.',
   ID_DUPLICADO: 'Ya existe una minifigura con ese id.',
   MINIFIGURA_NO_ENCONTRADA: 'La minifigura ya no existe.',
-  CATALOGO_NO_DISPONIBLE: 'El catalogo no esta disponible en este momento.',
-  CATALOGO_INVALIDO: 'El catalogo no tiene un formato valido.',
+  CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
+  CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
 };
 
 let requestSequence = 0;
@@ -53,6 +61,20 @@ let currentEditId = null;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
+
+anioInput.max = String(currentYear);
+formAnioInput.max = String(currentYear);
+
+function renderThemeOptions(catalog) {
+  const selectedTheme = temaInput.value;
+  const themes = [...new Set(catalog.map((minifigura) => minifigura.tematica).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'es'));
+  temaInput.replaceChildren(new Option('Todos los temas', ''));
+  for (const theme of themes) {
+    temaInput.append(new Option(theme, theme));
+  }
+  temaInput.value = themes.includes(selectedTheme) ? selectedTheme : '';
+}
 
 function setStatus(message, type = '') {
   statusMessage.textContent = message;
@@ -100,23 +122,40 @@ function differenceCell(minifigura) {
   return element;
 }
 
+function rankingCard(minifigura, position, detail) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'ranking-card';
+  card.dataset.action = 'preview';
+  card.dataset.id = minifigura.id;
+  card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
+
+  const image = document.createElement('img');
+  image.className = 'ranking-img';
+  image.alt = minifigura.nombre ?? '';
+  image.addEventListener('error', () => { image.style.display = 'none'; });
+  image.src = imagenUrlPara(minifigura.id);
+
+  const caption = document.createElement('span');
+  caption.className = 'ranking-caption';
+  caption.textContent = `#${position} - ${detail}`;
+
+  card.append(image, caption);
+  return card;
+}
+
 function renderTopFive(topFive) {
   topFiveList.replaceChildren();
-  for (const minifigura of topFive) {
-    const item = document.createElement('li');
-    item.textContent = `${minifigura.id} - ${minifigura.nombre}: ${formatPrice(minifigura.precio)}`;
-    topFiveList.append(item);
-  }
+  topFive.forEach((minifigura, index) => {
+    topFiveList.append(rankingCard(minifigura, index + 1, formatPrice(minifigura.precio)));
+  });
 }
 
 function renderOldestFive(oldestFive) {
   oldestFiveList.replaceChildren();
-  for (const minifigura of oldestFive) {
-    const item = document.createElement('li');
-    const price = Number.isFinite(minifigura.precio) ? ` - ${formatPrice(minifigura.precio)}` : '';
-    item.textContent = `${minifigura.id} - ${minifigura.nombre}: ${minifigura.anio}${price}`;
-    oldestFiveList.append(item);
-  }
+  oldestFive.forEach((minifigura, index) => {
+    oldestFiveList.append(rankingCard(minifigura, index + 1, minifigura.anio));
+  });
 }
 
 function sortCatalog(catalog) {
@@ -153,6 +192,35 @@ function badgeCell(value) {
   return element;
 }
 
+function imagenUrlPara(id) {
+  return `https://img.bricklink.com/ItemImage/MN/0/${encodeURIComponent(String(id).toLowerCase())}.png`;
+}
+
+function thumbCell(minifigura) {
+  const element = document.createElement('td');
+  const thumb = document.createElement('img');
+  thumb.className = 'table-thumb';
+  thumb.alt = minifigura.nombre ?? '';
+  thumb.dataset.action = 'preview';
+  thumb.dataset.id = minifigura.id;
+  thumb.addEventListener('error', () => { thumb.style.display = 'none'; });
+  thumb.src = imagenUrlPara(minifigura.id);
+  element.append(thumb);
+  return element;
+}
+
+function idCell(minifigura) {
+  const element = document.createElement('td');
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'id-link';
+  link.textContent = minifigura.id ?? '';
+  link.dataset.action = 'preview';
+  link.dataset.id = minifigura.id;
+  element.append(link);
+  return element;
+}
+
 function actionsCell(minifigura) {
   const element = document.createElement('td');
   element.className = 'actions-cell';
@@ -183,7 +251,8 @@ function renderCatalog(catalog) {
   for (const minifigura of sortCatalog(catalog)) {
     const row = document.createElement('tr');
     row.append(
-      cell(minifigura.id),
+      thumbCell(minifigura),
+      idCell(minifigura),
       cell(minifigura.nombre),
       cell(minifigura.descripcion),
       cell(minifigura.tematica),
@@ -199,14 +268,14 @@ function renderCatalog(catalog) {
   if (catalog.length === 0) {
     setStatus('No hay minifiguras que coincidan con la consulta.');
   } else {
-    setStatus('Catalogo actualizado.');
+    setStatus('Catálogo actualizado.');
   }
 }
 
 function setLoading(isLoading) {
   controls.forEach((control) => { control.disabled = isLoading || isSyncingPrices; });
   if (isLoading) {
-    setStatus('Cargando catalogo...');
+    setStatus('Cargando catálogo...');
   }
 }
 
@@ -239,6 +308,9 @@ async function loadCatalog(filters = {}) {
       throw new Error('Respuesta invalida');
     }
     if (currentRequest === requestSequence) {
+      if (Object.keys(filters).length === 0) {
+        renderThemeOptions(catalog);
+      }
       renderCatalog(catalog);
       await loadTotal();
     }
@@ -246,7 +318,7 @@ async function loadCatalog(filters = {}) {
     if (currentRequest === requestSequence) {
       catalogBody.replaceChildren();
       resultCount.textContent = '';
-      setStatus('No se pudo cargar el catalogo. Intentalo de nuevo.', 'error');
+      setStatus('No se pudo cargar el catálogo. Inténtalo de nuevo.', 'error');
     }
   } finally {
     if (currentRequest === requestSequence) {
@@ -291,6 +363,29 @@ function messageForErrorCode(code) {
   return ERROR_MESSAGES[code] ?? 'Ocurrio un error inesperado. Intentalo de nuevo.';
 }
 
+function closeImageModal() {
+  imageModal.hidden = true;
+  imageModalImage.removeAttribute('src');
+  imageModalImage.alt = '';
+}
+
+function mostrarImagenMinifigura(id) {
+  const upperId = String(id).toUpperCase();
+  const url = imagenUrlPara(id);
+  const preloader = new Image();
+  preloader.onload = () => {
+    imageModalImage.src = url;
+    imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
+    imageModalTitle.textContent = `Minifigura: ${upperId}`;
+    imageModal.hidden = false;
+    imageModalCloseButton.focus();
+  };
+  preloader.onerror = () => {
+    showToast(`No se pudo cargar la imagen de la minifigura ${upperId}.`, 'error');
+  };
+  preloader.src = url;
+}
+
 function openFormDialog(mode, minifigura) {
   currentEditId = mode === 'edit' ? minifigura.id : null;
   minifiguraForm.reset();
@@ -304,7 +399,7 @@ function openFormDialog(mode, minifigura) {
     formDescripcionInput.value = minifigura.descripcion ?? '';
     formTematicaInput.value = minifigura.tematica ?? '';
     formAnioInput.value = minifigura.anio ?? '';
-    formEstadoInput.value = minifigura.estadoColeccion || 'COLECCIÓN';
+    formEstadoInput.value = minifigura.estadoColeccion ?? '';
     formPrecioCompraInput.value = minifigura.precioCompra ?? '';
     formFechaCompraInput.value = minifigura.fechaCompra ?? '';
     formPrecioInput.value = minifigura.precio ?? '';
@@ -360,10 +455,10 @@ function validatePayload(payload) {
     return 'El nombre es obligatorio.';
   }
   if (!payload.tematica) {
-    return 'La tematica es obligatoria.';
+    return 'La temática es obligatoria.';
   }
-  if (!Number.isInteger(payload.anio)) {
-    return 'El anio es obligatorio y debe ser un numero entero.';
+  if (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear) {
+    return `El año es obligatorio y debe ser un número entero entre 1978 y ${currentYear}.`;
   }
   return null;
 }
@@ -438,20 +533,47 @@ newMinifiguraButton.addEventListener('click', () => {
 });
 
 catalogBody.addEventListener('click', (event) => {
-  const button = event.target.closest('button[data-action]');
-  if (!button) {
+  const trigger = event.target.closest('[data-action]');
+  if (!trigger) {
     return;
   }
 
-  const minifigura = currentCatalog.find((item) => item.id === button.dataset.id);
+  const minifigura = currentCatalog.find((item) => item.id === trigger.dataset.id);
   if (!minifigura) {
     return;
   }
 
-  if (button.dataset.action === 'edit') {
+  if (trigger.dataset.action === 'edit') {
     openFormDialog('edit', minifigura);
-  } else if (button.dataset.action === 'delete') {
+  } else if (trigger.dataset.action === 'delete') {
     openDeleteDialog(minifigura);
+  } else if (trigger.dataset.action === 'preview') {
+    mostrarImagenMinifigura(minifigura.id);
+  }
+});
+
+[topFiveList, oldestFiveList].forEach((list) => {
+  list.addEventListener('click', (event) => {
+    const card = event.target.closest('[data-action="preview"]');
+    if (card) {
+      mostrarImagenMinifigura(card.dataset.id);
+    }
+  });
+});
+
+imageModalCloseButton.addEventListener('click', () => {
+  closeImageModal();
+});
+
+imageModal.addEventListener('click', (event) => {
+  if (event.target === imageModal) {
+    closeImageModal();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !imageModal.hidden) {
+    closeImageModal();
   }
 });
 
