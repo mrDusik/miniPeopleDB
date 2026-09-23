@@ -95,7 +95,3 @@ npm start
 La aplicación queda disponible en `http://localhost:3000`.
 
 La concurrencia de la sincronización masiva puede ajustarse con `BRICKSET_CONCURRENCY`; por defecto es `4`.
-
-## 📚 Historial OpenSpec
-
-El cambio LEGO-6 está archivado en `openspec/changes/archive/2026-09-22-lego-6-valoracion-coleccion-brickset/`, junto con su propuesta, diseño, tareas y specs sincronizadas.
