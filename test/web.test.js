@@ -65,12 +65,12 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
 
-    for (const expected of ['name="tema"', 'name="anio"', 'name="estadoColeccion"', '<option value="COLECCIÓN" selected>COLECCIÓN</option>', '<option value="BUSCADA">BUSCADA</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
+    for (const expected of ['name="tema"', '<option value="" selected>Todos los temas</option>', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="" selected>Todos los estados</option>', '<option value="BUSCADA">BUSCADA</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
     assert.match(script, /URLSearchParams/);
     assert.match(script, /replaceChildren/);
-    assert.match(script, /No se pudo cargar el catalogo/);
+    assert.match(script, /No se pudo cargar el catálogo/);
   });
 });
 
@@ -180,21 +180,71 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
-  assert.equal(rows()[0].children[7].textContent, '5,00 €');
-  assert.equal(rows()[1].children[7].textContent, 'N/A');
-  assert.equal(rows()[2].children[7].textContent, '?');
-  assert.ok(rows()[0].children[7].querySelector('.difference-positive'));
+  assert.equal(rows()[0].children[8].textContent, '5,00 €');
+  assert.equal(rows()[1].children[8].textContent, 'N/A');
+  assert.equal(rows()[2].children[8].textContent, '?');
+  assert.ok(rows()[0].children[8].querySelector('.difference-positive'));
 
   window.document.querySelector('[data-sort="anio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['b', 'c', 'a']);
+  assert.deepEqual(rows().map((row) => row.children[1].textContent), ['b', 'c', 'a']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['a', 'b', 'c']);
+  assert.deepEqual(rows().map((row) => row.children[1].textContent), ['a', 'b', 'c']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[0].textContent), ['b', 'a', 'c']);
+  assert.deepEqual(rows().map((row) => row.children[1].textContent), ['b', 'a', 'c']);
 
-  const editButton = rows().find((row) => row.children[0].textContent === 'c').querySelector('[data-action="edit"]');
+  const editButton = rows().find((row) => row.children[1].textContent === 'c').querySelector('[data-action="edit"]');
   editButton.click();
-  assert.equal(window.document.querySelector('#form-estadoColeccion').value, 'COLECCIÓN');
+  assert.equal(window.document.querySelector('#form-estadoColeccion').value, '');
+  dom.window.close();
+});
+
+test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const catalog = [{
+    id: 'ST008', nombre: 'Demogorgon', descripcion: 'Figura', tematica: 'Stranger Things',
+    anio: 2019, estadoColeccion: 'COLECCIÓN', precio: 109.56,
+  }];
+  window.fetch = async (url) => url === '/valoracion'
+    ? { ok: true, json: async () => ({ total: 109.56, enColeccion: 1, buscadas: 0, top5: catalog, top5Antiguas: catalog }) }
+    : { ok: true, json: async () => catalog };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const thumbnail = window.document.querySelector('.table-thumb');
+  assert.equal(thumbnail.src, 'https://img.bricklink.com/ItemImage/MN/0/st008.png');
+  assert.equal(window.document.querySelector('.id-link').dataset.action, 'preview');
+  assert.equal(window.document.querySelectorAll('.ranking-card').length, 2);
+  assert.equal(window.document.querySelector('#image-modal').hidden, true);
+  dom.window.close();
+});
+
+test('los filtros muestran todos los estados, limitan el año y listan los temas', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const catalog = [
+    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'Espacio', anio: 2024, estadoColeccion: 'COLECCIÓN' },
+    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'Piratas', anio: 1980, estadoColeccion: 'BUSCADA' },
+  ];
+  window.fetch = async (url) => url === '/valoracion'
+    ? { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 1 }) }
+    : { ok: true, json: async () => catalog };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#estadoColeccion').value, '');
+  assert.deepEqual(
+    [...window.document.querySelectorAll('#tema option')].map((option) => option.textContent),
+    ['Todos los temas', 'Espacio', 'Piratas'],
+  );
+  assert.equal(window.document.querySelector('#anio').min, '1978');
+  assert.equal(window.document.querySelector('#anio').max, String(new Date().getFullYear()));
   dom.window.close();
 });
 
