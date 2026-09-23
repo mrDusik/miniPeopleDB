@@ -68,12 +68,6 @@ mi-proyecto/
 │   ├── index.html            # Estructura del dashboard y formularios
 │   └── styles.css            # Estilos visuales, estados y diferencias
 ├── reviews/                  # Informes de revisión de cada iteración del proyecto
-│   ├── lego-1-review.md
-│   ├── lego-2-review.md
-│   ├── lego-3-review.md
-│   ├── lego-4-review.md
-│   ├── lego-5-review.md
-│   └── lego-6-review.md
 ├── src/                      # Código fuente del backend
 │   ├── brickset-scraper.js    # Scraping público y parseo de precios Brickset
 │   ├── minifiguras-repository.js
