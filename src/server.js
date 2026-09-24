@@ -10,12 +10,14 @@ import {
   MinifiguraNoEncontradaError,
   MinifigurasRepository,
 } from './minifiguras-repository.js';
+import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
+const defaultGamificacionPath = resolve(projectRoot, 'data', 'gamificacion.json');
 const publicDirectory = resolve(projectRoot, 'public');
 
 function sendJson(response, statusCode, body) {
@@ -71,11 +73,17 @@ async function readJsonBody(request) {
   }
 }
 
-export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultCategoriasPath, fetchImpl, scraper } = {}) {
+export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultCategoriasPath, gamificationPath, fetchImpl, scraper } = {}) {
   const categoriasRepository = new CategoriasRepository(themesPath);
-  const repository = new MinifigurasRepository(catalogPath, { categoriasRepository });
+  const resolvedGamificacionPath = gamificationPath ?? (catalogPath === defaultCatalogPath ? defaultGamificacionPath : resolve(dirname(catalogPath), 'gamificacion.json'));
+  const gamificacionRepository = new GamificacionRepository(resolvedGamificacionPath, { categoriasRepository });
+  const repository = new MinifigurasRepository(catalogPath, {
+    categoriasRepository,
+    onCatalogPersisted: async (catalogo) => gamificacionRepository.recalculate(catalogo),
+  });
   const brickset = scraper ?? new BricksetScraper({ fetchImpl });
   const app = express();
+  const ensureGamificacion = () => gamificacionRepository.ensure(() => repository.readCatalog());
 
   app.use(express.static(publicDirectory));
   app.use(async (request, response) => {
@@ -103,6 +111,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
     if (requestUrl.pathname === '/minifiguras') {
       if (request.method === 'GET') {
         try {
+          await ensureGamificacion();
           const filters = {};
           const categoria = requestUrl.searchParams.get('categoria');
           if (categoria !== null && categoria.trim() !== '') {
@@ -165,9 +174,13 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
 
       if (request.method === 'POST') {
         try {
+          await ensureGamificacion();
           const payload = await readJsonBody(request);
           const minifigura = await repository.create(payload);
-          sendJson(response, 201, minifigura);
+          const body = request.headers['x-gamificacion'] === 'true'
+            ? { ...minifigura, gamificacion: repository.lastGamification }
+            : minifigura;
+          sendJson(response, 201, body);
         } catch (error) {
           if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
@@ -196,6 +209,29 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
 
       response.setHeader('allow', 'GET, POST');
       sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+
+    if (requestUrl.pathname === '/gamificacion') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      try {
+        sendJson(response, 200, await ensureGamificacion());
+      } catch (error) {
+        if (error instanceof GamificacionNoDisponibleError || error instanceof GamificacionInvalidaError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        if (isCategoriasError(error) || error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
       return;
     }
 
@@ -242,7 +278,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       try {
         const detalles = await brickset.getDetails(id);
         const categorias = await categoriasRepository.read();
-        const normalize = (value) => value.trim().normalize('NFKC').toLocaleLowerCase();
+        const normalize = (value) => value.trim().normalize('NFKC').replace(/\s+/g, ' ').toLocaleLowerCase();
         const categoriaEncontrada = categorias.find((categoria) => normalize(categoria.categoria) === normalize(detalles.categoria));
         if (!categoriaEncontrada) {
           sendJson(response, 502, { error: 'BRICKSET_CATEGORIA_DESCONOCIDA' });
@@ -281,6 +317,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       }
 
       try {
+        await ensureGamificacion();
         const catalogo = await repository.readCatalog();
         const actualizaciones = new Map();
         const fallidos = [];
@@ -332,9 +369,13 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
     
       if (request.method === 'PUT') {
         try {
+          await ensureGamificacion();
           const payload = await readJsonBody(request);
           const minifigura = await repository.replace(id, payload);
-          sendJson(response, 200, minifigura);
+          const body = request.headers['x-gamificacion'] === 'true'
+            ? { ...minifigura, gamificacion: repository.lastGamification }
+            : minifigura;
+          sendJson(response, 200, body);
         } catch (error) {
           if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
@@ -363,6 +404,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
 
       if (request.method === 'DELETE') {
         try {
+          await ensureGamificacion();
           await repository.delete(id);
           sendEmpty(response, 204);
         } catch (error) {

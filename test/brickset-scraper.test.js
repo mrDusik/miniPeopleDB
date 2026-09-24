@@ -108,6 +108,26 @@ test('parseBricksetDetails admite ausencia de subcategoria y rechaza HTML sin ca
   );
 });
 
+test('parseBricksetDetails compacta espacios internos de los campos', () => {
+  const html = "<dl><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible  Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Series-3-Minifigures'>Series  3 Minifigures</a></dd><dt>Year released</dt><dd>2011</dd></dl><p>Current Value - New</p><span>€6.28</span>";
+  assert.deepEqual(parseBricksetDetails(html), {
+    categoria: 'Collectible Minifigures',
+    subcategoria: 'Series 3 Minifigures',
+    anio: 2011,
+    precio: 6.28,
+  });
+});
+
+test('parseBricksetDetails omite un año Brickset igual a cero', () => {
+  const html = "<dl><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>0</dd></dl><p>Current Value - New</p><span>€1</span>";
+  assert.deepEqual(parseBricksetDetails(html), {
+    categoria: 'Space',
+    subcategoria: undefined,
+    anio: undefined,
+    precio: 1,
+  });
+});
+
 test('BricksetScraper.getDetails reutiliza la misma peticion que getPrice', async () => {
   let requestedUrl;
   const scraper = new BricksetScraper({

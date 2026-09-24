@@ -60,6 +60,7 @@ function makeMinifigura(overrides = {}) {
     categoria: 'Space',
     anio: 2023,
     estadoColeccion: 'COLECCIÓN',
+    FechaRegistro: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -203,6 +204,27 @@ test('POST acepta una subcategoria valida perteneciente a la categoria', async (
     });
     assert.equal(response.status, 201);
     assert.deepEqual(await response.json(), payload);
+  });
+});
+
+test('POST y PUT aceptan descripcion y anio ausentes y conservan FechaRegistro', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const payload = { id: 'optional-fields', nombre: 'Sin datos extra', categoria: 'Space', estadoColeccion: 'COLECCIÓN' };
+    const createdResponse = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = await createdResponse.json();
+    assert.equal(created.descripcion, undefined);
+    assert.equal(created.anio, undefined);
+    assert.match(created.FechaRegistro, /^\d{4}-\d{2}-\d{2}T/);
+
+    const replacementResponse = await fetch(`${baseUrl}/minifiguras/optional-fields`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    assert.equal(replacementResponse.status, 200);
+    const replacement = await replacementResponse.json();
+    assert.equal(replacement.FechaRegistro, created.FechaRegistro);
   });
 });
 
@@ -843,6 +865,25 @@ test('GET /minifiguras/:id/brickset resuelve subcategoria conocida y omite una d
     const categoriaDesconocida = await fetch(`${baseUrl}/minifiguras/categoria-desconocida/brickset`);
     assert.equal(categoriaDesconocida.status, 502);
     assert.deepEqual(await categoriaDesconocida.json(), { error: 'BRICKSET_CATEGORIA_DESCONOCIDA' });
+  });
+});
+
+test('GET /minifiguras/:id/brickset resuelve COL041 aunque Brickset duplique espacios', async () => {
+  const fetchImpl = async () => new Response(
+    "<dl><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Series-3-Minifigures'>Series  3 Minifigures</a></dd><dt>Year released</dt><dd>2011</dd></dl><p>Current Value - New</p><span>€6.28</span>",
+    { status: 200 },
+  );
+
+  await withServerOptions('[]', { fetchImpl }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/minifiguras/COL041/brickset`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      id: 'COL041',
+      categoria: 'Collectible Minifigures',
+      subcategoria: 'Series 3 Minifigures',
+      anio: 2011,
+      precio: 6.28,
+    });
   });
 });
 
