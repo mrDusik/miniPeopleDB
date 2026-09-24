@@ -1,6 +1,6 @@
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { TemasNoDisponiblesError } from './temas-repository.js';
+import { CategoriasNoDisponiblesError } from './categorias-repository.js';
 
 export class CatalogoNoDisponibleError extends Error {
   constructor() {
@@ -73,7 +73,8 @@ const MINIFIGURA_FIELDS = new Set([
   'id',
   'nombre',
   'descripcion',
-  'tematica',
+  'categoria',
+  'subcategoria',
   'anio',
   'estadoColeccion',
   'precioCompra',
@@ -81,7 +82,18 @@ const MINIFIGURA_FIELDS = new Set([
   'precio',
 ]);
 
-function isMinifigura(value, officialThemes) {
+function isValidOptionalSubcategoria(value, categoria, officialCategorias) {
+  if (value === undefined) {
+    return true;
+  }
+  if (!isNonEmptyText(value)) {
+    return false;
+  }
+  const subcategorias = officialCategorias.get(categoria);
+  return subcategorias !== undefined && subcategorias.has(value);
+}
+
+function isMinifigura(value, officialCategorias) {
   return value !== null
     && typeof value === 'object'
     && !Array.isArray(value)
@@ -89,8 +101,9 @@ function isMinifigura(value, officialThemes) {
     && isNonEmptyText(value.id)
     && isNonEmptyText(value.nombre)
     && isNonEmptyText(value.descripcion)
-    && isNonEmptyText(value.tematica)
-    && officialThemes.has(value.tematica)
+    && isNonEmptyText(value.categoria)
+    && officialCategorias.has(value.categoria)
+    && isValidOptionalSubcategoria(value.subcategoria, value.categoria, officialCategorias)
     && Number.isInteger(value.anio)
     && isValidEstado(value.estadoColeccion)
     && isValidOptionalPrice(value.precioCompra)
@@ -98,8 +111,8 @@ function isMinifigura(value, officialThemes) {
     && isValidOptionalPrice(value.precio);
 }
 
-function validateCatalogo(value, officialThemes) {
-  if (!Array.isArray(value) || !value.every((item) => isMinifigura(item, officialThemes))) {
+function validateCatalogo(value, officialCategorias) {
+  if (!Array.isArray(value) || !value.every((item) => isMinifigura(item, officialCategorias))) {
     throw new CatalogoInvalidoError();
   }
 
@@ -121,10 +134,19 @@ function normalizeText(value) {
 }
 
 function matchesFilters(minifigura, filters) {
-  const tema = normalizeText(filters.tema);
+  const categoria = normalizeText(filters.categoria);
+  const subcategoria = normalizeText(filters.subcategoria);
   const estadoColeccion = normalizeText(filters.estadoColeccion);
 
-  if (tema !== undefined && normalizeText(minifigura.tematica) !== tema) {
+  if (categoria !== undefined && normalizeText(minifigura.categoria) !== categoria) {
+    return false;
+  }
+
+  if (subcategoria !== undefined && normalizeText(minifigura.subcategoria) !== subcategoria) {
+    return false;
+  }
+
+  if (filters.id !== undefined && !normalizeText(minifigura.id).includes(normalizeText(filters.id))) {
     return false;
   }
 
@@ -140,17 +162,17 @@ function matchesFilters(minifigura, filters) {
 }
 
 export class MinifigurasRepository {
-  constructor(filePath, { temasRepository } = {}) {
+  constructor(filePath, { categoriasRepository } = {}) {
     this.filePath = filePath;
-    this.temasRepository = temasRepository;
+    this.categoriasRepository = categoriasRepository;
   }
 
-  async officialThemes() {
-    if (!this.temasRepository) {
-      throw new TemasNoDisponiblesError();
+  async officialCategorias() {
+    if (!this.categoriasRepository) {
+      throw new CategoriasNoDisponiblesError();
     }
-    const temas = await this.temasRepository.read();
-    return new Set(temas.map(({ tema }) => tema));
+    const categorias = await this.categoriasRepository.read();
+    return new Map(categorias.map(({ categoria, subcategorias }) => [categoria, new Set(subcategorias.map(({ subcategoria }) => subcategoria))]));
   }
 
   async readCatalog() {
@@ -168,7 +190,7 @@ export class MinifigurasRepository {
       throw new CatalogoInvalidoError();
     }
 
-    return validateCatalogo(catalog, await this.officialThemes());
+    return validateCatalogo(catalog, await this.officialCategorias());
   }
 
   async persist(catalogo) {
@@ -194,10 +216,10 @@ export class MinifigurasRepository {
       return minifiguras;
     }
 
-    if (activeFilters.tema !== undefined && this.temasRepository) {
-      const officialThemes = await this.officialThemes();
-      const normalizedTheme = normalizeText(activeFilters.tema);
-      if (![...officialThemes].some((theme) => normalizeText(theme) === normalizedTheme)) {
+    if (activeFilters.categoria !== undefined && this.categoriasRepository) {
+      const officialCategorias = await this.officialCategorias();
+      const normalizedCategoria = normalizeText(activeFilters.categoria);
+      if (![...officialCategorias.keys()].some((categoria) => normalizeText(categoria) === normalizedCategoria)) {
         throw new MinifiguraInvalidaError();
       }
     }
@@ -316,12 +338,12 @@ export class MinifigurasRepository {
 
   async create(minifigura) {
     const catalogo = await this.readCatalog();
-    const officialThemes = await this.officialThemes();
+    const officialCategorias = await this.officialCategorias();
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
     };
-    if (!isMinifigura(nextMinifigura, officialThemes)) {
+    if (!isMinifigura(nextMinifigura, officialCategorias)) {
       throw new MinifiguraInvalidaError();
     }
     if (catalogo.some((item) => item.id === nextMinifigura.id)) {
@@ -335,12 +357,12 @@ export class MinifigurasRepository {
 
   async replace(id, minifigura) {
     const catalogo = await this.readCatalog();
-    const officialThemes = await this.officialThemes();
+    const officialCategorias = await this.officialCategorias();
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
     };
-    if (!isMinifigura(nextMinifigura, officialThemes) || nextMinifigura.id !== id) {
+    if (!isMinifigura(nextMinifigura, officialCategorias) || nextMinifigura.id !== id) {
       throw new MinifiguraInvalidaError();
     }
 

@@ -10,7 +10,9 @@ const collectionCount = document.querySelector('#collection-count');
 const wantedCount = document.querySelector('#wanted-count');
 const topFiveList = document.querySelector('#top-five-list');
 const oldestFiveList = document.querySelector('#oldest-five-list');
-const temaInput = document.querySelector('#tema');
+const idFilterInput = document.querySelector('#id');
+const categoriaInput = document.querySelector('#categoria');
+const subcategoriaInput = document.querySelector('#subcategoria');
 const anioInput = document.querySelector('#anio');
 const currentYear = new Date().getFullYear();
 const sortButtons = [...document.querySelectorAll('[data-sort]')];
@@ -25,13 +27,14 @@ const formCancelButton = document.querySelector('#form-cancel');
 const formIdInput = document.querySelector('#form-id');
 const formNombreInput = document.querySelector('#form-nombre');
 const formDescripcionInput = document.querySelector('#form-descripcion');
-const formTematicaInput = document.querySelector('#form-tematica');
+const formCategoriaInput = document.querySelector('#form-categoria');
+const formSubcategoriaInput = document.querySelector('#form-subcategoria');
 const formAnioInput = document.querySelector('#form-anio');
 const formEstadoInput = document.querySelector('#form-estadoColeccion');
 const formPrecioCompraInput = document.querySelector('#form-precioCompra');
 const formFechaCompraInput = document.querySelector('#form-fechaCompra');
 const formPrecioInput = document.querySelector('#form-precio');
-const lookupPriceButton = document.querySelector('#lookup-price');
+const lookupBricksetButton = document.querySelector('#lookup-brickset');
 
 const deleteDialog = document.querySelector('#delete-dialog');
 const deleteMessage = document.querySelector('#delete-message');
@@ -52,8 +55,8 @@ const ERROR_MESSAGES = {
   MINIFIGURA_NO_ENCONTRADA: 'La minifigura ya no existe.',
   CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
   CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
-  TEMAS_NO_DISPONIBLES: 'El catálogo de temas no está disponible en este momento.',
-  TEMAS_INVALIDOS: 'El catálogo de temas no tiene un formato válido.',
+  CATEGORIAS_NO_DISPONIBLES: 'El catálogo de categorías no está disponible en este momento.',
+  CATEGORIAS_INVALIDOS: 'El catálogo de categorías no tiene un formato válido.',
 };
 
 let requestSequence = 0;
@@ -63,71 +66,95 @@ let currentEditId = null;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
-let officialThemes = [];
-let themesReady = false;
+let officialCategorias = [];
+let subcategoriasPorCategoria = new Map();
+let categoriasReady = false;
 let syncButtonStates = new Map();
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
 
-function renderThemeOptions(themes) {
-  const selectedTheme = temaInput.value;
-  temaInput.replaceChildren(new Option('Todos los temas', ''));
-  for (const theme of themes) {
-    temaInput.append(new Option(theme, theme));
+function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
+  const previousValue = selectElement.value;
+  const subcategorias = subcategoriasPorCategoria.get(categoria) ?? [];
+  selectElement.replaceChildren(new Option(placeholderText, ''));
+  for (const subcategoria of subcategorias) {
+    selectElement.append(new Option(subcategoria, subcategoria));
   }
-  temaInput.value = themes.includes(selectedTheme) ? selectedTheme : '';
-
-  const selectedFormTheme = formTematicaInput.value;
-  formTematicaInput.replaceChildren(new Option('Selecciona un tema', ''));
-  for (const theme of themes) {
-    formTematicaInput.append(new Option(theme, theme));
-  }
-  formTematicaInput.value = themes.includes(selectedFormTheme) ? selectedFormTheme : '';
+  selectElement.value = subcategorias.includes(previousValue) ? previousValue : '';
+  selectElement.disabled = !categoriasReady || subcategorias.length === 0;
 }
 
-function setThemeControlsEnabled(enabled) {
-  temaInput.disabled = !enabled;
-  formTematicaInput.disabled = !enabled;
+function renderCategoryOptions(categorias) {
+  const categoryNames = categorias.map(({ categoria }) => categoria);
+
+  const selectedCategoria = categoriaInput.value;
+  categoriaInput.replaceChildren(new Option('Todas', ''));
+  for (const categoria of categoryNames) {
+    categoriaInput.append(new Option(categoria, categoria));
+  }
+  categoriaInput.value = categoryNames.includes(selectedCategoria) ? selectedCategoria : '';
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+}
+
+function setCategoriaControlsEnabled(enabled) {
+  categoriaInput.disabled = !enabled;
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
   newMinifiguraButton.disabled = !enabled;
   syncPricesButton.disabled = !enabled;
 }
 
-async function loadThemes() {
+categoriaInput.addEventListener('change', () => {
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+});
+
+async function loadCategorias() {
   try {
-    const response = await fetch('/temas');
+    const response = await fetch('/categorias');
     if (!response.ok) {
-      throw new Error('TEMAS_NO_DISPONIBLES');
+      throw new Error('CATEGORIAS_NO_DISPONIBLES');
     }
-    const themes = await response.json();
-    if (!Array.isArray(themes) || themes.length === 0 || themes.some((theme) => (
-      theme === null
-      || typeof theme !== 'object'
-      || Array.isArray(theme)
-      || Object.keys(theme).length !== 2
-      || !Object.hasOwn(theme, 'tema')
-      || !Object.hasOwn(theme, 'total')
-      || typeof theme.tema !== 'string'
-      || theme.tema !== theme.tema.trim()
-      || theme.tema === ''
-      || !Number.isInteger(theme.total)
-      || theme.total < 0
+    const categorias = await response.json();
+    if (!Array.isArray(categorias) || categorias.length === 0 || categorias.some((categoria) => (
+      categoria === null
+      || typeof categoria !== 'object'
+      || Array.isArray(categoria)
+      || Object.keys(categoria).length !== 3
+      || !Object.hasOwn(categoria, 'categoria')
+      || !Object.hasOwn(categoria, 'total')
+      || !Object.hasOwn(categoria, 'subcategorias')
+      || typeof categoria.categoria !== 'string'
+      || categoria.categoria !== categoria.categoria.trim()
+      || categoria.categoria === ''
+      || !Number.isInteger(categoria.total)
+      || categoria.total < 0
+      || !Array.isArray(categoria.subcategorias)
+      || categoria.subcategorias.some((subcategoria) => (
+        subcategoria === null
+        || typeof subcategoria !== 'object'
+        || Array.isArray(subcategoria)
+        || typeof subcategoria.subcategoria !== 'string'
+        || subcategoria.subcategoria.trim() === ''
+        || (subcategoria.total !== undefined && (!Number.isInteger(subcategoria.total) || subcategoria.total < 0))
+      ))
     ))) {
-      throw new Error('TEMAS_INVALIDOS');
+      throw new Error('CATEGORIAS_INVALIDOS');
     }
-    const normalizedThemes = themes.map(({ tema }) => tema.trim().normalize('NFKC').toLocaleLowerCase());
-    if (new Set(normalizedThemes).size !== normalizedThemes.length) {
-      throw new Error('TEMAS_INVALIDOS');
+    const normalizedCategorias = categorias.map(({ categoria }) => categoria.trim().normalize('NFKC').toLocaleLowerCase());
+    if (new Set(normalizedCategorias).size !== normalizedCategorias.length) {
+      throw new Error('CATEGORIAS_INVALIDOS');
     }
-    officialThemes = themes.map(({ tema }) => tema);
-    renderThemeOptions(officialThemes);
-    themesReady = true;
-    setThemeControlsEnabled(true);
+    officialCategorias = categorias;
+    subcategoriasPorCategoria = new Map(categorias.map(({ categoria, subcategorias }) => [categoria, subcategorias.map(({ subcategoria }) => subcategoria)]));
+    renderCategoryOptions(officialCategorias);
+    categoriasReady = true;
+    setCategoriaControlsEnabled(true);
     return true;
   } catch (error) {
-    themesReady = false;
-    officialThemes = [];
-    setThemeControlsEnabled(false);
+    categoriasReady = false;
+    officialCategorias = [];
+    subcategoriasPorCategoria = new Map();
+    setCategoriaControlsEnabled(false);
     setStatus(messageForErrorCode(error.message), 'error');
     return false;
   }
@@ -269,15 +296,7 @@ function thumbCell(minifigura) {
 }
 
 function idCell(minifigura) {
-  const element = document.createElement('td');
-  const link = document.createElement('button');
-  link.type = 'button';
-  link.className = 'id-link';
-  link.textContent = minifigura.id ?? '';
-  link.dataset.action = 'preview';
-  link.dataset.id = minifigura.id;
-  element.append(link);
-  return element;
+  return cell(minifigura.id);
 }
 
 function actionsCell(minifigura) {
@@ -286,15 +305,19 @@ function actionsCell(minifigura) {
 
   const editButton = document.createElement('button');
   editButton.type = 'button';
-  editButton.className = 'button button-secondary button-small';
-  editButton.textContent = 'Editar';
+  editButton.className = 'button button-secondary button-small button-icon';
+  editButton.setAttribute('aria-label', 'Editar');
+  editButton.title = 'Editar';
+  editButton.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 20h4L18.5 9.5a2.121 2.121 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   editButton.dataset.action = 'edit';
   editButton.dataset.id = minifigura.id;
 
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
-  deleteButton.className = 'button button-danger button-small';
-  deleteButton.textContent = 'Eliminar';
+  deleteButton.className = 'button button-danger button-small button-icon';
+  deleteButton.setAttribute('aria-label', 'Eliminar');
+  deleteButton.title = 'Eliminar';
+  deleteButton.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   deleteButton.dataset.action = 'delete';
   deleteButton.dataset.id = minifigura.id;
 
@@ -313,8 +336,8 @@ function renderCatalog(catalog) {
       thumbCell(minifigura),
       idCell(minifigura),
       cell(minifigura.nombre),
-      cell(minifigura.descripcion),
-      cell(minifigura.tematica),
+      cell(minifigura.categoria),
+      cell(minifigura.subcategoria),
       cell(minifigura.anio),
       badgeCell(minifigura.estadoColeccion),
       priceCell(minifigura.precio),
@@ -367,7 +390,7 @@ function setSyncLoading(isLoading) {
     button.disabled = wasDisabled;
   });
   syncButtonStates.clear();
-  setThemeControlsEnabled(themesReady);
+  setCategoriaControlsEnabled(categoriasReady);
 }
 
 async function loadCatalog(filters = {}) {
@@ -396,15 +419,15 @@ async function loadCatalog(filters = {}) {
     if (currentRequest === requestSequence) {
       catalogBody.replaceChildren();
       resultCount.textContent = '';
-      themesReady = false;
-      officialThemes = [];
-      setThemeControlsEnabled(false);
+      categoriasReady = false;
+      officialCategorias = [];
+      setCategoriaControlsEnabled(false);
       setStatus('No se pudo cargar el catálogo. Inténtalo de nuevo.', 'error');
     }
   } finally {
     if (currentRequest === requestSequence) {
       setLoading(false);
-      setThemeControlsEnabled(!isSyncingPrices && themesReady);
+      setCategoriaControlsEnabled(!isSyncingPrices && categoriasReady);
     }
   }
 }
@@ -469,8 +492,8 @@ function mostrarImagenMinifigura(id) {
 }
 
 function openFormDialog(mode, minifigura) {
-  if (!themesReady) {
-    showToast('No se pueden crear minifiguras sin cargar los temas oficiales.', 'error');
+  if (!categoriasReady) {
+    showToast('No se pueden crear minifiguras sin cargar las categorías oficiales.', 'error');
     return;
   }
   currentEditId = mode === 'edit' ? minifigura.id : null;
@@ -483,7 +506,8 @@ function openFormDialog(mode, minifigura) {
     formIdInput.value = minifigura.id ?? '';
     formNombreInput.value = minifigura.nombre ?? '';
     formDescripcionInput.value = minifigura.descripcion ?? '';
-    formTematicaInput.value = minifigura.tematica ?? '';
+    formCategoriaInput.value = minifigura.categoria ?? '';
+    formSubcategoriaInput.value = minifigura.subcategoria ?? '';
     formAnioInput.value = minifigura.anio ?? '';
     formEstadoInput.value = minifigura.estadoColeccion ?? '';
     formPrecioCompraInput.value = minifigura.precioCompra ?? '';
@@ -507,8 +531,13 @@ function buildPayloadFromForm() {
     id: formData.get('id')?.toString().trim() ?? '',
     nombre: formData.get('nombre')?.toString().trim() ?? '',
     descripcion: formData.get('descripcion')?.toString().trim() ?? '',
-    tematica: formData.get('tematica')?.toString().trim() ?? '',
+    categoria: formData.get('categoria')?.toString().trim() ?? '',
   };
+
+  const subcategoria = formData.get('subcategoria')?.toString().trim() ?? '';
+  if (subcategoria !== '') {
+    payload.subcategoria = subcategoria;
+  }
 
   if (anioRaw !== '' && Number.isInteger(Number(anioRaw))) {
     payload.anio = Number(anioRaw);
@@ -540,11 +569,14 @@ function validatePayload(payload) {
   if (!payload.nombre) {
     return 'El nombre es obligatorio.';
   }
-  if (!payload.tematica) {
-    return 'La temática es obligatoria.';
+  if (!payload.categoria) {
+    return 'La categoría es obligatoria.';
   }
-  if (!officialThemes.includes(payload.tematica)) {
-    return 'La temática debe ser un tema oficial de Brickset.';
+  if (!officialCategorias.some(({ categoria }) => categoria === payload.categoria)) {
+    return 'La categoría debe ser una categoría oficial de Brickset.';
+  }
+  if (payload.subcategoria && !(subcategoriasPorCategoria.get(payload.categoria) ?? []).includes(payload.subcategoria)) {
+    return 'La subcategoría debe pertenecer a la categoría seleccionada.';
   }
   if (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear) {
     return `El año es obligatorio y debe ser un número entero entre 1978 y ${currentYear}.`;
@@ -569,7 +601,9 @@ form.addEventListener('submit', (event) => {
   event.preventDefault();
   const formData = new FormData(form);
   loadCatalog({
-    tema: formData.get('tema').trim(),
+    id: formData.get('id').trim(),
+    categoria: formData.get('categoria').trim(),
+    subcategoria: formData.get('subcategoria').trim(),
     anio: formData.get('anio').trim(),
     estadoColeccion: formData.get('estadoColeccion').trim(),
   });
@@ -721,27 +755,30 @@ minifiguraForm.addEventListener('submit', async (event) => {
   }
 });
 
-lookupPriceButton.addEventListener('click', async () => {
+lookupBricksetButton.addEventListener('click', async () => {
   const id = formIdInput.value.trim();
   if (!id) {
-    formError.textContent = 'El id es obligatorio para consultar el precio.';
+    formError.textContent = 'El id es obligatorio para consultar los datos de Brickset.';
     return;
   }
 
-  lookupPriceButton.disabled = true;
-  showToast('Consultando precio en Brickset...', 'success');
+  lookupBricksetButton.disabled = true;
+  showToast('Consultando datos en Brickset...', 'success');
   try {
-    const response = await fetch(`/minifiguras/${encodeURIComponent(id)}/precio`);
+    const response = await fetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
     if (!response.ok) {
       throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
     }
+    formCategoriaInput.value = result.categoria;
+    formSubcategoriaInput.value = result.subcategoria ?? '';
+    formAnioInput.value = result.anio;
     formPrecioInput.value = result.precio;
-    showToast('Precio de Brickset actualizado.', 'success');
+    showToast('Datos de Brickset actualizados.', 'success');
   } catch {
-    showToast('No se pudo consultar el precio en Brickset.', 'error');
+    showToast('No se pudieron consultar los datos en Brickset.', 'error');
   } finally {
-    lookupPriceButton.disabled = false;
+    lookupBricksetButton.disabled = false;
   }
 });
 
@@ -785,10 +822,10 @@ deleteConfirmButton.addEventListener('click', async () => {
 });
 
 async function initialize() {
-  if (await loadThemes()) {
+  if (await loadCategorias()) {
     await loadCatalog();
   }
 }
 
-setThemeControlsEnabled(false);
+setCategoriaControlsEnabled(false);
 initialize();

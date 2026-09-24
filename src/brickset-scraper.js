@@ -50,6 +50,40 @@ export function parseBricksetPrice(html) {
   return value;
 }
 
+function decodeMinifigEntities(value) {
+  return value
+    .replace(/&amp;/gi, '&')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&eacute;/gi, 'é')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .trim();
+}
+
+function matchDetailField(html, label) {
+  const pattern = new RegExp(`<dt>\\s*${label}\\s*<\\/dt>\\s*<dd>(?:<a[^>]*>)?([^<]+)(?:<\\/a>)?<\\/dd>`, 'i');
+  const match = html.match(pattern);
+  return match ? match[1].trim() : null;
+}
+
+export function parseBricksetDetails(html) {
+  const categoria = matchDetailField(html, 'Category');
+  const subcategoria = matchDetailField(html, 'Subcategory');
+  const anioText = matchDetailField(html, 'Year released');
+
+  if (!categoria || !anioText || !/^\d+$/.test(anioText)) {
+    throw new BricksetPriceError('BRICKSET_DETALLES_NO_DISPONIBLES');
+  }
+
+  return {
+    categoria: decodeMinifigEntities(categoria),
+    subcategoria: subcategoria ? decodeMinifigEntities(subcategoria) : undefined,
+    anio: Number(anioText),
+    precio: parseBricksetPrice(html),
+  };
+}
+
 export class BricksetScraper {
   constructor({ fetchImpl = globalThis.fetch, timeoutMs = 8000, retries = 1 } = {}) {
     this.fetchImpl = fetchImpl;
@@ -57,7 +91,7 @@ export class BricksetScraper {
     this.retries = retries;
   }
 
-  async getPrice(id) {
+  async _fetchHtml(id) {
     if (typeof id !== 'string' || id.trim() === '') {
       throw new BricksetPriceError('BRICKSET_ID_INVALIDO');
     }
@@ -80,13 +114,7 @@ export class BricksetScraper {
           console.error(`[BricksetScraper] HTTP ${response.status} al consultar ${url}`);
           throw new BricksetPriceError(response.status === 404 ? 'BRICKSET_NO_ENCONTRADO' : 'BRICKSET_NO_DISPONIBLE');
         }
-        const html = await response.text();
-        try {
-          return parseBricksetPrice(html);
-        } catch (error) {
-          console.error(`[BricksetScraper] No se extrajo 'Current Value - New' de ${url}. Respuesta: ${html.slice(0, 500)}`);
-          throw error;
-        }
+        return { html: await response.text(), url };
       } catch (error) {
         lastError = error instanceof BricksetPriceError
           ? error
@@ -99,5 +127,25 @@ export class BricksetScraper {
       }
     }
     throw lastError ?? new BricksetPriceError();
+  }
+
+  async getPrice(id) {
+    const { html, url } = await this._fetchHtml(id);
+    try {
+      return parseBricksetPrice(html);
+    } catch (error) {
+      console.error(`[BricksetScraper] No se extrajo 'Current Value - New' de ${url}. Respuesta: ${html.slice(0, 500)}`);
+      throw error;
+    }
+  }
+
+  async getDetails(id) {
+    const { html, url } = await this._fetchHtml(id);
+    try {
+      return parseBricksetDetails(html);
+    } catch (error) {
+      console.error(`[BricksetScraper] No se extrajeron los detalles de ${url}. Respuesta: ${html.slice(0, 500)}`);
+      throw error;
+    }
   }
 }

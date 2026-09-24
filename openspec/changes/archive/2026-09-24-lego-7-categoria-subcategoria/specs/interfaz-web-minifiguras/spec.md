@@ -1,24 +1,23 @@
-# interfaz-web-minifiguras Specification
+# Spec Delta
 
-## Purpose
+## MODIFIED Requirements
 
-Esta capacidad permite consultar y gestionar el catálogo desde un navegador mediante una interfaz estática, con valoración en Euros, rankings y estados de interacción comprensibles.
+### Requirement: Gestionar datos de compra y precio Brickset
 
-## Requirements
+La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables, y `categoria`, `subcategoria`, `anio` y `precio` como campos no editables en el formulario de alta y edición. SHALL ofrecer un único botón para consultar los datos de Brickset por `id` que rellena `categoria`, `subcategoria`, `anio` y `precio` a la vez, y SHALL ofrecer por separado una actualización masiva de precios desde el header, que solo actualiza `precio` y no modifica `categoria`, `subcategoria` ni `anio`.
 
-### Requirement: Servir la interfaz web estática
+#### Scenario: Consulta individual
+- **WHEN** el usuario solicita los datos de Brickset con un ID válido
+- **THEN** solicita los datos individuales a la API
+- **AND** rellena `categoria`, `subcategoria` (cuando aplica), `anio` en Euros y `precio` en Euros
+- **AND** mantiene los cuatro campos no editables
 
-El sistema SHALL servir una interfaz web estática desde la ruta raíz del servidor Express, incluyendo HTML, CSS y JavaScript.
-
-#### Scenario: Cargar la página principal
-- **WHEN** un usuario solicita `GET /`
-- **THEN** el sistema responde con HTTP `200`
-- **AND** el cuerpo contiene el documento HTML
-- **AND** la respuesta identifica un tipo de contenido HTML
-
-#### Scenario: Cargar recursos
-- **WHEN** el navegador solicita CSS y JavaScript referenciados
-- **THEN** cada recurso responde con HTTP `200` y su tipo de contenido correspondiente
+#### Scenario: Actualización masiva
+- **WHEN** el usuario activa `Actualizar precios desde Brickset`
+- **THEN** inicia la actualización masiva de `precio` únicamente
+- **AND** muestra Toasts de carga, éxito o error
+- **AND** refresca tabla y resumen al terminar
+- **AND** no modifica `categoria`, `subcategoria` ni `anio` de ninguna minifigura
 
 ### Requirement: Filtrar el catálogo desde el panel de búsqueda
 
@@ -61,75 +60,7 @@ La interfaz SHALL representar cada minifigura en una fila y SHALL mostrar `id`, 
 - **THEN** no ocurre ninguna acción
 - **AND** solo hacer click en la miniatura de la columna `Imagen` abre el modal de vista previa
 
-### Requirement: Comunicar estados de carga y error
-
-La interfaz SHALL comunicar cargas, errores locales y errores de Brickset sin borrar datos válidos ni bloquear la página.
-
-#### Scenario: Consulta en curso
-- **WHEN** se inicia una consulta o actualización de precios
-- **THEN** muestra carga mediante estado o Toast
-- **AND** deshabilita los botones relevantes
-- **AND** evita solicitudes concurrentes
-
-#### Scenario: Error de consulta
-- **WHEN** la API devuelve un error o resultado parcial
-- **THEN** conserva filas y precios anteriores
-- **AND** muestra un Toast o resumen identificando los fallos
-
-### Requirement: Gestionar datos de compra y precio Brickset
-
-La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables, y `categoria`, `subcategoria`, `anio` y `precio` como campos no editables en el formulario de alta y edición. SHALL ofrecer un único botón para consultar los datos de Brickset por `id` que rellena `categoria`, `subcategoria`, `anio` y `precio` a la vez, y SHALL ofrecer por separado una actualización masiva de precios desde el header, que solo actualiza `precio` y no modifica `categoria`, `subcategoria` ni `anio`.
-
-#### Scenario: Consulta individual
-- **WHEN** el usuario solicita los datos de Brickset con un ID válido
-- **THEN** solicita los datos individuales a la API
-- **AND** rellena `categoria`, `subcategoria` (cuando aplica), `anio` en Euros y `precio` en Euros
-- **AND** mantiene los cuatro campos no editables
-
-#### Scenario: Actualización masiva
-- **WHEN** el usuario activa `Actualizar precios desde Brickset`
-- **THEN** inicia la actualización masiva de `precio` únicamente
-- **AND** muestra Toasts de carga, éxito o error
-- **AND** refresca tabla y resumen al terminar
-- **AND** no modifica `categoria`, `subcategoria` ni `anio` de ninguna minifigura
-
-### Requirement: Ordenar la tabla por año y precio
-
-La interfaz SHALL permitir ordenar por `Año` y `Precio`, alternando ascendente y descendente.
-
-#### Scenario: Ordenar por año
-- **WHEN** el usuario activa `Año`
-- **THEN** las filas se ordenan por año
-- **AND** una activación posterior invierte el orden
-
-#### Scenario: Ordenar por precio
-- **WHEN** el usuario activa `Precio`
-- **THEN** las filas se ordenan por precio
-- **AND** una activación posterior invierte el orden
-
-### Requirement: Mostrar resumen, contadores y rankings
-
-La interfaz SHALL mostrar el `Valor Total de la Colección` en Euros, priorizando `precio` y usando `precioCompra` como fallback, junto con los contadores de `COLECCIÓN` y `BUSCADA`, un top 5 por precio y un top 5 de figuras más antiguas.
-
-#### Scenario: Cabecera con resumen
-- **WHEN** la API devuelve el resumen
-- **THEN** muestra el valor total y ambos contadores
-- **AND** muestra los rankings sin figuras `BUSCADA`
-- **AND** muestra menos de cinco elementos cuando no hay más disponibles
-
-### Requirement: Crear, editar y eliminar minifiguras
-
-La interfaz SHALL ofrecer creación, edición y eliminación mediante formularios y confirmación explícita, mostrando Toasts tras cada operación.
-
-#### Scenario: Alta, edición o eliminación exitosa
-- **WHEN** la API confirma la operación
-- **THEN** refresca la tabla conservando filtros
-- **AND** muestra un Toast de éxito
-
-#### Scenario: Operación rechazada
-- **WHEN** la API devuelve un error
-- **THEN** conserva los datos existentes
-- **AND** muestra un mensaje o Toast de error
+## ADDED Requirements
 
 ### Requirement: Rellenar Categoría, Subcategoría y Año desde Brickset en el formulario
 

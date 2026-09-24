@@ -11,11 +11,11 @@ import {
   MinifigurasRepository,
 } from './minifiguras-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
-import { TemasInvalidosError, TemasNoDisponiblesError, TemasRepository } from './temas-repository.js';
+import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
-const defaultThemesPath = resolve(projectRoot, 'data', 'temas-brickset.json');
+const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
 
 function sendJson(response, statusCode, body) {
@@ -45,8 +45,8 @@ function normalizeEstadoFilter(value) {
   return null;
 }
 
-function isTemasError(error) {
-  return error instanceof TemasNoDisponiblesError || error instanceof TemasInvalidosError;
+function isCategoriasError(error) {
+  return error instanceof CategoriasNoDisponiblesError || error instanceof CategoriasInvalidosError;
 }
 
 async function readJsonBody(request) {
@@ -71,9 +71,9 @@ async function readJsonBody(request) {
   }
 }
 
-export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultThemesPath, fetchImpl, scraper } = {}) {
-  const temasRepository = new TemasRepository(themesPath);
-  const repository = new MinifigurasRepository(catalogPath, { temasRepository });
+export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultCategoriasPath, fetchImpl, scraper } = {}) {
+  const categoriasRepository = new CategoriasRepository(themesPath);
+  const repository = new MinifigurasRepository(catalogPath, { categoriasRepository });
   const brickset = scraper ?? new BricksetScraper({ fetchImpl });
   const app = express();
 
@@ -81,7 +81,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
   app.use(async (request, response) => {
     const requestUrl = new URL(request.url, 'http://localhost');
 
-    if (requestUrl.pathname === '/temas') {
+    if (requestUrl.pathname === '/categorias') {
       if (request.method !== 'GET') {
         response.setHeader('allow', 'GET');
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
@@ -89,9 +89,9 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       }
 
       try {
-        sendJson(response, 200, await temasRepository.read());
+        sendJson(response, 200, await categoriasRepository.read());
       } catch (error) {
-        if (error instanceof TemasNoDisponiblesError || error instanceof TemasInvalidosError) {
+        if (error instanceof CategoriasNoDisponiblesError || error instanceof CategoriasInvalidosError) {
           sendJson(response, 500, { error: error.code });
           return;
         }
@@ -104,9 +104,19 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       if (request.method === 'GET') {
         try {
           const filters = {};
-          const tema = requestUrl.searchParams.get('tema');
-          if (tema !== null && tema.trim() !== '') {
-            filters.tema = tema.trim();
+          const categoria = requestUrl.searchParams.get('categoria');
+          if (categoria !== null && categoria.trim() !== '') {
+            filters.categoria = categoria.trim();
+          }
+
+          const subcategoria = requestUrl.searchParams.get('subcategoria');
+          if (subcategoria !== null && subcategoria.trim() !== '') {
+            filters.subcategoria = subcategoria.trim();
+          }
+
+          const id = requestUrl.searchParams.get('id');
+          if (id !== null && id.trim() !== '') {
+            filters.id = id.trim();
           }
 
           const anio = requestUrl.searchParams.get('anio');
@@ -132,7 +142,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           const minifiguras = await repository.list(filters);
           sendJson(response, 200, minifiguras);
         } catch (error) {
-          if (isTemasError(error)) {
+          if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
             return;
           }
@@ -145,7 +155,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
             return;
           }
           if (error instanceof MinifiguraInvalidaError) {
-            sendJson(response, 400, { error: error.code, parametro: 'tema' });
+            sendJson(response, 400, { error: error.code, parametro: 'categoria' });
             return;
           }
           sendJson(response, 500, { error: 'ERROR_INTERNO' });
@@ -159,7 +169,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           const minifigura = await repository.create(payload);
           sendJson(response, 201, minifigura);
         } catch (error) {
-          if (isTemasError(error)) {
+          if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
             return;
           }
@@ -200,7 +210,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
         const summary = await repository.valuationSummary();
         sendJson(response, 200, summary);
       } catch (error) {
-        if (isTemasError(error)) {
+        if (isCategoriasError(error)) {
           sendJson(response, 500, { error: error.code });
           return;
         }
@@ -213,8 +223,8 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       return;
     }
 
-    const priceMatch = requestUrl.pathname.match(/^\/minifiguras\/(.+)\/precio$/);
-    if (priceMatch) {
+    const detailsMatch = requestUrl.pathname.match(/^\/minifiguras\/(.+)\/brickset$/);
+    if (detailsMatch) {
       if (request.method !== 'GET') {
         response.setHeader('allow', 'GET');
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
@@ -223,17 +233,39 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
 
       let id;
       try {
-        id = decodeURIComponent(priceMatch[1]);
+        id = decodeURIComponent(detailsMatch[1]);
       } catch {
         sendJson(response, 400, { error: 'ID_INVALIDO' });
         return;
       }
 
       try {
-        sendJson(response, 200, { id, precio: await brickset.getPrice(id) });
+        const detalles = await brickset.getDetails(id);
+        const categorias = await categoriasRepository.read();
+        const normalize = (value) => value.trim().normalize('NFKC').toLocaleLowerCase();
+        const categoriaEncontrada = categorias.find((categoria) => normalize(categoria.categoria) === normalize(detalles.categoria));
+        if (!categoriaEncontrada) {
+          sendJson(response, 502, { error: 'BRICKSET_CATEGORIA_DESCONOCIDA' });
+          return;
+        }
+
+        const resultado = { id, categoria: categoriaEncontrada.categoria, anio: detalles.anio, precio: detalles.precio };
+        if (detalles.subcategoria) {
+          const subcategoriaEncontrada = categoriaEncontrada.subcategorias.find(
+            (subcategoria) => normalize(subcategoria.subcategoria) === normalize(detalles.subcategoria),
+          );
+          if (subcategoriaEncontrada) {
+            resultado.subcategoria = subcategoriaEncontrada.subcategoria;
+          }
+        }
+        sendJson(response, 200, resultado);
       } catch (error) {
         if (error instanceof BricksetPriceError) {
           sendJson(response, 502, { error: error.code });
+          return;
+        }
+        if (isCategoriasError(error)) {
+          sendJson(response, 500, { error: error.code });
           return;
         }
         sendJson(response, 500, { error: 'ERROR_INTERNO' });
@@ -275,7 +307,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           total: catalogo.length,
         });
       } catch (error) {
-        if (isTemasError(error)) {
+        if (isCategoriasError(error)) {
           sendJson(response, 500, { error: error.code });
           return;
         }
@@ -304,7 +336,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           const minifigura = await repository.replace(id, payload);
           sendJson(response, 200, minifigura);
         } catch (error) {
-          if (isTemasError(error)) {
+          if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
             return;
           }
@@ -334,7 +366,7 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           await repository.delete(id);
           sendEmpty(response, 204);
         } catch (error) {
-          if (isTemasError(error)) {
+          if (isCategoriasError(error)) {
             sendJson(response, 500, { error: error.code });
             return;
           }
