@@ -1,0 +1,17 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "openspec": true,
+        "/^npx --yes --package=@fission-ai/openspec openspec validate \"sincronizar-temas-brickset\" --strict$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^npx --yes --package=@fission-ai/openspec openspec status --change \"sincronizar-temas-brickset\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^git diff --check && npx --yes --package=@fission-ai/openspec openspec validate --strict$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

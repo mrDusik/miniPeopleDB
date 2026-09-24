@@ -11,9 +11,11 @@ import {
   MinifigurasRepository,
 } from './minifiguras-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
+import { TemasInvalidosError, TemasNoDisponiblesError, TemasRepository } from './temas-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
+const defaultThemesPath = resolve(projectRoot, 'data', 'temas-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
 
 function sendJson(response, statusCode, body) {
@@ -43,6 +45,10 @@ function normalizeEstadoFilter(value) {
   return null;
 }
 
+function isTemasError(error) {
+  return error instanceof TemasNoDisponiblesError || error instanceof TemasInvalidosError;
+}
+
 async function readJsonBody(request) {
   const chunks = [];
   for await (const chunk of request) {
@@ -65,14 +71,34 @@ async function readJsonBody(request) {
   }
 }
 
-export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scraper } = {}) {
-  const repository = new MinifigurasRepository(catalogPath);
+export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultThemesPath, fetchImpl, scraper } = {}) {
+  const temasRepository = new TemasRepository(themesPath);
+  const repository = new MinifigurasRepository(catalogPath, { temasRepository });
   const brickset = scraper ?? new BricksetScraper({ fetchImpl });
   const app = express();
 
   app.use(express.static(publicDirectory));
   app.use(async (request, response) => {
     const requestUrl = new URL(request.url, 'http://localhost');
+
+    if (requestUrl.pathname === '/temas') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      try {
+        sendJson(response, 200, await temasRepository.read());
+      } catch (error) {
+        if (error instanceof TemasNoDisponiblesError || error instanceof TemasInvalidosError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
 
     if (requestUrl.pathname === '/minifiguras') {
       if (request.method === 'GET') {
@@ -106,12 +132,20 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
           const minifiguras = await repository.list(filters);
           sendJson(response, 200, minifiguras);
         } catch (error) {
+          if (isTemasError(error)) {
+            sendJson(response, 500, { error: error.code });
+            return;
+          }
           if (error instanceof CatalogoNoDisponibleError) {
             sendJson(response, 500, { error: error.code });
             return;
           }
           if (error instanceof CatalogoInvalidoError) {
             sendJson(response, 500, { error: error.code });
+            return;
+          }
+          if (error instanceof MinifiguraInvalidaError) {
+            sendJson(response, 400, { error: error.code, parametro: 'tema' });
             return;
           }
           sendJson(response, 500, { error: 'ERROR_INTERNO' });
@@ -125,6 +159,10 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
           const minifigura = await repository.create(payload);
           sendJson(response, 201, minifigura);
         } catch (error) {
+          if (isTemasError(error)) {
+            sendJson(response, 500, { error: error.code });
+            return;
+          }
           if (error instanceof MinifiguraInvalidaError) {
             sendJson(response, 400, { error: error.code });
             return;
@@ -162,6 +200,10 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
         const summary = await repository.valuationSummary();
         sendJson(response, 200, summary);
       } catch (error) {
+        if (isTemasError(error)) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
         if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
           sendJson(response, 500, { error: error.code });
           return;
@@ -233,6 +275,10 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
           total: catalogo.length,
         });
       } catch (error) {
+        if (isTemasError(error)) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
         if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
           sendJson(response, 500, { error: error.code });
           return;
@@ -258,6 +304,10 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
           const minifigura = await repository.replace(id, payload);
           sendJson(response, 200, minifigura);
         } catch (error) {
+          if (isTemasError(error)) {
+            sendJson(response, 500, { error: error.code });
+            return;
+          }
           if (error instanceof MinifiguraInvalidaError) {
             sendJson(response, 400, { error: error.code });
             return;
@@ -284,6 +334,10 @@ export function createServer({ catalogPath = defaultCatalogPath, fetchImpl, scra
           await repository.delete(id);
           sendEmpty(response, 204);
         } catch (error) {
+          if (isTemasError(error)) {
+            sendJson(response, 500, { error: error.code });
+            return;
+          }
           if (error instanceof MinifiguraNoEncontradaError) {
             sendJson(response, 404, { error: error.code });
             return;
