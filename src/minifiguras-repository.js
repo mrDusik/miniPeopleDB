@@ -1,5 +1,6 @@
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
+import { TemasNoDisponiblesError } from './temas-repository.js';
 
 export class CatalogoNoDisponibleError extends Error {
   constructor() {
@@ -80,7 +81,7 @@ const MINIFIGURA_FIELDS = new Set([
   'precio',
 ]);
 
-function isMinifigura(value) {
+function isMinifigura(value, officialThemes) {
   return value !== null
     && typeof value === 'object'
     && !Array.isArray(value)
@@ -89,6 +90,7 @@ function isMinifigura(value) {
     && isNonEmptyText(value.nombre)
     && isNonEmptyText(value.descripcion)
     && isNonEmptyText(value.tematica)
+    && officialThemes.has(value.tematica)
     && Number.isInteger(value.anio)
     && isValidEstado(value.estadoColeccion)
     && isValidOptionalPrice(value.precioCompra)
@@ -96,8 +98,8 @@ function isMinifigura(value) {
     && isValidOptionalPrice(value.precio);
 }
 
-function validateCatalogo(value) {
-  if (!Array.isArray(value) || !value.every(isMinifigura)) {
+function validateCatalogo(value, officialThemes) {
+  if (!Array.isArray(value) || !value.every((item) => isMinifigura(item, officialThemes))) {
     throw new CatalogoInvalidoError();
   }
 
@@ -138,8 +140,17 @@ function matchesFilters(minifigura, filters) {
 }
 
 export class MinifigurasRepository {
-  constructor(filePath) {
+  constructor(filePath, { temasRepository } = {}) {
     this.filePath = filePath;
+    this.temasRepository = temasRepository;
+  }
+
+  async officialThemes() {
+    if (!this.temasRepository) {
+      throw new TemasNoDisponiblesError();
+    }
+    const temas = await this.temasRepository.read();
+    return new Set(temas.map(({ tema }) => tema));
   }
 
   async readCatalog() {
@@ -150,11 +161,14 @@ export class MinifigurasRepository {
       throw new CatalogoNoDisponibleError();
     }
 
+    let catalog;
     try {
-      return validateCatalogo(JSON.parse(content));
+      catalog = JSON.parse(content);
     } catch {
       throw new CatalogoInvalidoError();
     }
+
+    return validateCatalogo(catalog, await this.officialThemes());
   }
 
   async persist(catalogo) {
@@ -178,6 +192,14 @@ export class MinifigurasRepository {
 
     if (Object.keys(activeFilters).length === 0) {
       return minifiguras;
+    }
+
+    if (activeFilters.tema !== undefined && this.temasRepository) {
+      const officialThemes = await this.officialThemes();
+      const normalizedTheme = normalizeText(activeFilters.tema);
+      if (![...officialThemes].some((theme) => normalizeText(theme) === normalizedTheme)) {
+        throw new MinifiguraInvalidaError();
+      }
     }
 
     return minifiguras.filter((minifigura) => matchesFilters(minifigura, activeFilters));
@@ -294,11 +316,12 @@ export class MinifigurasRepository {
 
   async create(minifigura) {
     const catalogo = await this.readCatalog();
+    const officialThemes = await this.officialThemes();
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
     };
-    if (!isMinifigura(nextMinifigura)) {
+    if (!isMinifigura(nextMinifigura, officialThemes)) {
       throw new MinifiguraInvalidaError();
     }
     if (catalogo.some((item) => item.id === nextMinifigura.id)) {
@@ -312,11 +335,12 @@ export class MinifigurasRepository {
 
   async replace(id, minifigura) {
     const catalogo = await this.readCatalog();
+    const officialThemes = await this.officialThemes();
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
     };
-    if (!isMinifigura(nextMinifigura) || nextMinifigura.id !== id) {
+    if (!isMinifigura(nextMinifigura, officialThemes) || nextMinifigura.id !== id) {
       throw new MinifiguraInvalidaError();
     }
 

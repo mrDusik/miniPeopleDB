@@ -6,21 +6,30 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { createServer } from '../src/server.js';
 
+const officialThemes = await readFile(
+  new URL('../data/temas-brickset.json', import.meta.url),
+  'utf8',
+);
+const officialThemeNames = JSON.parse(officialThemes).map(({ tema }) => tema);
+const officialThemeSet = new Set(officialThemeNames);
+
 async function withServer(callback) {
   const directory = await mkdtemp(join(tmpdir(), 'minifiguras-web-'));
   const catalogPath = join(directory, 'minifiguras.json');
+  const themesPath = join(directory, 'temas.json');
   await writeFile(catalogPath, JSON.stringify([
     {
       id: 'mf-web',
       nombre: 'Figura web',
       descripcion: 'Figura para probar la interfaz',
-      tematica: 'Espacio',
+      tematica: 'Space',
       anio: 2023,
       estadoColeccion: 'COLECCIÓN',
     },
   ]));
+  await writeFile(themesPath, officialThemes);
 
-  const server = createServer({ catalogPath });
+  const server = createServer({ catalogPath, themesPath });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
 
@@ -53,7 +62,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
       id: 'mf-web',
       nombre: 'Figura web',
       descripcion: 'Figura para probar la interfaz',
-      tematica: 'Espacio',
+      tematica: 'Space',
       anio: 2023,
       estadoColeccion: 'COLECCIÓN',
     }]);
@@ -161,9 +170,9 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   const catalog = [
-    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'T', anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15 },
-    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'T', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50 },
-    { id: 'c', nombre: 'C', descripcion: 'C', tematica: 'T', anio: 2023, precioCompra: 20 },
+    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15 },
+    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'Space', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50 },
+    { id: 'c', nombre: 'C', descripcion: 'C', tematica: 'Space', anio: 2023, precioCompra: 20 },
   ];
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
@@ -171,6 +180,7 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const valuation = { total: 15, enColeccion: 2, buscadas: 1, top5: [], top5Antiguas: [] };
   window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => catalog };
     if (url === '/valoracion') return { ok: true, json: async () => valuation };
     return { ok: false, json: async () => ({}) };
@@ -180,6 +190,10 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
+  assert.deepEqual(
+    [...window.document.querySelectorAll('#tema option')].slice(1).map((option) => option.textContent),
+    officialThemeNames,
+  );
   assert.equal(rows()[0].children[8].textContent, '5,00 €');
   assert.equal(rows()[1].children[8].textContent, 'N/A');
   assert.equal(rows()[2].children[8].textContent, '?');
@@ -203,13 +217,16 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
+  assert.ok(officialThemeSet.has('Stranger Things'));
   const catalog = [{
     id: 'ST008', nombre: 'Demogorgon', descripcion: 'Figura', tematica: 'Stranger Things',
     anio: 2019, estadoColeccion: 'COLECCIÓN', precio: 109.56,
   }];
-  window.fetch = async (url) => url === '/valoracion'
-    ? { ok: true, json: async () => ({ total: 109.56, enColeccion: 1, buscadas: 0, top5: catalog, top5Antiguas: catalog }) }
-    : { ok: true, json: async () => catalog };
+  window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 109.56, enColeccion: 1, buscadas: 0, top5: catalog, top5Antiguas: catalog }) };
+    return { ok: true, json: async () => catalog };
+  };
 
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -227,13 +244,17 @@ test('los filtros muestran todos los estados, limitan el año y listan los temas
   const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
+  assert.ok(officialThemeSet.has('Space'));
+  assert.ok(officialThemeSet.has('Castle'));
   const catalog = [
-    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'Espacio', anio: 2024, estadoColeccion: 'COLECCIÓN' },
-    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'Piratas', anio: 1980, estadoColeccion: 'BUSCADA' },
+    { id: 'a', nombre: 'A', descripcion: 'A', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' },
+    { id: 'b', nombre: 'B', descripcion: 'B', tematica: 'Castle', anio: 1980, estadoColeccion: 'BUSCADA' },
   ];
-  window.fetch = async (url) => url === '/valoracion'
-    ? { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 1 }) }
-    : { ok: true, json: async () => catalog };
+  window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 1 }) };
+    return { ok: true, json: async () => catalog };
+  };
 
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -241,10 +262,94 @@ test('los filtros muestran todos los estados, limitan el año y listan los temas
   assert.equal(window.document.querySelector('#estadoColeccion').value, '');
   assert.deepEqual(
     [...window.document.querySelectorAll('#tema option')].map((option) => option.textContent),
-    ['Todos los temas', 'Espacio', 'Piratas'],
+    ['Todos los temas', ...officialThemeNames],
+  );
+  assert.deepEqual(
+    [...window.document.querySelectorAll('#form-tematica option')].map((option) => option.textContent),
+    ['Selecciona un tema', ...officialThemeNames],
   );
   assert.equal(window.document.querySelector('#anio').min, '1978');
   assert.equal(window.document.querySelector('#anio').max, String(new Date().getFullYear()));
+  dom.window.close();
+});
+
+test('la interfaz bloquea controles dependientes cuando no puede cargar temas', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = async () => ({ ok: false, json: async () => ({ error: 'TEMAS_NO_DISPONIBLES' }) });
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#tema').disabled, true);
+  assert.equal(window.document.querySelector('#form-tematica').disabled, true);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, true);
+  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
+  assert.match(window.document.querySelector('#status').textContent, /temas no está disponible/);
+  dom.window.close();
+});
+
+test('la interfaz bloquea controles dependientes si falla el catalogo de minifiguras', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
+    return { ok: false, json: async () => ({ error: 'CATALOGO_NO_DISPONIBLE' }) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#tema').disabled, true);
+  assert.equal(window.document.querySelector('#form-tematica').disabled, true);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, true);
+  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
+  dom.window.close();
+});
+
+test('la interfaz mantiene bloqueados los controles de temas tras sincronizar sin catálogo', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => [] };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 0 }) };
+    if (url === '/minifiguras' || url === '/valoracion') return { ok: true, json: async () => url === '/valoracion' ? { total: 0, enColeccion: 0, buscadas: 0 } : [] };
+    return { ok: false, json: async () => ({}) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.document.querySelector('#sync-prices').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#tema').disabled, true);
+  assert.equal(window.document.querySelector('#form-tematica').disabled, true);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, true);
+  dom.window.close();
+});
+
+test('la interfaz rechaza entradas de temas con propiedades adicionales o nombres no canónicos', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = async () => ({
+    ok: true,
+    json: async () => [{ tema: ' Space ', total: 1, extra: true }],
+  });
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#tema').disabled, true);
+  assert.equal(window.document.querySelector('#form-tematica').disabled, true);
+  assert.match(window.document.querySelector('#status').textContent, /temas no tiene un formato válido/);
   dom.window.close();
 });
 
@@ -255,11 +360,25 @@ test('la sincronización deshabilita los botones mientras está en curso', async
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  const catalog = [{
+    id: 'sync-test',
+    nombre: 'Figura de sincronización',
+    descripcion: 'Figura para probar la restauración de botones',
+    tematica: 'Space',
+    anio: 2024,
+    estadoColeccion: 'COLECCIÓN',
+  }];
   let releaseSync;
   const syncPending = new Promise((resolve) => { releaseSync = resolve; });
   window.fetch = async (url) => {
     if (url === '/sincronizacion/brickset') return syncPending;
-    if (url === '/minifiguras' || url === '/valoracion') return { ok: true, json: async () => url === '/valoracion' ? { total: 0, enColeccion: 0, buscadas: 0 } : [] };
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
+    if (url === '/minifiguras' || url === '/valoracion') return {
+      ok: true,
+      json: async () => url === '/valoracion'
+        ? { total: 0, enColeccion: 1, buscadas: 0 }
+        : catalog,
+    };
     return { ok: true, json: async () => ({}) };
   };
   window.eval(script);
@@ -270,7 +389,75 @@ test('la sincronización deshabilita los botones mientras está en curso', async
   assert.ok([...window.document.querySelectorAll('button')].every((button) => button.disabled));
   releaseSync({ ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 0 }) });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.ok([...window.document.querySelectorAll('button')].some((button) => !button.disabled));
+  for (const selector of [
+    '#show-all',
+    '#new-minifigura',
+    '#sync-prices',
+    '.table-sort',
+    '#lookup-price',
+    '#form-cancel',
+    '#delete-cancel',
+    '[data-action="edit"]',
+    '[data-action="delete"]',
+  ]) {
+    assert.equal(window.document.querySelector(selector).disabled, false, `${selector} debe reactivarse`);
+  }
+  dom.window.close();
+});
+
+test('la sincronización mantiene bloqueadas las acciones creadas al refrescar el catálogo', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const catalog = [{
+    id: 'sync-row',
+    nombre: 'Figura sincronizada',
+    descripcion: 'Figura para probar acciones nuevas',
+    tematica: 'Space',
+    anio: 2024,
+    estadoColeccion: 'COLECCIÓN',
+  }];
+  let valuationCalls = 0;
+  let releaseSummary;
+  const summaryPending = new Promise((resolve) => { releaseSummary = resolve; });
+  window.fetch = async (url) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 1 }) };
+    if (url === '/minifiguras') return { ok: true, json: async () => catalog };
+    if (url === '/valoracion') {
+      valuationCalls += 1;
+      return valuationCalls === 1
+        ? { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) }
+        : summaryPending;
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.document.querySelector('#sync-prices').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('[data-action="edit"]').disabled, true);
+  assert.equal(window.document.querySelector('[data-action="delete"]').disabled, true);
+  assert.equal(window.document.querySelector('.id-link').disabled, true);
+  assert.equal(window.document.querySelector('#tema').disabled, true);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, true);
+  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
+
+  releaseSummary({
+    ok: true,
+    json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('[data-action="edit"]').disabled, false);
+  assert.equal(window.document.querySelector('[data-action="delete"]').disabled, false);
+  assert.equal(window.document.querySelector('.id-link').disabled, false);
+  assert.equal(window.document.querySelector('#tema').disabled, false);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, false);
+  assert.equal(window.document.querySelector('#sync-prices').disabled, false);
   dom.window.close();
 });
 
@@ -279,10 +466,12 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
+  assert.ok(officialThemeSet.has('Space'));
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   let submittedPayload;
   window.fetch = async (url, options = {}) => {
+    if (url === '/temas') return { ok: true, json: async () => JSON.parse(officialThemes) };
     if (url === '/minifiguras' && options.method === 'POST') {
       submittedPayload = JSON.parse(options.body);
       return { ok: true, status: 201, json: async () => submittedPayload };
@@ -301,7 +490,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.document.querySelector('#new-minifigura').click();
   window.document.querySelector('#form-id').value = 'new-figure';
   window.document.querySelector('#form-nombre').value = 'Nueva';
-  window.document.querySelector('#form-tematica').value = 'Espacio';
+  window.document.querySelector('#form-tematica').value = 'Space';
   window.document.querySelector('#form-anio').value = '2024';
   window.document.querySelector('#form-estadoColeccion').value = '';
   window.document.querySelector('#minifigura-form').dispatchEvent(

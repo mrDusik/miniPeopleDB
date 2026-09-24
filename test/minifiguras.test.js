@@ -5,15 +5,24 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { createServer } from '../src/server.js';
+import { TemasRepository } from '../src/temas-repository.js';
+
+const officialThemes = await readFile(
+  new URL('../data/temas-brickset.json', import.meta.url),
+  'utf8',
+);
+const officialThemeNames = new Set(JSON.parse(officialThemes).map(({ tema }) => tema));
 
 async function withServer(catalog, callback) {
   const directory = await mkdtemp(join(tmpdir(), 'minifiguras-'));
   const catalogPath = join(directory, 'minifiguras.json');
+  const themesPath = join(directory, 'temas.json');
   if (catalog !== undefined) {
     await writeFile(catalogPath, catalog);
   }
+  await writeFile(themesPath, officialThemes);
 
-  const server = createServer({ catalogPath });
+  const server = createServer({ catalogPath, themesPath });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
 
@@ -28,8 +37,10 @@ async function withServer(catalog, callback) {
 async function withServerOptions(catalog, options, callback) {
   const directory = await mkdtemp(join(tmpdir(), 'minifiguras-options-'));
   const catalogPath = join(directory, 'minifiguras.json');
+  const themesPath = join(directory, 'temas.json');
   await writeFile(catalogPath, catalog);
-  const server = createServer({ catalogPath, ...options });
+  await writeFile(themesPath, officialThemes);
+  const server = createServer({ catalogPath, themesPath, ...options });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
 
@@ -46,11 +57,19 @@ function makeMinifigura(overrides = {}) {
     id: 'mf-001',
     nombre: 'Explorador',
     descripcion: 'Figura espacial',
-    tematica: 'Espacio',
+    tematica: 'Space',
     anio: 2023,
     estadoColeccion: 'COLECCIÓN',
     ...overrides,
   };
+}
+
+async function repositoryWithOfficialThemes(directory, catalogPath) {
+  const themesPath = join(directory, 'temas.json');
+  await writeFile(themesPath, officialThemes);
+  return new MinifigurasRepository(catalogPath, {
+    temasRepository: new TemasRepository(themesPath),
+  });
 }
 
 test('GET /minifiguras devuelve el catalogo y conserva su orden', async () => {
@@ -70,40 +89,50 @@ test('GET /minifiguras devuelve el catalogo y conserva su orden', async () => {
   });
 });
 
+test('GET /temas devuelve el catalogo oficial en el orden persistido', async () => {
+  const catalog = JSON.stringify([makeMinifigura({ id: 'a', tematica: 'Space' })]);
+
+  await withServer(catalog, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/temas`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), JSON.parse(officialThemes));
+  });
+});
+
 test('GET /minifiguras filtra por tema, anio y estado de coleccion', async () => {
   const catalog = JSON.stringify([
-    makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Espacio', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Mar', anio: 2023, estadoColeccion: 'BUSCADA' }),
-    makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Espacio', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'd', nombre: 'Samurái', tematica: 'Historia', anio: 2024, estadoColeccion: 'BUSCADA' }),
+    makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
+    makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'd', nombre: 'Samurái', tematica: 'Collectible Minifigures', anio: 2024, estadoColeccion: 'BUSCADA' }),
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const byTheme = await fetch(`${baseUrl}/minifiguras?tema=espacio`);
+    const byTheme = await fetch(`${baseUrl}/minifiguras?tema=space`);
     assert.equal(byTheme.status, 200);
     assert.deepEqual(await byTheme.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Espacio', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Espacio', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
     ]);
 
     const byYear = await fetch(`${baseUrl}/minifiguras?anio=2023`);
     assert.equal(byYear.status, 200);
     assert.deepEqual(await byYear.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Espacio', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-        makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Mar', anio: 2023, estadoColeccion: 'BUSCADA' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+        makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
     ]);
 
     const byCollectionState = await fetch(`${baseUrl}/minifiguras?estadoColeccion=coleccion`);
     assert.equal(byCollectionState.status, 200);
     assert.deepEqual(await byCollectionState.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Espacio', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Espacio', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
     ]);
 
-    const combined = await fetch(`${baseUrl}/minifiguras?tema=espacio&anio=2023&estadoColeccion=coleccion`);
+    const combined = await fetch(`${baseUrl}/minifiguras?tema=space&anio=2023&estadoColeccion=coleccion`);
     assert.equal(combined.status, 200);
     assert.deepEqual(await combined.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Espacio', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
     ]);
   });
 });
@@ -120,11 +149,11 @@ test('GET /minifiguras rechaza un anio no entero', async () => {
 
 test('GET /minifiguras conserva la comparacion insensible a mayusculas y permite resultados vacios', async () => {
   const catalog = JSON.stringify([
-    makeMinifigura({ id: 'a', tematica: 'Espacio', estadoColeccion: 'COLECCIÓN' }),
+    makeMinifigura({ id: 'a', tematica: 'Space', estadoColeccion: 'COLECCIÓN' }),
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/minifiguras?tema=ESPACIO&estadoColeccion=coleccion`);
+    const response = await fetch(`${baseUrl}/minifiguras?tema=SPACE&estadoColeccion=coleccion`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), JSON.parse(catalog));
 
@@ -139,6 +168,31 @@ test('GET /minifiguras rechaza un estado de filtro invalido', async () => {
     const response = await fetch(`${baseUrl}/minifiguras?estadoColeccion=VENDIDA`);
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: 'PARAMETRO_INVALIDO', parametro: 'estadoColeccion' });
+  });
+});
+
+test('GET, POST y PUT rechazan temas que no pertenecen al catalogo oficial', async () => {
+  const initialCatalog = JSON.stringify([makeMinifigura({ id: 'a', tematica: 'Space' })]);
+
+  await withServer(initialCatalog, async (baseUrl) => {
+    const invalidFilter = await fetch(`${baseUrl}/minifiguras?tema=Desconocido`);
+    assert.equal(invalidFilter.status, 400);
+    assert.deepEqual(await invalidFilter.json(), { error: 'MINIFIGURA_INVALIDA', parametro: 'tema' });
+
+    const invalidCreate = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'b', tematica: 'Desconocido' })),
+    });
+    assert.equal(invalidCreate.status, 400);
+
+    const invalidReplace = await fetch(`${baseUrl}/minifiguras/a`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'a', tematica: 'Desconocido' })),
+    });
+    assert.equal(invalidReplace.status, 400);
+    assert.deepEqual(await (await fetch(`${baseUrl}/minifiguras`)).json(), JSON.parse(initialCatalog));
   });
 });
 
@@ -177,13 +231,51 @@ test('GET /minifiguras devuelve error controlado para JSON o estructura invalida
   }
 });
 
+test('las operaciones de minifiguras informan errores del catalogo de temas', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-temas-invalidos-'));
+  const catalogPath = join(directory, 'minifiguras.json');
+  const themesPath = join(directory, 'temas.json');
+  const catalog = [makeMinifigura({ id: 'a' })];
+  await writeFile(catalogPath, JSON.stringify(catalog));
+
+  const server = createServer({ catalogPath, themesPath });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const list = await fetch(`http://127.0.0.1:${port}/minifiguras`);
+    assert.equal(list.status, 500);
+    assert.deepEqual(await list.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+
+    const create = await fetch(`http://127.0.0.1:${port}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'b' })),
+    });
+    assert.equal(create.status, 500);
+    assert.deepEqual(await create.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+
+    const replace = await fetch(`http://127.0.0.1:${port}/minifiguras/a`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'a' })),
+    });
+    assert.equal(replace.status, 500);
+    assert.deepEqual(await replace.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+    assert.deepEqual(JSON.parse(await readFile(catalogPath, 'utf8')), catalog);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('POST /minifiguras crea una minifigura y persiste el catalogo actualizado', async () => {
   const initialCatalog = JSON.stringify([
     makeMinifigura({ id: 'a' }),
   ]);
 
   await withServer(initialCatalog, async (baseUrl) => {
-    const payload = makeMinifigura({ id: 'b', nombre: 'Constructora', tematica: 'Ciudad' });
+    const payload = makeMinifigura({ id: 'b', nombre: 'Constructora', tematica: 'Space' });
 
     const response = await fetch(`${baseUrl}/minifiguras`, {
       method: 'POST',
@@ -209,7 +301,7 @@ test('PUT /minifiguras/:id reemplaza una minifigura existente sin mover su posic
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const replacement = makeMinifigura({ id: 'b', nombre: 'Reemplazada', tematica: 'Aventura' });
+    const replacement = makeMinifigura({ id: 'b', nombre: 'Reemplazada', tematica: 'Space' });
     const response = await fetch(`${baseUrl}/minifiguras/b`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -317,7 +409,56 @@ test('el archivo inicial es JSON valido', async () => {
   const catalog = JSON.parse(content);
   assert.ok(Array.isArray(catalog));
   assert.ok(catalog.length > 0);
-  assert.ok(catalog.every((minifigura) => minifigura.tematica && minifigura.anio));
+  assert.ok(catalog.every((minifigura) => (
+    officialThemeNames.has(minifigura.tematica)
+    && minifigura.tematica !== 'Series 5'
+    && minifigura.tematica !== 'Series 9'
+    && minifigura.anio
+  )));
+});
+
+test('la migracion conserva estados y todos los temas persistidos son oficiales', async () => {
+  const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
+  const catalog = JSON.parse(content);
+
+  assert.ok(catalog.every((minifigura) => officialThemeNames.has(minifigura.tematica)));
+  assert.ok(catalog.every((minifigura) => ['COLECCIÓN', 'BUSCADA'].includes(minifigura.estadoColeccion)));
+  assert.equal(catalog.some((minifigura) => /^Series\s+/i.test(minifigura.tematica)), false);
+});
+
+test('la migracion conserva el orden y los datos de valoracion persistidos', async () => {
+  const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
+  const catalog = JSON.parse(content);
+  const expected = [
+    ['col079', 'BUSCADA', undefined, undefined, 9.07],
+    ['ST008', 'COLECCIÓN', 35.49, '2026-07-22', 109.56],
+    ['LOR139', 'COLECCIÓN', undefined, undefined, 33.53],
+    ['EDI002', 'COLECCIÓN', 16.11, '2026-05-26', 11.32],
+    ['IDEA106', 'COLECCIÓN', undefined, undefined, 16.85],
+    ['EDI003', 'COLECCIÓN', 15.2, '2026-05-26', 10.81],
+    ['NIKE001', 'COLECCIÓN', undefined, undefined, 18.32],
+    ['DIM018', 'COLECCIÓN', 25.69, '2026-09-20', 26.57],
+    ['DIM040', 'COLECCIÓN', 21.28, '2026-07-09', 77.49],
+    ['COL137', 'BUSCADA', undefined, undefined, 18.68],
+    ['DIM030', 'BUSCADA', undefined, undefined, 30.18],
+    ['DIM033', 'BUSCADA', undefined, undefined, 21.66],
+    ['DIM032', 'BUSCADA', undefined, undefined, 20.98],
+    ['NJO1048', 'COLECCIÓN', 7.99, undefined, 14.88],
+    ['COLSH10', 'COLECCIÓN', undefined, undefined, 40.92],
+    ['ST014', 'COLECCIÓN', undefined, undefined, 36.86],
+    ['CAS215', 'COLECCIÓN', undefined, undefined, 17.53],
+    ['WW008', 'COLECCIÓN', undefined, undefined, 10.53],
+    ['NJO1051', 'COLECCIÓN', 7.99, undefined, 17.93],
+    ['SH1152', 'BUSCADA', undefined, undefined, 51.87],
+  ];
+
+  assert.deepEqual(catalog.map((item) => [
+    item.id,
+    item.estadoColeccion,
+    item.precioCompra,
+    item.fechaCompra,
+    item.precio,
+  ]), expected);
 });
 
 test('conserva los campos planos de precio y calcula el total priorizando precio', async () => {
@@ -566,7 +707,7 @@ test('updatePrices conserva el archivo original si falla la persistencia', async
   await writeFile(catalogPath, originalCatalog);
 
   try {
-    const repository = new MinifigurasRepository(catalogPath);
+    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
     repository.persist = async () => {
       throw new Error('fallo de persistencia simulado');
     };
@@ -588,7 +729,7 @@ test('updatePrices rechaza precios invalidos antes de persistir', async () => {
   await writeFile(catalogPath, originalCatalog);
 
   try {
-    const repository = new MinifigurasRepository(catalogPath);
+    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
     await assert.rejects(
       () => repository.updatePrices(new Map([['a', -1]])),
       (error) => error.code === 'MINIFIGURA_INVALIDA',
@@ -605,9 +746,25 @@ test('updatePrices rechaza IDs inexistentes y precios undefined', async () => {
   await writeFile(catalogPath, JSON.stringify([makeMinifigura({ id: 'a', precio: 10 })]));
 
   try {
-    const repository = new MinifigurasRepository(catalogPath);
+    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
     await assert.rejects(() => repository.updatePrices(new Map([['missing', 20]])), (error) => error.code === 'MINIFIGURA_NO_ENCONTRADA');
     await assert.rejects(() => repository.updatePrices(new Map([['a', undefined]])), (error) => error.code === 'MINIFIGURA_INVALIDA');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('el repositorio no permite operar sin catálogo oficial de temas', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-required-themes-'));
+  const catalogPath = join(directory, 'minifiguras.json');
+  await writeFile(catalogPath, JSON.stringify([makeMinifigura({ id: 'a' })]));
+
+  try {
+    const repository = new MinifigurasRepository(catalogPath);
+    await assert.rejects(
+      () => repository.list(),
+      (error) => error.code === 'TEMAS_NO_DISPONIBLES',
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

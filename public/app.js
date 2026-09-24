@@ -52,6 +52,8 @@ const ERROR_MESSAGES = {
   MINIFIGURA_NO_ENCONTRADA: 'La minifigura ya no existe.',
   CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
   CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
+  TEMAS_NO_DISPONIBLES: 'El catálogo de temas no está disponible en este momento.',
+  TEMAS_INVALIDOS: 'El catálogo de temas no tiene un formato válido.',
 };
 
 let requestSequence = 0;
@@ -61,19 +63,74 @@ let currentEditId = null;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
+let officialThemes = [];
+let themesReady = false;
+let syncButtonStates = new Map();
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
 
-function renderThemeOptions(catalog) {
+function renderThemeOptions(themes) {
   const selectedTheme = temaInput.value;
-  const themes = [...new Set(catalog.map((minifigura) => minifigura.tematica).filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right, 'es'));
   temaInput.replaceChildren(new Option('Todos los temas', ''));
   for (const theme of themes) {
     temaInput.append(new Option(theme, theme));
   }
   temaInput.value = themes.includes(selectedTheme) ? selectedTheme : '';
+
+  const selectedFormTheme = formTematicaInput.value;
+  formTematicaInput.replaceChildren(new Option('Selecciona un tema', ''));
+  for (const theme of themes) {
+    formTematicaInput.append(new Option(theme, theme));
+  }
+  formTematicaInput.value = themes.includes(selectedFormTheme) ? selectedFormTheme : '';
+}
+
+function setThemeControlsEnabled(enabled) {
+  temaInput.disabled = !enabled;
+  formTematicaInput.disabled = !enabled;
+  newMinifiguraButton.disabled = !enabled;
+  syncPricesButton.disabled = !enabled;
+}
+
+async function loadThemes() {
+  try {
+    const response = await fetch('/temas');
+    if (!response.ok) {
+      throw new Error('TEMAS_NO_DISPONIBLES');
+    }
+    const themes = await response.json();
+    if (!Array.isArray(themes) || themes.length === 0 || themes.some((theme) => (
+      theme === null
+      || typeof theme !== 'object'
+      || Array.isArray(theme)
+      || Object.keys(theme).length !== 2
+      || !Object.hasOwn(theme, 'tema')
+      || !Object.hasOwn(theme, 'total')
+      || typeof theme.tema !== 'string'
+      || theme.tema !== theme.tema.trim()
+      || theme.tema === ''
+      || !Number.isInteger(theme.total)
+      || theme.total < 0
+    ))) {
+      throw new Error('TEMAS_INVALIDOS');
+    }
+    const normalizedThemes = themes.map(({ tema }) => tema.trim().normalize('NFKC').toLocaleLowerCase());
+    if (new Set(normalizedThemes).size !== normalizedThemes.length) {
+      throw new Error('TEMAS_INVALIDOS');
+    }
+    officialThemes = themes.map(({ tema }) => tema);
+    renderThemeOptions(officialThemes);
+    themesReady = true;
+    setThemeControlsEnabled(true);
+    return true;
+  } catch (error) {
+    themesReady = false;
+    officialThemes = [];
+    setThemeControlsEnabled(false);
+    setStatus(messageForErrorCode(error.message), 'error');
+    return false;
+  }
 }
 
 function setStatus(message, type = '') {
@@ -149,6 +206,7 @@ function renderTopFive(topFive) {
   topFive.forEach((minifigura, index) => {
     topFiveList.append(rankingCard(minifigura, index + 1, formatPrice(minifigura.precio)));
   });
+  trackButtonsDuringSync(topFiveList);
 }
 
 function renderOldestFive(oldestFive) {
@@ -156,6 +214,7 @@ function renderOldestFive(oldestFive) {
   oldestFive.forEach((minifigura, index) => {
     oldestFiveList.append(rankingCard(minifigura, index + 1, minifigura.anio));
   });
+  trackButtonsDuringSync(oldestFiveList);
 }
 
 function sortCatalog(catalog) {
@@ -264,12 +323,25 @@ function renderCatalog(catalog) {
     );
     catalogBody.append(row);
   }
+  trackButtonsDuringSync(catalogBody);
 
   if (catalog.length === 0) {
     setStatus('No hay minifiguras que coincidan con la consulta.');
   } else {
     setStatus('Catálogo actualizado.');
   }
+}
+
+function trackButtonsDuringSync(container) {
+  if (!isSyncingPrices) {
+    return;
+  }
+  container.querySelectorAll('button').forEach((button) => {
+    if (!syncButtonStates.has(button)) {
+      syncButtonStates.set(button, button.disabled);
+    }
+    button.disabled = true;
+  });
 }
 
 function setLoading(isLoading) {
@@ -281,12 +353,21 @@ function setLoading(isLoading) {
 
 function setSyncLoading(isLoading) {
   isSyncingPrices = isLoading;
-  document.querySelectorAll('button').forEach((button) => {
-    button.disabled = isLoading;
-  });
-  if (!isLoading) {
-    controls.forEach((control) => { control.disabled = false; });
+  if (isLoading) {
+    syncButtonStates = new Map(
+      [...document.querySelectorAll('button')].map((button) => [button, button.disabled]),
+    );
+    syncButtonStates.forEach((wasDisabled, button) => {
+      button.disabled = true;
+    });
+    return;
   }
+
+  syncButtonStates.forEach((wasDisabled, button) => {
+    button.disabled = wasDisabled;
+  });
+  syncButtonStates.clear();
+  setThemeControlsEnabled(themesReady);
 }
 
 async function loadCatalog(filters = {}) {
@@ -308,9 +389,6 @@ async function loadCatalog(filters = {}) {
       throw new Error('Respuesta invalida');
     }
     if (currentRequest === requestSequence) {
-      if (Object.keys(filters).length === 0) {
-        renderThemeOptions(catalog);
-      }
       renderCatalog(catalog);
       await loadTotal();
     }
@@ -318,11 +396,15 @@ async function loadCatalog(filters = {}) {
     if (currentRequest === requestSequence) {
       catalogBody.replaceChildren();
       resultCount.textContent = '';
+      themesReady = false;
+      officialThemes = [];
+      setThemeControlsEnabled(false);
       setStatus('No se pudo cargar el catálogo. Inténtalo de nuevo.', 'error');
     }
   } finally {
     if (currentRequest === requestSequence) {
       setLoading(false);
+      setThemeControlsEnabled(!isSyncingPrices && themesReady);
     }
   }
 }
@@ -387,6 +469,10 @@ function mostrarImagenMinifigura(id) {
 }
 
 function openFormDialog(mode, minifigura) {
+  if (!themesReady) {
+    showToast('No se pueden crear minifiguras sin cargar los temas oficiales.', 'error');
+    return;
+  }
   currentEditId = mode === 'edit' ? minifigura.id : null;
   minifiguraForm.reset();
   formError.textContent = '';
@@ -456,6 +542,9 @@ function validatePayload(payload) {
   }
   if (!payload.tematica) {
     return 'La temática es obligatoria.';
+  }
+  if (!officialThemes.includes(payload.tematica)) {
+    return 'La temática debe ser un tema oficial de Brickset.';
   }
   if (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear) {
     return `El año es obligatorio y debe ser un número entero entre 1978 y ${currentYear}.`;
@@ -695,4 +784,11 @@ deleteConfirmButton.addEventListener('click', async () => {
   }
 });
 
-loadCatalog();
+async function initialize() {
+  if (await loadThemes()) {
+    await loadCatalog();
+  }
+}
+
+setThemeControlsEnabled(false);
+initialize();
