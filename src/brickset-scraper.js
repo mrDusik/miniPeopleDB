@@ -58,6 +58,7 @@ function decodeMinifigEntities(value) {
     .replace(/&nbsp;|&#160;/gi, ' ')
     .replace(/&eacute;/gi, 'é')
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -79,7 +80,7 @@ export function parseBricksetDetails(html) {
   return {
     categoria: decodeMinifigEntities(categoria),
     subcategoria: subcategoria ? decodeMinifigEntities(subcategoria) : undefined,
-    anio: Number(anioText),
+    anio: Number(anioText) || undefined,
     precio: parseBricksetPrice(html),
   };
 }

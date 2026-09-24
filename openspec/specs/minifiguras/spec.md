@@ -12,7 +12,7 @@ El sistema SHALL exponer `GET /minifiguras` y SHALL obtener la colección desde 
 - **WHEN** un cliente realiza `GET /minifiguras` y el archivo JSON contiene una colección válida
 - **THEN** el sistema responde con HTTP `200`
 - **AND** el cuerpo es JSON con un arreglo de minifiguras
-- **AND** cada minifigura incluye al menos `id`, `nombre` y `descripcion`
+	- **AND** cada minifigura incluye al menos `id`, `nombre` y `FechaRegistro`
 - **AND** los campos planos de precio se devuelven sin consultar Brickset
 
 #### Scenario: Catálogo vacío
@@ -46,6 +46,34 @@ La implementación SHALL incluir un archivo JSON inicial válido y SHALL permiti
 - **WHEN** una actualización de precios no puede reemplazar el archivo local
 - **THEN** el sistema informa un error controlado
 - **AND** el archivo anterior permanece legible y sin datos parcialmente escritos
+
+### Requirement: Permitir descripción y año ausentes
+
+El sistema SHALL aceptar minifiguras sin `descripcion` y sin `anio`. Cuando Brickset devuelva el año `0`, la aplicación SHALL tratarlo como ausente y SHALL dejar vacío el campo Año del formulario.
+
+#### Scenario: Crear sin descripción ni año
+- **WHEN** se crea o edita una minifigura sin `descripcion` o sin `anio`
+- **THEN** la operación se completa correctamente
+- **AND** esos campos permanecen ausentes o vacíos
+
+#### Scenario: Brickset devuelve año cero
+- **WHEN** Brickset devuelve `0` como año de lanzamiento
+- **THEN** la API no incluye un año válido para ese resultado
+- **AND** el formulario deja vacío el campo Año
+
+### Requirement: Registrar y ordenar por fecha de alta
+
+Cada minifigura SHALL conservar un campo `FechaRegistro` con una marca temporal ISO de su alta. Las altas nuevas SHALL generarlo automáticamente y las ediciones SHALL conservarlo. Los registros antiguos sin ese campo SHALL migrarse una sola vez a marcas persistidas. La interfaz SHALL ordenar la tabla por `FechaRegistro` descendente por defecto y no SHALL mostrar esa columna.
+
+#### Scenario: Alta y edición conservan FechaRegistro
+- **WHEN** se crea una minifigura y posteriormente se edita
+- **THEN** la alta incluye `FechaRegistro`
+- **AND** la edición conserva exactamente la misma marca
+
+#### Scenario: Orden por alta más reciente
+- **WHEN** se muestra la tabla sin una ordenación manual
+- **THEN** las minifiguras aparecen de `FechaRegistro` más reciente a más antigua
+- **AND** `FechaRegistro` no se muestra como columna
 
 ### Requirement: Restringir el estado de la minifigura
 

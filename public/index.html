@@ -10,14 +10,28 @@
 <body>
   <main class="page-shell">
     <header class="page-header">
-      <p class="eyebrow">LEGO Mini API</p>
-      <h1>Catálogo de minifiguras</h1>
+      <p class="eyebrow">by MrDusik</p>
+      <h1>MiniPeopleDB</h1>
       <p class="intro">Explora las figuras disponibles y encuentra rápidamente la pieza que buscas.</p>
-      <div class="collection-summary" aria-live="polite">
-        <span>Valor Total de la Colección (<span id="collection-count">0 minifiguras</span>):</span>
-        <strong id="collection-total">€0,00</strong>
-        <span id="wanted-count">Total de figuras buscadas: 0</span>
-        <button type="button" id="sync-prices" class="button button-primary">Actualizar precios desde Brickset</button>
+      <div class="summary-row">
+        <section class="gamification-summary" aria-labelledby="gamification-title">
+          <button type="button" id="gamification-level" class="gamification-level" aria-haspopup="dialog">
+            <span id="gamification-title">Nivel Duplo</span>
+            <strong id="gamification-bricks">0 Bricks</strong>
+          </button>
+          <div class="gamification-progress">
+            <progress id="gamification-progress" max="100" value="0">0%</progress>
+            <span id="gamification-next">Próximo nivel: Stud</span>
+          </div>
+        </section>
+        <div class="collection-summary" aria-live="polite">
+          <div class="collection-summary-content">
+            <span>Valor Total de la Colección (<span id="collection-count">0 minifiguras</span>):</span>
+            <strong id="collection-total">€0,00</strong>
+            <span id="wanted-count">Total de figuras buscadas: 0</span>
+          </div>
+          <button type="button" id="sync-prices" class="button button-primary button-small">Actualizar precios desde Brickset</button>
+        </div>
       </div>
     </header>
 
@@ -109,6 +123,11 @@
           <tbody id="catalog-body"></tbody>
         </table>
       </div>
+      <nav id="catalog-pagination" class="catalog-pagination" aria-label="Paginación del catálogo">
+        <button type="button" id="previous-page" class="button button-secondary button-small">Anterior</button>
+        <span id="page-status" aria-live="polite">Página 1 de 1</span>
+        <button type="button" id="next-page" class="button button-secondary button-small">Siguiente</button>
+      </nav>
     </section>
 
     <dialog id="form-dialog" class="modal">
@@ -181,6 +200,12 @@
         <button type="button" id="delete-confirm" class="button button-danger">Eliminar</button>
         <button type="button" id="delete-cancel" class="button button-secondary">Cancelar</button>
       </div>
+    </dialog>
+
+    <dialog id="gamification-dialog" class="modal" aria-labelledby="gamification-dialog-title">
+      <h2 id="gamification-dialog-title">Logros conseguidos</h2>
+      <ul id="gamification-achievements"></ul>
+      <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>

@@ -69,6 +69,10 @@ function isValidEstado(value) {
   return value === 'COLECCIÓN' || value === 'BUSCADA';
 }
 
+function isValidOptionalRegistrationDate(value) {
+  return value === undefined || (typeof value === 'string' && !Number.isNaN(Date.parse(value)));
+}
+
 const MINIFIGURA_FIELDS = new Set([
   'id',
   'nombre',
@@ -80,6 +84,7 @@ const MINIFIGURA_FIELDS = new Set([
   'precioCompra',
   'fechaCompra',
   'precio',
+  'FechaRegistro',
 ]);
 
 function isValidOptionalSubcategoria(value, categoria, officialCategorias) {
@@ -100,15 +105,16 @@ function isMinifigura(value, officialCategorias) {
     && Object.keys(value).every((key) => MINIFIGURA_FIELDS.has(key))
     && isNonEmptyText(value.id)
     && isNonEmptyText(value.nombre)
-    && isNonEmptyText(value.descripcion)
+    && (value.descripcion === undefined || typeof value.descripcion === 'string')
     && isNonEmptyText(value.categoria)
     && officialCategorias.has(value.categoria)
     && isValidOptionalSubcategoria(value.subcategoria, value.categoria, officialCategorias)
-    && Number.isInteger(value.anio)
+    && (value.anio === undefined || Number.isInteger(value.anio))
     && isValidEstado(value.estadoColeccion)
     && isValidOptionalPrice(value.precioCompra)
     && isValidOptionalPurchaseDate(value.fechaCompra)
-    && isValidOptionalPrice(value.precio);
+    && isValidOptionalPrice(value.precio)
+    && isValidOptionalRegistrationDate(value.FechaRegistro);
 }
 
 function validateCatalogo(value, officialCategorias) {
@@ -125,6 +131,19 @@ function validateCatalogo(value, officialCategorias) {
   }
 
   return value;
+}
+
+function addMissingRegistrationDates(catalogo) {
+  const now = Date.now();
+  let changed = false;
+  const normalized = catalogo.map((minifigura, index) => {
+    if (minifigura.FechaRegistro !== undefined) {
+      return minifigura;
+    }
+    changed = true;
+    return { ...minifigura, FechaRegistro: new Date(now + index).toISOString() };
+  });
+  return { catalogo: normalized, changed };
 }
 
 function normalizeText(value) {
@@ -162,9 +181,11 @@ function matchesFilters(minifigura, filters) {
 }
 
 export class MinifigurasRepository {
-  constructor(filePath, { categoriasRepository } = {}) {
+  constructor(filePath, { categoriasRepository, onCatalogPersisted } = {}) {
     this.filePath = filePath;
     this.categoriasRepository = categoriasRepository;
+    this.onCatalogPersisted = onCatalogPersisted;
+    this.lastGamification = null;
   }
 
   async officialCategorias() {
@@ -190,7 +211,12 @@ export class MinifigurasRepository {
       throw new CatalogoInvalidoError();
     }
 
-    return validateCatalogo(catalog, await this.officialCategorias());
+    const validatedCatalog = validateCatalogo(catalog, await this.officialCategorias());
+    const normalizedCatalog = addMissingRegistrationDates(validatedCatalog);
+    if (normalizedCatalog.changed) {
+      await this.persist(normalizedCatalog.catalogo);
+    }
+    return normalizedCatalog.catalogo;
   }
 
   async persist(catalogo) {
@@ -254,6 +280,7 @@ export class MinifigurasRepository {
       return nextPrice === undefined ? minifigura : { ...minifigura, precio: nextPrice };
     });
     await this.persist(nextCatalog);
+    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
     return nextCatalog;
   }
 
@@ -342,6 +369,7 @@ export class MinifigurasRepository {
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
+      FechaRegistro: new Date().toISOString(),
     };
     if (!isMinifigura(nextMinifigura, officialCategorias)) {
       throw new MinifiguraInvalidaError();
@@ -352,6 +380,7 @@ export class MinifigurasRepository {
 
     const nextCatalog = [...catalogo, nextMinifigura];
     await this.persist(nextCatalog);
+    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
     return nextMinifigura;
   }
 
@@ -361,6 +390,7 @@ export class MinifigurasRepository {
     const nextMinifigura = {
       ...minifigura,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
+      FechaRegistro: catalogo.find((item) => item.id === id)?.FechaRegistro,
     };
     if (!isMinifigura(nextMinifigura, officialCategorias) || nextMinifigura.id !== id) {
       throw new MinifiguraInvalidaError();
@@ -374,6 +404,7 @@ export class MinifigurasRepository {
     const nextCatalog = [...catalogo];
     nextCatalog[index] = nextMinifigura;
     await this.persist(nextCatalog);
+    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
     return nextMinifigura;
   }
 
@@ -386,5 +417,6 @@ export class MinifigurasRepository {
 
     const nextCatalog = catalogo.filter((item) => item.id !== id);
     await this.persist(nextCatalog);
+    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
   }
 }

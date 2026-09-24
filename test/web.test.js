@@ -25,6 +25,7 @@ async function withServer(callback) {
       categoria: 'Space',
       anio: 2023,
       estadoColeccion: 'COLECCIÓN',
+      FechaRegistro: '2026-01-01T00:00:00.000Z',
     },
   ]));
   await writeFile(themesPath, officialCategoriasRaw);

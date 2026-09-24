@@ -3,6 +3,9 @@ const showAllButton = document.querySelector('#show-all');
 const statusMessage = document.querySelector('#status');
 const resultCount = document.querySelector('#result-count');
 const catalogBody = document.querySelector('#catalog-body');
+const previousPageButton = document.querySelector('#previous-page');
+const nextPageButton = document.querySelector('#next-page');
+const pageStatus = document.querySelector('#page-status');
 const newMinifiguraButton = document.querySelector('#new-minifigura');
 const syncPricesButton = document.querySelector('#sync-prices');
 const collectionTotal = document.querySelector('#collection-total');
@@ -47,6 +50,14 @@ const imageModalImage = document.querySelector('#image-modal-image');
 const imageModalCloseButton = document.querySelector('#image-modal-close');
 
 const toastRegion = document.querySelector('#toast-region');
+const gamificationLevelButton = document.querySelector('#gamification-level');
+const gamificationTitle = document.querySelector('#gamification-title');
+const gamificationBricks = document.querySelector('#gamification-bricks');
+const gamificationProgress = document.querySelector('#gamification-progress');
+const gamificationNext = document.querySelector('#gamification-next');
+const gamificationDialog = document.querySelector('#gamification-dialog');
+const gamificationAchievements = document.querySelector('#gamification-achievements');
+const gamificationCloseButton = document.querySelector('#gamification-close');
 
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
@@ -70,6 +81,10 @@ let officialCategorias = [];
 let subcategoriasPorCategoria = new Map();
 let categoriasReady = false;
 let syncButtonStates = new Map();
+const pageSize = 10;
+let currentPage = 1;
+let achievementQueue = [];
+let isShowingAchievement = false;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -246,7 +261,17 @@ function renderOldestFive(oldestFive) {
 
 function sortCatalog(catalog) {
   if (!activeSort.field) {
-    return catalog;
+    return catalog
+      .map((minifigura, index) => ({ minifigura, index }))
+      .sort((left, right) => {
+        const leftDate = Date.parse(left.minifigura.FechaRegistro ?? '');
+        const rightDate = Date.parse(right.minifigura.FechaRegistro ?? '');
+        if (rightDate !== leftDate) {
+          return (Number.isNaN(rightDate) ? -Infinity : rightDate) - (Number.isNaN(leftDate) ? -Infinity : leftDate);
+        }
+        return left.index - right.index;
+      })
+      .map(({ minifigura }) => minifigura);
   }
 
   const direction = activeSort.direction === 'asc' ? 1 : -1;
@@ -327,10 +352,19 @@ function actionsCell(minifigura) {
 
 function renderCatalog(catalog) {
   currentCatalog = catalog;
-  catalogBody.replaceChildren();
-  resultCount.textContent = `${catalog.length} ${catalog.length === 1 ? 'figura' : 'figuras'}`;
+  currentPage = 1;
+  renderCatalogPage();
+}
 
-  for (const minifigura of sortCatalog(catalog)) {
+function renderCatalogPage() {
+  catalogBody.replaceChildren();
+  resultCount.textContent = `${currentCatalog.length} ${currentCatalog.length === 1 ? 'figura' : 'figuras'}`;
+  const sortedCatalog = sortCatalog(currentCatalog);
+  const totalPages = Math.max(1, Math.ceil(sortedCatalog.length / pageSize));
+  currentPage = Math.min(currentPage, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+
+  for (const minifigura of sortedCatalog.slice(pageStart, pageStart + pageSize)) {
     const row = document.createElement('tr');
     row.append(
       thumbCell(minifigura),
@@ -347,8 +381,11 @@ function renderCatalog(catalog) {
     catalogBody.append(row);
   }
   trackButtonsDuringSync(catalogBody);
+  pageStatus.textContent = `Página ${currentPage} de ${totalPages}`;
+  previousPageButton.disabled = currentPage === 1 || isSyncingPrices;
+  nextPageButton.disabled = currentPage === totalPages || isSyncingPrices;
 
-  if (catalog.length === 0) {
+  if (currentCatalog.length === 0) {
     setStatus('No hay minifiguras que coincidan con la consulta.');
   } else {
     setStatus('Catálogo actualizado.');
@@ -369,8 +406,12 @@ function trackButtonsDuringSync(container) {
 
 function setLoading(isLoading) {
   controls.forEach((control) => { control.disabled = isLoading || isSyncingPrices; });
+  previousPageButton.disabled = isLoading || isSyncingPrices;
+  nextPageButton.disabled = isLoading || isSyncingPrices;
   if (isLoading) {
     setStatus('Cargando catálogo...');
+  } else if (currentCatalog.length > 0) {
+    renderCatalogPage();
   }
 }
 
@@ -414,6 +455,7 @@ async function loadCatalog(filters = {}) {
     if (currentRequest === requestSequence) {
       renderCatalog(catalog);
       await loadTotal();
+      await loadGamification();
     }
   } catch {
     if (currentRequest === requestSequence) {
@@ -453,6 +495,36 @@ async function loadTotal() {
   }
 }
 
+function renderGamification(state) {
+  const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
+  gamificationTitle.textContent = `${level.id} ${level.nombre}`;
+  gamificationBricks.textContent = `${state.bricks ?? 0} Bricks`;
+  gamificationProgress.value = state.progreso?.porcentaje ?? 0;
+  gamificationProgress.setAttribute('aria-valuetext', `${gamificationProgress.value}%`);
+  gamificationNext.textContent = state.siguienteNivel
+    ? `Próximo nivel: ${state.siguienteNivel.id} ${state.siguienteNivel.nombre}`
+    : 'Nivel máximo alcanzado';
+  gamificationAchievements.replaceChildren();
+  for (const logro of state.logros ?? []) {
+    const item = document.createElement('li');
+    item.title = logro.descripcion ?? '';
+    item.textContent = `${logro.nombre} (x${logro.cantidad}) - ${logro.total} Bricks`;
+    gamificationAchievements.append(item);
+  }
+}
+
+async function loadGamification() {
+  try {
+    const response = await fetch('/gamificacion');
+    if (!response.ok) throw new Error('GAMIFICACION_NO_DISPONIBLE');
+    renderGamification(await response.json());
+  } catch {
+    gamificationTitle.textContent = 'Nivel no disponible';
+    gamificationBricks.textContent = '0 Bricks';
+    gamificationNext.textContent = 'Progreso no disponible';
+  }
+}
+
 function showToast(message, type = 'success') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
@@ -462,6 +534,31 @@ function showToast(message, type = 'success') {
   setTimeout(() => {
     toast.remove();
   }, 4000);
+}
+
+function showGamificationToasts(gamification) {
+  const achievements = (gamification?.logrosNuevos ?? [])
+    .sort((left, right) => left.bricksNuevos - right.bricksNuevos)
+    .map((logro) => ({ kind: 'achievement', ...logro }));
+  const levels = (gamification?.nivelesAlcanzados ?? [])
+    .map((nivel) => ({ kind: 'level', ...nivel }));
+  achievementQueue.push(...achievements, ...levels);
+  if (isShowingAchievement) return;
+  isShowingAchievement = true;
+  const showNext = () => {
+    const logro = achievementQueue.shift();
+    if (!logro) {
+      isShowingAchievement = false;
+      return;
+    }
+    if (logro.kind === 'level') {
+      showToast(`Has alcanzado el nivel ${logro.id} ${logro.nombre}`, 'level');
+    } else {
+      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'success');
+    }
+    setTimeout(showNext, 300);
+  };
+  showNext();
 }
 
 function messageForErrorCode(code) {
@@ -578,8 +675,8 @@ function validatePayload(payload) {
   if (payload.subcategoria && !(subcategoriasPorCategoria.get(payload.categoria) ?? []).includes(payload.subcategoria)) {
     return 'La subcategoría debe pertenecer a la categoría seleccionada.';
   }
-  if (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear) {
-    return `El año es obligatorio y debe ser un número entero entre 1978 y ${currentYear}.`;
+  if (payload.anio !== undefined && (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear)) {
+    return `El año debe ser un número entero entre 1978 y ${currentYear}.`;
   }
   return null;
 }
@@ -600,12 +697,13 @@ function closeDeleteDialog() {
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   const formData = new FormData(form);
+  const filterValue = (name) => String(formData.get(name) ?? '').trim();
   loadCatalog({
-    id: formData.get('id').trim(),
-    categoria: formData.get('categoria').trim(),
-    subcategoria: formData.get('subcategoria').trim(),
-    anio: formData.get('anio').trim(),
-    estadoColeccion: formData.get('estadoColeccion').trim(),
+    id: filterValue('id'),
+    categoria: filterValue('categoria'),
+    subcategoria: filterValue('subcategoria'),
+    anio: filterValue('anio'),
+    estadoColeccion: filterValue('estadoColeccion'),
   });
 });
 
@@ -623,8 +721,23 @@ sortButtons.forEach((button) => {
     sortButtons.forEach((sortButton) => {
       sortButton.dataset.direction = sortButton === button ? activeSort.direction : '';
     });
-    renderCatalog(currentCatalog);
+    renderCatalogPage();
   });
+});
+
+previousPageButton.addEventListener('click', () => {
+  if (currentPage > 1) {
+    currentPage -= 1;
+    renderCatalogPage();
+  }
+});
+
+nextPageButton.addEventListener('click', () => {
+  const totalPages = Math.max(1, Math.ceil(currentCatalog.length / pageSize));
+  if (currentPage < totalPages) {
+    currentPage += 1;
+    renderCatalogPage();
+  }
 });
 
 syncPricesButton.addEventListener('click', async () => {
@@ -653,6 +766,14 @@ syncPricesButton.addEventListener('click', async () => {
 
 newMinifiguraButton.addEventListener('click', () => {
   openFormDialog('create');
+});
+
+gamificationLevelButton.addEventListener('click', () => {
+  gamificationDialog.showModal();
+});
+
+gamificationCloseButton.addEventListener('click', () => {
+  gamificationDialog.close();
 });
 
 catalogBody.addEventListener('click', (event) => {
@@ -726,7 +847,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
     const url = isEdit ? `/minifiguras/${encodeURIComponent(currentEditId)}` : '/minifiguras';
     const response = await fetch(url, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
       body: JSON.stringify(payload),
     });
 
@@ -743,6 +864,8 @@ minifiguraForm.addEventListener('submit', async (event) => {
       return;
     }
 
+    const result = await response.json();
+    showGamificationToasts(result.gamificacion);
     closeFormDialog();
     await loadCatalog(currentFilters);
     showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
