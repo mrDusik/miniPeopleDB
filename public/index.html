@@ -19,6 +19,9 @@
         <span id="wanted-count">Total de figuras buscadas: 0</span>
         <button type="button" id="sync-prices" class="button button-primary">Actualizar precios desde Brickset</button>
       </div>
+    </header>
+
+    <div class="rankings">
       <section class="top-five" aria-labelledby="top-five-title">
         <h2 id="top-five-title">Top 5 minifiguras en colección por precio</h2>
         <div id="top-five-list" class="ranking-row"></div>
@@ -27,7 +30,7 @@
         <h2 id="oldest-five-title">Top 5 minifiguras más antiguas</h2>
         <div id="oldest-five-list" class="ranking-row"></div>
       </section>
-    </header>
+    </div>
 
     <section class="search-panel" aria-labelledby="search-title">
       <div class="section-heading">
@@ -39,9 +42,19 @@
       </div>
       <form id="filters-form" class="filters-form">
         <label>
-          Tema
-          <select id="tema" name="tema">
-            <option value="" selected>Todos los temas</option>
+          Id
+          <input id="id" name="id" placeholder="Ej. col079">
+        </label>
+        <label>
+          Categoría
+          <select id="categoria" name="categoria">
+            <option value="" selected>Todas</option>
+          </select>
+        </label>
+        <label>
+          Subcategoría
+          <select id="subcategoria" name="subcategoria" disabled>
+            <option value="" selected>Todas</option>
           </select>
         </label>
         <label>
@@ -51,7 +64,7 @@
         <label>
           Estado de colección
           <select id="estadoColeccion" name="estadoColeccion">
-            <option value="" selected>Todos los estados</option>
+            <option value="" selected>Todos</option>
             <option value="COLECCIÓN">COLECCIÓN</option>
             <option value="BUSCADA">BUSCADA</option>
           </select>
@@ -71,7 +84,9 @@
         </div>
         <div class="results-heading-actions">
           <p id="result-count" class="result-count" aria-live="polite"></p>
-          <button type="button" id="new-minifigura" class="button button-primary">Nueva minifigura</button>
+          <button type="button" id="new-minifigura" class="button button-primary button-icon" aria-label="Nueva minifigura" title="Nueva minifigura">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </button>
         </div>
       </div>
       <p id="status" class="status" role="status" aria-live="polite">Cargando catálogo...</p>
@@ -82,8 +97,8 @@
               <th scope="col">Imagen</th>
               <th scope="col">ID</th>
               <th scope="col">Nombre</th>
-              <th scope="col">Descripción</th>
-              <th scope="col">Temática</th>
+              <th scope="col">Categoría</th>
+              <th scope="col">Subcategoría</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="anio">Año</button></th>
               <th scope="col">Estado</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
@@ -112,14 +127,16 @@
           <textarea id="form-descripcion" name="descripcion" rows="3"></textarea>
         </label>
         <label>
-          Temática
-          <select id="form-tematica" name="tematica" required>
-            <option value="" selected>Selecciona un tema</option>
-          </select>
+          Categoría
+          <input id="form-categoria" name="categoria" readonly>
+        </label>
+        <label>
+          Subcategoría
+          <input id="form-subcategoria" name="subcategoria" readonly>
         </label>
         <label>
           Año
-          <input id="form-anio" name="anio" type="number" min="1978" step="1" required>
+          <input id="form-anio" name="anio" type="number" readonly>
         </label>
         <label>
           Estado de colección
@@ -140,7 +157,7 @@
           Precio Brickset (€)
           <input id="form-precio" name="precio" type="number" min="0" step="0.01" readonly>
         </label>
-        <button type="button" id="lookup-price" class="button button-secondary">Consultar precio en Brickset</button>
+        <button type="button" id="lookup-brickset" class="button button-secondary">Consultar datos en Brickset</button>
         <p id="form-error" class="form-error" role="alert"></p>
         <div class="form-actions">
           <button type="submit" id="form-submit" class="button button-primary">Guardar</button>

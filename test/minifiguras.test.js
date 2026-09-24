@@ -5,13 +5,13 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { createServer } from '../src/server.js';
-import { TemasRepository } from '../src/temas-repository.js';
+import { CategoriasRepository } from '../src/categorias-repository.js';
 
-const officialThemes = await readFile(
-  new URL('../data/temas-brickset.json', import.meta.url),
+const officialCategoriasRaw = await readFile(
+  new URL('../data/categorias-brickset.json', import.meta.url),
   'utf8',
 );
-const officialThemeNames = new Set(JSON.parse(officialThemes).map(({ tema }) => tema));
+const officialCategoriaNames = new Set(JSON.parse(officialCategoriasRaw).map(({ categoria }) => categoria));
 
 async function withServer(catalog, callback) {
   const directory = await mkdtemp(join(tmpdir(), 'minifiguras-'));
@@ -20,7 +20,7 @@ async function withServer(catalog, callback) {
   if (catalog !== undefined) {
     await writeFile(catalogPath, catalog);
   }
-  await writeFile(themesPath, officialThemes);
+  await writeFile(themesPath, officialCategoriasRaw);
 
   const server = createServer({ catalogPath, themesPath });
   await new Promise((resolve) => server.listen(0, resolve));
@@ -39,7 +39,7 @@ async function withServerOptions(catalog, options, callback) {
   const catalogPath = join(directory, 'minifiguras.json');
   const themesPath = join(directory, 'temas.json');
   await writeFile(catalogPath, catalog);
-  await writeFile(themesPath, officialThemes);
+  await writeFile(themesPath, officialCategoriasRaw);
   const server = createServer({ catalogPath, themesPath, ...options });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
@@ -57,18 +57,18 @@ function makeMinifigura(overrides = {}) {
     id: 'mf-001',
     nombre: 'Explorador',
     descripcion: 'Figura espacial',
-    tematica: 'Space',
+    categoria: 'Space',
     anio: 2023,
     estadoColeccion: 'COLECCIÓN',
     ...overrides,
   };
 }
 
-async function repositoryWithOfficialThemes(directory, catalogPath) {
+async function repositoryWithOfficialCategorias(directory, catalogPath) {
   const themesPath = join(directory, 'temas.json');
-  await writeFile(themesPath, officialThemes);
+  await writeFile(themesPath, officialCategoriasRaw);
   return new MinifigurasRepository(catalogPath, {
-    temasRepository: new TemasRepository(themesPath),
+    categoriasRepository: new CategoriasRepository(themesPath),
   });
 }
 
@@ -89,51 +89,73 @@ test('GET /minifiguras devuelve el catalogo y conserva su orden', async () => {
   });
 });
 
-test('GET /temas devuelve el catalogo oficial en el orden persistido', async () => {
-  const catalog = JSON.stringify([makeMinifigura({ id: 'a', tematica: 'Space' })]);
+test('GET /categorias devuelve el catalogo oficial en el orden persistido', async () => {
+  const catalog = JSON.stringify([makeMinifigura({ id: 'a', categoria: 'Space' })]);
 
   await withServer(catalog, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/temas`);
+    const response = await fetch(`${baseUrl}/categorias`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), JSON.parse(officialThemes));
+    assert.deepEqual(await response.json(), JSON.parse(officialCategoriasRaw));
   });
 });
 
-test('GET /minifiguras filtra por tema, anio y estado de coleccion', async () => {
+test('GET /minifiguras filtra por categoria, anio y estado de coleccion', async () => {
   const catalog = JSON.stringify([
-    makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
-    makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'd', nombre: 'Samurái', tematica: 'Collectible Minifigures', anio: 2024, estadoColeccion: 'BUSCADA' }),
+    makeMinifigura({ id: 'a', nombre: 'Explorador', categoria: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'b', nombre: 'Pirata', categoria: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
+    makeMinifigura({ id: 'c', nombre: 'Constructor', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'd', nombre: 'Samurái', categoria: 'Collectible Minifigures', anio: 2024, estadoColeccion: 'BUSCADA' }),
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const byTheme = await fetch(`${baseUrl}/minifiguras?tema=space`);
+    const byTheme = await fetch(`${baseUrl}/minifiguras?categoria=space`);
     assert.equal(byTheme.status, 200);
     assert.deepEqual(await byTheme.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', categoria: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'c', nombre: 'Constructor', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
     ]);
 
     const byYear = await fetch(`${baseUrl}/minifiguras?anio=2023`);
     assert.equal(byYear.status, 200);
     assert.deepEqual(await byYear.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-        makeMinifigura({ id: 'b', nombre: 'Pirata', tematica: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', categoria: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+        makeMinifigura({ id: 'b', nombre: 'Pirata', categoria: 'Castle', anio: 2023, estadoColeccion: 'BUSCADA' }),
     ]);
 
     const byCollectionState = await fetch(`${baseUrl}/minifiguras?estadoColeccion=coleccion`);
     assert.equal(byCollectionState.status, 200);
     assert.deepEqual(await byCollectionState.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
-      makeMinifigura({ id: 'c', nombre: 'Constructor', tematica: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', categoria: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'c', nombre: 'Constructor', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }),
     ]);
 
-    const combined = await fetch(`${baseUrl}/minifiguras?tema=space&anio=2023&estadoColeccion=coleccion`);
+    const combined = await fetch(`${baseUrl}/minifiguras?categoria=space&anio=2023&estadoColeccion=coleccion`);
     assert.equal(combined.status, 200);
     assert.deepEqual(await combined.json(), [
-      makeMinifigura({ id: 'a', nombre: 'Explorador', tematica: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
+      makeMinifigura({ id: 'a', nombre: 'Explorador', categoria: 'Space', anio: 2023, estadoColeccion: 'COLECCIÓN' }),
     ]);
+  });
+});
+
+test('GET /minifiguras filtra por id y subcategoria', async () => {
+  const catalog = JSON.stringify([
+    makeMinifigura({ id: 'col079', nombre: 'Gangster', categoria: 'Collectible Minifigures', subcategoria: 'Team GB' }),
+    makeMinifigura({ id: 'col080', nombre: 'Otro', categoria: 'Collectible Minifigures', subcategoria: 'The LEGO Movie' }),
+    makeMinifigura({ id: 'other-id', nombre: 'Sin subcategoria', categoria: 'Space' }),
+  ]);
+
+  await withServer(catalog, async (baseUrl) => {
+    const byId = await fetch(`${baseUrl}/minifiguras?id=col0`);
+    assert.equal(byId.status, 200);
+    assert.deepEqual((await byId.json()).map((item) => item.id), ['col079', 'col080']);
+
+    const bySubcategoria = await fetch(`${baseUrl}/minifiguras?subcategoria=${encodeURIComponent('Team GB')}`);
+    assert.equal(bySubcategoria.status, 200);
+    assert.deepEqual((await bySubcategoria.json()).map((item) => item.id), ['col079']);
+
+    const combined = await fetch(`${baseUrl}/minifiguras?categoria=${encodeURIComponent('Collectible Minifigures')}&subcategoria=${encodeURIComponent('The LEGO Movie')}`);
+    assert.equal(combined.status, 200);
+    assert.deepEqual((await combined.json()).map((item) => item.id), ['col080']);
   });
 });
 
@@ -147,13 +169,93 @@ test('GET /minifiguras rechaza un anio no entero', async () => {
   });
 });
 
+test('POST y PUT rechazan una subcategoria que no pertenece a la categoria', async () => {
+  const initialCatalog = JSON.stringify([makeMinifigura({ id: 'a', categoria: 'Space' })]);
+
+  await withServer(initialCatalog, async (baseUrl) => {
+    const invalidCreate = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'b', categoria: 'Collectible Minifigures', subcategoria: 'No existe' })),
+    });
+    assert.equal(invalidCreate.status, 400);
+    assert.deepEqual(await invalidCreate.json(), { error: 'MINIFIGURA_INVALIDA' });
+
+    const invalidReplace = await fetch(`${baseUrl}/minifiguras/a`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'a', categoria: 'Space', subcategoria: 'No aplica' })),
+    });
+    assert.equal(invalidReplace.status, 400);
+    assert.deepEqual(await (await fetch(`${baseUrl}/minifiguras`)).json(), JSON.parse(initialCatalog));
+  });
+});
+
+test('POST acepta una subcategoria valida perteneciente a la categoria', async () => {
+  const initialCatalog = JSON.stringify([makeMinifigura({ id: 'a', categoria: 'Space' })]);
+
+  await withServer(initialCatalog, async (baseUrl) => {
+    const payload = makeMinifigura({ id: 'b', categoria: 'Collectible Minifigures', subcategoria: 'Team GB' });
+    const response = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), payload);
+  });
+});
+
+test('el total de una subcategoria (0, ausente o un numero) no afecta si una minifigura la acepta como valida', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-subcategoria-total-'));
+  const catalogPath = join(directory, 'minifiguras.json');
+  const themesPath = join(directory, 'temas.json');
+  const categorias = [{
+    categoria: 'Collectible Minifigures',
+    total: 3,
+    subcategorias: [
+      { subcategoria: 'Sin total definido' },
+      { subcategoria: 'Total en cero', total: 0 },
+      { subcategoria: 'Total numerico', total: 16 },
+    ],
+  }];
+  await writeFile(catalogPath, '[]');
+  await writeFile(themesPath, JSON.stringify(categorias));
+
+  const server = createServer({ catalogPath, themesPath });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    for (const subcategoria of ['Sin total definido', 'Total en cero', 'Total numerico']) {
+      const payload = makeMinifigura({ id: subcategoria, categoria: 'Collectible Minifigures', subcategoria });
+      const response = await fetch(`http://127.0.0.1:${port}/minifiguras`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      assert.equal(response.status, 201, `la subcategoria "${subcategoria}" deberia aceptarse sin importar su total`);
+    }
+
+    const persisted = await fetch(`http://127.0.0.1:${port}/minifiguras`);
+    assert.deepEqual((await persisted.json()).map((item) => item.subcategoria), [
+      'Sin total definido',
+      'Total en cero',
+      'Total numerico',
+    ]);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('GET /minifiguras conserva la comparacion insensible a mayusculas y permite resultados vacios', async () => {
   const catalog = JSON.stringify([
-    makeMinifigura({ id: 'a', tematica: 'Space', estadoColeccion: 'COLECCIÓN' }),
+    makeMinifigura({ id: 'a', categoria: 'Space', estadoColeccion: 'COLECCIÓN' }),
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/minifiguras?tema=SPACE&estadoColeccion=coleccion`);
+    const response = await fetch(`${baseUrl}/minifiguras?categoria=SPACE&estadoColeccion=coleccion`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), JSON.parse(catalog));
 
@@ -172,24 +274,24 @@ test('GET /minifiguras rechaza un estado de filtro invalido', async () => {
 });
 
 test('GET, POST y PUT rechazan temas que no pertenecen al catalogo oficial', async () => {
-  const initialCatalog = JSON.stringify([makeMinifigura({ id: 'a', tematica: 'Space' })]);
+  const initialCatalog = JSON.stringify([makeMinifigura({ id: 'a', categoria: 'Space' })]);
 
   await withServer(initialCatalog, async (baseUrl) => {
-    const invalidFilter = await fetch(`${baseUrl}/minifiguras?tema=Desconocido`);
+    const invalidFilter = await fetch(`${baseUrl}/minifiguras?categoria=Desconocido`);
     assert.equal(invalidFilter.status, 400);
-    assert.deepEqual(await invalidFilter.json(), { error: 'MINIFIGURA_INVALIDA', parametro: 'tema' });
+    assert.deepEqual(await invalidFilter.json(), { error: 'MINIFIGURA_INVALIDA', parametro: 'categoria' });
 
     const invalidCreate = await fetch(`${baseUrl}/minifiguras`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(makeMinifigura({ id: 'b', tematica: 'Desconocido' })),
+      body: JSON.stringify(makeMinifigura({ id: 'b', categoria: 'Desconocido' })),
     });
     assert.equal(invalidCreate.status, 400);
 
     const invalidReplace = await fetch(`${baseUrl}/minifiguras/a`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(makeMinifigura({ id: 'a', tematica: 'Desconocido' })),
+      body: JSON.stringify(makeMinifigura({ id: 'a', categoria: 'Desconocido' })),
     });
     assert.equal(invalidReplace.status, 400);
     assert.deepEqual(await (await fetch(`${baseUrl}/minifiguras`)).json(), JSON.parse(initialCatalog));
@@ -245,7 +347,7 @@ test('las operaciones de minifiguras informan errores del catalogo de temas', as
   try {
     const list = await fetch(`http://127.0.0.1:${port}/minifiguras`);
     assert.equal(list.status, 500);
-    assert.deepEqual(await list.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+    assert.deepEqual(await list.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
 
     const create = await fetch(`http://127.0.0.1:${port}/minifiguras`, {
       method: 'POST',
@@ -253,7 +355,7 @@ test('las operaciones de minifiguras informan errores del catalogo de temas', as
       body: JSON.stringify(makeMinifigura({ id: 'b' })),
     });
     assert.equal(create.status, 500);
-    assert.deepEqual(await create.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+    assert.deepEqual(await create.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
 
     const replace = await fetch(`http://127.0.0.1:${port}/minifiguras/a`, {
       method: 'PUT',
@@ -261,7 +363,7 @@ test('las operaciones de minifiguras informan errores del catalogo de temas', as
       body: JSON.stringify(makeMinifigura({ id: 'a' })),
     });
     assert.equal(replace.status, 500);
-    assert.deepEqual(await replace.json(), { error: 'TEMAS_NO_DISPONIBLES' });
+    assert.deepEqual(await replace.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
     assert.deepEqual(JSON.parse(await readFile(catalogPath, 'utf8')), catalog);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -275,7 +377,7 @@ test('POST /minifiguras crea una minifigura y persiste el catalogo actualizado',
   ]);
 
   await withServer(initialCatalog, async (baseUrl) => {
-    const payload = makeMinifigura({ id: 'b', nombre: 'Constructora', tematica: 'Space' });
+    const payload = makeMinifigura({ id: 'b', nombre: 'Constructora', categoria: 'Space' });
 
     const response = await fetch(`${baseUrl}/minifiguras`, {
       method: 'POST',
@@ -301,7 +403,7 @@ test('PUT /minifiguras/:id reemplaza una minifigura existente sin mover su posic
   ]);
 
   await withServer(catalog, async (baseUrl) => {
-    const replacement = makeMinifigura({ id: 'b', nombre: 'Reemplazada', tematica: 'Space' });
+    const replacement = makeMinifigura({ id: 'b', nombre: 'Reemplazada', categoria: 'Space' });
     const response = await fetch(`${baseUrl}/minifiguras/b`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -339,7 +441,7 @@ test('DELETE /minifiguras/:id elimina la minifigura y devuelve 204', async () =>
   });
 });
 
-test('POST /minifiguras rechaza cuerpo invalido, falta de tematica y duplicados', async () => {
+test('POST /minifiguras rechaza cuerpo invalido, falta de categoria y duplicados', async () => {
   const initialCatalog = JSON.stringify([
     makeMinifigura({ id: 'a' }),
   ]);
@@ -410,9 +512,9 @@ test('el archivo inicial es JSON valido', async () => {
   assert.ok(Array.isArray(catalog));
   assert.ok(catalog.length > 0);
   assert.ok(catalog.every((minifigura) => (
-    officialThemeNames.has(minifigura.tematica)
-    && minifigura.tematica !== 'Series 5'
-    && minifigura.tematica !== 'Series 9'
+    officialCategoriaNames.has(minifigura.categoria)
+    && minifigura.categoria !== 'Series 5'
+    && minifigura.categoria !== 'Series 9'
     && minifigura.anio
   )));
 });
@@ -421,9 +523,9 @@ test('la migracion conserva estados y todos los temas persistidos son oficiales'
   const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
   const catalog = JSON.parse(content);
 
-  assert.ok(catalog.every((minifigura) => officialThemeNames.has(minifigura.tematica)));
+  assert.ok(catalog.every((minifigura) => officialCategoriaNames.has(minifigura.categoria)));
   assert.ok(catalog.every((minifigura) => ['COLECCIÓN', 'BUSCADA'].includes(minifigura.estadoColeccion)));
-  assert.equal(catalog.some((minifigura) => /^Series\s+/i.test(minifigura.tematica)), false);
+  assert.equal(catalog.some((minifigura) => /^Series\s+/i.test(minifigura.categoria)), false);
 });
 
 test('la migracion conserva el orden y los datos de valoracion persistidos', async () => {
@@ -449,7 +551,12 @@ test('la migracion conserva el orden y los datos de valoracion persistidos', asy
     ['CAS215', 'COLECCIÓN', undefined, undefined, 17.53],
     ['WW008', 'COLECCIÓN', undefined, undefined, 10.53],
     ['NJO1051', 'COLECCIÓN', 7.99, undefined, 17.93],
-    ['SH1152', 'BUSCADA', undefined, undefined, 51.87],
+    ['SH1152', 'COLECCIÓN', undefined, undefined, 51.87],
+    ['NJO1035', 'COLECCIÓN', 0, '2026-09-23', 17.65],
+    ['SW1278', 'COLECCIÓN', 0, '2026-09-23', 3.06],
+    ['SW0879', 'COLECCIÓN', undefined, undefined, 22.49],
+    ['HP035', 'COLECCIÓN', undefined, undefined, 8.88],
+    ['COL450', 'COLECCIÓN', 3.99, undefined, 9.26],
   ];
 
   assert.deepEqual(catalog.map((item) => [
@@ -652,14 +759,17 @@ test('rechaza un catálogo con estado ausente', async () => {
   });
 });
 
-test('consulta el precio individual y actualiza precios de forma masiva aunque haya fallos', async () => {
+test('consulta los datos individuales de Brickset y actualiza precios de forma masiva aunque haya fallos', async () => {
   const catalog = JSON.stringify([
     makeMinifigura({ id: 'a', precio: 10 }),
     makeMinifigura({ id: 'b', precio: 20 }),
   ]);
   const fetchImpl = async (url) => {
     if (url.endsWith('/a')) {
-      return new Response('<span>Current Value - New</span><strong>€35.50</strong>', { status: 200 });
+      return new Response(
+        "<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2023'>2023</a></dd></dl><span>Current Value - New</span><strong>€35.50</strong>",
+        { status: 200 },
+      );
     }
     if (url.endsWith('/b')) {
       return new Response('sin precio', { status: 200 });
@@ -668,9 +778,9 @@ test('consulta el precio individual y actualiza precios de forma masiva aunque h
   };
 
   await withServerOptions(catalog, { fetchImpl }, async (baseUrl) => {
-    const individual = await fetch(`${baseUrl}/minifiguras/a/precio`);
+    const individual = await fetch(`${baseUrl}/minifiguras/a/brickset`);
     assert.equal(individual.status, 200);
-    assert.deepEqual(await individual.json(), { id: 'a', precio: 35.5 });
+    assert.deepEqual(await individual.json(), { id: 'a', categoria: 'Space', anio: 2023, precio: 35.5 });
 
     const sync = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'POST' });
     assert.equal(sync.status, 200);
@@ -687,16 +797,77 @@ test('consulta el precio individual y actualiza precios de forma masiva aunque h
   });
 });
 
-test('consulta el precio individual para un id todavía no persistido', async () => {
+test('GET /minifiguras/:id/brickset resuelve subcategoria conocida y omite una desconocida', async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/con-subcategoria')) {
+      return new Response(
+        "<dl><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Team-GB'>Team GB</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2012'>2012</a></dd></dl><p>Current Value - New</p><span>€9.07</span>",
+        { status: 200 },
+      );
+    }
+    if (url.endsWith('/subcategoria-desconocida')) {
+      return new Response(
+        "<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Space/subcategory-General'>General</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2015'>2015</a></dd></dl><p>Current Value - New</p><span>€3</span>",
+        { status: 200 },
+      );
+    }
+    if (url.endsWith('/categoria-desconocida')) {
+      return new Response(
+        "<dl><dt>Category</dt><dd><a href='/minifigs/category-Inexistente'>Inexistente</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2015'>2015</a></dd></dl><p>Current Value - New</p><span>€3</span>",
+        { status: 200 },
+      );
+    }
+    throw new Error('URL inesperada');
+  };
+
+  await withServerOptions('[]', { fetchImpl }, async (baseUrl) => {
+    const conSubcategoria = await fetch(`${baseUrl}/minifiguras/con-subcategoria/brickset`);
+    assert.equal(conSubcategoria.status, 200);
+    assert.deepEqual(await conSubcategoria.json(), {
+      id: 'con-subcategoria',
+      categoria: 'Collectible Minifigures',
+      subcategoria: 'Team GB',
+      anio: 2012,
+      precio: 9.07,
+    });
+
+    const subcategoriaDesconocida = await fetch(`${baseUrl}/minifiguras/subcategoria-desconocida/brickset`);
+    assert.equal(subcategoriaDesconocida.status, 200);
+    assert.deepEqual(await subcategoriaDesconocida.json(), {
+      id: 'subcategoria-desconocida',
+      categoria: 'Space',
+      anio: 2015,
+      precio: 3,
+    });
+
+    const categoriaDesconocida = await fetch(`${baseUrl}/minifiguras/categoria-desconocida/brickset`);
+    assert.equal(categoriaDesconocida.status, 502);
+    assert.deepEqual(await categoriaDesconocida.json(), { error: 'BRICKSET_CATEGORIA_DESCONOCIDA' });
+  });
+});
+
+test('una ruta existente /brickset con un metodo no permitido devuelve 405', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/minifiguras/a/brickset`, { method: 'POST' });
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('allow'), 'GET');
+    assert.deepEqual(await response.json(), { error: 'METODO_NO_PERMITIDO' });
+  });
+});
+
+test('consulta los datos de Brickset para un id todavía no persistido', async () => {
   const fetchImpl = async (url) => {
     assert.equal(url, 'https://brickset.com/minifigs/new-figure');
-    return new Response('<span>Current Value - New</span><strong>€18.75</strong>', { status: 200 });
+    return new Response(
+      "<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2020'>2020</a></dd></dl><span>Current Value - New</span><strong>€18.75</strong>",
+      { status: 200 },
+    );
   };
 
   await withServerOptions(JSON.stringify([makeMinifigura({ id: 'existing' })]), { fetchImpl }, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/minifiguras/new-figure/precio`);
+    const response = await fetch(`${baseUrl}/minifiguras/new-figure/brickset`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { id: 'new-figure', precio: 18.75 });
+    assert.deepEqual(await response.json(), { id: 'new-figure', categoria: 'Space', anio: 2020, precio: 18.75 });
   });
 });
 
@@ -707,7 +878,7 @@ test('updatePrices conserva el archivo original si falla la persistencia', async
   await writeFile(catalogPath, originalCatalog);
 
   try {
-    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
+    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
     repository.persist = async () => {
       throw new Error('fallo de persistencia simulado');
     };
@@ -729,7 +900,7 @@ test('updatePrices rechaza precios invalidos antes de persistir', async () => {
   await writeFile(catalogPath, originalCatalog);
 
   try {
-    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
+    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
     await assert.rejects(
       () => repository.updatePrices(new Map([['a', -1]])),
       (error) => error.code === 'MINIFIGURA_INVALIDA',
@@ -746,7 +917,7 @@ test('updatePrices rechaza IDs inexistentes y precios undefined', async () => {
   await writeFile(catalogPath, JSON.stringify([makeMinifigura({ id: 'a', precio: 10 })]));
 
   try {
-    const repository = await repositoryWithOfficialThemes(directory, catalogPath);
+    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
     await assert.rejects(() => repository.updatePrices(new Map([['missing', 20]])), (error) => error.code === 'MINIFIGURA_NO_ENCONTRADA');
     await assert.rejects(() => repository.updatePrices(new Map([['a', undefined]])), (error) => error.code === 'MINIFIGURA_INVALIDA');
   } finally {
@@ -763,7 +934,7 @@ test('el repositorio no permite operar sin catálogo oficial de temas', async ()
     const repository = new MinifigurasRepository(catalogPath);
     await assert.rejects(
       () => repository.list(),
-      (error) => error.code === 'TEMAS_NO_DISPONIBLES',
+      (error) => error.code === 'CATEGORIAS_NO_DISPONIBLES',
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

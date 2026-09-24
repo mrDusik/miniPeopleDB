@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BricksetPriceError, BricksetScraper, parseBricksetPrice } from '../src/brickset-scraper.js';
+import { BricksetPriceError, BricksetScraper, parseBricksetDetails, parseBricksetPrice } from '../src/brickset-scraper.js';
 
 test('extrae Current Value - New en Euros y construye la URL publica', async () => {
   let requestedUrl;
@@ -80,4 +80,51 @@ test('registra errores HTTP, de extracción y de red con contexto de Brickset', 
   assert.ok(messages.some((message) => message.includes('HTTP 403') && message.includes('/blocked')));
   assert.ok(messages.some((message) => message.includes('No se extrajo') && message.includes('/without-price')));
   assert.ok(messages.some((message) => message.includes('Error de red') && message.includes('/offline')));
+});
+
+test('parseBricksetDetails extrae categoria, subcategoria, anio y precio', () => {
+  const html = "<dl><dt>Minifig number</dt><dd>col079</dd><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Team-GB'>Team GB</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2012'>2012</a></dd></dl><p>Current Value - New</p><span>€9.07</span>";
+  assert.deepEqual(parseBricksetDetails(html), {
+    categoria: 'Collectible Minifigures',
+    subcategoria: 'Team GB',
+    anio: 2012,
+    precio: 9.07,
+  });
+});
+
+test('parseBricksetDetails admite ausencia de subcategoria y rechaza HTML sin categoria o sin anio', () => {
+  const sinSubcategoria = "<dl><dt>Minifig number</dt><dd>st999</dd><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2020'>2020</a></dd></dl><p>Current Value - New</p><span>€5</span>";
+  assert.deepEqual(parseBricksetDetails(sinSubcategoria), {
+    categoria: 'Space',
+    subcategoria: undefined,
+    anio: 2020,
+    precio: 5,
+  });
+
+  assert.throws(() => parseBricksetDetails('<html>sin datos</html>'), (error) => error instanceof BricksetPriceError);
+  assert.throws(
+    () => parseBricksetDetails("<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd></dl>"),
+    (error) => error instanceof BricksetPriceError,
+  );
+});
+
+test('BricksetScraper.getDetails reutiliza la misma peticion que getPrice', async () => {
+  let requestedUrl;
+  const scraper = new BricksetScraper({
+    fetchImpl: async (url) => {
+      requestedUrl = url;
+      return new Response(
+        "<dl><dt>Minifig number</dt><dd>col079</dd><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Team-GB'>Team GB</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2012'>2012</a></dd></dl><p>Current Value - New</p><span>€9.07</span>",
+        { status: 200 },
+      );
+    },
+  });
+
+  assert.deepEqual(await scraper.getDetails('col079'), {
+    categoria: 'Collectible Minifigures',
+    subcategoria: 'Team GB',
+    anio: 2012,
+    precio: 9.07,
+  });
+  assert.equal(requestedUrl, 'https://brickset.com/minifigs/col079');
 });

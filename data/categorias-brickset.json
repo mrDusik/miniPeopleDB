@@ -1,0 +1,883 @@
+[
+  {
+    "categoria": "Adventurers",
+    "total": 54,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Agents",
+    "total": 33,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Alpha Team",
+    "total": 32,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Animal Crossing",
+    "total": 27,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Aquazone",
+    "total": 39,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Architecture",
+    "total": 3,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Atlantis",
+    "total": 26,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Avatar",
+    "total": 27,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Avatar The Last Airbender",
+    "total": 6,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Back to the Future",
+    "total": 2,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Basic",
+    "total": 6,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Batman I",
+    "total": 28,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Belville",
+    "total": 213,
+    "subcategorias": []
+  },
+  {
+    "categoria": "BIONICLE",
+    "total": 47,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Bluey",
+    "total": 11,
+    "subcategorias": []
+  },
+  {
+    "categoria": "BrickLink Designer Program",
+    "total": 356,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Building Bigger Thinking",
+    "total": 6,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Cars",
+    "total": 78,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Castle",
+    "total": 609,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Clikits",
+    "total": 3,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Collectible Minifigures",
+    "total": 845,
+    "subcategorias": [
+      {
+        "subcategoria": "Collectible Minifigures Other",
+        "total": 0
+      },
+      {
+        "subcategoria": "Deutscher Fussball-Bund (DFB)",
+        "total": 0
+      },
+      {
+        "subcategoria": "Disney / Disney 100",
+        "total": 0
+      },
+      {
+        "subcategoria": "Disney / Disney Series 1",
+        "total": 0
+      },
+      {
+        "subcategoria": "Disney / Disney Series 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "Dungeons & Dragons",
+        "total": 0
+      },
+      {
+        "subcategoria": "General",
+        "total": 0
+      },
+      {
+        "subcategoria": "Harry Potter / Harry Potter Series 1",
+        "total": 0
+      },
+      {
+        "subcategoria": "Harry Potter / Harry Potter Series 1 Fantastic Beasts",
+        "total": 0
+      },
+      {
+        "subcategoria": "Harry Potter / Harry Potter Series 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "Jurassic World",
+        "total": 0
+      },
+      {
+        "subcategoria": "Looney Tunes",
+        "total": 0
+      },
+      {
+        "subcategoria": "Promotional",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 1 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 2 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 3 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 4 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 5 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 6 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 7 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 8 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 9 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 10 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 11 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 12 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 13 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 14 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 15 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 16 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 17 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 18 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 19 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 20 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 21 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 22 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 23 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 24 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 25 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 26 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 27 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 28 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Series 29 Minifigures",
+        "total": 0
+      },
+      {
+        "subcategoria": "Shrek",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / Avengers Infinity War",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / DC Super Heroes",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / Marvel Studios Series 1",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / Marvel Studios Series 1 What If",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / Marvel Studios Series 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / Spider-Man Across the Spider-Verse",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / The LEGO Batman Movie",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / The LEGO Batman Movie / The LEGO Batman Movie Series 1",
+        "total": 0
+      },
+      {
+        "subcategoria": "Super Heroes / The LEGO Batman Movie / The LEGO Batman Movie Series 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "Team GB",
+        "total": 0
+      },
+      {
+        "subcategoria": "The LEGO Movie",
+        "total": 0
+      },
+      {
+        "subcategoria": "The LEGO Movie 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "The LEGO NINJAGO Movie",
+        "total": 0
+      },
+      {
+        "subcategoria": "The Muppets",
+        "total": 0
+      },
+      {
+        "subcategoria": "The Simpsons / The Simpsons Series 1",
+        "total": 0
+      },
+      {
+        "subcategoria": "The Simpsons / The Simpsons Series 2",
+        "total": 0
+      },
+      {
+        "subcategoria": "Town / City / Jungle",
+        "total": 0
+      }
+    ]
+  },
+  {
+    "categoria": "DC Super Hero Girls",
+    "total": 35,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Despicable Me & Minions",
+    "total": 34,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Dimensions",
+    "total": 52,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Dino",
+    "total": 8,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Dino Attack",
+    "total": 10,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Discovery",
+    "total": 1,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Disney",
+    "total": 432,
+    "subcategorias": []
+  },
+  {
+    "categoria": "DREAMZzz",
+    "total": 118,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Dune",
+    "total": 8,
+    "subcategorias": []
+  },
+  {
+    "categoria": "DUPLO",
+    "total": 1127,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Editions",
+    "total": 17,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Education",
+    "total": 12,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Educational & Dacta",
+    "total": 37,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Elves",
+    "total": 60,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Exo-Force",
+    "total": 26,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Fabuland",
+    "total": 95,
+    "subcategorias": []
+  },
+  {
+    "categoria": "FIRST LEGO League",
+    "total": 66,
+    "subcategorias": []
+  },
+  {
+    "categoria": "For Juniors",
+    "total": 55,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Fortnite",
+    "total": 26,
+    "subcategorias": []
+  },
+  {
+    "categoria": "FreeStyle",
+    "total": 18,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Friends",
+    "total": 932,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Friends TV Series",
+    "total": 7,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Fusion",
+    "total": 1,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Gabby's Dollhouse",
+    "total": 18,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Games",
+    "total": 126,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Ghostbusters",
+    "total": 20,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Harry Potter",
+    "total": 710,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Hero Factory",
+    "total": 20,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Hidden Side",
+    "total": 75,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Holiday & Event",
+    "total": 421,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Homemaker",
+    "total": 3,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Horizon",
+    "total": 4,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Indiana Jones",
+    "total": 58,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Island Xtreme Stunts",
+    "total": 14,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Jurassic World",
+    "total": 154,
+    "subcategorias": []
+  },
+  {
+    "categoria": "LEGENDS OF CHIMA",
+    "total": 159,
+    "subcategorias": []
+  },
+  {
+    "categoria": "LEGO Brand",
+    "total": 281,
+    "subcategorias": []
+  },
+  {
+    "categoria": "LEGO Ideas",
+    "total": 294,
+    "subcategorias": []
+  },
+  {
+    "categoria": "LEGOLAND",
+    "total": 51,
+    "subcategorias": []
+  },
+  {
+    "categoria": "LEGOLAND Parks",
+    "total": 42,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Lightyear",
+    "total": 7,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Master Builder Academy",
+    "total": 6,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Midnight Valley Collection",
+    "total": 4,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Minecraft",
+    "total": 279,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Monkie Kid",
+    "total": 183,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Monster Fighters",
+    "total": 23,
+    "subcategorias": []
+  },
+  {
+    "categoria": "NEXO KNIGHTS",
+    "total": 153,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Nike",
+    "total": 4,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Ninja",
+    "total": 20,
+    "subcategorias": []
+  },
+  {
+    "categoria": "NINJAGO",
+    "total": 1004,
+    "subcategorias": []
+  },
+  {
+    "categoria": "One Piece",
+    "total": 51,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Overwatch",
+    "total": 16,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Pharaoh's Quest",
+    "total": 12,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Pirates",
+    "total": 217,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Pirates of the Caribbean",
+    "total": 53,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Pokémon",
+    "total": 1,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Power Miners",
+    "total": 33,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Primo",
+    "total": 28,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Prince of Persia",
+    "total": 17,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Project Hail Mary",
+    "total": 2,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Promotional",
+    "total": 27,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Quatro",
+    "total": 1,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Queer Eye",
+    "total": 7,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Racers",
+    "total": 123,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Rock Raiders",
+    "total": 10,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Scala",
+    "total": 42,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Scooby-Doo",
+    "total": 14,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Shrek",
+    "total": 1,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Sonic the Hedgehog",
+    "total": 35,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Space",
+    "total": 230,
+    "subcategorias": []
+  },
+  {
+    "categoria": "SPEED CHAMPIONS",
+    "total": 151,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Speed Racer",
+    "total": 14,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Spider-Man",
+    "total": 31,
+    "subcategorias": []
+  },
+  {
+    "categoria": "SpongeBob SquarePants",
+    "total": 42,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Sports",
+    "total": 342,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Star Trek",
+    "total": 18,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Star Wars",
+    "total": 1610,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Stranger Things",
+    "total": 24,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Studios",
+    "total": 37,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Super Heroes",
+    "total": 1179,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Super Mario",
+    "total": 230,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Technic",
+    "total": 73,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Teenage Mutant Ninja Turtles",
+    "total": 54,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Angry Birds Movie",
+    "total": 20,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Hobbit & The Lord of the Rings",
+    "total": 165,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Incredibles",
+    "total": 10,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Legend of Zelda",
+    "total": 6,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The LEGO Movie",
+    "total": 84,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The LEGO Movie 2",
+    "total": 86,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The LEGO NINJAGO Movie",
+    "total": 91,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Lone Ranger",
+    "total": 21,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Powerpuff Girls",
+    "total": 5,
+    "subcategorias": []
+  },
+  {
+    "categoria": "The Simpsons",
+    "total": 17,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Time Cruisers & Time Twisters",
+    "total": 9,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Town",
+    "total": 3839,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Toy Story",
+    "total": 26,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Train",
+    "total": 87,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Trolls World Tour",
+    "total": 30,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Ultra Agents",
+    "total": 39,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Unikitty!",
+    "total": 38,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Universe",
+    "total": 2,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Vidiyo",
+    "total": 47,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Vikings",
+    "total": 37,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Wednesday",
+    "total": 11,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Western",
+    "total": 24,
+    "subcategorias": []
+  },
+  {
+    "categoria": "Wicked",
+    "total": 30,
+    "subcategorias": []
+  },
+  {
+    "categoria": "World Racers",
+    "total": 26,
+    "subcategorias": []
+  }
+]
