@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { GamificacionInvalidaError, GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
+import { categoriasMock } from '../test-support/fixtures.js';
 
-const categorias = JSON.parse(await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8'));
 const catalogo = [{ id: 'one', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN', precio: 20 }];
 
 function categoryRepository() {
-  return { read: async () => categorias };
+  return { read: async () => categoriasMock };
 }
 
 test('inicializa una sola vez aunque se solicite concurrentemente', async () => {

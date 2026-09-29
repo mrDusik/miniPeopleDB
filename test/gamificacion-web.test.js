@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { categoriasMockRaw } from '../test-support/fixtures.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-const categorias = await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8');
 
 function baseFetch(catalogo, gamificacion, postResponse) {
   return async (url, options = {}) => {
-    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categorias) };
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
     if (url === '/minifiguras' && options.method === 'POST') return { ok: true, status: 201, json: async () => postResponse };
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => catalogo };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: catalogo.length, buscadas: 0, top5: [], top5Antiguas: [] }) };

@@ -5,11 +5,9 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { createServer } from '../src/server.js';
+import { categoriasMockRaw } from '../test-support/fixtures.js';
 
-const officialCategoriasRaw = await readFile(
-  new URL('../data/categorias-brickset.json', import.meta.url),
-  'utf8',
-);
+const officialCategoriasRaw = categoriasMockRaw;
 const officialCategoriaNames = JSON.parse(officialCategoriasRaw).map(({ categoria }) => categoria);
 const officialCategoriaSet = new Set(officialCategoriaNames);
 
@@ -66,6 +64,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
       categoria: 'Space',
       anio: 2023,
       estadoColeccion: 'COLECCIÓN',
+      FechaRegistro: '2026-01-01T00:00:00.000Z',
     }]);
   });
 });
