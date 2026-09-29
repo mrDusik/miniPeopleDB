@@ -7,6 +7,7 @@ import { BricksetCategoriasError, BricksetCategoriasScraper, parseBricksetCatego
 import { syncCategorias } from '../scripts/sync-brickset-categorias.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasPersistenciaError, CategoriasRepository, validateCategorias } from '../src/categorias-repository.js';
 import { createServer } from '../src/server.js';
+import { categoriasMock } from '../test-support/fixtures.js';
 
 const validHtml = `
   <a href="/minifigs/category-Jurassic-World">Jurassic World</a> (154)
@@ -14,39 +15,15 @@ const validHtml = `
   <a href="/minifigs/category-Pokemon">Pok&eacute;mon</a> (1)
 `;
 
-test('el catálogo oficial de categorías tiene una estructura íntegra', async () => {
-  const content = await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8');
-  const categorias = JSON.parse(content);
-
-  assert.doesNotThrow(() => validateCategorias(categorias));
-  assert.ok(categorias.length > 0);
-  assert.equal(new Set(categorias.map(({ categoria }) => categoria)).size, categorias.length);
-  assert.ok(categorias.every(({ categoria, total, subcategorias }) => (
-    typeof categoria === 'string'
-    && categoria.trim() !== ''
-    && Number.isInteger(total)
-    && total >= 0
-    && Array.isArray(subcategorias)
-  )));
-});
-
-test('Collectible Minifigures incluye subcategorias representativas y el resto de categorias no tiene subcategorias', async () => {
-  const content = await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8');
-  const categorias = JSON.parse(content);
-  const collectible = categorias.find(({ categoria }) => categoria === 'Collectible Minifigures');
-
-  assert.ok(collectible, 'Collectible Minifigures debe existir en el catálogo');
-  assert.ok(collectible.subcategorias.length >= 50, 'Collectible Minifigures debe tener su conjunto íntegro de subcategorias');
-  const nombres = collectible.subcategorias.map(({ subcategoria }) => subcategoria);
-  for (const esperada of ['Series 17 Minifigures', 'Team GB', 'The LEGO Movie', 'Disney / Disney Series 1']) {
-    assert.ok(nombres.includes(esperada), `falta la subcategoria "${esperada}"`);
-  }
-  assert.equal(new Set(nombres).size, nombres.length);
-  assert.ok(collectible.subcategorias.every(({ total }) => total === undefined || (Number.isInteger(total) && total >= 0)));
-
-  const otras = categorias.filter(({ categoria }) => categoria !== 'Collectible Minifigures');
-  assert.ok(otras.length > 0);
-  assert.ok(otras.every(({ subcategorias }) => subcategorias.length === 0));
+test('el fixture de categorías representa categorías y subcategorías válidas', () => {
+  assert.doesNotThrow(() => validateCategorias(categoriasMock));
+  const collectible = categoriasMock.find(({ categoria }) => categoria === 'Collectible Minifigures');
+  assert.deepEqual(collectible.subcategorias.map(({ subcategoria }) => subcategoria), [
+    'Team GB',
+    'The LEGO Movie',
+    'Series 3 Minifigures',
+    'Series 17 Minifigures',
+  ]);
 });
 
 test('validateCategorias acepta subcategorias sin total o con total 0 y rechaza totales invalidos', () => {

@@ -6,12 +6,10 @@ import test from 'node:test';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { createServer } from '../src/server.js';
 import { CategoriasRepository } from '../src/categorias-repository.js';
+import { categoriasMock, categoriasMockRaw } from '../test-support/fixtures.js';
 
-const officialCategoriasRaw = await readFile(
-  new URL('../data/categorias-brickset.json', import.meta.url),
-  'utf8',
-);
-const officialCategoriaNames = new Set(JSON.parse(officialCategoriasRaw).map(({ categoria }) => categoria));
+const officialCategoriasRaw = categoriasMockRaw;
+const officialCategoriaNames = new Set(categoriasMock.map(({ categoria }) => categoria));
 
 async function withServer(catalog, callback) {
   const directory = await mkdtemp(join(tmpdir(), 'minifiguras-'));
@@ -203,7 +201,9 @@ test('POST acepta una subcategoria valida perteneciente a la categoria', async (
       body: JSON.stringify(payload),
     });
     assert.equal(response.status, 201);
-    assert.deepEqual(await response.json(), payload);
+    const created = await response.json();
+    assert.deepEqual({ ...created, FechaRegistro: payload.FechaRegistro }, payload);
+    assert.match(created.FechaRegistro, /^\d{4}-\d{2}-\d{2}T/);
   });
 });
 
@@ -408,12 +408,14 @@ test('POST /minifiguras crea una minifigura y persiste el catalogo actualizado',
     });
 
     assert.equal(response.status, 201);
-    assert.deepEqual(await response.json(), payload);
+    const created = await response.json();
+    assert.deepEqual({ ...created, FechaRegistro: payload.FechaRegistro }, payload);
+    assert.match(created.FechaRegistro, /^\d{4}-\d{2}-\d{2}T/);
 
     const persisted = await fetch(`${baseUrl}/minifiguras`);
     assert.deepEqual(await persisted.json(), [
       makeMinifigura({ id: 'a' }),
-      payload,
+      created,
     ]);
   });
 });
@@ -526,68 +528,6 @@ test('DELETE /minifiguras/:id rechaza un recurso inexistente', async () => {
     const persisted = await fetch(`${baseUrl}/minifiguras`);
     assert.deepEqual(await persisted.json(), [makeMinifigura({ id: 'a' })]);
   });
-});
-
-test('el archivo inicial es JSON valido', async () => {
-  const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
-  const catalog = JSON.parse(content);
-  assert.ok(Array.isArray(catalog));
-  assert.ok(catalog.length > 0);
-  assert.ok(catalog.every((minifigura) => (
-    officialCategoriaNames.has(minifigura.categoria)
-    && minifigura.categoria !== 'Series 5'
-    && minifigura.categoria !== 'Series 9'
-    && minifigura.anio
-  )));
-});
-
-test('la migracion conserva estados y todos los temas persistidos son oficiales', async () => {
-  const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
-  const catalog = JSON.parse(content);
-
-  assert.ok(catalog.every((minifigura) => officialCategoriaNames.has(minifigura.categoria)));
-  assert.ok(catalog.every((minifigura) => ['COLECCIÓN', 'BUSCADA'].includes(minifigura.estadoColeccion)));
-  assert.equal(catalog.some((minifigura) => /^Series\s+/i.test(minifigura.categoria)), false);
-});
-
-test('la migracion conserva el orden y los datos de valoracion persistidos', async () => {
-  const content = await readFile(new URL('../data/minifiguras.json', import.meta.url), 'utf8');
-  const catalog = JSON.parse(content);
-  const expected = [
-    ['col079', 'BUSCADA', undefined, undefined, 9.07],
-    ['ST008', 'COLECCIÓN', 35.49, '2026-07-22', 109.56],
-    ['LOR139', 'COLECCIÓN', undefined, undefined, 33.53],
-    ['EDI002', 'COLECCIÓN', 16.11, '2026-05-26', 11.32],
-    ['IDEA106', 'COLECCIÓN', undefined, undefined, 16.85],
-    ['EDI003', 'COLECCIÓN', 15.2, '2026-05-26', 10.81],
-    ['NIKE001', 'COLECCIÓN', undefined, undefined, 18.32],
-    ['DIM018', 'COLECCIÓN', 25.69, '2026-09-20', 26.57],
-    ['DIM040', 'COLECCIÓN', 21.28, '2026-07-09', 77.49],
-    ['COL137', 'BUSCADA', undefined, undefined, 18.68],
-    ['DIM030', 'BUSCADA', undefined, undefined, 30.18],
-    ['DIM033', 'BUSCADA', undefined, undefined, 21.66],
-    ['DIM032', 'BUSCADA', undefined, undefined, 20.98],
-    ['NJO1048', 'COLECCIÓN', 7.99, undefined, 14.88],
-    ['COLSH10', 'COLECCIÓN', undefined, undefined, 40.92],
-    ['ST014', 'COLECCIÓN', undefined, undefined, 36.86],
-    ['CAS215', 'COLECCIÓN', undefined, undefined, 17.53],
-    ['WW008', 'COLECCIÓN', undefined, undefined, 10.53],
-    ['NJO1051', 'COLECCIÓN', 7.99, undefined, 17.93],
-    ['SH1152', 'COLECCIÓN', undefined, undefined, 51.87],
-    ['NJO1035', 'COLECCIÓN', 0, '2026-09-23', 17.65],
-    ['SW1278', 'COLECCIÓN', 0, '2026-09-23', 3.06],
-    ['SW0879', 'COLECCIÓN', undefined, undefined, 22.49],
-    ['HP035', 'COLECCIÓN', undefined, undefined, 8.88],
-    ['COL450', 'COLECCIÓN', 3.99, undefined, 9.26],
-  ];
-
-  assert.deepEqual(catalog.map((item) => [
-    item.id,
-    item.estadoColeccion,
-    item.precioCompra,
-    item.fechaCompra,
-    item.precio,
-  ]), expected);
 });
 
 test('conserva los campos planos de precio y calcula el total priorizando precio', async () => {

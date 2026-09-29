@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createServer } from '../src/server.js';
-
-const categorias = await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8');
+import { categoriasMockRaw } from '../test-support/fixtures.js';
 
 function figura(overrides = {}) {
   return {
@@ -19,7 +18,7 @@ async function withServer(catalogo, callback) {
   const themesPath = join(directory, 'categorias.json');
   const gamificationPath = join(directory, 'gamificacion.json');
   await writeFile(catalogPath, JSON.stringify(catalogo));
-  await writeFile(themesPath, categorias);
+  await writeFile(themesPath, categoriasMockRaw);
   const server = createServer({ catalogPath, themesPath, gamificationPath });
   await new Promise((resolve) => server.listen(0, resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
