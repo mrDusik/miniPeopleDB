@@ -33,6 +33,6 @@ test('repro: Buscar envía filtros y muestra solo el resultado filtrado', async 
   window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.ok(requests.includes('/minifiguras?categoria=Castle'));
-  assert.deepEqual([...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[1].textContent), ['castle-1']);
+  assert.deepEqual([...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent), ['castle-1']);
   dom.window.close();
 });

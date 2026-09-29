@@ -13,10 +13,15 @@ const collectionCount = document.querySelector('#collection-count');
 const wantedCount = document.querySelector('#wanted-count');
 const topFiveList = document.querySelector('#top-five-list');
 const oldestFiveList = document.querySelector('#oldest-five-list');
+const watchlistList = document.querySelector('#watchlist-list');
 const idFilterInput = document.querySelector('#id');
+const nameFilterInput = document.querySelector('#nombre');
 const categoriaInput = document.querySelector('#categoria');
 const subcategoriaInput = document.querySelector('#subcategoria');
 const anioInput = document.querySelector('#anio');
+const collectionFilterInput = document.querySelector('#filter-coleccion');
+const wantedFilterInput = document.querySelector('#filter-buscada');
+const observedFilterInput = document.querySelector('#observada');
 const currentYear = new Date().getFullYear();
 const sortButtons = [...document.querySelectorAll('[data-sort]')];
 const controls = [...form.querySelectorAll('input, select, button'), syncPricesButton];
@@ -34,10 +39,13 @@ const formCategoriaInput = document.querySelector('#form-categoria');
 const formSubcategoriaInput = document.querySelector('#form-subcategoria');
 const formAnioInput = document.querySelector('#form-anio');
 const formEstadoInput = document.querySelector('#form-estadoColeccion');
+const formStateToggleButtons = [...document.querySelectorAll('[data-form-state]')];
 const formPrecioCompraInput = document.querySelector('#form-precioCompra');
 const formFechaCompraInput = document.querySelector('#form-fechaCompra');
 const formPrecioInput = document.querySelector('#form-precio');
 const lookupBricksetButton = document.querySelector('#lookup-brickset');
+const formObservedButton = document.querySelector('#form-observada');
+const formPreviewImage = document.querySelector('#form-preview-image');
 
 const deleteDialog = document.querySelector('#delete-dialog');
 const deleteMessage = document.querySelector('#delete-message');
@@ -46,14 +54,18 @@ const deleteCancelButton = document.querySelector('#delete-cancel');
 
 const imageModal = document.querySelector('#image-modal');
 const imageModalTitle = document.querySelector('#image-modal-title');
+const imageModalName = document.querySelector('#image-modal-name');
 const imageModalImage = document.querySelector('#image-modal-image');
 const imageModalCloseButton = document.querySelector('#image-modal-close');
 
 const toastRegion = document.querySelector('#toast-region');
 const gamificationLevelButton = document.querySelector('#gamification-level');
 const gamificationTitle = document.querySelector('#gamification-title');
+const gamificationLevelNumber = document.querySelector('#gamification-level-number');
+const gamificationLevelName = document.querySelector('#gamification-level-name');
 const gamificationBricks = document.querySelector('#gamification-bricks');
 const gamificationProgress = document.querySelector('#gamification-progress');
+const gamificationPercentage = document.querySelector('#gamification-percentage');
 const gamificationNext = document.querySelector('#gamification-next');
 const gamificationDialog = document.querySelector('#gamification-dialog');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
@@ -74,12 +86,15 @@ let requestSequence = 0;
 let currentFilters = {};
 let currentCatalog = [];
 let currentEditId = null;
+let currentFormMode = null;
+let formSynced = false;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
 let officialCategorias = [];
 let subcategoriasPorCategoria = new Map();
 let categoriasReady = false;
+let catalogForOptions = [];
 let syncButtonStates = new Map();
 const pageSize = 10;
 let currentPage = 1;
@@ -91,25 +106,42 @@ formAnioInput.max = String(currentYear);
 
 function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   const previousValue = selectElement.value;
-  const subcategorias = subcategoriasPorCategoria.get(categoria) ?? [];
-  selectElement.replaceChildren(new Option(placeholderText, ''));
-  for (const subcategoria of subcategorias) {
-    selectElement.append(new Option(subcategoria, subcategoria));
+  const subcategorias = [...new Map(
+    (categoria ? catalogForOptions : [])
+      .filter((minifigura) => minifigura.categoria === categoria)
+      .filter((minifigura) => minifigura.subcategoria)
+      .map((minifigura) => [minifigura.subcategoria, 0]),
+  ).keys()];
+  const counts = new Map(subcategorias.map((subcategoria) => [subcategoria, catalogForOptions.filter((minifigura) => (
+    minifigura.subcategoria === subcategoria && (!categoria || minifigura.categoria === categoria)
+  )).length]));
+  selectElement.replaceChildren(new Option(`${placeholderText} (${catalogForOptions.filter((minifigura) => !categoria || minifigura.categoria === categoria).length})`, ''));
+  for (const subcategoria of subcategorias.sort()) {
+    selectElement.append(new Option(`${subcategoria} (${counts.get(subcategoria)})`, subcategoria));
   }
   selectElement.value = subcategorias.includes(previousValue) ? previousValue : '';
   selectElement.disabled = !categoriasReady || subcategorias.length === 0;
 }
 
 function renderCategoryOptions(categorias) {
-  const categoryNames = categorias.map(({ categoria }) => categoria);
+  const categoryCounts = new Map();
+  for (const minifigura of catalogForOptions) {
+    categoryCounts.set(minifigura.categoria, (categoryCounts.get(minifigura.categoria) ?? 0) + 1);
+  }
+  const categoryNames = [...categoryCounts.keys()].sort();
 
   const selectedCategoria = categoriaInput.value;
-  categoriaInput.replaceChildren(new Option('Todas', ''));
+  categoriaInput.replaceChildren(new Option(`Todas (${catalogForOptions.length})`, ''));
   for (const categoria of categoryNames) {
-    categoriaInput.append(new Option(categoria, categoria));
+    categoriaInput.append(new Option(`${categoria} (${categoryCounts.get(categoria)})`, categoria));
   }
   categoriaInput.value = categoryNames.includes(selectedCategoria) ? selectedCategoria : '';
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+}
+
+function renderDynamicFilterOptions(catalog) {
+  catalogForOptions = catalog;
+  renderCategoryOptions(officialCategorias);
 }
 
 function setCategoriaControlsEnabled(enabled) {
@@ -202,6 +234,11 @@ function normalizedCollectionState(value) {
     : value;
 }
 
+function collectionStateIcon(value) {
+  const state = normalizedCollectionState(value);
+  return state === 'COLECCION' ? '📦' : state === 'BUSCADA' ? '🔍' : value ?? '';
+}
+
 function differenceCell(minifigura) {
   const element = document.createElement('td');
   const difference = document.createElement('span');
@@ -225,7 +262,7 @@ function rankingCard(minifigura, position, detail) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'ranking-card';
-  card.dataset.action = 'preview';
+  card.dataset.action = 'view';
   card.dataset.id = minifigura.id;
   card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
 
@@ -257,6 +294,25 @@ function renderOldestFive(oldestFive) {
     oldestFiveList.append(rankingCard(minifigura, index + 1, minifigura.anio));
   });
   trackButtonsDuringSync(oldestFiveList);
+}
+
+function renderWatchlist(observed) {
+  watchlistList.replaceChildren();
+  for (const minifigura of observed) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'watchlist-card';
+    card.dataset.action = 'view';
+    card.dataset.id = minifigura.id;
+    const image = document.createElement('img');
+    image.src = imagenUrlPara(minifigura.id);
+    image.alt = minifigura.nombre ?? '';
+    image.addEventListener('error', () => { image.style.display = 'none'; });
+    const caption = document.createElement('span');
+    caption.textContent = `${collectionStateIcon(minifigura.estadoColeccion)} ${minifigura.id} ${formatPrice(minifigura.precioBrickset)}`;
+    card.append(image, caption);
+    watchlistList.append(card);
+  }
 }
 
 function sortCatalog(catalog) {
@@ -297,8 +353,12 @@ function badgeClassFor(value) {
 function badgeCell(value) {
   const element = document.createElement('td');
   const badge = document.createElement('span');
+  const state = normalizedCollectionState(value);
+  const label = collectionStateIcon(value);
   badge.className = `badge ${badgeClassFor(value)}`;
-  badge.textContent = value ?? '';
+  badge.textContent = label;
+  badge.title = label;
+  badge.setAttribute('aria-label', label);
   element.append(badge);
   return element;
 }
@@ -321,12 +381,38 @@ function thumbCell(minifigura) {
 }
 
 function idCell(minifigura) {
-  return cell(minifigura.id);
+  const element = document.createElement('td');
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'id-link';
+  link.textContent = minifigura.id;
+  link.dataset.action = 'view';
+  link.dataset.id = minifigura.id;
+  link.setAttribute('aria-label', `Ver ${minifigura.id}`);
+  element.append(link);
+  return element;
+}
+
+function observedCell(minifigura) {
+  const element = document.createElement('td');
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `eye-icon ${minifigura.observada ? 'active' : 'inactive'}`;
+  button.textContent = '👁️';
+  button.title = minifigura.observada ? 'Dejar de observar' : 'Observar';
+  button.setAttribute('aria-label', button.title);
+  button.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
+  button.dataset.action = 'observe';
+  button.dataset.id = minifigura.id;
+  element.append(button);
+  return element;
 }
 
 function actionsCell(minifigura) {
   const element = document.createElement('td');
   element.className = 'actions-cell';
+  const actions = document.createElement('div');
+  actions.className = 'actions-buttons';
 
   const editButton = document.createElement('button');
   editButton.type = 'button';
@@ -346,7 +432,8 @@ function actionsCell(minifigura) {
   deleteButton.dataset.action = 'delete';
   deleteButton.dataset.id = minifigura.id;
 
-  element.append(editButton, deleteButton);
+  actions.append(editButton, deleteButton);
+  element.append(actions);
   return element;
 }
 
@@ -368,6 +455,7 @@ function renderCatalogPage() {
     const row = document.createElement('tr');
     row.append(
       thumbCell(minifigura),
+      observedCell(minifigura),
       idCell(minifigura),
       cell(minifigura.nombre),
       cell(minifigura.categoria),
@@ -454,6 +542,9 @@ async function loadCatalog(filters = {}) {
     }
     if (currentRequest === requestSequence) {
       renderCatalog(catalog);
+      if (Object.keys(filters).length === 0) {
+        renderDynamicFilterOptions(catalog);
+      }
       await loadTotal();
       await loadGamification();
     }
@@ -482,24 +573,29 @@ async function loadTotal() {
     }
     const summary = await response.json();
     collectionTotal.textContent = formatPrice(summary.total ?? 0);
-    collectionCount.textContent = `${summary.enColeccion ?? 0} minifiguras`;
-    wantedCount.textContent = `Total de figuras buscadas: ${summary.buscadas ?? 0}`;
+    collectionCount.textContent = `${summary.enColeccion ?? 0}`;
+    wantedCount.textContent = `${summary.buscadas ?? 0}`;
     renderTopFive(Array.isArray(summary.top5) ? summary.top5 : []);
     renderOldestFive(Array.isArray(summary.top5Antiguas) ? summary.top5Antiguas : []);
+    renderWatchlist(Array.isArray(summary.observadas) ? summary.observadas : []);
   } catch {
     collectionTotal.textContent = 'No disponible';
-    collectionCount.textContent = '0 minifiguras';
-    wantedCount.textContent = 'Total de figuras buscadas: 0';
+    collectionCount.textContent = '0';
+    wantedCount.textContent = '0';
     renderTopFive([]);
     renderOldestFive([]);
+    renderWatchlist([]);
   }
 }
 
 function renderGamification(state) {
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
-  gamificationTitle.textContent = `${level.id} ${level.nombre}`;
+  gamificationLevelNumber.textContent = level.id;
+  gamificationLevelName.textContent = level.nombre;
   gamificationBricks.textContent = `${state.bricks ?? 0} Bricks`;
   gamificationProgress.value = state.progreso?.porcentaje ?? 0;
+  gamificationPercentage.textContent = `${Math.round(gamificationProgress.value)}%`;
+  gamificationPercentage.classList.toggle('on-accent', gamificationProgress.value >= 50);
   gamificationProgress.setAttribute('aria-valuetext', `${gamificationProgress.value}%`);
   gamificationNext.textContent = state.siguienteNivel
     ? `Próximo nivel: ${state.siguienteNivel.id} ${state.siguienteNivel.nombre}`
@@ -519,17 +615,32 @@ async function loadGamification() {
     if (!response.ok) throw new Error('GAMIFICACION_NO_DISPONIBLE');
     renderGamification(await response.json());
   } catch {
-    gamificationTitle.textContent = 'Nivel no disponible';
+    gamificationLevelNumber.textContent = '';
+    gamificationLevelName.textContent = 'Nivel no disponible';
     gamificationBricks.textContent = '0 Bricks';
+    gamificationProgress.value = 0;
+    gamificationPercentage.textContent = '0%';
+    gamificationPercentage.classList.remove('on-accent');
     gamificationNext.textContent = 'Progreso no disponible';
   }
 }
 
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', iconSrc = null, iconPosition = 'after') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  toast.textContent = message;
+  const messageNode = document.createTextNode(message);
+  if (iconSrc === null) iconSrc = '/wrench-icon.svg';
+  iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
+  const icon = iconSrc ? document.createElement('img') : null;
+  if (icon) {
+    icon.className = 'toast-icon';
+    icon.src = iconSrc;
+    icon.alt = type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Herramienta';
+  }
+  if (icon && iconPosition === 'before') toast.append(icon);
+  toast.append(messageNode);
+  if (icon && iconPosition !== 'before') toast.append(icon);
   toastRegion.append(toast);
   setTimeout(() => {
     toast.remove();
@@ -552,9 +663,9 @@ function showGamificationToasts(gamification) {
       return;
     }
     if (logro.kind === 'level') {
-      showToast(`Has alcanzado el nivel ${logro.id} ${logro.nombre}`, 'level');
+      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', '/trophy-icon.svg', 'before');
     } else {
-      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'success');
+      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'task', '/brick-red-icon.svg', 'before');
     }
     setTimeout(showNext, 300);
   };
@@ -569,16 +680,18 @@ function closeImageModal() {
   imageModal.hidden = true;
   imageModalImage.removeAttribute('src');
   imageModalImage.alt = '';
+  imageModalName.textContent = '';
 }
 
-function mostrarImagenMinifigura(id) {
+function mostrarImagenMinifigura(id, nombre) {
   const upperId = String(id).toUpperCase();
   const url = imagenUrlPara(id);
   const preloader = new Image();
   preloader.onload = () => {
     imageModalImage.src = url;
     imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
-    imageModalTitle.textContent = `Minifigura: ${upperId}`;
+    imageModalTitle.textContent = upperId;
+    imageModalName.textContent = nombre ?? '';
     imageModal.hidden = false;
     imageModalCloseButton.focus();
   };
@@ -593,13 +706,15 @@ function openFormDialog(mode, minifigura) {
     showToast('No se pueden crear minifiguras sin cargar las categorías oficiales.', 'error');
     return;
   }
+  currentFormMode = mode;
   currentEditId = mode === 'edit' ? minifigura.id : null;
+  formSynced = mode !== 'create';
   minifiguraForm.reset();
+  formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
-  formIdInput.readOnly = mode === 'edit';
-  formDialogTitle.textContent = mode === 'edit' ? 'Editar minifigura' : 'Nueva minifigura';
+  formDialogTitle.textContent = mode === 'edit' ? 'Editar minifigura' : mode === 'view' ? 'Ver minifigura' : 'Nueva minifigura';
 
-  if (mode === 'edit') {
+  if (mode !== 'create') {
     formIdInput.value = minifigura.id ?? '';
     formNombreInput.value = minifigura.nombre ?? '';
     formDescripcionInput.value = minifigura.descripcion ?? '';
@@ -610,9 +725,89 @@ function openFormDialog(mode, minifigura) {
     formPrecioCompraInput.value = minifigura.precioCompra ?? '';
     formFechaCompraInput.value = minifigura.fechaCompra ?? '';
     formPrecioInput.value = minifigura.precio ?? '';
+    formObservedButton.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
+    formPreviewImage.src = imagenUrlPara(minifigura.id);
+    formPreviewImage.alt = minifigura.nombre ?? '';
   }
 
+  updateFormMode();
   formDialog.showModal();
+}
+
+async function openMinifiguraView(id) {
+  let minifigura = currentCatalog.find((item) => item.id === id);
+  if (!minifigura) {
+    try {
+      const response = await fetch(`/minifiguras?id=${encodeURIComponent(id)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const matches = await response.json();
+      minifigura = Array.isArray(matches) ? matches.find((item) => item.id === id) : null;
+    } catch {
+      showToast('No se pudo cargar la minifigura.', 'error');
+      return;
+    }
+  }
+  if (minifigura) {
+    openFormDialog('view', minifigura);
+  } else {
+    showToast('No se pudo cargar la minifigura.', 'error');
+  }
+}
+
+function updateFormMode() {
+  const isCreate = currentFormMode === 'create';
+  const isView = currentFormMode === 'view';
+  const hasId = formIdInput.value.trim() !== '';
+  const editableFields = [formNombreInput, formDescripcionInput, formEstadoInput, formPrecioCompraInput, formFechaCompraInput];
+  const bricksetFields = [formCategoriaInput, formSubcategoriaInput, formAnioInput, formPrecioInput];
+
+  formDialog.classList.toggle('view-mode', isView);
+  formIdInput.closest('.modal-row-identity').classList.toggle('view-mode', isView);
+  formIdInput.readOnly = !isCreate;
+  formIdInput.disabled = isView;
+  editableFields.forEach((field) => { field.disabled = isView || (isCreate && !formSynced); });
+  formStateToggleButtons.forEach((button) => { button.disabled = isView || (isCreate && !formSynced); });
+  bricksetFields.forEach((field) => {
+    field.disabled = isView || (isCreate && !formSynced);
+    field.readOnly = true;
+  });
+  formObservedButton.disabled = isView || isCreate && !formSynced;
+  updateFormToggleStates();
+  formDialogTitle.hidden = isView;
+  lookupBricksetButton.hidden = isView;
+  lookupBricksetButton.disabled = isView || !hasId;
+  formSubmitButton.hidden = isView;
+  formSubmitButton.disabled = isView || !isFormValid();
+  formCancelButton.textContent = isView ? 'Cerrar' : 'Cancelar';
+  formPreviewImage.hidden = !formIdInput.value.trim();
+}
+
+function updateFormToggleStates() {
+  const selectedState = formEstadoInput.value;
+  for (const button of formStateToggleButtons) {
+    const isActive = button.dataset.formState === selectedState;
+    button.classList.toggle('active', isActive);
+    button.classList.toggle('inactive', !isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+  }
+
+  const isObserved = formObservedButton.getAttribute('aria-pressed') === 'true';
+  formObservedButton.classList.toggle('active', isObserved);
+  formObservedButton.classList.toggle('inactive', !isObserved);
+  formObservedButton.setAttribute('aria-label', isObserved ? 'Dejar de seguir' : 'Seguir');
+  formObservedButton.title = isObserved ? 'Dejar de seguir' : 'Seguir';
+}
+
+function isFormValid() {
+  return formIdInput.value.trim() !== ''
+    && formNombreInput.value.trim() !== ''
+    && formEstadoInput.value.trim() !== ''
+    && formCategoriaInput.value.trim() !== ''
+    && Number.isInteger(Number(formAnioInput.value))
+    && Number(formAnioInput.value) > 0
+    && Number.isFinite(Number(formPrecioInput.value));
 }
 
 function closeFormDialog() {
@@ -622,16 +817,16 @@ function closeFormDialog() {
 }
 
 function buildPayloadFromForm() {
-  const formData = new FormData(minifiguraForm);
-  const anioRaw = formData.get('anio')?.toString().trim() ?? '';
+  const anioRaw = formAnioInput.value.trim();
   const payload = {
-    id: formData.get('id')?.toString().trim() ?? '',
-    nombre: formData.get('nombre')?.toString().trim() ?? '',
-    descripcion: formData.get('descripcion')?.toString().trim() ?? '',
-    categoria: formData.get('categoria')?.toString().trim() ?? '',
+    id: formIdInput.value.trim(),
+    nombre: formNombreInput.value.trim(),
+    descripcion: formDescripcionInput.value.trim(),
+    categoria: formCategoriaInput.value.trim(),
+    observada: formObservedButton.getAttribute('aria-pressed') === 'true',
   };
 
-  const subcategoria = formData.get('subcategoria')?.toString().trim() ?? '';
+  const subcategoria = formSubcategoriaInput.value.trim();
   if (subcategoria !== '') {
     payload.subcategoria = subcategoria;
   }
@@ -640,18 +835,18 @@ function buildPayloadFromForm() {
     payload.anio = Number(anioRaw);
   }
 
-  const estadoColeccion = formData.get('estadoColeccion')?.toString().trim() ?? '';
+  const estadoColeccion = formEstadoInput.value.trim();
   payload.estadoColeccion = estadoColeccion || 'COLECCIÓN';
 
-  const precioCompraRaw = formData.get('precioCompra')?.toString().trim() ?? '';
+  const precioCompraRaw = formPrecioCompraInput.value.trim();
   if (precioCompraRaw !== '') {
     payload.precioCompra = Number(precioCompraRaw);
   }
-  const fechaCompra = formData.get('fechaCompra')?.toString().trim() ?? '';
+  const fechaCompra = formFechaCompraInput.value.trim();
   if (fechaCompra !== '') {
     payload.fechaCompra = fechaCompra;
   }
-  const precioRaw = formData.get('precio')?.toString().trim() ?? '';
+  const precioRaw = formPrecioInput.value.trim();
   if (precioRaw !== '') {
     payload.precio = Number(precioRaw);
   }
@@ -668,6 +863,12 @@ function validatePayload(payload) {
   }
   if (!payload.categoria) {
     return 'La categoría es obligatoria.';
+  }
+  if (payload.anio === undefined || payload.anio <= 0) {
+    return 'El año es obligatorio.';
+  }
+  if (payload.precio === undefined || !Number.isFinite(payload.precio)) {
+    return 'El precio Brickset es obligatorio.';
   }
   if (!officialCategorias.some(({ categoria }) => categoria === payload.categoria)) {
     return 'La categoría debe ser una categoría oficial de Brickset.';
@@ -698,12 +899,19 @@ form.addEventListener('submit', (event) => {
   event.preventDefault();
   const formData = new FormData(form);
   const filterValue = (name) => String(formData.get(name) ?? '').trim();
+  const collectionState = collectionFilterInput.checked && !wantedFilterInput.checked
+    ? 'COLECCIÓN'
+    : wantedFilterInput.checked && !collectionFilterInput.checked
+      ? 'BUSCADA'
+      : '';
   loadCatalog({
     id: filterValue('id'),
+    nombre: filterValue('nombre'),
     categoria: filterValue('categoria'),
     subcategoria: filterValue('subcategoria'),
     anio: filterValue('anio'),
-    estadoColeccion: filterValue('estadoColeccion'),
+    estadoColeccion: collectionState,
+    observada: observedFilterInput.checked ? 'true' : '',
   });
 });
 
@@ -789,21 +997,53 @@ catalogBody.addEventListener('click', (event) => {
 
   if (trigger.dataset.action === 'edit') {
     openFormDialog('edit', minifigura);
+  } else if (trigger.dataset.action === 'view') {
+    openFormDialog('view', minifigura);
   } else if (trigger.dataset.action === 'delete') {
     openDeleteDialog(minifigura);
   } else if (trigger.dataset.action === 'preview') {
-    mostrarImagenMinifigura(minifigura.id);
+    mostrarImagenMinifigura(minifigura.id, minifigura.nombre);
+  } else if (trigger.dataset.action === 'observe') {
+    toggleObserved(minifigura, trigger);
   }
 });
 
-[topFiveList, oldestFiveList].forEach((list) => {
+[topFiveList, oldestFiveList, watchlistList].forEach((list) => {
   list.addEventListener('click', (event) => {
-    const card = event.target.closest('[data-action="preview"]');
+    const card = event.target.closest('[data-action="view"]');
     if (card) {
-      mostrarImagenMinifigura(card.dataset.id);
+      void openMinifiguraView(card.dataset.id);
     }
   });
 });
+
+async function toggleObserved(minifigura, trigger) {
+  const nextObserved = !minifigura.observada;
+  trigger.disabled = true;
+  try {
+    const response = await fetch(`/minifiguras/${encodeURIComponent(minifigura.id)}/observada`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ observada: nextObserved }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      if (result.error === 'LIMITE_OBSERVADAS') {
+        showToast('Límite alcanzado: Máximo 10 minifiguras en observación', 'warning');
+      } else {
+        showToast(messageForErrorCode(result.error), 'error');
+      }
+      return;
+    }
+    Object.assign(minifigura, result);
+    renderCatalogPage();
+    await loadTotal();
+  } catch {
+    showToast('No se pudo actualizar la observación.', 'error');
+  } finally {
+    trigger.disabled = false;
+  }
+}
 
 imageModalCloseButton.addEventListener('click', () => {
   closeImageModal();
@@ -827,6 +1067,33 @@ formCancelButton.addEventListener('click', () => {
 
 formDialog.addEventListener('close', () => {
   currentEditId = null;
+  currentFormMode = null;
+  formSynced = false;
+  formPreviewImage.removeAttribute('src');
+});
+
+[formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput].forEach((input) => {
+  input.addEventListener('input', () => {
+    if (currentFormMode === 'create' && input === formIdInput) {
+      formPreviewImage.src = input.value.trim() ? imagenUrlPara(input.value) : '';
+    }
+    if (currentFormMode) {
+      updateFormMode();
+    }
+  });
+});
+
+formObservedButton.addEventListener('click', () => {
+  const pressed = formObservedButton.getAttribute('aria-pressed') === 'true';
+  formObservedButton.setAttribute('aria-pressed', String(!pressed));
+  updateFormToggleStates();
+});
+
+formStateToggleButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    formEstadoInput.value = button.dataset.formState;
+    updateFormMode();
+  });
 });
 
 minifiguraForm.addEventListener('submit', async (event) => {
@@ -875,6 +1142,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
     showToast(connError, 'error');
   } finally {
     formSubmitButton.disabled = false;
+    updateFormMode();
   }
 });
 
@@ -895,13 +1163,17 @@ lookupBricksetButton.addEventListener('click', async () => {
     }
     formCategoriaInput.value = result.categoria;
     formSubcategoriaInput.value = result.subcategoria ?? '';
-    formAnioInput.value = result.anio;
+    formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
     formPrecioInput.value = result.precio;
+    formSynced = true;
+    formPreviewImage.src = imagenUrlPara(id);
+    formPreviewImage.alt = formNombreInput.value || id;
+    updateFormMode();
     showToast('Datos de Brickset actualizados.', 'success');
   } catch {
-    showToast('No se pudieron consultar los datos en Brickset.', 'error');
+    showToast('No se encontraron datos en Brickset para el ID especificado', 'error');
   } finally {
-    lookupBricksetButton.disabled = false;
+    updateFormMode();
   }
 });
 

@@ -42,6 +42,14 @@ export class MinifiguraNoEncontradaError extends Error {
   }
 }
 
+export class LimiteObservadasError extends Error {
+  constructor() {
+    super('Se ha alcanzado el limite de minifiguras en observacion');
+    this.name = 'LimiteObservadasError';
+    this.code = 'LIMITE_OBSERVADAS';
+  }
+}
+
 function isNonEmptyText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -85,6 +93,7 @@ const MINIFIGURA_FIELDS = new Set([
   'fechaCompra',
   'precio',
   'FechaRegistro',
+  'observada',
 ]);
 
 function isValidOptionalSubcategoria(value, categoria, officialCategorias) {
@@ -114,6 +123,7 @@ function isMinifigura(value, officialCategorias) {
     && isValidOptionalPrice(value.precioCompra)
     && isValidOptionalPurchaseDate(value.fechaCompra)
     && isValidOptionalPrice(value.precio)
+    && typeof value.observada === 'boolean'
     && isValidOptionalRegistrationDate(value.FechaRegistro);
 }
 
@@ -146,6 +156,23 @@ function addMissingRegistrationDates(catalogo) {
   return { catalogo: normalized, changed };
 }
 
+function normalizeCatalog(catalogo) {
+  let changed = false;
+  const normalized = catalogo.map((minifigura) => {
+    const id = typeof minifigura.id === 'string' ? minifigura.id.trim().toUpperCase() : minifigura.id;
+    const observada = minifigura.observada === undefined ? false : minifigura.observada;
+    if (id !== minifigura.id || observada !== minifigura.observada) {
+      changed = true;
+    }
+    return { ...minifigura, id, observada };
+  });
+  return { catalogo: normalized, changed };
+}
+
+function normalizeId(id) {
+  return typeof id === 'string' ? id.trim().toUpperCase() : id;
+}
+
 function normalizeText(value) {
   return typeof value === 'string'
     ? value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -155,6 +182,7 @@ function normalizeText(value) {
 function matchesFilters(minifigura, filters) {
   const categoria = normalizeText(filters.categoria);
   const subcategoria = normalizeText(filters.subcategoria);
+  const nombre = normalizeText(filters.nombre);
   const estadoColeccion = normalizeText(filters.estadoColeccion);
 
   if (categoria !== undefined && normalizeText(minifigura.categoria) !== categoria) {
@@ -162,6 +190,10 @@ function matchesFilters(minifigura, filters) {
   }
 
   if (subcategoria !== undefined && normalizeText(minifigura.subcategoria) !== subcategoria) {
+    return false;
+  }
+
+  if (nombre !== undefined && !normalizeText(minifigura.nombre).includes(nombre)) {
     return false;
   }
 
@@ -177,6 +209,10 @@ function matchesFilters(minifigura, filters) {
     return false;
   }
 
+  if (filters.observada !== undefined && minifigura.observada !== filters.observada) {
+    return false;
+  }
+
   return true;
 }
 
@@ -186,6 +222,7 @@ export class MinifigurasRepository {
     this.categoriasRepository = categoriasRepository;
     this.onCatalogPersisted = onCatalogPersisted;
     this.lastGamification = null;
+    this.observationMutation = Promise.resolve();
   }
 
   async officialCategorias() {
@@ -211,9 +248,10 @@ export class MinifigurasRepository {
       throw new CatalogoInvalidoError();
     }
 
-    const validatedCatalog = validateCatalogo(catalog, await this.officialCategorias());
+    const normalizedValues = normalizeCatalog(catalog);
+    const validatedCatalog = validateCatalogo(normalizedValues.catalogo, await this.officialCategorias());
     const normalizedCatalog = addMissingRegistrationDates(validatedCatalog);
-    if (normalizedCatalog.changed) {
+    if (normalizedValues.changed || normalizedCatalog.changed) {
       await this.persist(normalizedCatalog.catalogo);
     }
     return normalizedCatalog.catalogo;
@@ -255,7 +293,7 @@ export class MinifigurasRepository {
 
   async findById(id) {
     const catalogo = await this.readCatalog();
-    const minifigura = catalogo.find((item) => item.id === id);
+    const minifigura = catalogo.find((item) => item.id === normalizeId(id));
     if (!minifigura) {
       throw new MinifiguraNoEncontradaError();
     }
@@ -264,19 +302,20 @@ export class MinifigurasRepository {
 
   async updatePrices(priceUpdates) {
     const catalogo = await this.readCatalog();
+    const normalizedUpdates = new Map([...priceUpdates.entries()].map(([id, price]) => [normalizeId(id), price]));
     const catalogIds = new Set(catalogo.map((minifigura) => minifigura.id));
-    for (const id of priceUpdates.keys()) {
+    for (const id of normalizedUpdates.keys()) {
       if (!catalogIds.has(id)) {
         throw new MinifiguraNoEncontradaError();
       }
     }
-    for (const price of priceUpdates.values()) {
+    for (const price of normalizedUpdates.values()) {
       if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) {
         throw new MinifiguraInvalidaError();
       }
     }
     const nextCatalog = catalogo.map((minifigura) => {
-      const nextPrice = priceUpdates.get(minifigura.id);
+      const nextPrice = normalizedUpdates.get(minifigura.id);
       return nextPrice === undefined ? minifigura : { ...minifigura, precio: nextPrice };
     });
     await this.persist(nextCatalog);
@@ -318,7 +357,24 @@ export class MinifigurasRepository {
         index,
       });
       return result;
-    }, { total: 0, enColeccion: 0, buscadas: 0, topCandidates: [] });
+    }, { total: 0, enColeccion: 0, buscadas: 0, topCandidates: [], observadas: [] });
+
+    for (const minifigura of catalogo) {
+      if (minifigura.observada) {
+        summary.observadas.push({
+          id: minifigura.id,
+          nombre: minifigura.nombre,
+          estadoColeccion: minifigura.estadoColeccion,
+          precioBrickset: minifigura.precio,
+          precio: minifigura.precio,
+        });
+      }
+    }
+    summary.observadas.sort((left, right) => {
+      const leftPrice = Number.isFinite(left.precioBrickset) ? left.precioBrickset : -Infinity;
+      const rightPrice = Number.isFinite(right.precioBrickset) ? right.precioBrickset : -Infinity;
+      return rightPrice - leftPrice;
+    });
 
     summary.top5 = summary.topCandidates
       .sort((left, right) => {
@@ -368,6 +424,8 @@ export class MinifigurasRepository {
     const officialCategorias = await this.officialCategorias();
     const nextMinifigura = {
       ...minifigura,
+      id: normalizeId(minifigura.id),
+      observada: minifigura.observada ?? false,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
       FechaRegistro: new Date().toISOString(),
     };
@@ -387,16 +445,20 @@ export class MinifigurasRepository {
   async replace(id, minifigura) {
     const catalogo = await this.readCatalog();
     const officialCategorias = await this.officialCategorias();
+    const normalizedId = normalizeId(id);
+    const existing = catalogo.find((item) => item.id === normalizedId);
     const nextMinifigura = {
       ...minifigura,
+      id: normalizeId(minifigura.id),
+      observada: minifigura.observada ?? existing?.observada ?? false,
       estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
-      FechaRegistro: catalogo.find((item) => item.id === id)?.FechaRegistro,
+      FechaRegistro: existing?.FechaRegistro,
     };
-    if (!isMinifigura(nextMinifigura, officialCategorias) || nextMinifigura.id !== id) {
+    if (!isMinifigura(nextMinifigura, officialCategorias) || nextMinifigura.id !== normalizedId) {
       throw new MinifiguraInvalidaError();
     }
 
-    const index = catalogo.findIndex((item) => item.id === id);
+    const index = catalogo.findIndex((item) => item.id === normalizedId);
     if (index === -1) {
       throw new MinifiguraNoEncontradaError();
     }
@@ -410,13 +472,36 @@ export class MinifigurasRepository {
 
   async delete(id) {
     const catalogo = await this.readCatalog();
-    const index = catalogo.findIndex((item) => item.id === id);
+    const normalizedId = normalizeId(id);
+    const index = catalogo.findIndex((item) => item.id === normalizedId);
     if (index === -1) {
       throw new MinifiguraNoEncontradaError();
     }
 
-    const nextCatalog = catalogo.filter((item) => item.id !== id);
+    const nextCatalog = catalogo.filter((item) => item.id !== normalizedId);
     await this.persist(nextCatalog);
     this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+  }
+
+  async setObserved(id, observed) {
+    const operation = async () => {
+      const catalogo = await this.readCatalog();
+      const normalizedId = normalizeId(id);
+      const index = catalogo.findIndex((item) => item.id === normalizedId);
+      if (index === -1) {
+        throw new MinifiguraNoEncontradaError();
+      }
+      if (observed && !catalogo[index].observada && catalogo.filter((item) => item.observada).length >= 10) {
+        throw new LimiteObservadasError();
+      }
+
+      const nextCatalog = [...catalogo];
+      nextCatalog[index] = { ...nextCatalog[index], observada: observed };
+      await this.persist(nextCatalog);
+      this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+      return nextCatalog[index];
+    };
+    this.observationMutation = this.observationMutation.then(operation, operation);
+    return this.observationMutation;
   }
 }

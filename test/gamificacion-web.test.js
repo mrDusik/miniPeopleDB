@@ -41,6 +41,8 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Redbeard');
   assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820 Bricks');
   assert.equal(window.document.querySelector('#gamification-progress').value, 28);
+  assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
+  assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
   window.document.querySelector('#gamification-level').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
   const achievement = window.document.querySelector('#gamification-achievements li');
@@ -55,7 +57,8 @@ test('coloca el panel de nivel antes del panel de valoracion', () => {
   const dom = new JSDOM(html);
   const panels = [...dom.window.document.querySelector('.summary-row').children];
   assert.equal(panels[0].className, 'gamification-summary');
-  assert.equal(panels[1].className, 'collection-summary');
+  assert.equal(panels[1].className, 'collection-counts-panel');
+  assert.equal(panels[2].className, 'collection-summary');
   dom.window.close();
 });
 
@@ -65,7 +68,7 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalogo = [];
-  window.fetch = baseFetch(catalogo, state({ bricks: 0, nivel: { id: 0, nombre: 'Duplo', umbral: 0 }, siguienteNivel: { id: 1, nombre: 'Stud', umbral: 20 }, progreso: { actual: 0, desde: 0, hasta: 20, porcentaje: 0 }, logros: [] }), {
+  const fetchCatalog = baseFetch(catalogo, state({ bricks: 0, nivel: { id: 0, nombre: 'Duplo', umbral: 0 }, siguienteNivel: { id: 1, nombre: 'Stud', umbral: 20 }, progreso: { actual: 0, desde: 0, hasta: 20, porcentaje: 0 }, logros: [] }), {
     gamificacion: {
       logrosNuevos: [
         { nombre: 'Masterpiece', bricksNuevos: 100 },
@@ -75,22 +78,31 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
       nivelesAlcanzados: [{ id: 5, nombre: 'Skeleton' }],
     },
   });
+  window.fetch = async (url, options = {}) => {
+    if (url.endsWith('/brickset')) return { ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) };
+    return fetchCatalog(url, options);
+  };
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
   window.document.querySelector('#new-minifigura').click();
   window.document.querySelector('#form-id').value = 'new-figure';
+  window.document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.document.querySelector('#lookup-brickset').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
   window.document.querySelector('#form-nombre').value = 'Nueva';
   window.document.querySelector('#form-descripcion').value = 'Figura';
   window.document.querySelector('#form-categoria').value = 'Space';
   window.document.querySelector('#form-anio').value = '2024';
   window.document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.match(window.document.querySelector('.toast').textContent, /New mini person \+1 Bricks/);
+  const taskToast = [...window.document.querySelectorAll('.toast')].find((toast) => /New mini person \+1 Bricks/.test(toast.textContent));
+  assert.ok(taskToast);
+  assert.ok(taskToast.classList.contains('toast-task'));
   await new Promise((resolve) => setTimeout(resolve, 620));
-  assert.ok([...window.document.querySelectorAll('.toast')].some((toast) => /WOAH! \+10 Bricks/.test(toast.textContent)));
+  assert.ok([...window.document.querySelectorAll('.toast')].some((toast) => /WOAH! \+10 Bricks/.test(toast.textContent) && toast.classList.contains('toast-task')));
   await new Promise((resolve) => setTimeout(resolve, 320));
   const levelToast = [...window.document.querySelectorAll('.toast')].find((toast) => toast.classList.contains('toast-level'));
-  assert.equal(levelToast.textContent, 'Has alcanzado el nivel 5 Skeleton');
+  assert.equal(levelToast.textContent, 'NIVEL 5 Skeleton');
   dom.window.close();
 });
 
