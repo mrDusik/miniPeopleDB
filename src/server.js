@@ -6,6 +6,7 @@ import {
   CatalogoInvalidoError,
   CatalogoNoDisponibleError,
   IdDuplicadoError,
+  LimiteObservadasError,
   MinifiguraInvalidaError,
   MinifiguraNoEncontradaError,
   MinifigurasRepository,
@@ -126,6 +127,20 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           const id = requestUrl.searchParams.get('id');
           if (id !== null && id.trim() !== '') {
             filters.id = id.trim();
+          }
+
+          const nombre = requestUrl.searchParams.get('nombre');
+          if (nombre !== null && nombre.trim() !== '') {
+            filters.nombre = nombre.trim();
+          }
+
+          const observada = requestUrl.searchParams.get('observada');
+          if (observada !== null && observada.trim() !== '') {
+            if (observada !== 'true' && observada !== 'false') {
+              sendJson(response, 400, { error: 'PARAMETRO_INVALIDO', parametro: 'observada' });
+              return;
+            }
+            filters.observada = observada === 'true';
           }
 
           const anio = requestUrl.searchParams.get('anio');
@@ -285,7 +300,12 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
           return;
         }
 
-        const resultado = { id, categoria: categoriaEncontrada.categoria, anio: detalles.anio, precio: detalles.precio };
+        const resultado = {
+          id: id.trim().toUpperCase(),
+          categoria: categoriaEncontrada.categoria,
+          anio: Number.isInteger(detalles.anio) && detalles.anio > 0 ? detalles.anio : new Date().getFullYear(),
+          precio: detalles.precio,
+        };
         if (detalles.subcategoria) {
           const subcategoriaEncontrada = categoriaEncontrada.subcategorias.find(
             (subcategoria) => normalize(subcategoria.subcategoria) === normalize(detalles.subcategoria),
@@ -346,6 +366,47 @@ export function createServer({ catalogPath = defaultCatalogPath, themesPath = de
       } catch (error) {
         if (isCategoriasError(error)) {
           sendJson(response, 500, { error: error.code });
+          return;
+        }
+        if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    const observedMatch = requestUrl.pathname.match(/^\/minifiguras\/(.+)\/observada$/);
+    if (observedMatch) {
+      if (request.method !== 'PUT') {
+        response.setHeader('allow', 'PUT');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      let id;
+      try {
+        id = decodeURIComponent(observedMatch[1]);
+      } catch {
+        sendJson(response, 400, { error: 'ID_INVALIDO' });
+        return;
+      }
+
+      try {
+        const payload = await readJsonBody(request);
+        if (typeof payload.observada !== 'boolean') {
+          sendJson(response, 400, { error: 'MINIFIGURA_INVALIDA', parametro: 'observada' });
+          return;
+        }
+        sendJson(response, 200, await repository.setObserved(id, payload.observada));
+      } catch (error) {
+        if (error instanceof LimiteObservadasError) {
+          sendJson(response, 409, { error: error.code });
+          return;
+        }
+        if (error instanceof MinifiguraNoEncontradaError) {
+          sendJson(response, 404, { error: error.code });
           return;
         }
         if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title">
+  <title id="title">Brick</title>
+  <defs>
+    <linearGradient id="front" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d67b7"/>
+      <stop offset="1" stop-color="#07529a"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07529a"/>
+      <stop offset="1" stop-color="#06447f"/>
+    </linearGradient>
+    <linearGradient id="stud" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1475c5"/>
+      <stop offset="1" stop-color="#07529a"/>
+    </linearGradient>
+  </defs>
+  <path d="M136 148 210 118l53 40-75 35z" fill="#0a5da8"/>
+  <path d="m136 148 52 45v136l-52-43z" fill="url(#side)"/>
+  <path d="m188 193 75-35v133l-75 38z" fill="url(#front)"/>
+  <ellipse cx="205" cy="143" rx="29" ry="15" fill="url(#stud)"/>
+  <path d="M176 143v18c0 8 13 15 29 15s29-7 29-15v-18c0 8-13 15-29 15s-29-7-29-15z" fill="#07529a"/>
+  <ellipse cx="205" cy="143" rx="29" ry="15" fill="url(#stud)" stroke="#06447f" stroke-width="2"/>
+  <path d="M188 139c9-6 25-7 35-1" fill="none" stroke="#5ca2df" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+</svg>

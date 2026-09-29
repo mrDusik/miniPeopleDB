@@ -51,16 +51,20 @@ async function withServerOptions(catalog, options, callback) {
 }
 
 function makeMinifigura(overrides = {}) {
-  return {
-    id: 'mf-001',
+  const minifigura = {
+    id: 'MF-001',
     nombre: 'Explorador',
     descripcion: 'Figura espacial',
     categoria: 'Space',
     anio: 2023,
     estadoColeccion: 'COLECCIÓN',
     FechaRegistro: '2026-01-01T00:00:00.000Z',
+    observada: false,
     ...overrides,
   };
+  minifigura.id = minifigura.id.trim().toUpperCase();
+  minifigura.observada ??= false;
+  return minifigura;
 }
 
 async function repositoryWithOfficialCategorias(directory, catalogPath) {
@@ -146,15 +150,102 @@ test('GET /minifiguras filtra por id y subcategoria', async () => {
   await withServer(catalog, async (baseUrl) => {
     const byId = await fetch(`${baseUrl}/minifiguras?id=col0`);
     assert.equal(byId.status, 200);
-    assert.deepEqual((await byId.json()).map((item) => item.id), ['col079', 'col080']);
+    assert.deepEqual((await byId.json()).map((item) => item.id), ['COL079', 'COL080']);
 
     const bySubcategoria = await fetch(`${baseUrl}/minifiguras?subcategoria=${encodeURIComponent('Team GB')}`);
     assert.equal(bySubcategoria.status, 200);
-    assert.deepEqual((await bySubcategoria.json()).map((item) => item.id), ['col079']);
+    assert.deepEqual((await bySubcategoria.json()).map((item) => item.id), ['COL079']);
 
     const combined = await fetch(`${baseUrl}/minifiguras?categoria=${encodeURIComponent('Collectible Minifigures')}&subcategoria=${encodeURIComponent('The LEGO Movie')}`);
     assert.equal(combined.status, 200);
-    assert.deepEqual((await combined.json()).map((item) => item.id), ['col080']);
+    assert.deepEqual((await combined.json()).map((item) => item.id), ['COL080']);
+  });
+});
+
+test('GET /minifiguras filtra por nombre y observacion y rechaza observacion invalida', async () => {
+  const catalog = JSON.stringify([
+    makeMinifigura({ id: 'watched', nombre: 'Princesa Ámbar', observada: true }),
+    makeMinifigura({ id: 'unwatched', nombre: 'Astronauta Azul', observada: false }),
+  ]);
+
+  await withServer(catalog, async (baseUrl) => {
+    const filtered = await fetch(`${baseUrl}/minifiguras?nombre=ambar&observada=true`);
+    assert.equal(filtered.status, 200);
+    assert.deepEqual((await filtered.json()).map((item) => item.id), ['WATCHED']);
+
+    const invalid = await fetch(`${baseUrl}/minifiguras?observada=yes`);
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { error: 'PARAMETRO_INVALIDO', parametro: 'observada' });
+  });
+});
+
+test('migra IDs y observada de un catalogo antiguo de forma idempotente', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-migration-'));
+  const catalogPath = join(directory, 'minifiguras.json');
+  await writeFile(catalogPath, JSON.stringify([{
+    id: ' old-id ', nombre: 'Antigua', categoria: 'Space', estadoColeccion: 'COLECCIÓN',
+  }]));
+
+  try {
+    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
+    const first = await repository.readCatalog();
+    assert.equal(first[0].id, 'OLD-ID');
+    assert.equal(first[0].observada, false);
+    const persisted = await readFile(catalogPath, 'utf8');
+    assert.deepEqual(JSON.parse(persisted), first);
+    assert.deepEqual(await repository.readCatalog(), first);
+    assert.deepEqual(JSON.parse(await readFile(catalogPath, 'utf8')), first);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('rechaza un catalogo con observada de tipo invalido', async () => {
+  await withServer(JSON.stringify([makeMinifigura({ id: 'invalid-observed', observada: 'yes' })]), async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/minifiguras`);
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: 'CATALOGO_INVALIDO' });
+  });
+});
+
+test('la API limita la watchlist a diez y permite liberar el cupo', async () => {
+  const catalog = JSON.stringify(Array.from({ length: 11 }, (_, index) => makeMinifigura({
+    id: `watch-${index}`,
+    observada: index < 10,
+  })));
+
+  await withServer(catalog, async (baseUrl) => {
+    const rejected = await fetch(`${baseUrl}/minifiguras/watch-10/observada`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ observada: true }),
+    });
+    assert.equal(rejected.status, 409);
+    assert.deepEqual(await rejected.json(), { error: 'LIMITE_OBSERVADAS' });
+
+    const released = await fetch(`${baseUrl}/minifiguras/watch-0/observada`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ observada: false }),
+    });
+    assert.equal(released.status, 200);
+
+    const accepted = await fetch(`${baseUrl}/minifiguras/watch-10/observada`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ observada: true }),
+    });
+    assert.equal(accepted.status, 200);
+    assert.equal((await accepted.json()).observada, true);
+  });
+});
+
+test('valoracion expone observadas ordenadas por precio incluyendo BUSCADA', async () => {
+  const catalog = JSON.stringify([
+    makeMinifigura({ id: 'low', precio: 10, observada: true }),
+    makeMinifigura({ id: 'high', precio: 30, observada: true }),
+    makeMinifigura({ id: 'wanted', estadoColeccion: 'BUSCADA', precio: 20, observada: true }),
+    makeMinifigura({ id: 'none', observada: true }),
+  ]);
+
+  await withServer(catalog, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/valoracion`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).observadas.map(({ id }) => id), ['HIGH', 'WANTED', 'LOW', 'NONE']);
   });
 });
 
@@ -541,9 +632,9 @@ test('conserva los campos planos de precio y calcula el total priorizando precio
     const list = await fetch(`${baseUrl}/minifiguras`);
     assert.equal(list.status, 200);
     assert.deepEqual((await list.json()).map(({ id, precioCompra, fechaCompra, precio }) => ({ id, precioCompra, fechaCompra, precio })), [
-      { id: 'a', precioCompra: 20, fechaCompra: '2024-01-15', precio: 35 },
-      { id: 'b', precioCompra: 12, precio: undefined, fechaCompra: undefined },
-      { id: 'c', precioCompra: undefined, precio: undefined, fechaCompra: undefined },
+      { id: 'A', precioCompra: 20, fechaCompra: '2024-01-15', precio: 35 },
+      { id: 'B', precioCompra: 12, precio: undefined, fechaCompra: undefined },
+      { id: 'C', precioCompra: undefined, precio: undefined, fechaCompra: undefined },
     ]);
 
     const total = await fetch(`${baseUrl}/valoracion`);
@@ -552,15 +643,16 @@ test('conserva los campos planos de precio y calcula el total priorizando precio
       total: 47,
       enColeccion: 3,
       buscadas: 0,
+      observadas: [],
       top5: [
-        { id: 'a', nombre: 'Explorador', precio: 35 },
-        { id: 'c', nombre: 'Explorador' },
-        { id: 'b', nombre: 'Explorador' },
+        { id: 'A', nombre: 'Explorador', precio: 35 },
+        { id: 'C', nombre: 'Explorador' },
+        { id: 'B', nombre: 'Explorador' },
       ],
       top5Antiguas: [
-        { id: 'a', nombre: 'Explorador', anio: 2023, precio: 35 },
-        { id: 'c', nombre: 'Explorador', anio: 2023 },
-        { id: 'b', nombre: 'Explorador', anio: 2023 },
+        { id: 'A', nombre: 'Explorador', anio: 2023, precio: 35 },
+        { id: 'C', nombre: 'Explorador', anio: 2023 },
+        { id: 'B', nombre: 'Explorador', anio: 2023 },
       ],
     });
   });
@@ -579,8 +671,9 @@ test('excluye las minifiguras BUSCADA del valor total', async () => {
       total: 25,
       enColeccion: 1,
       buscadas: 1,
-      top5: [{ id: 'coleccion', nombre: 'Explorador', precio: 25 }],
-      top5Antiguas: [{ id: 'coleccion', nombre: 'Explorador', anio: 2023, precio: 25 }],
+      observadas: [],
+      top5: [{ id: 'COLECCION', nombre: 'Explorador', precio: 25 }],
+      top5Antiguas: [{ id: 'COLECCION', nombre: 'Explorador', anio: 2023, precio: 25 }],
     });
   });
 });
@@ -598,16 +691,16 @@ test('calcula el top cinco por precio, fecha y posicion posterior del JSON', asy
     const response = await fetch(`${baseUrl}/valoracion`);
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).top5, [
-      { id: 'same-old', nombre: 'Misma fecha', precio: 50 },
-      { id: 'old', nombre: 'Antigua', precio: 50 },
-      { id: 'newer', nombre: 'Nueva', precio: 50 },
-      { id: 'no-date', nombre: 'Sin fecha', precio: 40 },
+      { id: 'SAME-OLD', nombre: 'Misma fecha', precio: 50 },
+      { id: 'OLD', nombre: 'Antigua', precio: 50 },
+      { id: 'NEWER', nombre: 'Nueva', precio: 50 },
+      { id: 'NO-DATE', nombre: 'Sin fecha', precio: 40 },
     ]);
     assert.deepEqual((await (await fetch(`${baseUrl}/valoracion`)).json()).top5Antiguas, [
-      { id: 'newer', nombre: 'Nueva', anio: 1988, precio: 50 },
-      { id: 'same-old', nombre: 'Misma fecha', anio: 1988, precio: 50 },
-      { id: 'old', nombre: 'Antigua', anio: 1988, precio: 50 },
-      { id: 'no-date', nombre: 'Sin fecha', anio: 1988, precio: 40 },
+      { id: 'NEWER', nombre: 'Nueva', anio: 1988, precio: 50 },
+      { id: 'SAME-OLD', nombre: 'Misma fecha', anio: 1988, precio: 50 },
+      { id: 'OLD', nombre: 'Antigua', anio: 1988, precio: 50 },
+      { id: 'NO-DATE', nombre: 'Sin fecha', anio: 1988, precio: 40 },
     ]);
   });
 });
@@ -622,8 +715,8 @@ test('el top por precio incluye al final las figuras de coleccion sin precio', a
     const response = await fetch(`${baseUrl}/valoracion`);
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).top5, [
-      { id: 'priced', nombre: 'Explorador', precio: 25 },
-      { id: 'unpriced', nombre: 'Explorador' },
+      { id: 'PRICED', nombre: 'Explorador', precio: 25 },
+      { id: 'UNPRICED', nombre: 'Explorador' },
     ]);
   });
 });
@@ -727,13 +820,13 @@ test('consulta los datos individuales de Brickset y actualiza precios de forma m
     makeMinifigura({ id: 'b', precio: 20 }),
   ]);
   const fetchImpl = async (url) => {
-    if (url.endsWith('/a')) {
+    if (url.endsWith('/a') || url.endsWith('/A')) {
       return new Response(
         "<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Year released</dt><dd><a href='/minifigs/year-2023'>2023</a></dd></dl><span>Current Value - New</span><strong>€35.50</strong>",
         { status: 200 },
       );
     }
-    if (url.endsWith('/b')) {
+    if (url.endsWith('/b') || url.endsWith('/B')) {
       return new Response('sin precio', { status: 200 });
     }
     throw new Error('URL inesperada');
@@ -742,20 +835,20 @@ test('consulta los datos individuales de Brickset y actualiza precios de forma m
   await withServerOptions(catalog, { fetchImpl }, async (baseUrl) => {
     const individual = await fetch(`${baseUrl}/minifiguras/a/brickset`);
     assert.equal(individual.status, 200);
-    assert.deepEqual(await individual.json(), { id: 'a', categoria: 'Space', anio: 2023, precio: 35.5 });
+    assert.deepEqual(await individual.json(), { id: 'A', categoria: 'Space', anio: 2023, precio: 35.5 });
 
     const sync = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'POST' });
     assert.equal(sync.status, 200);
     assert.deepEqual(await sync.json(), {
-      actualizados: ['a'],
-      fallidos: [{ id: 'b', error: 'BRICKSET_PRECIO_NO_DISPONIBLE' }],
+      actualizados: ['A'],
+      fallidos: [{ id: 'B', error: 'BRICKSET_PRECIO_NO_DISPONIBLE' }],
       total: 2,
     });
 
     const persisted = await fetch(`${baseUrl}/minifiguras`);
     const items = await persisted.json();
-    assert.equal(items.find((item) => item.id === 'a').precio, 35.5);
-    assert.equal(items.find((item) => item.id === 'b').precio, 20);
+    assert.equal(items.find((item) => item.id === 'A').precio, 35.5);
+    assert.equal(items.find((item) => item.id === 'B').precio, 20);
   });
 });
 
@@ -786,7 +879,7 @@ test('GET /minifiguras/:id/brickset resuelve subcategoria conocida y omite una d
     const conSubcategoria = await fetch(`${baseUrl}/minifiguras/con-subcategoria/brickset`);
     assert.equal(conSubcategoria.status, 200);
     assert.deepEqual(await conSubcategoria.json(), {
-      id: 'con-subcategoria',
+      id: 'CON-SUBCATEGORIA',
       categoria: 'Collectible Minifigures',
       subcategoria: 'Team GB',
       anio: 2012,
@@ -796,7 +889,7 @@ test('GET /minifiguras/:id/brickset resuelve subcategoria conocida y omite una d
     const subcategoriaDesconocida = await fetch(`${baseUrl}/minifiguras/subcategoria-desconocida/brickset`);
     assert.equal(subcategoriaDesconocida.status, 200);
     assert.deepEqual(await subcategoriaDesconocida.json(), {
-      id: 'subcategoria-desconocida',
+      id: 'SUBCATEGORIA-DESCONOCIDA',
       categoria: 'Space',
       anio: 2015,
       precio: 3,
@@ -827,6 +920,19 @@ test('GET /minifiguras/:id/brickset resuelve COL041 aunque Brickset duplique esp
   });
 });
 
+test('GET /minifiguras/:id/brickset usa el año actual cuando Brickset devuelve cero', async () => {
+  const fetchImpl = async () => new Response(
+    "<dl><dt>Category</dt><dd><a href='/minifigs/category-Space'>Space</a></dd><dt>Year released</dt><dd>0</dd></dl><p>Current Value - New</p><span>€6.28</span>",
+    { status: 200 },
+  );
+
+  await withServerOptions('[]', { fetchImpl }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/minifiguras/YEAR-ZERO/brickset`);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).anio, new Date().getFullYear());
+  });
+});
+
 test('una ruta existente /brickset con un metodo no permitido devuelve 405', async () => {
   await withServer('[]', async (baseUrl) => {
     const response = await fetch(`${baseUrl}/minifiguras/a/brickset`, { method: 'POST' });
@@ -848,7 +954,7 @@ test('consulta los datos de Brickset para un id todavía no persistido', async (
   await withServerOptions(JSON.stringify([makeMinifigura({ id: 'existing' })]), { fetchImpl }, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/minifiguras/new-figure/brickset`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { id: 'new-figure', categoria: 'Space', anio: 2020, precio: 18.75 });
+    assert.deepEqual(await response.json(), { id: 'NEW-FIGURE', categoria: 'Space', anio: 2020, precio: 18.75 });
   });
 });
 

@@ -3,58 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Catálogo de minifiguras</title>
+  <title>MiniPeopleDB</title>
+  <link rel="icon" type="image/svg+xml" href="/brick-red-icon.svg">
   <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=toast-icons-2" defer></script>
 </head>
 <body>
   <main class="page-shell">
     <header class="page-header">
-      <p class="eyebrow">by MrDusik</p>
-      <h1>MiniPeopleDB</h1>
-      <p class="intro">Explora las figuras disponibles y encuentra rápidamente la pieza que buscas.</p>
+      <div class="brand-heading">
+        <h1>MiniPeopleDB</h1>
+        <p class="eyebrow">BY MRDUSIK</p>
+      </div>
       <div class="summary-row">
         <section class="gamification-summary" aria-labelledby="gamification-title">
           <button type="button" id="gamification-level" class="gamification-level" aria-haspopup="dialog">
-            <span id="gamification-title">Nivel Duplo</span>
-            <strong id="gamification-bricks">0 Bricks</strong>
+            <span id="gamification-title" class="gamification-level-title"><span id="gamification-level-number">0</span> <span id="gamification-level-name">Duplo</span></span>
+            <span class="gamification-bricks-value">
+              <strong id="gamification-bricks">0</strong>
+              <img class="gamification-brick-icon" src="/brick-red-icon.svg" alt="Bricks">
+            </span>
           </button>
           <div class="gamification-progress">
-            <progress id="gamification-progress" max="100" value="0">0%</progress>
-            <span id="gamification-next">Próximo nivel: Stud</span>
+            <div class="gamification-meter">
+              <progress id="gamification-progress" max="100" value="0">0%</progress>
+              <span id="gamification-percentage">0%</span>
+            </div>
+            <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
           </div>
         </section>
+        <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
+          <span><span class="count-icon" aria-hidden="true">📦</span><strong id="collection-count">0</strong></span>
+          <span><span class="count-icon" aria-hidden="true">🔍</span><strong id="wanted-count">0</strong></span>
+        </div>
         <div class="collection-summary" aria-live="polite">
           <div class="collection-summary-content">
-            <span>Valor Total de la Colección (<span id="collection-count">0 minifiguras</span>):</span>
+            <span>Valor Total</span>
             <strong id="collection-total">€0,00</strong>
-            <span id="wanted-count">Total de figuras buscadas: 0</span>
           </div>
-          <button type="button" id="sync-prices" class="button button-primary button-small">Actualizar precios desde Brickset</button>
+          <button type="button" id="sync-prices" class="button button-secondary button-icon summary-sync" aria-label="Actualizar precios desde Brickset" title="Actualizar precios desde Brickset">🔄</button>
         </div>
       </div>
     </header>
 
     <div class="rankings">
       <section class="top-five" aria-labelledby="top-five-title">
-        <h2 id="top-five-title">Top 5 minifiguras en colección por precio</h2>
+        <h2 id="top-five-title">Top 5 por precio</h2>
         <div id="top-five-list" class="ranking-row"></div>
       </section>
       <section class="top-five" aria-labelledby="oldest-five-title">
-        <h2 id="oldest-five-title">Top 5 minifiguras más antiguas</h2>
+        <h2 id="oldest-five-title">Top 5 por antiguedad</h2>
         <div id="oldest-five-list" class="ranking-row"></div>
       </section>
     </div>
+
+    <section class="watchlist-panel" aria-labelledby="watchlist-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Seguimiento</p>
+        </div>
+      </div>
+      <div id="watchlist-list" class="watchlist-row"></div>
+    </section>
 
     <section class="search-panel" aria-labelledby="search-title">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Consulta</p>
-          <h2 id="search-title">Filtrar catálogo</h2>
         </div>
-        <span class="panel-mark" aria-hidden="true">+</span>
       </div>
       <form id="filters-form" class="filters-form">
+        <label>
+          Nombre
+          <input id="nombre" name="nombre" placeholder="Ej. Demogorgon">
+        </label>
         <label>
           Id
           <input id="id" name="id" placeholder="Ej. col079">
@@ -75,17 +97,25 @@
           Año
           <input id="anio" name="anio" type="number" min="1978" step="1" placeholder="Ej. 2023">
         </label>
-        <label>
-          Estado de colección
-          <select id="estadoColeccion" name="estadoColeccion">
-            <option value="" selected>Todos</option>
-            <option value="COLECCIÓN">COLECCIÓN</option>
-            <option value="BUSCADA">BUSCADA</option>
-          </select>
+        <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
+          <legend class="visually-hidden">Estado</legend>
+          <label class="filter-toggle" title="Filtrar 📦">
+            <input id="filter-coleccion" type="checkbox" aria-label="Filtrar 📦">
+            <span class="filter-symbol" aria-hidden="true">📦</span>
+          </label>
+          <label class="filter-toggle" title="Filtrar 🔍">
+            <input id="filter-buscada" type="checkbox" aria-label="Filtrar 🔍">
+            <span class="filter-symbol" aria-hidden="true">🔍</span>
+          </label>
+        </fieldset>
+        <label class="filter-toggle">
+          <span class="visually-hidden">Observadas</span>
+          <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
+          <span class="eye-symbol" aria-hidden="true">👁️</span>
         </label>
+        <button type="button" id="show-all" class="button button-secondary">Mostrar todo</button>
         <div class="form-actions">
-          <button type="submit" class="button button-primary">Buscar</button>
-          <button type="button" id="show-all" class="button button-secondary">Mostrar todo</button>
+          <button type="submit" id="filter-submit" class="button button-primary">Buscar</button>
         </div>
       </form>
     </section>
@@ -94,7 +124,6 @@
       <div class="results-heading">
         <div>
           <p class="eyebrow">Inventario</p>
-          <h2 id="results-title">Resultados</h2>
         </div>
         <div class="results-heading-actions">
           <p id="result-count" class="result-count" aria-live="polite"></p>
@@ -108,7 +137,8 @@
         <table>
           <thead>
             <tr>
-              <th scope="col">Imagen</th>
+              <th scope="col" aria-label="Imagen"></th>
+              <th scope="col" aria-label="Observar"></th>
               <th scope="col">ID</th>
               <th scope="col">Nombre</th>
               <th scope="col">Categoría</th>
@@ -117,7 +147,7 @@
               <th scope="col">Estado</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
               <th scope="col">Diferencia</th>
-              <th scope="col">Acciones</th>
+              <th scope="col" aria-label="Acciones"></th>
             </tr>
           </thead>
           <tbody id="catalog-body"></tbody>
@@ -132,62 +162,84 @@
 
     <dialog id="form-dialog" class="modal">
       <form id="minifigura-form" novalidate>
-        <h2 id="form-dialog-title">Nueva minifigura</h2>
-        <label>
-          Id
-          <input id="form-id" name="id" required>
-        </label>
-        <label>
-          Nombre
-          <input id="form-nombre" name="nombre" required>
-        </label>
-        <label>
-          Descripción
-          <textarea id="form-descripcion" name="descripcion" rows="3"></textarea>
-        </label>
-        <label>
-          Categoría
-          <input id="form-categoria" name="categoria" readonly>
-        </label>
-        <label>
-          Subcategoría
-          <input id="form-subcategoria" name="subcategoria" readonly>
-        </label>
-        <label>
-          Año
-          <input id="form-anio" name="anio" type="number" readonly>
-        </label>
-        <label>
-          Estado de colección
-          <select id="form-estadoColeccion" name="estadoColeccion">
-            <option value="COLECCIÓN" selected>COLECCIÓN</option>
-            <option value="BUSCADA">BUSCADA</option>
-          </select>
-        </label>
-        <label>
-          Precio de compra (€)
-          <input id="form-precioCompra" name="precioCompra" type="number" min="0" step="0.01">
-        </label>
-        <label>
-          Fecha de compra
-          <input id="form-fechaCompra" name="fechaCompra" type="date">
-        </label>
-        <label>
-          Precio Brickset (€)
-          <input id="form-precio" name="precio" type="number" min="0" step="0.01" readonly>
-        </label>
-        <button type="button" id="lookup-brickset" class="button button-secondary">Consultar datos en Brickset</button>
-        <p id="form-error" class="form-error" role="alert"></p>
+        <div class="modal-form-column">
+          <div class="modal-row modal-row-identity">
+            <label id="form-id-label" class="required-label" for="form-id"><span>ID</span></label>
+            <input id="form-id" name="id" required>
+            <button type="button" id="lookup-brickset" class="button button-secondary button-icon modal-sync-button" aria-label="Sincronizar con Brickset" title="Sincronizar con Brickset">🔄</button>
+            <label id="form-nombre-label" class="required-label" for="form-nombre"><span>Nombre</span></label>
+            <input id="form-nombre" name="nombre" required>
+          </div>
+          <div class="modal-fields">
+            <label class="description-field">
+              <span>Descripción</span>
+              <textarea id="form-descripcion" name="descripcion" rows="2"></textarea>
+            </label>
+            <div class="modal-row modal-row-status">
+              <div class="modal-state-control">
+                <label class="visually-hidden" for="form-estadoColeccion">Estado *</label>
+                <select id="form-estadoColeccion" name="estadoColeccion" class="visually-hidden">
+                  <option value="COLECCIÓN" selected>📦</option>
+                  <option value="BUSCADA">🔍</option>
+                </select>
+                <div id="form-state-toggles" class="form-state-toggles" role="group" aria-label="Estado">
+                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección">📦</button>
+                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda">🔍</button>
+                </div>
+              </div>
+              <button type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false">👁️</button>
+            </div>
+            <div class="modal-row modal-row-purchase">
+              <label>
+                Fecha de compra
+                <input id="form-fechaCompra" name="fechaCompra" type="date">
+              </label>
+              <label>
+                Precio de compra (€)
+                <input id="form-precioCompra" name="precioCompra" type="number" min="0" step="0.01">
+              </label>
+            </div>
+            <div class="modal-row modal-row-category">
+              <label>
+                <span class="required-label">Categoría</span>
+                <input id="form-categoria" name="categoria" class="input-readonly" readonly required>
+              </label>
+              <label>
+                Subcategoría
+                <input id="form-subcategoria" name="subcategoria" class="input-readonly" readonly>
+              </label>
+            </div>
+            <div class="modal-row modal-row-brickset">
+              <label>
+                <span class="required-label">Año</span>
+                <input id="form-anio" name="anio" type="number" class="input-readonly" readonly required>
+              </label>
+              <label>
+                <span class="required-label">Precio Brickset (€)</span>
+                <input id="form-precio" name="precio" type="number" min="0" step="0.01" class="input-readonly" readonly required>
+              </label>
+            </div>
+          </div>
+          <p id="form-error" class="form-error" role="alert"></p>
+        </div>
+        <aside class="modal-preview" aria-label="Previsualización Brickset">
+          <div class="modal-preview-heading">
+            <h2 id="form-dialog-title">Nueva minifigura</h2>
+            <span>Preview</span>
+          </div>
+          <img id="form-preview-image" alt="">
+        </aside>
         <div class="form-actions">
-          <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
           <button type="button" id="form-cancel" class="button button-secondary">Cancelar</button>
+          <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
         </div>
       </form>
     </dialog>
 
     <div id="image-modal" class="modal-overlay" hidden>
       <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
-        <h2 id="image-modal-title">Minifigura</h2>
+        <h2 id="image-modal-title">ID</h2>
+        <p id="image-modal-name"></p>
         <img id="image-modal-image" alt="">
         <button type="button" id="image-modal-close" class="button button-secondary">Cerrar</button>
       </div>

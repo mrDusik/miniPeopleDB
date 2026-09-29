@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768" role="img" aria-labelledby="title">
+  <title id="title">Brick</title>
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#ff5148"/><stop offset="1" stop-color="#df2f25"/></linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fa443a"/><stop offset="1" stop-color="#d92a21"/></linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d62b23"/><stop offset="1" stop-color="#a91e19"/></linearGradient>
+    <linearGradient id="stud" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff5a50"/><stop offset="1" stop-color="#c92921"/></linearGradient>
+  </defs>
+  <path d="M88 285 398 121l282 123-311 177z" fill="url(#top)" stroke="#741914" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m88 285 281 136v251L88 517z" fill="url(#front)" stroke="#741914" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m369 421 311-177v250L369 672z" fill="url(#side)" stroke="#741914" stroke-width="7" stroke-linejoin="round"/>
+  <g fill="url(#stud)" stroke="#741914" stroke-width="7">
+    <ellipse cx="190" cy="277" rx="57" ry="29"/><path d="M133 277v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+    <ellipse cx="305" cy="216" rx="57" ry="29"/><path d="M248 216v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+    <ellipse cx="420" cy="156" rx="57" ry="29"/><path d="M363 156v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+    <ellipse cx="443" cy="289" rx="57" ry="29"/><path d="M386 289v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+    <ellipse cx="558" cy="228" rx="57" ry="29"/><path d="M501 228v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+    <ellipse cx="274" cy="349" rx="57" ry="29"/><path d="M217 349v63c0 32 114 32 114 0v-63c0 32-114 32-114 0z"/>
+  </g>
+  <path d="m105 290 267 129M380 423l292-166" fill="none" stroke="#ff786e" stroke-width="8" opacity=".8"/>
+</svg>

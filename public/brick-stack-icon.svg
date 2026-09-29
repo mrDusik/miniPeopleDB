@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768" role="img" aria-labelledby="title">
+  <title id="title">Bricks</title>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#28a8ef"/><stop offset="1" stop-color="#0875c5"/></linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff4330"/><stop offset="1" stop-color="#d71712"/></linearGradient>
+    <linearGradient id="yellow" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffd42d"/><stop offset="1" stop-color="#f2a900"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#83c94a"/><stop offset="1" stop-color="#45952f"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="8" flood-opacity=".2"/></filter>
+  </defs>
+  <g filter="url(#shadow)" stroke="#9c6d14" stroke-width="3" stroke-linejoin="round">
+    <path fill="url(#yellow)" d="m205 493 188-74 173 61-187 78z"/>
+    <path fill="url(#yellow)" d="m205 493 1 83 173 66 1-84z"/>
+    <path fill="url(#yellow)" d="m379 558 187-78 1 76-187 84z"/>
+    <path fill="url(#blue)" d="m130 536 185-71 178 63-186 77z"/>
+    <path fill="url(#blue)" d="m130 536v68l177 68 1-67z"/>
+    <path fill="url(#blue)" d="m308 605 185-77v68l-185 76z"/>
+    <path fill="url(#red)" d="m435 430 173-68 146 54-173 72z"/>
+    <path fill="url(#red)" d="m435 430v75l146 54 1-71z"/>
+    <path fill="url(#red)" d="m581 488 173-72v72l-173 71z"/>
+    <path fill="url(#green)" d="m351 370 185-74 169 62-185 75z"/>
+    <path fill="url(#green)" d="m351 370 1 79 168 62v-78z"/>
+    <path fill="url(#green)" d="m519 433 186-75v78l-186 75z"/>
+    <path fill="url(#red)" d="m173 356 172-68 165 61-173 72z"/>
+    <path fill="url(#red)" d="m173 356v69l164 61 1-65z"/>
+    <path fill="url(#red)" d="m337 421 173-72v68l-173 69z"/>
+    <path fill="url(#yellow)" d="m289 280 178-71 166 61-178 74z"/>
+    <path fill="url(#yellow)" d="m289 280v71l165 61v-68z"/>
+    <path fill="url(#yellow)" d="m454 344 179-74v68l-179 74z"/>
+    <path fill="url(#blue)" d="m220 224 166-66 143 53-166 69z"/>
+    <path fill="url(#blue)" d="m220 224v67l143 54v-65z"/>
+    <path fill="url(#blue)" d="m363 280 166-69v67l-166 67z"/>
+    <path fill="url(#red)" d="m389 188 138-55 121 45-139 58z"/>
+    <path fill="url(#red)" d="m389 188v56l120 45v-56z"/>
+    <path fill="url(#red)" d="m509 233 139-55v56l-139 55z"/>
+  </g>
+  <g fill="#f9c91c" stroke="#b57d0b" stroke-width="3">
+    <ellipse cx="267" cy="218" rx="23" ry="10"/><ellipse cx="327" cy="194" rx="23" ry="10"/>
+    <ellipse cx="435" cy="181" rx="23" ry="10"/><ellipse cx="496" cy="158" rx="23" ry="10"/>
+    <ellipse cx="335" cy="278" rx="23" ry="10"/><ellipse cx="400" cy="253" rx="23" ry="10"/>
+    <ellipse cx="484" cy="277" rx="23" ry="10"/><ellipse cx="549" cy="251" rx="23" ry="10"/>
+    <ellipse cx="246" cy="354" rx="23" ry="10"/><ellipse cx="310" cy="329" rx="23" ry="10"/>
+    <ellipse cx="410" cy="397" rx="23" ry="10"/><ellipse cx="475" cy="371" rx="23" ry="10"/>
+    <ellipse cx="398" cy="500" rx="23" ry="10"/><ellipse cx="463" cy="474" rx="23" ry="10"/>
+  </g>
+</svg>
