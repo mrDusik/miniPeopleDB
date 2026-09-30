@@ -1,53 +1,31 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
-import { createServer } from '../src/server.js';
-import { CategoriasRepository } from '../src/categorias-repository.js';
 import { categoriasMock, categoriasMockRaw } from '../test-support/fixtures.js';
+import {
+  OTHER_TOKEN,
+  TEST_USER,
+  authFetch,
+  createTestClient,
+  createTestSupabase,
+  startTestServer,
+} from '../test-support/server.js';
 
 const officialCategoriasRaw = categoriasMockRaw;
 const officialCategoriaNames = new Set(categoriasMock.map(({ categoria }) => categoria));
+const fetch = authFetch();
 
-async function withServer(catalog, callback) {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const themesPath = join(directory, 'temas.json');
-  if (catalog !== undefined) {
-    await writeFile(catalogPath, catalog);
-  }
-  await writeFile(themesPath, officialCategoriasRaw);
-
-  const server = createServer({ catalogPath, themesPath });
-  await new Promise((resolve) => server.listen(0, resolve));
-  const { port } = server.address();
-
+async function withServer(catalog, callback, options = {}) {
+  const server = await startTestServer({ catalog: catalog === undefined ? [] : JSON.parse(catalog), options });
   try {
-    await callback(`http://127.0.0.1:${port}`);
+    await callback(server.baseUrl, server.supabase);
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(directory, { recursive: true, force: true });
+    await server.close();
   }
 }
 
 async function withServerOptions(catalog, options, callback) {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-options-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const themesPath = join(directory, 'temas.json');
-  await writeFile(catalogPath, catalog);
-  await writeFile(themesPath, officialCategoriasRaw);
-  const server = createServer({ catalogPath, themesPath, ...options });
-  await new Promise((resolve) => server.listen(0, resolve));
-  const { port } = server.address();
-
-  try {
-    await callback(`http://127.0.0.1:${port}`);
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(directory, { recursive: true, force: true });
-  }
+  await withServer(catalog, callback, options);
 }
 
 function makeMinifigura(overrides = {}) {
@@ -67,12 +45,14 @@ function makeMinifigura(overrides = {}) {
   return minifigura;
 }
 
-async function repositoryWithOfficialCategorias(directory, catalogPath) {
-  const themesPath = join(directory, 'temas.json');
-  await writeFile(themesPath, officialCategoriasRaw);
-  return new MinifigurasRepository(catalogPath, {
-    categoriasRepository: new CategoriasRepository(themesPath),
+function repositoryWith(catalog, { categoriasRepository = { read: async () => categoriasMock } } = {}) {
+  const supabase = createTestSupabase(catalog);
+  const repository = new MinifigurasRepository({
+    client: createTestClient(supabase),
+    userId: TEST_USER.id,
+    categoriasRepository,
   });
+  return { repository, supabase };
 }
 
 test('GET /minifiguras devuelve el catalogo y conserva su orden', async () => {
@@ -179,25 +159,18 @@ test('GET /minifiguras filtra por nombre y observacion y rechaza observacion inv
   });
 });
 
-test('migra IDs y observada de un catalogo antiguo de forma idempotente', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-migration-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  await writeFile(catalogPath, JSON.stringify([{
-    id: ' old-id ', nombre: 'Antigua', categoria: 'Space', estadoColeccion: 'COLECCIÓN',
-  }]));
+test('readCatalog mapea filas de Supabase omitiendo nulos y normalizando FechaRegistro', async () => {
+  const { repository, supabase } = repositoryWith([]);
+  supabase.seed('minifiguras', TEST_USER.id, [{
+    id: 'ROW-ID', nombre: 'Fila', descripcion: null, categoria: 'Space', subcategoria: null, anio: null,
+    estado_coleccion: 'COLECCIÓN', precio_compra: 12.5, fecha_compra: '2024-01-15', precio: null,
+    fecha_registro: '2026-01-01T00:00:00+00:00', observada: false,
+  }]);
 
-  try {
-    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
-    const first = await repository.readCatalog();
-    assert.equal(first[0].id, 'OLD-ID');
-    assert.equal(first[0].observada, false);
-    const persisted = await readFile(catalogPath, 'utf8');
-    assert.deepEqual(JSON.parse(persisted), first);
-    assert.deepEqual(await repository.readCatalog(), first);
-    assert.deepEqual(JSON.parse(await readFile(catalogPath, 'utf8')), first);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  assert.deepEqual(await repository.readCatalog(), [{
+    id: 'ROW-ID', nombre: 'Fila', categoria: 'Space', estadoColeccion: 'COLECCIÓN', precioCompra: 12.5,
+    fechaCompra: '2024-01-15', FechaRegistro: '2026-01-01T00:00:00.000Z', observada: false,
+  }]);
 });
 
 test('rechaza un catalogo con observada de tipo invalido', async () => {
@@ -320,9 +293,6 @@ test('POST y PUT aceptan descripcion y anio ausentes y conservan FechaRegistro',
 });
 
 test('el total de una subcategoria (0, ausente o un numero) no afecta si una minifigura la acepta como valida', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-subcategoria-total-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const themesPath = join(directory, 'temas.json');
   const categorias = [{
     categoria: 'Collectible Minifigures',
     total: 3,
@@ -332,17 +302,12 @@ test('el total de una subcategoria (0, ausente o un numero) no afecta si una min
       { subcategoria: 'Total numerico', total: 16 },
     ],
   }];
-  await writeFile(catalogPath, '[]');
-  await writeFile(themesPath, JSON.stringify(categorias));
-
-  const server = createServer({ catalogPath, themesPath });
-  await new Promise((resolve) => server.listen(0, resolve));
-  const { port } = server.address();
+  const server = await startTestServer({ themesRaw: JSON.stringify(categorias) });
 
   try {
     for (const subcategoria of ['Sin total definido', 'Total en cero', 'Total numerico']) {
       const payload = makeMinifigura({ id: subcategoria, categoria: 'Collectible Minifigures', subcategoria });
-      const response = await fetch(`http://127.0.0.1:${port}/minifiguras`, {
+      const response = await fetch(`${server.baseUrl}/minifiguras`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
@@ -350,15 +315,14 @@ test('el total de una subcategoria (0, ausente o un numero) no afecta si una min
       assert.equal(response.status, 201, `la subcategoria "${subcategoria}" deberia aceptarse sin importar su total`);
     }
 
-    const persisted = await fetch(`http://127.0.0.1:${port}/minifiguras`);
+    const persisted = await fetch(`${server.baseUrl}/minifiguras`);
     assert.deepEqual((await persisted.json()).map((item) => item.subcategoria), [
       'Sin total definido',
       'Total en cero',
       'Total numerico',
     ]);
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(directory, { recursive: true, force: true });
+    await server.close();
   }
 });
 
@@ -428,16 +392,17 @@ test('GET /minifiguras devuelve un arreglo vacio para un catalogo vacio', async 
   });
 });
 
-test('GET /minifiguras devuelve error controlado si falta el archivo', async () => {
-  await withServer(undefined, async (baseUrl) => {
+test('GET /minifiguras devuelve error controlado si Supabase no esta disponible', async () => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    supabase.failNext('minifiguras', { code: 'PGRST000', message: 'https://secreto.supabase.co caido' });
     const response = await fetch(`${baseUrl}/minifiguras`);
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: 'CATALOGO_NO_DISPONIBLE' });
   });
 });
 
-test('GET /minifiguras devuelve error controlado para JSON o estructura invalida', async () => {
-  for (const catalog of ['{', JSON.stringify([{ id: 'sin-nombre' }])]) {
+test('GET /minifiguras devuelve error controlado para registros con estructura invalida', async () => {
+  for (const catalog of [JSON.stringify([{ id: 'SIN-NOMBRE' }]), JSON.stringify([{ id: 'X', nombre: 'X', categoria: 'Desconocida' }])]) {
     await withServer(catalog, async (baseUrl) => {
       const response = await fetch(`${baseUrl}/minifiguras`);
       assert.equal(response.status, 500);
@@ -447,22 +412,16 @@ test('GET /minifiguras devuelve error controlado para JSON o estructura invalida
 });
 
 test('las operaciones de minifiguras informan errores del catalogo de temas', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-temas-invalidos-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const themesPath = join(directory, 'temas.json');
   const catalog = [makeMinifigura({ id: 'a' })];
-  await writeFile(catalogPath, JSON.stringify(catalog));
-
-  const server = createServer({ catalogPath, themesPath });
-  await new Promise((resolve) => server.listen(0, resolve));
-  const { port } = server.address();
+  const server = await startTestServer({ catalog, themesRaw: null });
+  const baseUrl = server.baseUrl;
 
   try {
-    const list = await fetch(`http://127.0.0.1:${port}/minifiguras`);
+    const list = await fetch(`${baseUrl}/minifiguras`);
     assert.equal(list.status, 500);
     assert.deepEqual(await list.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
 
-    const create = await fetch(`http://127.0.0.1:${port}/minifiguras`, {
+    const create = await fetch(`${baseUrl}/minifiguras`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(makeMinifigura({ id: 'b' })),
@@ -470,17 +429,16 @@ test('las operaciones de minifiguras informan errores del catalogo de temas', as
     assert.equal(create.status, 500);
     assert.deepEqual(await create.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
 
-    const replace = await fetch(`http://127.0.0.1:${port}/minifiguras/a`, {
+    const replace = await fetch(`${baseUrl}/minifiguras/a`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(makeMinifigura({ id: 'a' })),
     });
     assert.equal(replace.status, 500);
     assert.deepEqual(await replace.json(), { error: 'CATEGORIAS_NO_DISPONIBLES' });
-    assert.deepEqual(JSON.parse(await readFile(catalogPath, 'utf8')), catalog);
+    assert.deepEqual(server.supabase.rows('minifiguras').map(({ id, nombre }) => ({ id, nombre })), [{ id: 'A', nombre: 'Explorador' }]);
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(directory, { recursive: true, force: true });
+    await server.close();
   }
 });
 
@@ -804,10 +762,8 @@ test('rechaza campos planos de precio invalidos', async () => {
 });
 
 test('rechaza un catálogo con estado ausente', async () => {
-  const { estadoColeccion, ...sinEstado } = makeMinifigura({ id: 'sin-estado' });
-  void estadoColeccion;
-
-  await withServer(JSON.stringify([sinEstado]), async (baseUrl) => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    supabase.seed('minifiguras', TEST_USER.id, [{ id: 'SIN-ESTADO', nombre: 'Sin estado', categoria: 'Space', estado_coleccion: null }]);
     const response = await fetch(`${baseUrl}/minifiguras`);
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: 'CATALOGO_INVALIDO' });
@@ -958,72 +914,138 @@ test('consulta los datos de Brickset para un id todavía no persistido', async (
   });
 });
 
-test('updatePrices conserva el archivo original si falla la persistencia', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-persist-failure-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const originalCatalog = JSON.stringify([makeMinifigura({ id: 'a', precio: 10 })]);
-  await writeFile(catalogPath, originalCatalog);
+test('updatePrices conserva los datos originales si falla la persistencia', async () => {
+  const { repository, supabase } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 })]);
+  supabase.failNext('minifiguras', undefined, 'upsert');
 
-  try {
-    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
-    repository.persist = async () => {
-      throw new Error('fallo de persistencia simulado');
-    };
-
-    await assert.rejects(
-      () => repository.updatePrices(new Map([['a', 99]])),
-      /fallo de persistencia simulado/,
-    );
-    assert.equal(await readFile(catalogPath, 'utf8'), originalCatalog);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  await assert.rejects(
+    () => repository.updatePrices(new Map([['a', 99]])),
+    (error) => error.code === 'CATALOGO_NO_DISPONIBLE',
+  );
+  assert.equal(supabase.rows('minifiguras')[0].precio, 10);
 });
 
 test('updatePrices rechaza precios invalidos antes de persistir', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-invalid-price-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const originalCatalog = JSON.stringify([makeMinifigura({ id: 'a', precio: 10 })]);
-  await writeFile(catalogPath, originalCatalog);
-
-  try {
-    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
-    await assert.rejects(
-      () => repository.updatePrices(new Map([['a', -1]])),
-      (error) => error.code === 'MINIFIGURA_INVALIDA',
-    );
-    assert.equal(await readFile(catalogPath, 'utf8'), originalCatalog);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  const { repository, supabase } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 })]);
+  await assert.rejects(
+    () => repository.updatePrices(new Map([['a', -1]])),
+    (error) => error.code === 'MINIFIGURA_INVALIDA',
+  );
+  assert.equal(supabase.rows('minifiguras')[0].precio, 10);
 });
 
 test('updatePrices rechaza IDs inexistentes y precios undefined', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-update-validation-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  await writeFile(catalogPath, JSON.stringify([makeMinifigura({ id: 'a', precio: 10 })]));
+  const { repository } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 })]);
+  await assert.rejects(() => repository.updatePrices(new Map([['missing', 20]])), (error) => error.code === 'MINIFIGURA_NO_ENCONTRADA');
+  await assert.rejects(() => repository.updatePrices(new Map([['a', undefined]])), (error) => error.code === 'MINIFIGURA_INVALIDA');
+});
 
-  try {
-    const repository = await repositoryWithOfficialCategorias(directory, catalogPath);
-    await assert.rejects(() => repository.updatePrices(new Map([['missing', 20]])), (error) => error.code === 'MINIFIGURA_NO_ENCONTRADA');
-    await assert.rejects(() => repository.updatePrices(new Map([['a', undefined]])), (error) => error.code === 'MINIFIGURA_INVALIDA');
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+test('updatePrices persiste solo los precios cambiados del usuario', async () => {
+  const { repository, supabase } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 }), makeMinifigura({ id: 'b', precio: 20 })]);
+  await repository.updatePrices(new Map([['a', 15]]));
+  assert.deepEqual(supabase.rows('minifiguras').map(({ id, precio, user_id }) => ({ id, precio, user_id })), [
+    { id: 'A', precio: 15, user_id: TEST_USER.id },
+    { id: 'B', precio: 20, user_id: TEST_USER.id },
+  ]);
 });
 
 test('el repositorio no permite operar sin catálogo oficial de temas', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-required-themes-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  await writeFile(catalogPath, JSON.stringify([makeMinifigura({ id: 'a' })]));
+  const { repository } = repositoryWith([makeMinifigura({ id: 'a' })], { categoriasRepository: null });
+  await assert.rejects(
+    () => repository.list(),
+    (error) => error.code === 'CATEGORIAS_NO_DISPONIBLES',
+  );
+});
+
+test('las rutas de datos exigen autenticacion y /categorias sigue publica', async () => {
+  await withServer(JSON.stringify([makeMinifigura({ id: 'a' })]), async (baseUrl) => {
+    for (const [path, method] of [
+      ['/minifiguras', 'GET'],
+      ['/minifiguras', 'POST'],
+      ['/minifiguras/a', 'PUT'],
+      ['/minifiguras/a', 'DELETE'],
+      ['/minifiguras/a/observada', 'PUT'],
+      ['/minifiguras/a/brickset', 'GET'],
+      ['/gamificacion', 'GET'],
+      ['/valoracion', 'GET'],
+      ['/valor-total', 'GET'],
+      ['/sincronizacion/brickset', 'POST'],
+    ]) {
+      const anonymous = await globalThis.fetch(`${baseUrl}${path}`, { method });
+      assert.equal(anonymous.status, 401, `${method} ${path}`);
+      assert.deepEqual(await anonymous.json(), { error: 'NO_AUTENTICADO' });
+    }
+
+    const invalidToken = await authFetch('token-caducado')(`${baseUrl}/minifiguras`);
+    assert.equal(invalidToken.status, 401);
+    assert.deepEqual(await invalidToken.json(), { error: 'NO_AUTENTICADO' });
+
+    const categorias = await globalThis.fetch(`${baseUrl}/categorias`);
+    assert.equal(categorias.status, 200);
+  });
+});
+
+test('cada usuario solo ve y modifica sus propias minifiguras aunque compartan id', async () => {
+  const supabase = createTestSupabase([makeMinifigura({ id: 'shared', nombre: 'De A' })]);
+  supabase.seed('minifiguras', 'otro-usuario-sin-token', [{ id: 'AJENA', nombre: 'Ajena', categoria: 'Space' }]);
+  const server = await startTestServer({ supabase });
+  const fetchB = authFetch(OTHER_TOKEN);
 
   try {
-    const repository = new MinifigurasRepository(catalogPath);
-    await assert.rejects(
-      () => repository.list(),
-      (error) => error.code === 'CATEGORIAS_NO_DISPONIBLES',
-    );
+    const created = await fetchB(`${server.baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'shared', nombre: 'De B' })),
+    });
+    assert.equal(created.status, 201);
+
+    assert.deepEqual((await (await fetch(`${server.baseUrl}/minifiguras`)).json()).map(({ nombre }) => nombre), ['De A']);
+    assert.deepEqual((await (await fetchB(`${server.baseUrl}/minifiguras`)).json()).map(({ nombre }) => nombre), ['De B']);
+
+    const deleted = await fetchB(`${server.baseUrl}/minifiguras/shared`, { method: 'DELETE' });
+    assert.equal(deleted.status, 204);
+    assert.equal((await fetchB(`${server.baseUrl}/minifiguras/ajena`, { method: 'DELETE' })).status, 404);
+    assert.deepEqual((await (await fetch(`${server.baseUrl}/minifiguras`)).json()).map(({ nombre }) => nombre), ['De A']);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await server.close();
   }
+});
+
+test('POST /minifiguras rechaza un cuerpo con user_id y asocia el alta al usuario del token', async () => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    const rejected = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...makeMinifigura({ id: 'intruso' }), user_id: 'otro-usuario' }),
+    });
+    assert.equal(rejected.status, 400);
+    assert.deepEqual(await rejected.json(), { error: 'MINIFIGURA_INVALIDA' });
+    assert.deepEqual(supabase.rows('minifiguras'), []);
+
+    const created = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(makeMinifigura({ id: 'propia' })),
+    });
+    assert.equal(created.status, 201);
+    assert.deepEqual(supabase.rows('minifiguras').map(({ id, user_id }) => ({ id, user_id })), [{ id: 'PROPIA', user_id: TEST_USER.id }]);
+  });
+});
+
+test('GET /config/supabase expone solo la configuracion publica', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const response = await globalThis.fetch(`${baseUrl}/config/supabase`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { url: 'https://proyecto.supabase.test', anonKey: 'anon-key-publica' });
+
+    const vendor = await globalThis.fetch(`${baseUrl}/vendor/supabase.js`);
+    assert.equal(vendor.status, 200);
+    assert.match(vendor.headers.get('content-type'), /javascript/);
+  });
+
+  await withServer('[]', async (baseUrl) => {
+    const response = await globalThis.fetch(`${baseUrl}/config/supabase`);
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: 'CONFIGURACION_NO_DISPONIBLE' });
+  }, { supabaseConfig: null });
 });

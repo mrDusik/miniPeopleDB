@@ -24,8 +24,10 @@ Desarrollado siguiendo la metodología **Spec-Driven Development (SDD)** asistid
   * Consulta individual de precios mediante scraping de la URL pública de Brickset, sin credenciales ni API Key.
   * Actualización masiva aislada por minifigura, con timeout, reintentos y concurrencia limitada.
   * Manejo estandarizado de errores HTTP y códigos de negocio (`ID_DUPLICADO`, `ID_INVALIDO`, `MINIFIGURA_NO_ENCONTRADA`, `MINIFIGURA_INVALIDA`).
-* **Persistencia Local:** Almacenamiento seguro mediante archivo JSON local (`minifiguras.json`).
-  * Escrituras atómicas para evitar archivos parciales ante fallos de persistencia.
+* **Autenticación y persistencia multiusuario (Supabase):**
+  * Inicio de sesión con Google (Supabase Auth, flujo PKCE). La interfaz envía el token en `Authorization: Bearer` y la API responde `401 NO_AUTENTICADO` sin sesión válida.
+  * Minifiguras y gamificación se guardan por usuario en las tablas `minifiguras` y `gamificacion` (`supabase/schema.sql`), protegidas por RLS. El servidor usa la clave `anon` con el JWT del usuario; nunca una clave de servicio.
+  * Las categorías oficiales de Brickset siguen en `data/categorias-brickset.json`.
 
 ### Valoración y moneda
 
@@ -86,12 +88,16 @@ mi-proyecto/
 
 ## ▶️ Ejecución
 
+1. Aplica `supabase/schema.sql` en el SQL Editor de Supabase.
+2. En Supabase › Authentication › Providers habilita **Google** (Client ID y Secret de Google Cloud) y añade `http://localhost:3000` a *Redirect URLs*.
+3. Define `SUPABASE_URL` y `SUPABASE_ANON_KEY` como variables de entorno o en un fichero `sup.env` en la raíz (excluido de Git).
+
 ```bash
 npm install
 npm test
 npm start
 ```
 
-La aplicación queda disponible en `http://localhost:3000`.
+La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales: usan un cliente Supabase simulado (`test-support/supabase-mock.js`).
 
 La concurrencia de la sincronización masiva puede ajustarse con `BRICKSET_CONCURRENCY`; por defecto es `4`.

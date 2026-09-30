@@ -8,6 +8,8 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "dotenv": "^18.0.4",
     "express": "^5.2.1"
   },
   "devDependencies": {

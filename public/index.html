@@ -6,11 +6,28 @@
   <title>MiniPeopleDB</title>
   <link rel="icon" type="image/svg+xml" href="/brick-red-icon.svg">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/vendor/supabase.js" defer></script>
   <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
-  <main class="page-shell">
+  <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title" hidden>
+    <div class="auth-card">
+      <h1 id="auth-title">MiniPeopleDB</h1>
+      <p class="auth-eyebrow">BY MRDUSIK</p>
+      <p>Inicia sesión para gestionar tu colección.</p>
+      <button type="button" id="login-google" class="button button-primary">Iniciar sesión con Google</button>
+      <p id="auth-message" class="status error" role="alert"></p>
+    </div>
+  </section>
+  <main class="page-shell" hidden>
     <header class="page-header">
+      <div class="user-session">
+        <span id="user-profile" class="user-profile">
+          <img id="user-avatar" class="user-avatar" alt="" hidden>
+          <span id="user-name" class="user-name"></span>
+        </span>
+        <button type="button" id="logout" class="button button-secondary button-small">Cerrar sesión</button>
+      </div>
       <div class="header-top">
         <div class="brand-heading">
           <h1>MiniPeopleDB</h1>
@@ -179,6 +196,13 @@
         <button type="button" id="next-page" class="button button-secondary button-small">Siguiente</button>
       </nav>
     </section>
+
+    <dialog id="first-minifigura-dialog" class="modal first-minifigura-dialog" aria-labelledby="first-minifigura-title">
+      <img src="/brick-red-icon.svg" alt="" class="first-minifigura-icon">
+      <h2 id="first-minifigura-title" tabindex="-1">Tu colección empieza aquí</h2>
+      <p>Añade tu primera minifigura para ganar unos Bricks</p>
+      <button type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
+    </dialog>
 
     <dialog id="form-dialog" class="modal">
       <form id="minifigura-form" novalidate>

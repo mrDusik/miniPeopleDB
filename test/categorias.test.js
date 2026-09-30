@@ -154,7 +154,7 @@ test('GET /categorias devuelve un error controlado si el JSON esta corrupto', as
   const directory = await mkdtemp(join(tmpdir(), 'categorias-api-'));
   const themesPath = join(directory, 'categorias.json');
   await writeFile(themesPath, '{');
-  const server = createServer({ themesPath });
+  const server = createServer({ themesPath, supabaseConfig: null });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
 
