@@ -6,13 +6,19 @@ Permite exponer, validar y mantener el catálogo de minifiguras en un archivo JS
 
 ### Requirement: Listar minifiguras desde persistencia local
 
-El sistema SHALL exponer `GET /minifiguras` y SHALL obtener la colección desde un archivo JSON local, sin depender de una base de datos ni de la disponibilidad de Brickset. Cada minifigura SHALL conservar en su raíz los campos opcionales `precioCompra`, `fechaCompra` y `precio`, todos expresados en Euros, y su `estadoColeccion` SHALL ser `COLECCIÓN` o `BUSCADA`. Cada minifigura SHALL identificar su categoría oficial mediante el campo `categoria` y, opcionalmente, su subcategoría oficial mediante el campo `subcategoria`.
+El sistema SHALL exponer `GET /minifiguras` y SHALL obtener la colección desde un archivo JSON local, sin depender de una base de datos ni de la disponibilidad de Brickset. Cada minifigura SHALL conservar en su raíz los campos opcionales `precioCompra`, `fechaCompra` y `precio`, todos expresados en Euros, y su `estadoColeccion` SHALL ser `COLECCIÓN` o `BUSCADA`. Cada minifigura SHALL identificar su categoría oficial mediante `categoria` y, opcionalmente, su subcategoría oficial mediante `subcategoria`. Cada minifigura SHALL incluir el booleano `observada`; los registros existentes migrados sin ese campo SHALL quedar en `false`.
 
 #### Scenario: Catálogo con minifiguras disponibles
 - **WHEN** un cliente realiza `GET /minifiguras` y el archivo JSON contiene una colección válida
 - **THEN** el sistema responde con HTTP `200`
 - **AND** el cuerpo es JSON con un arreglo de minifiguras
 	- **AND** cada minifigura incluye al menos `id`, `nombre` y `FechaRegistro`
+- **AND** los campos planos de precio se devuelven sin consultar Brickset
+
+#### Scenario: Catálogo con estado de observación
+- **WHEN** un cliente realiza `GET /minifiguras` y el archivo JSON contiene una colección válida
+- **THEN** el sistema responde con HTTP `200`
+- **AND** cada elemento incluye `id`, `nombre`, `FechaRegistro` y `observada` booleano
 - **AND** los campos planos de precio se devuelven sin consultar Brickset
 
 #### Scenario: Catálogo vacío
@@ -49,7 +55,7 @@ La implementación SHALL incluir un archivo JSON inicial válido y SHALL permiti
 
 ### Requirement: Permitir descripción y año ausentes
 
-El sistema SHALL aceptar minifiguras sin `descripcion` y sin `anio`. Cuando Brickset devuelva el año `0`, la aplicación SHALL tratarlo como ausente y SHALL dejar vacío el campo Año del formulario.
+El sistema SHALL aceptar minifiguras sin `descripcion` y sin `anio`. Cuando Brickset devuelva el año `0` o no devuelva un año válido durante una sincronización, la aplicación SHALL asignar el año natural actual antes de habilitar el guardado y persistir el resultado.
 
 #### Scenario: Crear sin descripción ni año
 - **WHEN** se crea o edita una minifigura sin `descripcion` o sin `anio`
@@ -57,9 +63,9 @@ El sistema SHALL aceptar minifiguras sin `descripcion` y sin `anio`. Cuando Bric
 - **AND** esos campos permanecen ausentes o vacíos
 
 #### Scenario: Brickset devuelve año cero
-- **WHEN** Brickset devuelve `0` como año de lanzamiento
-- **THEN** la API no incluye un año válido para ese resultado
-- **AND** el formulario deja vacío el campo Año
+- **WHEN** Brickset devuelve `0` o un año ausente para una sincronización
+- **THEN** la respuesta de sincronización contiene el año natural actual
+- **AND** el formulario muestra ese año y permite guardar si los demás obligatorios son válidos
 
 ### Requirement: Registrar y ordenar por fecha de alta
 
@@ -95,7 +101,7 @@ El sistema SHALL aceptar únicamente los estados `COLECCIÓN` y `BUSCADA`. Cuand
 
 ### Requirement: Filtrar minifiguras por características
 
-El sistema SHALL permitir filtrar `GET /minifiguras` por `id`, `categoria`, `subcategoria`, `anio` y `estadoColeccion`, rechazando estados de filtro distintos de `COLECCIÓN` y `BUSCADA`.
+El sistema SHALL permitir filtrar `GET /minifiguras` por `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y `observada`, rechazando estados distintos de `COLECCIÓN` y `BUSCADA` y valores no booleanos para `observada`. El filtro `nombre` SHALL realizar coincidencias parciales insensibles a mayúsculas y acentos.
 
 #### Scenario: Filtro válido
 - **WHEN** el cliente envía uno o más filtros válidos
@@ -111,6 +117,19 @@ El sistema SHALL permitir filtrar `GET /minifiguras` por `id`, `categoria`, `sub
 
 #### Scenario: Estado de filtro inválido
 - **WHEN** el cliente envía un `estadoColeccion` distinto de los estados permitidos
+- **THEN** el sistema responde con HTTP `400`
+- **AND** identifica el parámetro inválido
+
+#### Scenario: Filtro por nombre
+- **WHEN** el cliente envía un filtro `nombre` con una parte del nombre
+- **THEN** el sistema devuelve las figuras cuyo nombre contiene esa parte sin distinguir mayúsculas ni acentos
+
+#### Scenario: Filtro por observadas
+- **WHEN** el cliente envía `observada=true`
+- **THEN** el sistema devuelve únicamente figuras con `observada: true`
+
+#### Scenario: Filtro de observación inválido
+- **WHEN** el cliente envía un valor de `observada` distinto de `true` o `false`
 - **THEN** el sistema responde con HTTP `400`
 - **AND** identifica el parámetro inválido
 
@@ -133,11 +152,16 @@ Cuando una minifigura declare `subcategoria`, el sistema SHALL validar que su `c
 
 ### Requirement: Gestionar el catálogo mediante CRUD
 
-El sistema SHALL permitir crear, reemplazar y eliminar minifiguras mediante `POST /minifiguras`, `PUT /minifiguras/:id` y `DELETE /minifiguras/:id`, manteniendo el orden y la persistencia atómica. Los campos planos enviados SHALL validarse contra el modelo permitido.
+El sistema SHALL permitir crear, reemplazar y eliminar minifiguras mediante `POST /minifiguras`, `PUT /minifiguras/:id` y `DELETE /minifiguras/:id`, manteniendo el orden y la persistencia atómica. Los campos planos enviados SHALL validarse contra el modelo permitido. Al crear, reemplazar o procesar cualquier minifigura, el ID SHALL persistirse como `id.toUpperCase().trim()`. Los identificadores de ruta y los duplicados SHALL compararse tras esa normalización.
 
 #### Scenario: Crear una minifigura válida
 - **WHEN** el cliente envía una minifigura válida con un ID no usado
 - **THEN** el sistema responde con HTTP `201` y persiste la figura
+
+#### Scenario: Normalizar ID al crear
+- **WHEN** el cliente crea una figura con un ID con espacios o minúsculas
+- **THEN** el sistema responde con HTTP `201`
+- **AND** persiste y devuelve el ID en mayúsculas y sin espacios
 
 #### Scenario: Rechazar ID duplicado
 - **WHEN** el cliente intenta crear una minifigura con un ID existente
@@ -153,3 +177,40 @@ El sistema SHALL permitir crear, reemplazar y eliminar minifiguras mediante `POS
 - **WHEN** el cliente solicita `DELETE /minifiguras/:id` para una figura existente
 - **THEN** el sistema responde con HTTP `204`
 - **AND** elimina la figura del catálogo
+
+#### Scenario: Reemplazar por ruta normalizada
+- **WHEN** el cliente reemplaza una figura usando una variante de mayúsculas o espacios del ID de ruta
+- **THEN** el sistema actualiza la figura canónica conservando su posición y `FechaRegistro`
+
+### Requirement: Gestionar minifiguras en observación
+
+El sistema SHALL permitir marcar o desmarcar como observada cualquier minifigura en estado `COLECCIÓN` o `BUSCADA`. El catálogo SHALL contener como máximo 10 figuras observadas; superar ese límite SHALL rechazarse sin persistir cambios y SHALL permitir a la interfaz mostrar el mensaje de límite acordado.
+
+#### Scenario: Marcar una figura dentro del límite
+- **WHEN** se marca como observada una figura no observada y hay menos de 10 observadas
+- **THEN** la operación persiste `observada: true`
+- **AND** conserva el resto de los campos de la figura
+
+#### Scenario: Rechazar la undécima observada
+- **WHEN** se intenta marcar una figura y ya existen 10 observadas
+- **THEN** la operación responde con un error controlado
+- **AND** la figura permanece con `observada: false`
+
+#### Scenario: Desmarcar una figura
+- **WHEN** se desmarca una figura observada
+- **THEN** la operación persiste `observada: false`
+- **AND** libera el cupo sin modificar otros datos
+
+### Requirement: Migrar y validar el estado de observación
+
+El sistema SHALL aceptar únicamente `observada` booleano cuando esté presente y SHALL migrar de forma persistente los registros que no lo tengan a `false`, sin cambiar sus IDs ni el orden del catálogo.
+
+#### Scenario: Migración de registros existentes
+- **WHEN** se lee un catálogo válido que carece de `observada`
+- **THEN** cada registro recibe `observada: false`
+- **AND** la migración se persiste de forma atómica y solo una vez
+
+#### Scenario: Rechazar tipo inválido
+- **WHEN** el catálogo o una operación contiene `observada` con un tipo distinto de booleano
+- **THEN** el sistema responde con error de catálogo o de minifigura inválida
+- **AND** no persiste el cambio inválido
