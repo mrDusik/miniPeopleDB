@@ -14,6 +14,7 @@ const wantedCount = document.querySelector('#wanted-count');
 const topFiveList = document.querySelector('#top-five-list');
 const oldestFiveList = document.querySelector('#oldest-five-list');
 const watchlistList = document.querySelector('#watchlist-list');
+const watchlistTitle = document.querySelector('#watchlist-title');
 const idFilterInput = document.querySelector('#id');
 const nameFilterInput = document.querySelector('#nombre');
 const categoriaInput = document.querySelector('#categoria');
@@ -23,6 +24,7 @@ const collectionFilterInput = document.querySelector('#filter-coleccion');
 const wantedFilterInput = document.querySelector('#filter-buscada');
 const observedFilterInput = document.querySelector('#observada');
 const currentYear = new Date().getFullYear();
+const maxWatchlistItems = 10;
 const sortButtons = [...document.querySelectorAll('[data-sort]')];
 const controls = [...form.querySelectorAll('input, select, button'), syncPricesButton];
 
@@ -43,7 +45,6 @@ const formStateToggleButtons = [...document.querySelectorAll('[data-form-state]'
 const formPrecioCompraInput = document.querySelector('#form-precioCompra');
 const formFechaCompraInput = document.querySelector('#form-fechaCompra');
 const formPrecioInput = document.querySelector('#form-precio');
-const lookupBricksetButton = document.querySelector('#lookup-brickset');
 const formObservedButton = document.querySelector('#form-observada');
 const formPreviewImage = document.querySelector('#form-preview-image');
 
@@ -60,15 +61,42 @@ const imageModalCloseButton = document.querySelector('#image-modal-close');
 
 const toastRegion = document.querySelector('#toast-region');
 const gamificationLevelButton = document.querySelector('#gamification-level');
+const gamificationToggleButton = document.querySelector('#gamification-toggle');
+const gamificationDetails = document.querySelector('#gamification-details');
 const gamificationTitle = document.querySelector('#gamification-title');
+const gamificationLevelImage = document.querySelector('.gamification-level-image');
+const gamificationLevelTooltip = document.createElement('div');
+const gamificationLevelTooltipImage = document.createElement('img');
 const gamificationLevelNumber = document.querySelector('#gamification-level-number');
 const gamificationLevelName = document.querySelector('#gamification-level-name');
 const gamificationBricks = document.querySelector('#gamification-bricks');
 const gamificationProgress = document.querySelector('#gamification-progress');
+
+function showLevelImageTooltip() {
+  gamificationLevelTooltip.style.display = 'block';
+}
+
+function hideLevelImageTooltip() {
+  gamificationLevelTooltip.style.display = 'none';
+}
+
+gamificationLevelTooltip.className = 'gamification-level-tooltip';
+gamificationLevelTooltipImage.className = 'gamification-level-tooltip-image';
+gamificationLevelTooltipImage.alt = 'Vista ampliada del nivel';
+gamificationLevelTooltip.append(gamificationLevelTooltipImage);
+gamificationTitle.append(gamificationLevelTooltip);
+gamificationLevelTooltip.style.display = 'none';
+gamificationLevelImage.addEventListener('mouseenter', showLevelImageTooltip);
+gamificationLevelImage.addEventListener('mouseleave', hideLevelImageTooltip);
+gamificationLevelImage.addEventListener('focus', showLevelImageTooltip);
+gamificationLevelImage.addEventListener('blur', hideLevelImageTooltip);
 const gamificationPercentage = document.querySelector('#gamification-percentage');
 const gamificationNext = document.querySelector('#gamification-next');
 const gamificationDialog = document.querySelector('#gamification-dialog');
+const gamificationDialogLevel = document.querySelector('#gamification-dialog-level');
+const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
+const gamificationAchievementsButton = document.querySelector('#gamification-achievements-button');
 const gamificationCloseButton = document.querySelector('#gamification-close');
 
 const ERROR_MESSAGES = {
@@ -88,6 +116,7 @@ let currentCatalog = [];
 let currentEditId = null;
 let currentFormMode = null;
 let formSynced = false;
+let imageLookupSequence = 0;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
@@ -239,6 +268,11 @@ function collectionStateIcon(value) {
   return state === 'COLECCION' ? '📦' : state === 'BUSCADA' ? '🔍' : value ?? '';
 }
 
+function collectionStateMeaning(value) {
+  const state = normalizedCollectionState(value);
+  return state === 'COLECCION' ? 'Colección' : state === 'BUSCADA' ? 'Búsqueda' : String(value ?? '');
+}
+
 function differenceCell(minifigura) {
   const element = document.createElement('td');
   const difference = document.createElement('span');
@@ -298,18 +332,24 @@ function renderOldestFive(oldestFive) {
 
 function renderWatchlist(observed) {
   watchlistList.replaceChildren();
+  watchlistTitle.textContent = `Seguimiento (${observed.length} / ${maxWatchlistItems})`;
   for (const minifigura of observed) {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'watchlist-card';
     card.dataset.action = 'view';
     card.dataset.id = minifigura.id;
+    card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
     const image = document.createElement('img');
     image.src = imagenUrlPara(minifigura.id);
     image.alt = minifigura.nombre ?? '';
     image.addEventListener('error', () => { image.style.display = 'none'; });
     const caption = document.createElement('span');
-    caption.textContent = `${collectionStateIcon(minifigura.estadoColeccion)} ${minifigura.id} ${formatPrice(minifigura.precioBrickset)}`;
+    const stateIcon = document.createElement('span');
+    stateIcon.className = 'watchlist-state-icon';
+    stateIcon.textContent = collectionStateIcon(minifigura.estadoColeccion);
+    stateIcon.title = collectionStateMeaning(minifigura.estadoColeccion);
+    caption.append(stateIcon, document.createTextNode(` ${minifigura.id} ${formatPrice(minifigura.precioBrickset)}`));
     card.append(image, caption);
     watchlistList.append(card);
   }
@@ -357,7 +397,7 @@ function badgeCell(value) {
   const label = collectionStateIcon(value);
   badge.className = `badge ${badgeClassFor(value)}`;
   badge.textContent = label;
-  badge.title = label;
+  badge.title = collectionStateMeaning(value);
   badge.setAttribute('aria-label', label);
   element.append(badge);
   return element;
@@ -399,8 +439,8 @@ function observedCell(minifigura) {
   button.type = 'button';
   button.className = `eye-icon ${minifigura.observada ? 'active' : 'inactive'}`;
   button.textContent = '👁️';
-  button.title = minifigura.observada ? 'Dejar de observar' : 'Observar';
-  button.setAttribute('aria-label', button.title);
+  button.title = 'Seguimiento';
+  button.setAttribute('aria-label', minifigura.observada ? 'Dejar de observar' : 'Observar');
   button.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
   button.dataset.action = 'observe';
   button.dataset.id = minifigura.id;
@@ -590,8 +630,18 @@ async function loadTotal() {
 
 function renderGamification(state) {
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
+  const levelImagePath = level.id === 15
+    ? '/level_images/15_spacebaby.jpg'
+    : level.id === 16
+      ? '/level_images/16_spaceman.jpg'
+      : '/level_images/9_forestman.png';
+  gamificationLevelImage.src = levelImagePath;
+  gamificationLevelTooltipImage.src = levelImagePath;
+  achievementsHeadingImage.src = levelImagePath;
+  gamificationLevelTooltipImage.alt = `Nivel ${level.id} ${level.nombre}`;
   gamificationLevelNumber.textContent = level.id;
   gamificationLevelName.textContent = level.nombre;
+  gamificationDialogLevel.textContent = `${level.id} ${level.nombre}`;
   gamificationBricks.textContent = `${state.bricks ?? 0} Bricks`;
   gamificationProgress.value = state.progreso?.porcentaje ?? 0;
   gamificationPercentage.textContent = `${Math.round(gamificationProgress.value)}%`;
@@ -603,8 +653,38 @@ function renderGamification(state) {
   gamificationAchievements.replaceChildren();
   for (const logro of state.logros ?? []) {
     const item = document.createElement('li');
-    item.title = logro.descripcion ?? '';
-    item.textContent = `${logro.nombre} (x${logro.cantidad}) - ${logro.total} Bricks`;
+    item.className = 'achievement-item';
+
+    const icon = document.createElement('img');
+    icon.className = 'achievement-icon';
+    icon.src = '/trophy-icon.svg';
+    icon.alt = '';
+
+    const info = document.createElement('div');
+    info.className = 'achievement-info';
+    const name = document.createElement('span');
+    name.className = 'achievement-name';
+    name.textContent = logro.nombre;
+    const description = document.createElement('span');
+    description.className = 'achievement-description';
+    description.textContent = logro.descripcion ?? '';
+    info.append(name, description);
+
+    const count = document.createElement('span');
+    count.className = 'achievement-count';
+    count.textContent = `x${logro.cantidad}`;
+
+    const bricks = document.createElement('span');
+    bricks.className = 'achievement-bricks';
+    const bricksValue = document.createElement('strong');
+    bricksValue.textContent = logro.total;
+    const brickIcon = document.createElement('img');
+    brickIcon.className = 'achievement-brick-icon';
+    brickIcon.src = '/brick-red-icon.svg';
+    brickIcon.alt = 'Bricks';
+    bricks.append(bricksValue, brickIcon);
+
+    item.append(icon, info, count, bricks);
     gamificationAchievements.append(item);
   }
 }
@@ -617,6 +697,7 @@ async function loadGamification() {
   } catch {
     gamificationLevelNumber.textContent = '';
     gamificationLevelName.textContent = 'Nivel no disponible';
+    gamificationDialogLevel.textContent = 'Nivel no disponible';
     gamificationBricks.textContent = '0 Bricks';
     gamificationProgress.value = 0;
     gamificationPercentage.textContent = '0%';
@@ -630,13 +711,13 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const messageNode = document.createTextNode(message);
-  if (iconSrc === null) iconSrc = '/wrench-icon.svg';
+  if (iconSrc === null) iconSrc = '/87X2Rz8y2ZY.png';
   iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
   const icon = iconSrc ? document.createElement('img') : null;
   if (icon) {
     icon.className = 'toast-icon';
     icon.src = iconSrc;
-    icon.alt = type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Herramienta';
+    icon.alt = type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Separador de ladrillos';
   }
   if (icon && iconPosition === 'before') toast.append(icon);
   toast.append(messageNode);
@@ -707,6 +788,7 @@ function openFormDialog(mode, minifigura) {
     return;
   }
   currentFormMode = mode;
+  imageLookupSequence += 1;
   currentEditId = mode === 'edit' ? minifigura.id : null;
   formSynced = mode !== 'create';
   minifiguraForm.reset();
@@ -776,8 +858,6 @@ function updateFormMode() {
   formObservedButton.disabled = isView || isCreate && !formSynced;
   updateFormToggleStates();
   formDialogTitle.hidden = isView;
-  lookupBricksetButton.hidden = isView;
-  lookupBricksetButton.disabled = isView || !hasId;
   formSubmitButton.hidden = isView;
   formSubmitButton.disabled = isView || !isFormValid();
   formCancelButton.textContent = isView ? 'Cerrar' : 'Cancelar';
@@ -797,7 +877,7 @@ function updateFormToggleStates() {
   formObservedButton.classList.toggle('active', isObserved);
   formObservedButton.classList.toggle('inactive', !isObserved);
   formObservedButton.setAttribute('aria-label', isObserved ? 'Dejar de seguir' : 'Seguir');
-  formObservedButton.title = isObserved ? 'Dejar de seguir' : 'Seguir';
+  formObservedButton.title = 'Seguimiento';
 }
 
 function isFormValid() {
@@ -980,8 +1060,33 @@ gamificationLevelButton.addEventListener('click', () => {
   gamificationDialog.showModal();
 });
 
+gamificationAchievementsButton.addEventListener('click', () => {
+  gamificationDialog.showModal();
+});
+
 gamificationCloseButton.addEventListener('click', () => {
   gamificationDialog.close();
+});
+
+gamificationToggleButton.addEventListener('click', () => {
+  const expanded = gamificationToggleButton.getAttribute('aria-expanded') !== 'true';
+  gamificationToggleButton.setAttribute('aria-expanded', String(expanded));
+  gamificationDetails.hidden = !expanded;
+  const label = expanded ? 'Ocultar resumen de colección' : 'Mostrar resumen de colección';
+  gamificationToggleButton.setAttribute('aria-label', label);
+  gamificationToggleButton.title = label;
+});
+
+document.querySelectorAll('.panel-toggle').forEach((button) => {
+  button.addEventListener('click', () => {
+    const expanded = button.getAttribute('aria-expanded') !== 'true';
+    button.setAttribute('aria-expanded', String(expanded));
+    document.getElementById(button.getAttribute('aria-controls')).hidden = !expanded;
+    button.closest('section').classList.toggle('panel-collapsed', !expanded);
+    const label = expanded ? 'Ocultar panel' : 'Mostrar panel';
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  });
 });
 
 catalogBody.addEventListener('click', (event) => {
@@ -1066,6 +1171,7 @@ formCancelButton.addEventListener('click', () => {
 });
 
 formDialog.addEventListener('close', () => {
+  imageLookupSequence += 1;
   currentEditId = null;
   currentFormMode = null;
   formSynced = false;
@@ -1075,6 +1181,12 @@ formDialog.addEventListener('close', () => {
 [formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput].forEach((input) => {
   input.addEventListener('input', () => {
     if (currentFormMode === 'create' && input === formIdInput) {
+      imageLookupSequence += 1;
+      formSynced = false;
+      formCategoriaInput.value = '';
+      formSubcategoriaInput.value = '';
+      formAnioInput.value = '';
+      formPrecioInput.value = '';
       formPreviewImage.src = input.value.trim() ? imagenUrlPara(input.value) : '';
     }
     if (currentFormMode) {
@@ -1146,18 +1258,17 @@ minifiguraForm.addEventListener('submit', async (event) => {
   }
 });
 
-lookupBricksetButton.addEventListener('click', async () => {
+formPreviewImage.addEventListener('load', async () => {
+  if (!formDialog.open || currentFormMode === 'view') return;
   const id = formIdInput.value.trim();
-  if (!id) {
-    formError.textContent = 'El id es obligatorio para consultar los datos de Brickset.';
-    return;
-  }
+  if (!id || formPreviewImage.src !== imagenUrlPara(id)) return;
+  const lookupSequence = imageLookupSequence;
 
-  lookupBricksetButton.disabled = true;
   showToast('Consultando datos en Brickset...', 'success');
   try {
     const response = await fetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
+    if (!formDialog.open || currentFormMode === 'view' || imageLookupSequence !== lookupSequence || formIdInput.value.trim() !== id) return;
     if (!response.ok) {
       throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
     }
@@ -1166,14 +1277,13 @@ lookupBricksetButton.addEventListener('click', async () => {
     formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
     formPrecioInput.value = result.precio;
     formSynced = true;
-    formPreviewImage.src = imagenUrlPara(id);
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
     showToast('Datos de Brickset actualizados.', 'success');
   } catch {
-    showToast('No se encontraron datos en Brickset para el ID especificado', 'error');
-  } finally {
-    updateFormMode();
+    if (formDialog.open && currentFormMode !== 'view' && imageLookupSequence === lookupSequence && formIdInput.value.trim() === id) {
+      showToast('No se encontraron datos en Brickset para el ID especificado', 'error');
+    }
   }
 });
 

@@ -46,7 +46,19 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const page = await fetch(`${baseUrl}/`);
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-type'), /^text\/html/);
-    assert.match(await page.text(), /id="filters-form"/);
+    const html = await page.text();
+    assert.match(html, /id="filters-form"/);
+    const levelTitle = new JSDOM(html).window.document.querySelector('#gamification-title');
+    assert.equal(levelTitle.firstElementChild.getAttribute('src'), '/level_images/9_forestman.png');
+    assert.equal(levelTitle.firstElementChild.getAttribute('alt'), '');
+    assert.equal(levelTitle.children[1].id, 'gamification-level-number');
+
+    const levelImage = await fetch(`${baseUrl}/level_images/9_forestman.png`);
+    assert.equal(levelImage.status, 200);
+    assert.match(levelImage.headers.get('content-type'), /^image\/png/);
+    const spacebabyImage = await fetch(`${baseUrl}/level_images/15_spacebaby.jpg`);
+    assert.equal(spacebabyImage.status, 200);
+    assert.match(spacebabyImage.headers.get('content-type'), /^image\/jpeg/);
 
     const styles = await fetch(`${baseUrl}/styles.css`);
     assert.equal(styles.status, 200);
@@ -55,6 +67,11 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const script = await fetch(`${baseUrl}/app.js`);
     assert.equal(script.status, 200);
     assert.match(script.headers.get('content-type'), /^text\/javascript/);
+    assert.match(await script.text(), /iconSrc = '\/87X2Rz8y2ZY\.png'/);
+
+    const toastImage = await fetch(`${baseUrl}/87X2Rz8y2ZY.png`);
+    assert.equal(toastImage.status, 200);
+    assert.match(toastImage.headers.get('content-type'), /^image\/png/);
 
     const catalog = await fetch(`${baseUrl}/minifiguras`);
     assert.equal(catalog.status, 200);
@@ -84,9 +101,9 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     assert.ok(html.indexOf('name="nombre"') < html.indexOf('name="id"'));
     assert.match(html, /id="show-all"[^>]*>Mostrar todo<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
     assert.match(html, /aria-label="Filtrar observadas"[^>]*title="Filtrar observadas"/);
-    assert.match(html, /<span class="filter-symbol" aria-hidden="true">📦<\/span>/);
-    assert.match(html, /<span class="filter-symbol" aria-hidden="true">🔍<\/span>/);
-    assert.match(html, /<span class="eye-symbol" aria-hidden="true">👁️<\/span>/);
+    assert.match(html, /<span class="filter-symbol" title="Colección" aria-hidden="true">📦<\/span>/);
+    assert.match(html, /<span class="filter-symbol" title="Búsqueda" aria-hidden="true">🔍<\/span>/);
+    assert.match(html, /<span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️<\/span>/);
     assert.match(script, /URLSearchParams/);
     assert.match(script, /replaceChildren/);
     assert.match(script, /No se pudo cargar el catálogo/);
@@ -133,34 +150,37 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.section-heading\s*\{[^}]*justify-content:\s*flex-start/s);
   assert.match(css, /\.modal label\s*\{[^}]*text-align:\s*left/s);
   assert.match(css, /\.results-heading\s*\{[^}]*justify-content:\s*space-between/s);
-  assert.match(css, /\.summary-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, calc\(\(100% - 24px\) \/ 2\)\) auto minmax\(0, 1fr\)/s);
-  assert.match(css, /\.collection-counts-panel\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /\.header-top\s*\{[^}]*display:\s*flex/s);
+  assert.match(css, /\.brand-heading\s*\{[^}]*justify-items:\s*end/s);
+  assert.match(css, /\.brand-heading \.eyebrow\s*\{[^}]*text-align:\s*right/s);
+  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s);
+  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 1 520px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*max-content/s);
+  assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
+  assert.match(css, /\.gamification-details\[hidden\]\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.collection-counts-panel\s*\{[^}]*display:\s*flex/s);
   assert.match(css, /\.filter-state-toggles\s*\{[^}]*align-self:\s*end[^}]*min-height:\s*46px/s);
   assert.match(css, /\.filters-form > \.filter-toggle\s*\{[^}]*align-self:\s*end/);
   assert.match(css, /\.filters-form > #show-all\s*\{[^}]*align-self:\s*end/);
   assert.match(css, /\.filters-form \.form-actions\s*\{[^}]*grid-row:\s*1;[^}]*align-self:\s*end/);
   assert.match(css, /\.modal-preview img\s*\{[^}]*object-fit:\s*contain;\s*\}/);
   assert.match(css, /\.collection-summary-content strong\s*\{[^}]*font:\s*700 1\.2rem Arial, sans-serif/s);
-  assert.match(css, /\.gamification-level strong\s*\{[^}]*font-size:\s*1\.2rem/s);
+  assert.match(css, /\.gamification-level strong\s*\{[^}]*font-size:\s*1\.05rem/s);
+  assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif/s);
+  assert.match(css, /#gamification-level-number\s*\{[^}]*font-size:\s*1\.75rem/s);
   assert.match(css, /\.gamification-meter > span\s*\{[^}]*position:\s*absolute/s);
-  assert.match(css, /\.toast-task\s*\{[^}]*background:\s*var\(--blue\)/s);
-  assert.match(css, /\.toast-level\s*\{[^}]*background:\s*var\(--accent\)/s);
+  assert.match(css, /\.toast-task\s*\{[^}]*color:\s*white;\s*background:\s*#00449e;\s*border-color:\s*#00449e/s);
+  assert.match(css, /\.toast-level\s*\{[^}]*color:\s*white;\s*background:\s*var\(--accent-dark\);\s*border-color:\s*var\(--accent-dark\)/s);
   assert.match(css, /\.toast-success\s*\{[^}]*background:\s*var\(--surface\)/s);
   assert.match(css, /#form-dialog\.view-mode \.state-toggle\.active:disabled[^}]*opacity:\s*1/s);
   assert.match(css, /#form-dialog\.view-mode \.state-toggle:disabled, #form-dialog\.view-mode \.eye-icon:disabled\s*\{[^}]*color:\s*inherit/s);
   assert.match(css, /\.button-danger\s*\{[^}]*background:\s*var\(--accent\)/s);
   assert.match(css, /\.watchlist-panel\s*\{[^}]*border-top:\s*4px solid var\(--accent\)/s);
   assert.match(css, /\.gamification-summary\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
-  assert.match(css, /\.collection-counts-panel\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
-  assert.match(css, /\.collection-summary\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
   assert.doesNotMatch(css, /\.collection-summary\s*\{[^}]*border-left:\s*6px solid var\(--accent\)/s);
   assert.match(css, /\.gamification-meter > span\s*\{[^}]*position:\s*absolute/s);
   assert.match(css, /\.button-danger\s*\{[^}]*background:\s*var\(--accent\)/s);
   assert.match(css, /\.watchlist-panel\s*\{[^}]*border-top:\s*4px solid var\(--accent\)/s);
-  assert.match(css, /\.gamification-summary\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
-  assert.match(css, /\.collection-counts-panel\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
-  assert.match(css, /\.collection-summary\s*\{[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
-  assert.doesNotMatch(css, /\.collection-summary\s*\{[^}]*border-left:\s*6px solid var\(--accent\)/s);
   assert.doesNotMatch(css, /\.page-header\s*\{[^}]*border-bottom:\s*6px solid var\(--yellow\)/s);
   assert.doesNotMatch(css, /\.top-five\s*\{[^}]*border-top:\s*4px solid var\(--yellow\)/s);
 });
@@ -186,7 +206,6 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
       'name="precioCompra"',
       'name="fechaCompra"',
       'name="precio"',
-      'id="lookup-brickset"',
       'id="sync-prices"',
       'id="collection-total"',
       'id="collection-count"',
@@ -207,22 +226,29 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
     const document = new JSDOM(html).window.document;
-    const summaryRow = document.querySelector('.summary-row');
-    assert.equal(summaryRow.children[0].className, 'gamification-summary');
-    assert.equal(summaryRow.children[1].className, 'collection-counts-panel');
-    assert.equal(summaryRow.children[2].className, 'collection-summary');
-    const countsPanel = summaryRow.children[1];
+    const headerTop = document.querySelector('.header-top');
+    assert.equal(headerTop.children[0].className, 'brand-heading');
+    assert.equal(headerTop.children[1].className, 'gamification-summary');
+    const main = document.querySelector('.gamification-main');
+    assert.deepEqual([...main.children].map((element) => element.className), ['gamification-level', 'gamification-toggle']);
+    const details = document.querySelector('#gamification-details');
+    assert.ok(details.hidden);
+    assert.equal(details.children[0].className, 'gamification-progress');
+    assert.equal(details.children[1].className, 'gamification-achievements-row');
+    assert.equal(details.children[2].className, 'collection-counts-panel');
+    assert.equal(details.children[3].className, 'collection-summary');
+    const countsPanel = details.children[2];
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['SPAN', 'STRONG']);
-    const collectionSummary = summaryRow.children[2];
-    assert.equal(collectionSummary.children[0].className, 'collection-summary-content');
-    assert.equal(collectionSummary.children[1].id, 'sync-prices');
+    const collectionSummary = details.children[3];
+    assert.equal(collectionSummary.children[0].id, 'sync-prices');
+    assert.equal(collectionSummary.children[1].className, 'collection-summary-content');
+    assert.equal(collectionSummary.children[1].children[0].textContent, 'Valor total:');
     assert.equal(document.querySelector('#sync-prices').textContent, '🔄');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
-    assert.equal(document.querySelector('#lookup-brickset').textContent, '🔄');
-    assert.ok(document.querySelector('#lookup-brickset').classList.contains('button-secondary'));
+    assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading').lastElementChild.textContent, 'BY MRDUSIK');
-    assert.equal(document.querySelector('.modal-preview span').textContent, 'Preview');
+    assert.doesNotMatch(document.querySelector('#form-dialog').textContent, /Preview/i);
   });
 });
 
@@ -233,7 +259,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   const form = dom.window.document.querySelector('#minifigura-form');
 
   for (const [rowSelector, fieldIds] of [
-    ['.modal-row-identity', ['form-id', 'lookup-brickset', 'form-nombre']],
+    ['.modal-row-identity', ['form-id', 'form-nombre']],
     ['.modal-row-status', ['form-estadoColeccion', 'form-observada']],
     ['.modal-row-purchase', ['form-fechaCompra', 'form-precioCompra']],
     ['.modal-row-category', ['form-categoria', 'form-subcategoria']],
@@ -245,9 +271,15 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   }
 
   const identityRow = form.querySelector('.modal-row-identity');
-  assert.deepEqual([...identityRow.children].map((element) => element.id), [
-    'form-id-label', 'form-id', 'lookup-brickset', 'form-nombre-label', 'form-nombre',
+  assert.deepEqual([...identityRow.children].map((element) => element.className), [
+    'modal-identity-fields', 'description-field',
   ]);
+  assert.deepEqual([...identityRow.querySelector('.modal-identity-fields').children].map((element) => element.id), [
+    'form-id-label', 'form-nombre-label',
+  ]);
+  assert.equal(form.querySelector('#form-id').parentElement.id, 'form-id-label');
+  assert.equal(form.querySelector('#form-nombre').parentElement.id, 'form-nombre-label');
+  assert.equal(identityRow.querySelector('.description-field #form-descripcion').tagName, 'TEXTAREA');
   assert.equal(identityRow.parentElement.className, 'modal-form-column');
   assert.equal(identityRow.getAttribute('style'), null);
   assert.equal(form.querySelector('#form-dialog-title').parentElement, form.querySelector('.modal-preview-heading'));
@@ -255,14 +287,13 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(form.querySelector('.modal-preview img').id, 'form-preview-image');
   assert.equal(form.querySelector('.form-actions').parentElement, form);
   assert.match(css, /\.modal form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 250px;[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
-  assert.match(css, /\.modal-row\.modal-row-identity\s*\{[^}]*grid-column:\s*1;[^}]*grid-template-columns:\s*max-content minmax\(0, 1fr\) 40px max-content minmax\(0, 1fr\)/s);
+  assert.match(css, /\.modal-row\.modal-row-identity\s*\{[^}]*grid-column:\s*1;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /\.modal-identity-fields\s*\{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /#form-dialog \.modal-row-identity input:disabled, #form-dialog \.modal-row-identity textarea:disabled, #form-dialog \.modal-row-purchase input:disabled\s*\{[^}]*background:\s*#ecebe6/s);
   assert.match(css, /\.modal-preview-heading\s*\{[^}]*justify-items:\s*center[^}]*text-align:\s*center/s);
   assert.match(css, /\.modal-preview-heading\s*\{[^}]*align-self:\s*start/s);
   assert.match(css, /#form-dialog-title\s*\{[^}]*text-align:\s*center/s);
-  assert.match(css, /\.modal-preview-heading > span\s*\{[^}]*text-align:\s*center/s);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
-  assert.match(css, /#form-dialog\.view-mode \.modal-row-identity\s*\{[^}]*grid-template-columns:\s*max-content minmax\(0, 1fr\) max-content minmax\(0, 1fr\)/s);
-  assert.match(css, /#form-dialog\.view-mode #lookup-brickset\s*\{\s*display:\s*none/);
   assert.match(css, /#form-dialog\.view-mode #form-dialog-title\s*\{\s*display:\s*none/);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
   assert.match(css, /#form-dialog\.view-mode \.required-label > span::after[^}]*content:\s*''/s);
@@ -270,14 +301,18 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.doesNotMatch(css, /#form-dialog #minifigura-form\s*\{[^}]*height:/);
   assert.match(css, /\.modal-form-column\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1 \/ 3;[^}]*grid-template-rows:\s*auto auto auto/s);
   assert.match(css, /\.modal-preview\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*2;[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch/s);
-  assert.match(css, /\.form-actions\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*3;/s);
+  assert.match(css, /\.modal \.form-actions\s*\{[^}]*grid-column:\s*1 \/ -1;[^}]*padding-top:\s*17px;[^}]*border-top:\s*1px solid var\(--line\)/s);
+  assert.doesNotMatch(css, /\.modal \.form-actions\s*\{[^}]*margin(?:-inline)?:\s*-/s);
+  assert.match(css, /#form-dialog\s*\{[^}]*padding-bottom:\s*16px/);
+  assert.match(css, /\.modal \.form-actions\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*3;/s);
   assert.match(css, /#form-dialog\s*\{[^}]*overflow:\s*hidden/s);
   assert.doesNotMatch(css, /\.modal-form-column\s*\{[^}]*overflow:\s*hidden/s);
   assert.match(css, /#form-dialog\s*\{[^}]*height:\s*fit-content/s);
   assert.doesNotMatch(css, /#form-dialog #minifigura-form\s*\{[^}]*height:/s);
   assert.match(css, /\.modal label\s*\{\s*gap:\s*4px;\s*font-size:\s*0\.68rem/);
   assert.match(css, /\.modal-preview img\s*\{\s*width:\s*100px;\s*height:\s*100px/);
-  assert.match(css, /@media \(max-width:\s*360px\)\s*\{[^}]*#form-dialog #minifigura-form\s*\{[^}]*gap:\s*4px/s);
+  assert.match(css, /\.modal form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*10px/s);
+  assert.match(css, /@media \(max-width:\s*360px\)\s*\{[^}]*#form-dialog #minifigura-form\s*\{[^}]*gap:\s*10px/s);
   assert.match(css, /\.modal label\s*\{\s*font-size:\s*0\.6rem;\s*line-height:\s*1;\s*\}/);
   dom.window.close();
 });
@@ -357,8 +392,10 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.equal(rows()[2].children[9].textContent, '?');
   assert.equal(rows()[0].children[7].querySelector('.badge').textContent, '📦');
   assert.equal(rows()[0].children[7].querySelector('.badge').getAttribute('aria-label'), '📦');
+  assert.equal(rows()[0].children[7].querySelector('.badge').title, 'Colección');
   assert.equal(rows()[1].children[7].querySelector('.badge').textContent, '🔍');
   assert.equal(rows()[1].children[7].querySelector('.badge').getAttribute('aria-label'), '🔍');
+  assert.equal(rows()[1].children[7].querySelector('.badge').title, 'Búsqueda');
   assert.ok(rows()[0].children[9].querySelector('.difference-positive'));  assert.equal(rows()[0].children[4].textContent, 'Space');
   assert.equal(rows()[0].children[5].textContent, '');
   assert.equal(rows()[1].children[4].textContent, 'Collectible Minifigures');
@@ -711,7 +748,6 @@ test('la sincronización deshabilita los botones mientras está en curso', async
     '#new-minifigura',
     '#sync-prices',
     '.table-sort',
-    '#lookup-brickset',
     '#form-cancel',
     '#delete-cancel',
     '[data-action="edit"]',
@@ -785,6 +821,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   let submittedPayload;
+  let lookups = 0;
   window.fetch = async (url, options = {}) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/minifiguras' && options.method === 'POST') {
@@ -792,6 +829,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
       return { ok: true, status: 201, json: async () => submittedPayload };
     }
     if (url === '/minifiguras/new-figure/brickset') {
+      lookups += 1;
       return { ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) };
     }
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) {
@@ -808,8 +846,18 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.document.querySelector('#new-minifigura').click();
   window.document.querySelector('#form-id').value = 'new-figure';
   window.document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
-  window.document.querySelector('#lookup-brickset').click();
+  assert.equal(lookups, 0);
+  assert.equal(window.document.querySelector('#form-nombre').disabled, true);
+  assert.equal(window.document.querySelector('#form-descripcion').disabled, true);
+  assert.equal(window.document.querySelector('#form-fechaCompra').disabled, true);
+  assert.equal(window.document.querySelector('#form-precioCompra').disabled, true);
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
   await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(lookups, 1);
+  assert.equal(window.document.querySelector('#form-nombre').disabled, false);
+  assert.equal(window.document.querySelector('#form-descripcion').disabled, false);
+  assert.equal(window.document.querySelector('#form-fechaCompra').disabled, false);
+  assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
   window.document.querySelector('#form-nombre').value = 'Nueva';
   window.document.querySelector('#form-estadoColeccion').value = '';
   window.document.querySelector('#minifigura-form').dispatchEvent(
@@ -821,16 +869,54 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   dom.window.close();
 });
 
+test('el alta ignora consultas de imágenes anteriores y bloquea los campos si falla Brickset', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  let resolveOldLookup;
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url === '/minifiguras/old/brickset') return new Promise((resolve) => { resolveOldLookup = resolve; });
+    if (url === '/minifiguras/new/brickset') return { ok: false, json: async () => ({ error: 'BRICKSET_NO_DISPONIBLE' }) };
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.document.querySelector('#new-minifigura').click();
+  const idInput = window.document.querySelector('#form-id');
+  const preview = window.document.querySelector('#form-preview-image');
+  idInput.value = 'old';
+  idInput.dispatchEvent(new window.Event('input'));
+  preview.dispatchEvent(new window.Event('load'));
+  idInput.value = 'new';
+  idInput.dispatchEvent(new window.Event('input'));
+  resolveOldLookup({ ok: true, json: async () => ({ categoria: 'Space', anio: 2024, precio: 12 }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(window.document.querySelector('#form-categoria').value, '');
+  assert.equal(window.document.querySelector('#form-nombre').disabled, true);
+
+  preview.dispatchEvent(new window.Event('load'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(window.document.querySelector('#form-submit').disabled, true);
+  assert.match(window.document.querySelector('#toast-region').textContent, /No se encontraron datos en Brickset para el ID especificado/);
+  dom.window.close();
+});
+
 test('la interfaz muestra y alterna la watchlist con el orden del resumen', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   const catalog = [
     { id: 'HIGH', nombre: 'Alta', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN', precio: 30, observada: true },
     { id: 'LOW', nombre: 'Baja', categoria: 'Space', anio: 2023, estadoColeccion: 'BUSCADA', precio: 10, observada: false },
   ];
-  const valuation = { total: 30, enColeccion: 1, buscadas: 1, top5: [], top5Antiguas: [], observadas: [{ id: 'HIGH', nombre: 'Alta', estadoColeccion: 'COLECCIÓN', precioBrickset: 30 }] };
+  const valuation = { total: 30, enColeccion: 1, buscadas: 1, top5: [catalog[0]], top5Antiguas: [], observadas: [{ id: 'HIGH', nombre: 'Alta', estadoColeccion: 'COLECCIÓN', precioBrickset: 30 }] };
   window.fetch = async (url, options = {}) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => valuation };
@@ -845,7 +931,18 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
 
   assert.equal(window.document.querySelector('.eye-icon.active').dataset.id, 'HIGH');
   assert.equal(window.document.querySelectorAll('.watchlist-card').length, 1);
-  assert.match(window.document.querySelector('.watchlist-card span').textContent, /^📦 HIGH 30,00/);
+  assert.equal(window.document.querySelector('#watchlist-title').textContent, 'Seguimiento (1 / 10)');
+  const watchlistCard = window.document.querySelector('.watchlist-card');
+  assert.equal(watchlistCard.title, window.document.querySelector('.ranking-card').title);
+  assert.equal(watchlistCard.querySelector('.watchlist-state-icon').title, 'Colección');
+  assert.match(watchlistCard.textContent, /^📦 HIGH 30,00/);
+  assert.equal(window.document.querySelector('.eye-icon.active').title, 'Seguimiento');
+  assert.equal(window.document.querySelector('.filter-symbol').title, 'Colección');
+  assert.equal(window.document.querySelectorAll('.filter-symbol')[1].title, 'Búsqueda');
+  assert.equal(window.document.querySelector('.eye-symbol').title, 'Seguimiento');
+  assert.equal(window.document.querySelectorAll('.count-icon')[0].title, 'Colección');
+  assert.equal(window.document.querySelectorAll('.count-icon')[1].title, 'Búsqueda');
+  assert.match(css, /\.watchlist-card:hover\s*\{[^}]*border-color:\s*var\(--accent\)/s);
   assert.equal(window.document.querySelector('#collection-count').textContent, '1');
   assert.equal(window.document.querySelector('#wanted-count').textContent, '1');
 
@@ -863,10 +960,14 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalog = [{ id: 'VIEW-1', nombre: 'Vista', categoria: 'Space', anio: 2024, estadoColeccion: 'BUSCADA', precio: 20, observada: true }];
+  let lookups = 0;
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 20, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [], observadas: [] }) };
-    if (url.endsWith('/brickset')) return { ok: true, json: async () => ({ id: 'NEW-1', categoria: 'Space', anio: 2024, precio: 18 }) };
+    if (url.endsWith('/brickset')) {
+      lookups += 1;
+      return { ok: true, json: async () => ({ id: 'NEW-1', categoria: 'Space', anio: 2024, precio: 18 }) };
+    }
     return { ok: true, json: async () => catalog };
   };
 
@@ -874,11 +975,13 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   window.document.querySelector('.id-link').click();
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+  assert.equal(lookups, 0);
   assert.ok(window.document.querySelector('#form-dialog').classList.contains('view-mode'));
   assert.ok(window.document.querySelector('.modal-row-identity').classList.contains('view-mode'));
   assert.equal(window.document.querySelector('#form-dialog-title').hidden, true);
   assert.equal(window.document.querySelector('#form-submit').hidden, true);
-  assert.equal(window.document.querySelector('#lookup-brickset').hidden, true);
+  assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(window.document.querySelector('#form-id').disabled, true);
   assert.equal(window.document.querySelector('#form-cancel').textContent, 'Cerrar');
   const collectionToggle = window.document.querySelector('[data-form-state="COLECCIÓN"]');
@@ -905,8 +1008,12 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   window.document.querySelector('#form-cancel').click();
 
   window.document.querySelector('[data-action="edit"]').click();
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(lookups, 1);
+  assert.equal(window.document.querySelector('#form-precio').value, '18');
   assert.equal(window.document.querySelector('#form-dialog').classList.contains('view-mode'), false);
-  assert.equal(window.document.querySelector('#lookup-brickset').hidden, false);
+  assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(collectionToggle.disabled, false);
   wantedToggle.click();
   assert.equal(window.document.querySelector('#form-estadoColeccion').value, 'BUSCADA');
@@ -927,7 +1034,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(window.document.querySelector('#form-dialog').classList.contains('view-mode'), false);
   assert.equal(window.document.querySelector('#form-id').disabled, false);
   assert.equal(window.document.querySelector('#form-nombre').disabled, true);
-  assert.equal(window.document.querySelector('#lookup-brickset').disabled, true);
+  assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(window.document.querySelector('#form-submit').disabled, true);
   assert.equal(collectionToggle.getAttribute('aria-pressed'), 'true');
   assert.equal(followToggle.getAttribute('aria-pressed'), 'false');
