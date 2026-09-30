@@ -29,7 +29,7 @@
 
 - [x] 5.1 Reestructurar el HTML/CSS del modal en dos columnas con preview BrickLink de 250px y clase `.input-readonly`, manteniendo responsive y selección/copia de campos; verificar estructura y estilos en pruebas web.
 - [x] 5.2 Implementar la matriz de permisos para modos `create`, `edit` y `view`, incluyendo campos obligatorios, botones visibles, toggle de observación y conservación de `FechaRegistro`; verificar cada modo y sus transiciones con JSDOM.
-- [x] 5.3 Ajustar sincronizacion individual y validacion de formulario para bloquear alta hasta obtener datos, aplicar fallback de año y mostrar el Toast de error exacto; verificar éxito, ID inexistente, error de red y guardado deshabilitado/habilitado.
+- [x] 5.3 Ajustar la sincronizacion individual automática al cargar la imagen y la validacion de formulario para bloquear alta hasta obtener datos, aplicar fallback de año y mostrar el Toast de error exacto; verificar éxito, ID inexistente, error de red y guardado deshabilitado/habilitado.
 - [x] 5.4 Abrir las tarjetas de rankings y observadas en el modal unificado `view`, recuperando el registro completo por ID cuando el catálogo esté filtrado.
 
 ## 6. Cobertura de pruebas y compatibilidad
@@ -52,12 +52,15 @@
 - [x] 8.4 Usar toggles de icono exclusivos para estado y seguimiento, alineando etiquetas y limpiando el fondo de la preview.
 - [x] 8.5 Alinear filas ID/Nombre y centrar verticalmente la preview, haciendo que la fila ID ocupe todo el ancho en visualización y ocultando los asteriscos.
 - [x] 8.6 Cubrir el layout por modo y las transiciones de toggles con pruebas web.
-- [x] 8.7 Integrar ID, sincronización y Nombre en una línea del ancho del formulario, eliminar scroll del modal y ocultar el botón sin reservar espacio en visualización.
+- [x] 8.7 Distribuir ID y Nombre apilados junto a Descripción en una fila del ancho del formulario, eliminar scroll del modal y sustituir el botón de sincronización individual por consulta automática al cargar la imagen.
 - [x] 8.8 Distribuir nivel, recuento y valor en tres paneles, mostrando solo iconos/cifras en el recuento y colocando 🔄 junto al valor.
 - [x] 8.9 Aplicar colores de botones y paneles, alinear el valor total y mostrar porcentaje en la barra de progreso.
 - [x] 8.10 Hacer que la altura del modal siga el contenido y alinear Nombre con los otros campos de la columna.
-- [x] 8.11 Mantener ID, 🔄 y Nombre en la misma fila y ubicar el título del modal sobre Preview, alineado a la derecha.
-- [x] 8.12 Centrar título y Preview en un mismo contenedor, y ocultar el título con todos los controles de edición en view-mode.
+- [x] 8.11 Mantener ID y Nombre junto a Descripción en la fila de identidad y ubicar el título del modal sobre la imagen.
+- [x] 8.12 Centrar el título sobre la imagen de preview y ocultarlo con todos los controles de edición en view-mode.
 - [x] 8.13 Alinear el título arriba y sombrear controles deshabilitados en visualización.
 - [x] 8.14 Asignar azul a Toasts de tareas, rojo a subidas de nivel y blanco a los demás eventos.
 - [x] 8.15 Mostrar visualmente el estado real de los toggles en view-mode manteniéndolos deshabilitados.
+- [x] 8.16 Usar en el número y nombre del nivel la misma tipografía que en el título `MiniPeopleDB`; verificar con prueba web.
+- [x] 8.17 Mostrar el cupo de seguimiento, igualar tooltip y borde de tarjetas a rankings, y etiquetar los tooltips de Ojo, Caja y Lupa; verificar con pruebas web.
+- [x] 8.18 Añadir la ampliación de la imagen del nivel al pasar el ratón, con tamaño equivalente a las miniaturas de seguimiento y foco accesible por teclado.

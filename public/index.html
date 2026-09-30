@@ -6,62 +6,82 @@
   <title>MiniPeopleDB</title>
   <link rel="icon" type="image/svg+xml" href="/brick-red-icon.svg">
   <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js?v=toast-icons-2" defer></script>
+  <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
   <main class="page-shell">
     <header class="page-header">
-      <div class="brand-heading">
-        <h1>MiniPeopleDB</h1>
-        <p class="eyebrow">BY MRDUSIK</p>
-      </div>
-      <div class="summary-row">
+      <div class="header-top">
+        <div class="brand-heading">
+          <h1>MiniPeopleDB</h1>
+          <p class="eyebrow">BY MRDUSIK</p>
+        </div>
         <section class="gamification-summary" aria-labelledby="gamification-title">
-          <button type="button" id="gamification-level" class="gamification-level" aria-haspopup="dialog">
-            <span id="gamification-title" class="gamification-level-title"><span id="gamification-level-number">0</span> <span id="gamification-level-name">Duplo</span></span>
-            <span class="gamification-bricks-value">
-              <strong id="gamification-bricks">0</strong>
-              <img class="gamification-brick-icon" src="/brick-red-icon.svg" alt="Bricks">
-            </span>
-          </button>
-          <div class="gamification-progress">
-            <div class="gamification-meter">
-              <progress id="gamification-progress" max="100" value="0">0%</progress>
-              <span id="gamification-percentage">0%</span>
+          <div class="gamification-main">
+            <button type="button" id="gamification-level" class="gamification-level" aria-haspopup="dialog">
+              <span id="gamification-title" class="gamification-level-title"><img class="gamification-level-image" src="/level_images/9_forestman.png" alt=""><span id="gamification-level-number">0</span> <span id="gamification-level-name">Duplo</span></span>
+              <span class="gamification-bricks-value">
+                <strong id="gamification-bricks">0</strong>
+                <img class="gamification-brick-icon" src="/brick-red-icon.svg" alt="Bricks">
+              </span>
+            </button>
+            <button type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
+          </div>
+          <div id="gamification-details" class="gamification-details" hidden>
+            <div class="gamification-progress">
+              <div class="gamification-meter">
+                <progress id="gamification-progress" max="100" value="0">0%</progress>
+                <span id="gamification-percentage">0%</span>
+              </div>
+              <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
             </div>
-            <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
+            <div class="gamification-achievements-row">
+              <button type="button" id="gamification-achievements-button" class="button button-secondary gamification-achievements-button" aria-haspopup="dialog">
+                <img class="gamification-trophy-icon" src="/trophy-icon.svg" alt="">
+                <span>Logros</span>
+              </button>
+            </div>
+            <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
+              <span><span class="count-icon" title="Colección" aria-hidden="true">📦</span><strong id="collection-count">0</strong></span>
+              <span><span class="count-icon" title="Búsqueda" aria-hidden="true">🔍</span><strong id="wanted-count">0</strong></span>
+            </div>
+            <div class="collection-summary" aria-live="polite">
+              <button type="button" id="sync-prices" class="button button-secondary button-icon summary-sync" aria-label="Actualizar precios desde Brickset" title="Actualizar precios desde Brickset">🔄</button>
+              <div class="collection-summary-content">
+                <span>Valor total:</span>
+                <strong id="collection-total">€0,00</strong>
+              </div>
+            </div>
           </div>
         </section>
-        <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
-          <span><span class="count-icon" aria-hidden="true">📦</span><strong id="collection-count">0</strong></span>
-          <span><span class="count-icon" aria-hidden="true">🔍</span><strong id="wanted-count">0</strong></span>
-        </div>
-        <div class="collection-summary" aria-live="polite">
-          <div class="collection-summary-content">
-            <span>Valor Total</span>
-            <strong id="collection-total">€0,00</strong>
-          </div>
-          <button type="button" id="sync-prices" class="button button-secondary button-icon summary-sync" aria-label="Actualizar precios desde Brickset" title="Actualizar precios desde Brickset">🔄</button>
-        </div>
       </div>
     </header>
 
-    <div class="rankings">
-      <section class="top-five" aria-labelledby="top-five-title">
-        <h2 id="top-five-title">Top 5 por precio</h2>
-        <div id="top-five-list" class="ranking-row"></div>
-      </section>
-      <section class="top-five" aria-labelledby="oldest-five-title">
-        <h2 id="oldest-five-title">Top 5 por antiguedad</h2>
-        <div id="oldest-five-list" class="ranking-row"></div>
-      </section>
-    </div>
+    <section class="rankings-panel" aria-labelledby="rankings-title">
+      <div class="section-heading">
+        <div>
+          <p id="rankings-title" class="eyebrow">Rankings</p>
+        </div>
+        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="rankings-content" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
+      </div>
+      <div id="rankings-content" class="rankings">
+        <section class="top-five" aria-labelledby="top-five-title">
+          <h2 id="top-five-title">Top 5 por precio</h2>
+          <div id="top-five-list" class="ranking-row"></div>
+        </section>
+        <section class="top-five" aria-labelledby="oldest-five-title">
+          <h2 id="oldest-five-title">Top 5 por antiguedad</h2>
+          <div id="oldest-five-list" class="ranking-row"></div>
+        </section>
+      </div>
+    </section>
 
     <section class="watchlist-panel" aria-labelledby="watchlist-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Seguimiento</p>
+          <p id="watchlist-title" class="eyebrow">Seguimiento</p>
         </div>
+        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="watchlist-list" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
       </div>
       <div id="watchlist-list" class="watchlist-row"></div>
     </section>
@@ -99,19 +119,19 @@
         </label>
         <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
           <legend class="visually-hidden">Estado</legend>
-          <label class="filter-toggle" title="Filtrar 📦">
+          <label class="filter-toggle" title="Colección">
             <input id="filter-coleccion" type="checkbox" aria-label="Filtrar 📦">
-            <span class="filter-symbol" aria-hidden="true">📦</span>
+            <span class="filter-symbol" title="Colección" aria-hidden="true">📦</span>
           </label>
-          <label class="filter-toggle" title="Filtrar 🔍">
+          <label class="filter-toggle" title="Búsqueda">
             <input id="filter-buscada" type="checkbox" aria-label="Filtrar 🔍">
-            <span class="filter-symbol" aria-hidden="true">🔍</span>
+            <span class="filter-symbol" title="Búsqueda" aria-hidden="true">🔍</span>
           </label>
         </fieldset>
         <label class="filter-toggle">
           <span class="visually-hidden">Observadas</span>
           <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
-          <span class="eye-symbol" aria-hidden="true">👁️</span>
+          <span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️</span>
         </label>
         <button type="button" id="show-all" class="button button-secondary">Mostrar todo</button>
         <div class="form-actions">
@@ -164,17 +184,16 @@
       <form id="minifigura-form" novalidate>
         <div class="modal-form-column">
           <div class="modal-row modal-row-identity">
-            <label id="form-id-label" class="required-label" for="form-id"><span>ID</span></label>
-            <input id="form-id" name="id" required>
-            <button type="button" id="lookup-brickset" class="button button-secondary button-icon modal-sync-button" aria-label="Sincronizar con Brickset" title="Sincronizar con Brickset">🔄</button>
-            <label id="form-nombre-label" class="required-label" for="form-nombre"><span>Nombre</span></label>
-            <input id="form-nombre" name="nombre" required>
-          </div>
-          <div class="modal-fields">
+            <div class="modal-identity-fields">
+              <label id="form-id-label" class="required-label" for="form-id"><span>ID</span><input id="form-id" name="id" required></label>
+              <label id="form-nombre-label" class="required-label" for="form-nombre"><span>Nombre</span><input id="form-nombre" name="nombre" required></label>
+            </div>
             <label class="description-field">
               <span>Descripción</span>
               <textarea id="form-descripcion" name="descripcion" rows="2"></textarea>
             </label>
+          </div>
+          <div class="modal-fields">
             <div class="modal-row modal-row-status">
               <div class="modal-state-control">
                 <label class="visually-hidden" for="form-estadoColeccion">Estado *</label>
@@ -225,7 +244,6 @@
         <aside class="modal-preview" aria-label="Previsualización Brickset">
           <div class="modal-preview-heading">
             <h2 id="form-dialog-title">Nueva minifigura</h2>
-            <span>Preview</span>
           </div>
           <img id="form-preview-image" alt="">
         </aside>
@@ -254,10 +272,18 @@
       </div>
     </dialog>
 
-    <dialog id="gamification-dialog" class="modal" aria-labelledby="gamification-dialog-title">
-      <h2 id="gamification-dialog-title">Logros conseguidos</h2>
-      <ul id="gamification-achievements"></ul>
-      <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
+    <dialog id="gamification-dialog" class="modal modal-achievements" aria-labelledby="gamification-dialog-title">
+      <div class="achievements-heading">
+        <img class="achievements-heading-icon" src="/level_images/9_forestman.png" alt="">
+        <div class="achievements-heading-text">
+          <h2 id="gamification-dialog-title">Logros</h2>
+          <p id="gamification-dialog-level" class="eyebrow">0 Duplo</p>
+        </div>
+      </div>
+      <ul id="gamification-achievements" class="achievements-list"></ul>
+      <div class="form-actions achievements-actions">
+        <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
+      </div>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>

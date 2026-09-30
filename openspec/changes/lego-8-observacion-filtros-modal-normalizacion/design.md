@@ -46,13 +46,13 @@ Alternativa descartada: usar los totales del archivo de categorías oficiales. E
 
 ### Modal con estado explícito por modo
 
-Se mantendrá un solo formulario y un estado `create`/`edit`/`view`. La apertura rellenará datos, establecerá `readOnly` y `disabled` según una matriz de permisos, reiniciará la sincronización pendiente y actualizará la preview. Los campos Brickset usarán `.input-readonly` para conservar selección y copia; los botones de guardar, sincronizar, observar y cerrar se controlarán por modo. La validación de campos obligatorios se ejecutará al cambiar ID, tras sincronizar y antes de enviar.
+Se mantendrá un solo formulario y un estado `create`/`edit`/`view`. La apertura rellenará datos, establecerá `readOnly` y `disabled` según una matriz de permisos, reiniciará la sincronización pendiente y actualizará la preview. Los campos Brickset usarán `.input-readonly` para conservar selección y copia; la consulta individual se disparará automáticamente cuando la imagen del ID cargue correctamente, mientras que la actualización masiva conservará su botón en el resumen. Los controles de guardar, observar y cerrar se controlarán por modo. La validación de campos obligatorios se ejecutará al cambiar ID, tras sincronizar y antes de enviar.
 
 Alternativa descartada: tres diálogos HTML independientes. Repetiría markup y validaciones y haría más probable que los modos quedaran inconsistentes.
 
 ### Resumen extendido sin alterar los rankings
 
-La valoración seguirá calculando total, contadores y los dos rankings existentes. Añadirá una colección `observadas` con precio Brickset descendente y ausentes al final. La interfaz la renderizará en una sección hermana de rankings con scroll horizontal; las tarjetas de ranking y observadas abrirán el modal unificado en modo visualización. Si el registro no está en el catálogo cargado, el cliente lo recuperará por ID antes de abrir el modal.
+La valoración seguirá calculando total, contadores y los dos rankings existentes. Añadirá una colección `observadas` con precio Brickset descendente y ausentes al final. La interfaz la renderizará en una sección hermana de rankings con scroll horizontal; las tarjetas de ranking y observadas abrirán el modal unificado en modo visualización. Si el registro no está en el catálogo cargado, el cliente lo recuperará por ID antes de abrir el modal. El desplegable de gamificación también ofrecerá acceso a un modal de logros con el nivel y el detalle de cada logro.
 
 Alternativa descartada: solicitar un endpoint separado por tarjeta. Aumentaría las peticiones y expondría más superficie API sin necesidad.
 

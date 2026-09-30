@@ -39,26 +39,112 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Redbeard');
+  assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), '/level_images/9_forestman.png');
+  assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), '/level_images/9_forestman.png');
   assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820 Bricks');
   assert.equal(window.document.querySelector('#gamification-progress').value, 28);
   assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
   assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
   window.document.querySelector('#gamification-level').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
+  assert.equal(window.document.querySelector('#gamification-dialog-level').textContent, '8 Redbeard');
   const achievement = window.document.querySelector('#gamification-achievements li');
-  assert.match(achievement.textContent, /New mini person \(x12\) - 12 Bricks/);
-  assert.equal(achievement.title, 'Añadir una nueva minifigura.');
+  assert.equal(achievement.className, 'achievement-item');
+  assert.equal(achievement.querySelector('.achievement-icon').getAttribute('src'), '/trophy-icon.svg');
+  assert.equal(achievement.querySelector('.achievement-name').textContent, 'New mini person');
+  assert.equal(achievement.querySelector('.achievement-description').textContent, 'Añadir una nueva minifigura.');
+  assert.equal(achievement.querySelector('.achievement-count').textContent, 'x12');
+  assert.equal(achievement.querySelector('.achievement-bricks strong').textContent, '12');
+  assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/brick-red-icon.svg');
   window.document.querySelector('#gamification-close').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, false);
+  const achievementsButton = window.document.querySelector('#gamification-achievements-button');
+  assert.equal(achievementsButton.querySelector('img').getAttribute('src'), '/trophy-icon.svg');
+  assert.equal(achievementsButton.textContent.trim(), 'Logros');
+  achievementsButton.click();
+  assert.equal(window.document.querySelector('#gamification-dialog').open, true);
   dom.window.close();
 });
 
-test('coloca el panel de nivel antes del panel de valoracion', () => {
-  const dom = new JSDOM(html);
-  const panels = [...dom.window.document.querySelector('.summary-row').children];
-  assert.equal(panels[0].className, 'gamification-summary');
-  assert.equal(panels[1].className, 'collection-counts-panel');
-  assert.equal(panels[2].className, 'collection-summary');
+test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los demas', async () => {
+  for (const [levelId, imagePath] of [[15, '/level_images/15_spacebaby.jpg'], [16, '/level_images/16_spaceman.jpg'], [8, '/level_images/9_forestman.png']]) {
+    const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+    const { window } = dom;
+    window.fetch = baseFetch([], state({ nivel: { id: levelId, nombre: 'Nivel de prueba' } }));
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(window.document.querySelector('#gamification-level-number').textContent, String(levelId));
+    assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), imagePath);
+    assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), imagePath);
+    dom.window.close();
+  }
+});
+
+test('muestra una ampliación del nivel al pasar el ratón por la imagen', async () => {
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = baseFetch([], state({ nivel: { id: 16, nombre: 'Spaceman' } }));
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const image = window.document.querySelector('.gamification-level-image');
+  const preview = window.document.querySelector('.gamification-level-tooltip');
+  assert.ok(preview);
+  assert.equal(preview.querySelector('img').getAttribute('src'), '/level_images/16_spaceman.jpg');
+  assert.equal(preview.style.display, 'none');
+  image.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: true }));
+  assert.equal(preview.style.display, 'block');
+  image.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: true }));
+  assert.equal(preview.style.display, 'none');
+  dom.window.close();
+});
+
+test('el panel de nivel despliega recuento y valor total con la flecha', async () => {
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = baseFetch([], state());
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const toggle = window.document.querySelector('#gamification-toggle');
+  const details = window.document.querySelector('#gamification-details');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(details.hidden, true);
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(details.hidden, false);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'gamification-achievements-row', 'collection-counts-panel', 'collection-summary']);
+  toggle.click();
+  assert.equal(details.hidden, true);
+  dom.window.close();
+});
+
+test('los paneles de rankings y seguimiento se comprimen y expanden con su flecha', async () => {
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = baseFetch([], state());
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(window.document.querySelector('#rankings-title').textContent, 'Rankings');
+  for (const [panelSelector, contentId] of [['.rankings-panel', 'rankings-content'], ['.watchlist-panel', 'watchlist-list']]) {
+    const panel = window.document.querySelector(panelSelector);
+    const toggle = panel.querySelector('.panel-toggle');
+    const content = window.document.getElementById(contentId);
+    assert.equal(toggle.getAttribute('aria-controls'), contentId);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(content.hidden, false);
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(content.hidden, true);
+    assert.ok(panel.classList.contains('panel-collapsed'));
+    toggle.click();
+    assert.equal(content.hidden, false);
+    assert.ok(!panel.classList.contains('panel-collapsed'));
+  }
+  assert.ok(window.document.querySelector('.rankings-panel #top-five-list'));
+  assert.ok(window.document.querySelector('.rankings-panel #oldest-five-list'));
   dom.window.close();
 });
 
@@ -87,7 +173,7 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
   window.document.querySelector('#new-minifigura').click();
   window.document.querySelector('#form-id').value = 'new-figure';
   window.document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
-  window.document.querySelector('#lookup-brickset').click();
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
   await new Promise((resolve) => setTimeout(resolve, 10));
   window.document.querySelector('#form-nombre').value = 'Nueva';
   window.document.querySelector('#form-descripcion').value = 'Figura';
