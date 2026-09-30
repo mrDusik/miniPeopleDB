@@ -2,6 +2,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import express from 'express';
+import { createClient } from '@supabase/supabase-js';
 import {
   CatalogoInvalidoError,
   CatalogoNoDisponibleError,
@@ -14,12 +15,13 @@ import {
 import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
+import { getSupabaseConfig } from './services/supabase.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const defaultCatalogPath = resolve(projectRoot, 'data', 'minifiguras.json');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
-const defaultGamificacionPath = resolve(projectRoot, 'data', 'gamificacion.json');
 const publicDirectory = resolve(projectRoot, 'public');
+const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion|valoracion|valor-total|sincronizacion\/brickset)$/;
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -74,21 +76,86 @@ async function readJsonBody(request) {
   }
 }
 
-export function createServer({ catalogPath = defaultCatalogPath, themesPath = defaultCategoriasPath, gamificationPath, fetchImpl, scraper } = {}) {
+export function createServer({
+  themesPath = defaultCategoriasPath,
+  supabaseConfig = getSupabaseConfig(),
+  createSupabaseClient = createClient,
+  fetchImpl,
+  scraper,
+} = {}) {
   const categoriasRepository = new CategoriasRepository(themesPath);
-  const resolvedGamificacionPath = gamificationPath ?? (catalogPath === defaultCatalogPath ? defaultGamificacionPath : resolve(dirname(catalogPath), 'gamificacion.json'));
-  const gamificacionRepository = new GamificacionRepository(resolvedGamificacionPath, { categoriasRepository });
-  const repository = new MinifigurasRepository(catalogPath, {
-    categoriasRepository,
-    onCatalogPersisted: async (catalogo) => gamificacionRepository.recalculate(catalogo),
-  });
   const brickset = scraper ?? new BricksetScraper({ fetchImpl });
   const app = express();
-  const ensureGamificacion = () => gamificacionRepository.ensure(() => repository.readCatalog());
 
+  async function authenticate(request) {
+    if (!supabaseConfig) {
+      return { status: 500, error: 'CONFIGURACION_NO_DISPONIBLE' };
+    }
+    const unauthorized = { status: 401, error: 'NO_AUTENTICADO' };
+    const token = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization ?? '')?.[1];
+    if (!token) {
+      return unauthorized;
+    }
+
+    const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    let userId;
+    try {
+      const { data, error } = await client.auth.getUser(token);
+      userId = error ? undefined : data?.user?.id;
+    } catch {
+      userId = undefined;
+    }
+    if (!userId) {
+      return unauthorized;
+    }
+
+    const gamificacionRepository = new GamificacionRepository({ client, userId, categoriasRepository });
+    const repository = new MinifigurasRepository({
+      client,
+      userId,
+      categoriasRepository,
+      onCatalogPersisted: async (catalogo) => gamificacionRepository.recalculate(catalogo),
+    });
+    return {
+      repository,
+      ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
+    };
+  }
+
+  app.get('/vendor/supabase.js', (request, response) => {
+    response.sendFile(supabaseBrowserBundle);
+  });
   app.use(express.static(publicDirectory));
   app.use(async (request, response) => {
     const requestUrl = new URL(request.url, 'http://localhost');
+
+    if (requestUrl.pathname === '/config/supabase') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!supabaseConfig) {
+        sendJson(response, 500, { error: 'CONFIGURACION_NO_DISPONIBLE' });
+        return;
+      }
+      sendJson(response, 200, { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey });
+      return;
+    }
+
+    let repository;
+    let ensureGamificacion;
+    if (protectedPath.test(requestUrl.pathname)) {
+      const context = await authenticate(request);
+      if (context.error) {
+        sendJson(response, context.status, { error: context.error });
+        return;
+      }
+      ({ repository, ensureGamificacion } = context);
+    }
 
     if (requestUrl.pathname === '/categorias') {
       if (request.method !== 'GET') {

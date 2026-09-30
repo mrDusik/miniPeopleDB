@@ -26,6 +26,14 @@ body {
 }
 
 .page-shell { width: min(1280px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0 72px; }
+.page-shell[hidden], .auth-screen[hidden] { display: none; }
+.auth-screen { display: grid; min-height: 100vh; place-items: center; padding: 16px; }
+.auth-card { display: grid; justify-items: center; gap: 12px; width: min(420px, 100%); padding: 36px 28px; border-top: 4px solid var(--accent); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.auth-card h1 { margin: 0; font-size: clamp(1.75rem, 7vw, 3.2rem); }
+.auth-eyebrow { margin: 0; color: var(--blue); font: 700 0.76rem/1.2 Arial, sans-serif; text-transform: uppercase; }
+.auth-card .status { margin: 0; }
+.user-session { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 12px; color: var(--muted); font: 0.85rem Arial, sans-serif; }
+.user-avatar:not([hidden]) { display: block; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .page-header { width: 100%; margin-bottom: 28px; padding-bottom: 22px; }
 .header-top { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; }
 .brand-heading { display: inline-grid; justify-items: end; gap: 6px; }
@@ -117,6 +125,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 .button-secondary { color: var(--ink); border-color: var(--ink); background: white; }
 .button-primary:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
 .button-secondary:hover { background: var(--yellow); }
+.button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .button:disabled { cursor: wait; opacity: 0.55; transform: none; }
 .results-panel { padding: 26px; }
 .results-heading-actions { display: flex; align-items: center; gap: 16px; }
@@ -158,9 +167,17 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .difference-neutral { color: var(--muted); font-weight: 700; }
 
 .modal { width: min(900px, calc(100% - 32px)); border: 2px solid var(--accent); border-radius: 4px; padding: 26px; box-shadow: var(--shadow); background: var(--surface); }
+#delete-dialog { width: min(420px, calc(100% - 32px)); }
+#delete-message { white-space: pre-line; }
+.first-minifigura-dialog { width: min(390px, calc(100% - 32px)); padding: 32px 28px; text-align: center; }
+.first-minifigura-icon { display: block; width: 56px; height: 56px; margin: 0 auto 16px; object-fit: contain; }
+.first-minifigura-dialog h2 { margin-bottom: 12px; color: var(--ink); }
+.first-minifigura-dialog h2:focus { outline: none; }
+.first-minifigura-dialog p { margin-bottom: 24px; color: var(--muted); line-height: 1.5; }
 #form-dialog { height: fit-content; max-height: calc(100vh - 32px); padding-bottom: 16px; overflow: hidden; }
 .modal::backdrop { background: rgba(24, 34, 45, 0.45); }
 .modal h2 { margin-bottom: 10px; }
+#delete-dialog h2 { margin-bottom: 2rem; }
 .modal form { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-rows: auto minmax(0, 1fr) auto; align-items: stretch; gap: 10px 20px; }
 .modal-preview-heading { display: grid; align-self: start; justify-items: center; gap: 4px; width: 100%; text-align: center; }
 #form-dialog-title { width: 100%; margin: 0; text-align: center; }

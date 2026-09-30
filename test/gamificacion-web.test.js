@@ -3,9 +3,17 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { categoriasMockRaw } from '../test-support/fixtures.js';
+import { withSupabaseSession } from '../test-support/browser-auth.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+const script = withSupabaseSession(await readFile(new URL('../public/app.js', import.meta.url), 'utf8'));
+
+function createDom() {
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  dom.window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  dom.window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  return dom;
+}
 
 function baseFetch(catalogo, gamificacion, postResponse) {
   return async (url, options = {}) => {
@@ -30,10 +38,8 @@ function state(overrides = {}) {
 }
 
 test('renderiza el nivel, progreso y modal de desglose', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
-  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
-  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   window.fetch = baseFetch([], state());
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -68,7 +74,7 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
 
 test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los demas', async () => {
   for (const [levelId, imagePath] of [[15, '/level_images/15_spacebaby.jpg'], [16, '/level_images/16_spaceman.jpg'], [8, '/level_images/9_forestman.png']]) {
-    const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+    const dom = createDom();
     const { window } = dom;
     window.fetch = baseFetch([], state({ nivel: { id: levelId, nombre: 'Nivel de prueba' } }));
     window.eval(script);
@@ -82,7 +88,7 @@ test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los d
 });
 
 test('muestra una ampliación del nivel al pasar el ratón por la imagen', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state({ nivel: { id: 16, nombre: 'Spaceman' } }));
   window.eval(script);
@@ -101,7 +107,7 @@ test('muestra una ampliación del nivel al pasar el ratón por la imagen', async
 });
 
 test('el panel de nivel despliega recuento y valor total con la flecha', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state());
   window.eval(script);
@@ -121,7 +127,7 @@ test('el panel de nivel despliega recuento y valor total con la flecha', async (
 });
 
 test('los paneles de rankings y seguimiento se comprimen y expanden con su flecha', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state());
   window.eval(script);
@@ -133,15 +139,15 @@ test('los paneles de rankings y seguimiento se comprimen y expanden con su flech
     const toggle = panel.querySelector('.panel-toggle');
     const content = window.document.getElementById(contentId);
     assert.equal(toggle.getAttribute('aria-controls'), contentId);
-    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-    assert.equal(content.hidden, false);
-    toggle.click();
     assert.equal(toggle.getAttribute('aria-expanded'), 'false');
     assert.equal(content.hidden, true);
-    assert.ok(panel.classList.contains('panel-collapsed'));
     toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
     assert.equal(content.hidden, false);
     assert.ok(!panel.classList.contains('panel-collapsed'));
+    toggle.click();
+    assert.equal(content.hidden, true);
+    assert.ok(panel.classList.contains('panel-collapsed'));
   }
   assert.ok(window.document.querySelector('.rankings-panel #top-five-list'));
   assert.ok(window.document.querySelector('.rankings-panel #oldest-five-list'));
@@ -149,10 +155,8 @@ test('los paneles de rankings y seguimiento se comprimen y expanden con su flech
 });
 
 test('ordena los Toasts de logros por Bricks y separa su aparición', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
-  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
-  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalogo = [];
   const fetchCatalog = baseFetch(catalogo, state({ bricks: 0, nivel: { id: 0, nombre: 'Duplo', umbral: 0 }, siguienteNivel: { id: 1, nombre: 'Stud', umbral: 20 }, progreso: { actual: 0, desde: 0, hasta: 20, porcentaje: 0 }, logros: [] }), {
     gamificacion: {
@@ -193,7 +197,7 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
 });
 
 test('pagina la tabla en bloques de diez filas', async () => {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const dom = createDom();
   const { window } = dom;
   const catalogo = Array.from({ length: 21 }, (_, index) => ({
     id: `figure-${index + 1}`,

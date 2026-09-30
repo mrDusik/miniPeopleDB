@@ -29,6 +29,9 @@ const sortButtons = [...document.querySelectorAll('[data-sort]')];
 const controls = [...form.querySelectorAll('input, select, button'), syncPricesButton];
 
 const formDialog = document.querySelector('#form-dialog');
+const firstMinifiguraDialog = document.querySelector('#first-minifigura-dialog');
+const firstMinifiguraAccept = document.querySelector('#first-minifigura-accept');
+const firstMinifiguraTitle = document.querySelector('#first-minifigura-title');
 const minifiguraForm = document.querySelector('#minifigura-form');
 const formDialogTitle = document.querySelector('#form-dialog-title');
 const formError = document.querySelector('#form-error');
@@ -99,6 +102,20 @@ const gamificationAchievements = document.querySelector('#gamification-achieveme
 const gamificationAchievementsButton = document.querySelector('#gamification-achievements-button');
 const gamificationCloseButton = document.querySelector('#gamification-close');
 
+const pageShell = document.querySelector('.page-shell');
+const authScreen = document.querySelector('#auth-screen');
+const authMessage = document.querySelector('#auth-message');
+const loginButton = document.querySelector('#login-google');
+const logoutButton = document.querySelector('#logout');
+const userName = document.querySelector('#user-name');
+const userProfile = document.querySelector('#user-profile');
+const userAvatar = document.querySelector('#user-avatar');
+userAvatar.addEventListener('error', () => {
+  userAvatar.hidden = true;
+  userName.hidden = false;
+});
+const SESSION_EXPIRED_MESSAGE = 'Tu sesión ha caducado. Inicia sesión de nuevo.';
+
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
   MINIFIGURA_INVALIDA: 'Los datos de la minifigura no son válidos.',
@@ -124,11 +141,15 @@ let officialCategorias = [];
 let subcategoriasPorCategoria = new Map();
 let categoriasReady = false;
 let catalogForOptions = [];
+let hasLoadedFullCatalog = false;
 let syncButtonStates = new Map();
 const pageSize = 10;
 let currentPage = 1;
 let achievementQueue = [];
 let isShowingAchievement = false;
+let supabaseClient = null;
+let currentSession = null;
+let appStarted = false;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -514,7 +535,9 @@ function renderCatalogPage() {
   nextPageButton.disabled = currentPage === totalPages || isSyncingPrices;
 
   if (currentCatalog.length === 0) {
-    setStatus('No hay minifiguras que coincidan con la consulta.');
+    setStatus(hasLoadedFullCatalog && catalogForOptions.length === 0
+      ? 'No hay ninguna minifigura registrada en tu cuenta.'
+      : 'No hay minifiguras que coincidan con la consulta.');
   } else {
     setStatus('Catálogo actualizado.');
   }
@@ -572,7 +595,7 @@ async function loadCatalog(filters = {}) {
   setLoading(true);
 
   try {
-    const response = await fetch(`/minifiguras${query ? `?${query}` : ''}`);
+    const response = await apiFetch(`/minifiguras${query ? `?${query}` : ''}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -581,12 +604,19 @@ async function loadCatalog(filters = {}) {
       throw new Error('Respuesta invalida');
     }
     if (currentRequest === requestSequence) {
-      renderCatalog(catalog);
-      if (Object.keys(filters).length === 0) {
+      if (!query) {
+        const wasEmpty = hasLoadedFullCatalog && catalogForOptions.length === 0;
+        hasLoadedFullCatalog = true;
         renderDynamicFilterOptions(catalog);
+        for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
+          if (catalog.length === 0) setPanelCollapsed(button, true);
+          else if (wasEmpty) setPanelCollapsed(button, false);
+        }
       }
+      renderCatalog(catalog);
       await loadTotal();
       await loadGamification();
+      return catalog;
     }
   } catch {
     if (currentRequest === requestSequence) {
@@ -605,9 +635,15 @@ async function loadCatalog(filters = {}) {
   }
 }
 
+async function refreshCatalogAfterMutation() {
+  const filters = currentFilters;
+  if (Object.values(filters).some((value) => value !== '')) await loadCatalog();
+  await loadCatalog(filters);
+}
+
 async function loadTotal() {
   try {
-    const response = await fetch('/valoracion');
+    const response = await apiFetch('/valoracion');
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -691,7 +727,7 @@ function renderGamification(state) {
 
 async function loadGamification() {
   try {
-    const response = await fetch('/gamificacion');
+    const response = await apiFetch('/gamificacion');
     if (!response.ok) throw new Error('GAMIFICACION_NO_DISPONIBLE');
     renderGamification(await response.json());
   } catch {
@@ -820,7 +856,7 @@ async function openMinifiguraView(id) {
   let minifigura = currentCatalog.find((item) => item.id === id);
   if (!minifigura) {
     try {
-      const response = await fetch(`/minifiguras?id=${encodeURIComponent(id)}`);
+      const response = await apiFetch(`/minifiguras?id=${encodeURIComponent(id)}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -964,7 +1000,7 @@ function validatePayload(payload) {
 
 function openDeleteDialog(minifigura) {
   pendingDeleteId = minifigura.id;
-  deleteMessage.textContent = `Se eliminara la minifigura "${minifigura.nombre}" (${minifigura.id}). Esta accion no se puede deshacer.`;
+  deleteMessage.textContent = `Se eliminará la minifigura "${minifigura.nombre}" (${minifigura.id}).\n\nEsta acción no se puede deshacer.`;
   deleteDialog.showModal();
 }
 
@@ -1033,7 +1069,7 @@ syncPricesButton.addEventListener('click', async () => {
   showToast('Actualizando precios desde Brickset...', 'success');
 
   try {
-    const response = await fetch('/sincronizacion/brickset', { method: 'POST' });
+    const response = await apiFetch('/sincronizacion/brickset', { method: 'POST' });
     const result = await response.json();
     if (!response.ok) {
       throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
@@ -1053,6 +1089,11 @@ syncPricesButton.addEventListener('click', async () => {
 });
 
 newMinifiguraButton.addEventListener('click', () => {
+  openFormDialog('create');
+});
+
+firstMinifiguraAccept.addEventListener('click', () => {
+  firstMinifiguraDialog.close();
   openFormDialog('create');
 });
 
@@ -1077,15 +1118,18 @@ gamificationToggleButton.addEventListener('click', () => {
   gamificationToggleButton.title = label;
 });
 
+function setPanelCollapsed(button, collapsed) {
+  button.setAttribute('aria-expanded', String(!collapsed));
+  document.getElementById(button.getAttribute('aria-controls')).hidden = collapsed;
+  button.closest('section').classList.toggle('panel-collapsed', collapsed);
+  const label = collapsed ? 'Mostrar panel' : 'Ocultar panel';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+}
+
 document.querySelectorAll('.panel-toggle').forEach((button) => {
   button.addEventListener('click', () => {
-    const expanded = button.getAttribute('aria-expanded') !== 'true';
-    button.setAttribute('aria-expanded', String(expanded));
-    document.getElementById(button.getAttribute('aria-controls')).hidden = !expanded;
-    button.closest('section').classList.toggle('panel-collapsed', !expanded);
-    const label = expanded ? 'Ocultar panel' : 'Mostrar panel';
-    button.setAttribute('aria-label', label);
-    button.title = label;
+    setPanelCollapsed(button, button.getAttribute('aria-expanded') === 'true');
   });
 });
 
@@ -1126,7 +1170,7 @@ async function toggleObserved(minifigura, trigger) {
   const nextObserved = !minifigura.observada;
   trigger.disabled = true;
   try {
-    const response = await fetch(`/minifiguras/${encodeURIComponent(minifigura.id)}/observada`, {
+    const response = await apiFetch(`/minifiguras/${encodeURIComponent(minifigura.id)}/observada`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ observada: nextObserved }),
@@ -1224,7 +1268,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
 
   try {
     const url = isEdit ? `/minifiguras/${encodeURIComponent(currentEditId)}` : '/minifiguras';
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
       body: JSON.stringify(payload),
@@ -1246,7 +1290,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
     const result = await response.json();
     showGamificationToasts(result.gamificacion);
     closeFormDialog();
-    await loadCatalog(currentFilters);
+    await refreshCatalogAfterMutation();
     showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
   } catch {
     const connError = 'No se pudo conectar con el servidor. Intentalo de nuevo.';
@@ -1266,7 +1310,7 @@ formPreviewImage.addEventListener('load', async () => {
 
   showToast('Consultando datos en Brickset...', 'success');
   try {
-    const response = await fetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
+    const response = await apiFetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
     if (!formDialog.open || currentFormMode === 'view' || imageLookupSequence !== lookupSequence || formIdInput.value.trim() !== id) return;
     if (!response.ok) {
@@ -1304,7 +1348,7 @@ deleteConfirmButton.addEventListener('click', async () => {
   deleteConfirmButton.disabled = true;
 
   try {
-    const response = await fetch(`/minifiguras/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const response = await apiFetch(`/minifiguras/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!response.ok && response.status !== 204) {
       let errorCode;
       try {
@@ -1317,7 +1361,7 @@ deleteConfirmButton.addEventListener('click', async () => {
     }
 
     closeDeleteDialog();
-    await loadCatalog(currentFilters);
+    await refreshCatalogAfterMutation();
     showToast('Minifigura eliminada correctamente.', 'success');
   } catch {
     showToast('No se pudo conectar con el servidor. Intentalo de nuevo.', 'error');
@@ -1328,9 +1372,152 @@ deleteConfirmButton.addEventListener('click', async () => {
 
 async function initialize() {
   if (await loadCategorias()) {
-    await loadCatalog();
+    const catalog = await loadCatalog();
+    if (catalog?.length === 0 && currentSession) {
+      firstMinifiguraDialog.showModal();
+      firstMinifiguraTitle.focus();
+    }
   }
 }
 
+async function apiFetch(url, init = {}) {
+  const response = await fetch(url, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${currentSession?.access_token ?? ''}` },
+  });
+  if (response.status === 401 && currentSession) {
+    await endSession(SESSION_EXPIRED_MESSAGE);
+  }
+  return response;
+}
+
+function clearUserData() {
+  requestSequence += 1;
+  currentFilters = {};
+  catalogForOptions = [];
+  hasLoadedFullCatalog = false;
+  renderCatalog([]);
+  collectionTotal.textContent = formatPrice(0);
+  collectionCount.textContent = '0';
+  wantedCount.textContent = '0';
+  renderTopFive([]);
+  renderOldestFive([]);
+  renderWatchlist([]);
+  renderGamification({});
+  for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
+    setPanelCollapsed(button, false);
+  }
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog]) {
+    if (dialog.open) dialog.close();
+  }
+}
+
+function showAuthScreen(message = '') {
+  pageShell.hidden = true;
+  authScreen.hidden = false;
+  authMessage.textContent = message;
+  loginButton.disabled = supabaseClient === null;
+  userName.textContent = '';
+  userName.hidden = false;
+  userProfile.removeAttribute('title');
+  userAvatar.hidden = true;
+  userAvatar.removeAttribute('src');
+}
+
+function handleSession(session, message = '') {
+  currentSession = session;
+  if (!session) {
+    if (appStarted) clearUserData();
+    appStarted = false;
+    showAuthScreen(message);
+    return;
+  }
+
+  const name = session.user?.user_metadata?.full_name || session.user?.email || '';
+  const avatarUrl = session.user?.user_metadata?.avatar_url;
+  userName.textContent = name;
+  userProfile.title = name;
+  userAvatar.hidden = !avatarUrl;
+  userName.hidden = Boolean(avatarUrl);
+  if (avatarUrl) userAvatar.src = avatarUrl;
+  else userAvatar.removeAttribute('src');
+  authScreen.hidden = true;
+  pageShell.hidden = false;
+  if (!appStarted) {
+    appStarted = true;
+    initialize();
+  }
+}
+
+async function endSession(message = '') {
+  currentSession = null;
+  try {
+    await supabaseClient.auth.signOut({ scope: 'local' });
+  } catch {
+    // The local session is discarded below even if Supabase cannot be reached.
+  }
+  handleSession(null, message);
+}
+
+async function initializeAuth() {
+  showAuthScreen();
+  try {
+    const response = await fetch('/config/supabase');
+    if (!response.ok) {
+      throw new Error('CONFIGURACION_NO_DISPONIBLE');
+    }
+    const config = await response.json();
+    supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+  } catch {
+    supabaseClient = null;
+    showAuthScreen('No se pudo iniciar el servicio de autenticación.');
+    return;
+  }
+
+  // Supabase warns against calling its API inside this callback, so it only updates local state.
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    if (session || currentSession) handleSession(session);
+  });
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    handleSession(data?.session ?? null);
+  } catch {
+    handleSession(null, 'No se pudo recuperar la sesión.');
+  }
+}
+
+loginButton.addEventListener('click', async () => {
+  if (!supabaseClient) return;
+  authMessage.textContent = '';
+  loginButton.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+        // Google reutiliza la cuenta activa del navegador si no se fuerza el selector.
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) throw error;
+  } catch {
+    authMessage.textContent = 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.';
+    loginButton.disabled = false;
+  }
+});
+
+logoutButton.addEventListener('click', async () => {
+  logoutButton.disabled = true;
+  try {
+    await supabaseClient.auth.signOut();
+  } catch {
+    // Fall through to discard the local session.
+  }
+  logoutButton.disabled = false;
+  handleSession(null);
+});
+
 setCategoriaControlsEnabled(false);
-initialize();
+initializeAuth();

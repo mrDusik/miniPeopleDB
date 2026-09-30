@@ -1,23 +1,24 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { createServer } from '../src/server.js';
 import { categoriasMockRaw } from '../test-support/fixtures.js';
+import { supabaseStubScript, withSupabaseSession } from '../test-support/browser-auth.js';
+import { authFetch, startTestServer } from '../test-support/server.js';
 
 const officialCategoriasRaw = categoriasMockRaw;
 const officialCategoriaNames = JSON.parse(officialCategoriasRaw).map(({ categoria }) => categoria);
 const officialCategoriaSet = new Set(officialCategoriaNames);
+const fetch = authFetch();
+
+async function readSessionScript(options) {
+  return withSupabaseSession(await readFile(new URL('../public/app.js', import.meta.url), 'utf8'), options);
+}
 
 async function withServer(callback) {
-  const directory = await mkdtemp(join(tmpdir(), 'minifiguras-web-'));
-  const catalogPath = join(directory, 'minifiguras.json');
-  const themesPath = join(directory, 'temas.json');
-  await writeFile(catalogPath, JSON.stringify([
+  const server = await startTestServer({ catalog: [
     {
-      id: 'mf-web',
+      id: 'MF-WEB',
       nombre: 'Figura web',
       descripcion: 'Figura para probar la interfaz',
       categoria: 'Space',
@@ -26,18 +27,12 @@ async function withServer(callback) {
       FechaRegistro: '2026-01-01T00:00:00.000Z',
       observada: false,
     },
-  ]));
-  await writeFile(themesPath, officialCategoriasRaw);
-
-  const server = createServer({ catalogPath, themesPath });
-  await new Promise((resolve) => server.listen(0, resolve));
-  const { port } = server.address();
+  ] });
 
   try {
-    await callback(`http://127.0.0.1:${port}`);
+    await callback(server.baseUrl);
   } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(directory, { recursive: true, force: true });
+    await server.close();
   }
 }
 
@@ -286,6 +281,9 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(form.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
   assert.equal(form.querySelector('.modal-preview img').id, 'form-preview-image');
   assert.equal(form.querySelector('.form-actions').parentElement, form);
+  assert.match(css, /#delete-dialog\s*\{\s*width:\s*min\(420px, calc\(100% - 32px\)\)/);
+  assert.match(css, /#delete-message\s*\{\s*white-space:\s*pre-line;/);
+  assert.match(css, /#delete-dialog h2\s*\{\s*margin-bottom:\s*2rem;/);
   assert.match(css, /\.modal form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 250px;[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
   assert.match(css, /\.modal-row\.modal-row-identity\s*\{[^}]*grid-column:\s*1;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /\.modal-identity-fields\s*\{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
@@ -356,12 +354,12 @@ test('El servidor expone correctamente los elementos del formulario y la integra
     assert.equal(appJsResponse.status, 200);
     const script = await appJsResponse.text();
 
-    assert.match(script, /fetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
+    assert.match(script, /apiFetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
 });
 
 test('la interfaz renderiza diferencias, ordena columnas y conserva el estado por defecto en edición', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const catalog = [
     { id: 'a', nombre: 'A', descripcion: 'A', categoria: 'Space', subcategoria: undefined, anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15 },
     { id: 'b', nombre: 'B', descripcion: 'B', categoria: 'Collectible Minifigures', subcategoria: 'Team GB', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50 },
@@ -415,7 +413,7 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
 
 test('Nueva minifigura, Editar y Eliminar se muestran como iconos sin texto visible y con aria-label', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const catalog = [
     { id: 'a', nombre: 'A', descripcion: 'A', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' },
   ];
@@ -443,12 +441,15 @@ test('Nueva minifigura, Editar y Eliminar se muestran como iconos sin texto visi
     assert.equal(button.getAttribute('aria-label'), expectedLabel);
     assert.ok(button.querySelector('svg'), `${expectedLabel} debe mostrar un icono`);
   }
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  deleteButton.click();
+  assert.match(window.document.querySelector('#delete-message').textContent, /\n\nEsta acción no se puede deshacer\.$/);
   dom.window.close();
 });
 
 test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -516,7 +517,7 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
 
 test('los filtros muestran los toggles de estado, limitan el año y listan los temas', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   assert.ok(officialCategoriaSet.has('Space'));
@@ -547,9 +548,11 @@ test('los filtros muestran los toggles de estado, limitan el año y listan los t
 
 test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambos', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalogRequests = [];
   window.fetch = async (url) => {
     if (url.startsWith('/minifiguras')) catalogRequests.push(url);
@@ -579,7 +582,7 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
 
 test('el select de subcategoria depende de la categoria seleccionada en el filtro', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async (url) => {
@@ -609,7 +612,7 @@ test('el select de subcategoria depende de la categoria seleccionada en el filtr
 
 test('el formulario de alta/edición mantiene Categoría, Subcategoría y Año como campos de solo lectura', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -633,7 +636,7 @@ test('el formulario de alta/edición mantiene Categoría, Subcategoría y Año c
 
 test('la interfaz bloquea controles dependientes cuando no puede cargar temas', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async () => ({ ok: false, json: async () => ({ error: 'CATEGORIAS_NO_DISPONIBLES' }) });
@@ -650,7 +653,7 @@ test('la interfaz bloquea controles dependientes cuando no puede cargar temas', 
 
 test('la interfaz bloquea controles dependientes si falla el catalogo de minifiguras', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async (url) => {
@@ -669,7 +672,7 @@ test('la interfaz bloquea controles dependientes si falla el catalogo de minifig
 
 test('la interfaz mantiene bloqueados los controles de temas tras sincronizar sin catálogo', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async (url) => {
@@ -691,7 +694,7 @@ test('la interfaz mantiene bloqueados los controles de temas tras sincronizar si
 
 test('la interfaz rechaza entradas de temas con propiedades adicionales o nombres no canónicos', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async () => ({
@@ -709,7 +712,7 @@ test('la interfaz rechaza entradas de temas con propiedades adicionales o nombre
 
 test('la sincronización deshabilita los botones mientras está en curso', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -760,7 +763,7 @@ test('la sincronización deshabilita los botones mientras está en curso', async
 
 test('la sincronización mantiene bloqueadas las acciones creadas al refrescar el catálogo', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   const catalog = [{
@@ -814,7 +817,7 @@ test('la sincronización mantiene bloqueadas las acciones creadas al refrescar e
 
 test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   assert.ok(officialCategoriaSet.has('Space'));
@@ -871,7 +874,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
 
 test('el alta ignora consultas de imágenes anteriores y bloquea los campos si falla Brickset', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -908,7 +911,7 @@ test('el alta ignora consultas de imágenes anteriores y bloquea los campos si f
 
 test('la interfaz muestra y alterna la watchlist con el orden del resumen', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
@@ -954,7 +957,7 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
 
 test('el modal aplica los modos de alta y visualizacion', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };

@@ -1,6 +1,6 @@
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
 import { calcularGamificacion, nivelesAlcanzados, nuevosLogros } from './gamificacion.js';
+
+const TABLE = 'gamificacion';
 
 export class GamificacionNoDisponibleError extends Error {
   constructor() {
@@ -50,38 +50,53 @@ function validateState(value) {
 }
 
 export class GamificacionRepository {
-  constructor(filePath, { categoriasRepository, catalogReader } = {}) {
-    this.filePath = filePath;
+  constructor({ client, userId, categoriasRepository, catalogReader } = {}) {
+    this.client = client;
+    this.userId = userId;
     this.categoriasRepository = categoriasRepository;
     this.catalogReader = catalogReader;
     this.initialization = null;
   }
 
-  async read() {
-    let content;
+  async run(query) {
+    let result;
     try {
-      content = await readFile(this.filePath, 'utf8');
+      result = await query;
     } catch {
       throw new GamificacionNoDisponibleError();
     }
-    try {
-      return validateState(JSON.parse(content));
-    } catch (error) {
-      if (error instanceof GamificacionInvalidaError) throw error;
-      throw new GamificacionInvalidaError();
+    if (result.error) {
+      throw new GamificacionNoDisponibleError();
     }
+    return result.data;
+  }
+
+  // Returns null when the user has no stored state yet.
+  async read() {
+    const row = await this.run(this.client.from(TABLE).select('bricks,nivel,siguiente_nivel,progreso,logros').maybeSingle());
+    if (!row) {
+      return null;
+    }
+    return validateState({
+      bricks: row.bricks,
+      nivel: row.nivel,
+      siguienteNivel: row.siguiente_nivel ?? null,
+      progreso: row.progreso,
+      logros: row.logros,
+    });
   }
 
   async persist(state) {
-    const directory = dirname(this.filePath);
-    const tempPath = join(directory, `.${basename(this.filePath)}.${process.pid}.${Date.now()}.tmp`);
-    try {
-      await writeFile(tempPath, JSON.stringify(validateState(state)));
-      await rename(tempPath, this.filePath);
-    } catch (error) {
-      await rm(tempPath, { force: true }).catch(() => {});
-      throw error;
-    }
+    const { bricks, nivel, siguienteNivel, progreso, logros } = validateState(state);
+    await this.run(this.client.from(TABLE).upsert({
+      user_id: this.userId,
+      bricks,
+      nivel,
+      siguiente_nivel: siguienteNivel,
+      progreso,
+      logros,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' }));
   }
 
   async calculate(catalogo) {
@@ -90,12 +105,7 @@ export class GamificacionRepository {
   }
 
   async recalculate(catalogo) {
-    let previous = null;
-    try {
-      previous = await this.read();
-    } catch (error) {
-      if (!(error instanceof GamificacionNoDisponibleError)) throw error;
-    }
+    const previous = await this.read();
     const state = await this.calculate(catalogo);
     await this.persist(state);
     this.initialization = Promise.resolve(state);
@@ -109,13 +119,10 @@ export class GamificacionRepository {
   async ensure(catalogReader = this.catalogReader) {
     if (!this.initialization) {
       this.initialization = (async () => {
-        try {
-          return await this.read();
-        } catch (error) {
-          if (!(error instanceof GamificacionNoDisponibleError)) throw error;
-          if (!catalogReader) throw error;
-          return (await this.recalculate(await catalogReader())).state;
-        }
+        const stored = await this.read();
+        if (stored) return stored;
+        if (!catalogReader) throw new GamificacionNoDisponibleError();
+        return (await this.recalculate(await catalogReader())).state;
       })().catch((error) => {
         this.initialization = null;
         throw error;

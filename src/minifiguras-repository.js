@@ -1,6 +1,21 @@
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
 import { CategoriasNoDisponiblesError } from './categorias-repository.js';
+
+const TABLE = 'minifiguras';
+const FIELD_COLUMNS = [
+  ['id', 'id'],
+  ['nombre', 'nombre'],
+  ['descripcion', 'descripcion'],
+  ['categoria', 'categoria'],
+  ['subcategoria', 'subcategoria'],
+  ['anio', 'anio'],
+  ['estadoColeccion', 'estado_coleccion'],
+  ['precioCompra', 'precio_compra'],
+  ['fechaCompra', 'fecha_compra'],
+  ['precio', 'precio'],
+  ['FechaRegistro', 'fecha_registro'],
+  ['observada', 'observada'],
+];
+const SELECT_COLUMNS = FIELD_COLUMNS.map(([, column]) => column).join(',');
 
 export class CatalogoNoDisponibleError extends Error {
   constructor() {
@@ -143,30 +158,26 @@ function validateCatalogo(value, officialCategorias) {
   return value;
 }
 
-function addMissingRegistrationDates(catalogo) {
-  const now = Date.now();
-  let changed = false;
-  const normalized = catalogo.map((minifigura, index) => {
-    if (minifigura.FechaRegistro !== undefined) {
-      return minifigura;
+function fromRow(row) {
+  const minifigura = {};
+  for (const [field, column] of FIELD_COLUMNS) {
+    if (row[column] !== null && row[column] !== undefined) {
+      minifigura[field] = row[column];
     }
-    changed = true;
-    return { ...minifigura, FechaRegistro: new Date(now + index).toISOString() };
-  });
-  return { catalogo: normalized, changed };
+  }
+  // Postgres returns timestamptz as "+00:00"; keep the API's ISO "Z" format.
+  if (typeof minifigura.FechaRegistro === 'string' && !Number.isNaN(Date.parse(minifigura.FechaRegistro))) {
+    minifigura.FechaRegistro = new Date(minifigura.FechaRegistro).toISOString();
+  }
+  return minifigura;
 }
 
-function normalizeCatalog(catalogo) {
-  let changed = false;
-  const normalized = catalogo.map((minifigura) => {
-    const id = typeof minifigura.id === 'string' ? minifigura.id.trim().toUpperCase() : minifigura.id;
-    const observada = minifigura.observada === undefined ? false : minifigura.observada;
-    if (id !== minifigura.id || observada !== minifigura.observada) {
-      changed = true;
-    }
-    return { ...minifigura, id, observada };
-  });
-  return { catalogo: normalized, changed };
+function toRow(minifigura) {
+  return Object.fromEntries(FIELD_COLUMNS.map(([field, column]) => [column, minifigura[field] ?? null]));
+}
+
+function persistenceError(error) {
+  return error?.code === '23505' ? new IdDuplicadoError() : new CatalogoNoDisponibleError();
 }
 
 function normalizeId(id) {
@@ -217,8 +228,9 @@ function matchesFilters(minifigura, filters) {
 }
 
 export class MinifigurasRepository {
-  constructor(filePath, { categoriasRepository, onCatalogPersisted } = {}) {
-    this.filePath = filePath;
+  constructor({ client, userId, categoriasRepository, onCatalogPersisted } = {}) {
+    this.client = client;
+    this.userId = userId;
     this.categoriasRepository = categoriasRepository;
     this.onCatalogPersisted = onCatalogPersisted;
     this.lastGamification = null;
@@ -233,41 +245,34 @@ export class MinifigurasRepository {
     return new Map(categorias.map(({ categoria, subcategorias }) => [categoria, new Set(subcategorias.map(({ subcategoria }) => subcategoria))]));
   }
 
-  async readCatalog() {
-    let content;
+  async run(query) {
+    let result;
     try {
-      content = await readFile(this.filePath, 'utf8');
+      result = await query;
     } catch {
       throw new CatalogoNoDisponibleError();
     }
-
-    let catalog;
-    try {
-      catalog = JSON.parse(content);
-    } catch {
-      throw new CatalogoInvalidoError();
+    if (result.error) {
+      throw persistenceError(result.error);
     }
-
-    const normalizedValues = normalizeCatalog(catalog);
-    const validatedCatalog = validateCatalogo(normalizedValues.catalogo, await this.officialCategorias());
-    const normalizedCatalog = addMissingRegistrationDates(validatedCatalog);
-    if (normalizedValues.changed || normalizedCatalog.changed) {
-      await this.persist(normalizedCatalog.catalogo);
-    }
-    return normalizedCatalog.catalogo;
+    return result.data;
   }
 
-  async persist(catalogo) {
-    const directory = dirname(this.filePath);
-    const tempPath = join(directory, `.${basename(this.filePath)}.${process.pid}.${Date.now()}.tmp`);
-
-    try {
-      await writeFile(tempPath, JSON.stringify(catalogo));
-      await rename(tempPath, this.filePath);
-    } catch (error) {
-      await rm(tempPath, { force: true }).catch(() => {});
-      throw error;
+  async readCatalog() {
+    const rows = await this.run(this.client.from(TABLE)
+      .select(SELECT_COLUMNS)
+      .order('fecha_registro', { ascending: true })
+      .order('created_at', { ascending: true }));
+    if (!Array.isArray(rows)) {
+      throw new CatalogoNoDisponibleError();
     }
+    return validateCatalogo(rows.map(fromRow), await this.officialCategorias());
+  }
+
+  async notifyPersisted() {
+    this.lastGamification = this.onCatalogPersisted
+      ? await this.onCatalogPersisted(await this.readCatalog()) ?? null
+      : null;
   }
 
   async list(filters = {}) {
@@ -318,8 +323,11 @@ export class MinifigurasRepository {
       const nextPrice = normalizedUpdates.get(minifigura.id);
       return nextPrice === undefined ? minifigura : { ...minifigura, precio: nextPrice };
     });
-    await this.persist(nextCatalog);
-    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+    const changedRows = nextCatalog
+      .filter((minifigura) => normalizedUpdates.has(minifigura.id))
+      .map((minifigura) => ({ ...toRow(minifigura), user_id: this.userId }));
+    await this.run(this.client.from(TABLE).upsert(changedRows, { onConflict: 'user_id,id' }));
+    await this.notifyPersisted();
     return nextCatalog;
   }
 
@@ -420,7 +428,6 @@ export class MinifigurasRepository {
   }
 
   async create(minifigura) {
-    const catalogo = await this.readCatalog();
     const officialCategorias = await this.officialCategorias();
     const nextMinifigura = {
       ...minifigura,
@@ -432,13 +439,9 @@ export class MinifigurasRepository {
     if (!isMinifigura(nextMinifigura, officialCategorias)) {
       throw new MinifiguraInvalidaError();
     }
-    if (catalogo.some((item) => item.id === nextMinifigura.id)) {
-      throw new IdDuplicadoError();
-    }
 
-    const nextCatalog = [...catalogo, nextMinifigura];
-    await this.persist(nextCatalog);
-    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+    await this.run(this.client.from(TABLE).insert(toRow(nextMinifigura)));
+    await this.notifyPersisted();
     return nextMinifigura;
   }
 
@@ -458,29 +461,25 @@ export class MinifigurasRepository {
       throw new MinifiguraInvalidaError();
     }
 
-    const index = catalogo.findIndex((item) => item.id === normalizedId);
-    if (index === -1) {
+    if (!existing) {
       throw new MinifiguraNoEncontradaError();
     }
 
-    const nextCatalog = [...catalogo];
-    nextCatalog[index] = nextMinifigura;
-    await this.persist(nextCatalog);
-    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+    const { fecha_registro: _fechaRegistro, ...changes } = toRow(nextMinifigura);
+    const updated = await this.run(this.client.from(TABLE).update(changes).eq('id', normalizedId).select('id'));
+    if (!updated?.length) {
+      throw new MinifiguraNoEncontradaError();
+    }
+    await this.notifyPersisted();
     return nextMinifigura;
   }
 
   async delete(id) {
-    const catalogo = await this.readCatalog();
-    const normalizedId = normalizeId(id);
-    const index = catalogo.findIndex((item) => item.id === normalizedId);
-    if (index === -1) {
+    const deleted = await this.run(this.client.from(TABLE).delete().eq('id', normalizeId(id)).select('id'));
+    if (!deleted?.length) {
       throw new MinifiguraNoEncontradaError();
     }
-
-    const nextCatalog = catalogo.filter((item) => item.id !== normalizedId);
-    await this.persist(nextCatalog);
-    this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
+    await this.notifyPersisted();
   }
 
   async setObserved(id, observed) {
@@ -495,11 +494,12 @@ export class MinifigurasRepository {
         throw new LimiteObservadasError();
       }
 
-      const nextCatalog = [...catalogo];
-      nextCatalog[index] = { ...nextCatalog[index], observada: observed };
-      await this.persist(nextCatalog);
-      this.lastGamification = await this.onCatalogPersisted?.(nextCatalog) ?? null;
-      return nextCatalog[index];
+      const updated = await this.run(this.client.from(TABLE).update({ observada: observed }).eq('id', normalizedId).select('id'));
+      if (!updated?.length) {
+        throw new MinifiguraNoEncontradaError();
+      }
+      await this.notifyPersisted();
+      return { ...catalogo[index], observada: observed };
     };
     this.observationMutation = this.observationMutation.then(operation, operation);
     return this.observationMutation;
