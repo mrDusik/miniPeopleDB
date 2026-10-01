@@ -63,10 +63,10 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-details { position: absolute; top: calc(100% + 4px); right: -1px; z-index: 20; display: grid; gap: 16px; width: max-content; max-width: calc(100vw - 22px); padding: 12px 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: var(--shadow); }
 .gamification-details[hidden] { display: none; }
 .gamification-details > * + * { padding-top: 16px; border-top: 1px solid var(--blue); }
-.collection-summary { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 16px; min-width: 0; font: 700 0.9rem Arial, sans-serif; }
+.collection-summary { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 16px; min-width: 0; font: 700 0.9rem Arial, sans-serif; }
 .collection-summary-content { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .collection-summary-content strong { color: var(--ink); font: 700 1.2rem Arial, sans-serif; }
-.summary-ranking-link { margin-left: auto; }
+.summary-ranking-link { grid-column: 1 / -1; justify-self: start; margin-left: 0; }
 .collection-counts-panel { display: flex; align-items: center; justify-content: center; gap: 24px; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 16px; }
 .gamification-details .count-icon { width: 40px; text-align: center; }
@@ -264,18 +264,22 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .global-ranking-list { display: grid; gap: 8px; max-height: calc(100vh - 190px); overflow-y: auto; padding: 2px 4px 2px 0; }
 .global-ranking-entry { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 4px; background: var(--surface); }
 .global-ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
-.ranking-expand { display: grid; grid-template-columns: 42px 22px 48px minmax(130px, 1fr) 44px minmax(150px, 0.8fr) minmax(110px, auto) 24px; align-items: center; gap: 9px; min-width: 0; border: 0; padding: 10px 12px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
+.ranking-expand { display: grid; grid-template-columns: 42px 22px 48px minmax(130px, 1fr) 44px minmax(150px, 0.8fr) minmax(110px, auto) 24px; align-items: center; justify-items: start; gap: 9px; min-width: 0; border: 0; padding: 10px 12px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
 .ranking-expand:hover { background: #f7f7f7; }
 .ranking-expand:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.ranking-position { color: var(--blue); font-size: 1rem; text-align: center; }
+.ranking-position { color: var(--blue); font-size: 1rem; text-align: left; }
 .ranking-avatar-wrap { display: grid; place-items: center; width: 42px; height: 42px; }
 .ranking-avatar, .ranking-avatar-fallback { grid-area: 1 / 1; width: 42px; height: 42px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .ranking-avatar-fallback { display: grid; place-items: center; background: white; }
 .ranking-avatar-fallback[hidden], .ranking-avatar[hidden] { display: none; }
 .ranking-identity { display: grid; gap: 3px; min-width: 0; }
 .ranking-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ranking-identity span, .ranking-level, .ranking-collection-count { color: var(--muted); font: 700 0.75rem Arial, sans-serif; }
+.ranking-identity span, .ranking-collection-count { color: var(--muted); font: 700 0.75rem Arial, sans-serif; }
+.ranking-level { color: var(--ink); font: 700 1rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
 .ranking-level-image { width: 40px; height: 40px; object-fit: contain; }
+.ranking-bricks { gap: 4px; }
+.ranking-bricks strong { color: var(--ink); font: 700 0.85rem Arial, sans-serif; line-height: 1; }
+.ranking-bricks .gamification-brick-icon { height: 1.5rem; }
 .ranking-row-chevron { font-size: 1.2rem; text-align: center; transition: transform 0.2s; }
 .ranking-expand[aria-expanded="true"] .ranking-row-chevron { transform: rotate(180deg); }
 .ranking-gift { align-self: center; margin-right: 10px; min-height: 38px; }
