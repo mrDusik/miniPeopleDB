@@ -80,7 +80,7 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .sync-progress progress { width: 100%; height: 12px; accent-color: var(--accent); }
 .gamification-summary { position: relative; display: grid; flex: 0 0 640px; margin-left: auto; gap: 12px; min-width: min(100%, 640px); padding: 16px 18px; border: 1px solid var(--line); border-bottom: 4px solid var(--blue); background: var(--surface); }
 .gamification-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; min-height: 42px; }
-.gamification-toggle, .panel-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: 700 1.3rem/1 Arial, sans-serif; transition: transform 0.2s; }
+.gamification-toggle, .panel-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: 700 1.3rem/1 Arial, sans-serif; transition: transform 0.2s; }
 .gamification-toggle:hover, .panel-toggle:hover { background: #eeeeee; }
 .gamification-toggle[aria-expanded="true"], .panel-toggle[aria-expanded="true"] { transform: rotate(180deg); }
 .gamification-level { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 0; border: 0; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
@@ -126,8 +126,8 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .search-panel { text-align: center; }
 .filters-form { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 84px 38px auto auto; align-items: center; gap: 14px; }
 .filters-form > #show-all { grid-column: 8; align-self: end; }
-.filter-state-toggles { display: flex; align-items: center; justify-content: center; align-self: end; gap: 4px; min-width: 0; min-height: 46px; margin: 0; padding: 0; border: 0; }
-.filter-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 38px; min-width: 38px; min-height: 46px; border: 1px solid transparent; border-radius: 3px; cursor: pointer; }
+.filter-state-toggles { display: flex; align-items: center; justify-content: center; align-self: end; gap: 4px; min-width: 0; min-height: 36px; margin: 0; padding: 0; border: 0; }
+.filter-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 38px; min-width: 38px; min-height: 36px; border: 1px solid transparent; border-radius: 3px; cursor: pointer; }
 .filters-form > .filter-toggle { align-self: end; }
 .filter-toggle input { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .filter-toggle .filter-symbol, .filter-toggle .eye-symbol { width: 1.25rem; height: 1.25rem; font-size: 1.25rem; opacity: 0.4; }
@@ -136,11 +136,13 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .filter-toggle:has(input:checked) { border-color: var(--accent); background: #fff5c2; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 label { display: grid; justify-items: center; gap: 8px; color: var(--muted); font: 700 0.78rem/1.2 Arial, sans-serif; text-align: center; text-transform: uppercase; }
-input, select { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 13px 12px; color: var(--ink); background: white; font: 1rem Arial, sans-serif; text-align: center; }
+input, select { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 8px 12px; color: var(--ink); background: white; font: 1rem Arial, sans-serif; text-align: center; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select { min-height: 36px; }
 .modal label { justify-items: stretch; text-align: left; }
 input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-actions { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.button { min-height: 46px; border: 1px solid var(--accent); border-radius: 3px; padding: 0 17px; cursor: pointer; font: 700 0.82rem Arial, sans-serif; white-space: nowrap; }
+button { min-height: 36px; }
+.button { min-height: 36px; border: 1px solid var(--accent); border-radius: 3px; padding: 0 12px; cursor: pointer; font: 700 0.82rem Arial, sans-serif; white-space: nowrap; }
 .button-primary { color: white; border-color: var(--accent); background: var(--accent); }
 .button-secondary { color: var(--ink); border-color: var(--ink); background: white; }
 .button-primary:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
@@ -172,11 +174,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .button-icon.button-small { width: 36px; }
 .button-icon svg { display: block; }
 .id-link { padding: 0; border: 0; color: var(--accent); background: transparent; cursor: pointer; font: inherit; text-decoration: underline; }
-.eye-icon { min-width: 38px; min-height: 34px; border: 0; background: transparent; cursor: pointer; font-size: 1.5rem; }
+.eye-icon { min-width: 38px; min-height: 36px; border: 0; background: transparent; cursor: pointer; font-size: 1.5rem; }
 .eye-icon.active { opacity: 1; filter: saturate(1.3); }
 .eye-icon.inactive { opacity: 0.35; }
 .eye-icon:disabled, .state-toggle:disabled { cursor: default; }
-.state-toggle { min-width: 38px; min-height: 34px; border: 0; background: transparent; cursor: pointer; font-size: 1.5rem; }
+.state-toggle { min-width: 38px; min-height: 36px; border: 0; background: transparent; cursor: pointer; font-size: 1.5rem; }
 .state-toggle .status-icon-image { width: 1.5rem; height: 1.5rem; }
 .state-toggle.active { opacity: 1; filter: saturate(1.3); }
 .state-toggle.inactive { opacity: 0.35; }
@@ -188,10 +190,10 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .difference-negative { color: #b42318; font-weight: 700; }
 .difference-neutral { color: var(--muted); font-weight: 700; }
 
-.modal { width: min(900px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 4px; padding: 26px; box-shadow: var(--shadow); background: var(--surface); }
-#delete-dialog { width: min(420px, calc(100% - 32px)); }
+.modal { width: min(860px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 4px; padding: 22px; box-shadow: var(--shadow); background: var(--surface); }
+#delete-dialog { width: min(400px, calc(100% - 32px)); }
 #delete-message { white-space: pre-line; }
-.first-minifigura-dialog { width: min(390px, calc(100% - 32px)); padding: 32px 28px; text-align: center; }
+.first-minifigura-dialog { width: min(370px, calc(100% - 32px)); padding: 28px 24px; text-align: center; }
 .first-minifigura-icon { display: block; width: 56px; height: 56px; margin: 0 auto 16px; object-fit: contain; }
 .first-minifigura-dialog h2 { margin-bottom: 12px; color: var(--ink); }
 .first-minifigura-dialog h2:focus { outline: none; }
@@ -220,7 +222,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .modal-row-status { grid-template-columns: minmax(0, 1fr) auto; }
 .required-label > span::after, span.required-label::after { content: ' *'; }
 #form-dialog.view-mode .required-label > span::after, #form-dialog.view-mode span.required-label::after { content: ''; }
-.modal-row .button { min-height: 46px; }
+.modal-row .button { min-height: 36px; }
 .modal .form-actions { grid-column: 1 / -1; grid-row: 3; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--line); }
 .form-actions #form-submit { margin-left: auto; }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
@@ -234,12 +236,13 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #form-dialog.view-mode .state-toggle:disabled, #form-dialog.view-mode .eye-icon:disabled { color: inherit; opacity: 0.35; filter: none; }
 #form-dialog.view-mode .state-toggle.active:disabled, #form-dialog.view-mode .eye-icon.active:disabled { opacity: 1; filter: saturate(1.3); }
 .eye-toggle { justify-self: center; }
-.modal textarea { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 13px 12px; color: var(--ink); background: white; font: 1rem Arial, sans-serif; text-align: center; resize: vertical; }
+.modal textarea { width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 3px; padding: 8px 12px; color: var(--ink); background: white; font: 1rem Arial, sans-serif; text-align: center; resize: vertical; }
+.modal .description-field textarea { min-height: 0; }
 .modal textarea:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-error { min-height: 20px; margin: 0; color: var(--accent-dark); font: 0.85rem Arial, sans-serif; }
 .modal ul { display: grid; gap: 8px; margin: 0 0 18px; padding-left: 20px; color: var(--muted); font: 0.95rem/1.4 Arial, sans-serif; }
 
-.modal-achievements { width: min(620px, calc(100% - 32px)); }
+.modal-achievements { width: min(600px, calc(100% - 32px)); }
 .achievements-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .achievements-heading-icon { display: block; width: 3rem; height: 3rem; object-fit: contain; }
 .achievements-heading-text { display: grid; gap: 2px; }
@@ -255,7 +258,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
 .achievements-heading .button { margin-left: auto; flex: 0 0 auto; }
-.modal-ranking { width: min(1400px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
+.modal-ranking { width: min(1280px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
@@ -287,8 +290,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-row-chevron { grid-column: 6; grid-row: 1 / 3; font-size: 1.2rem; text-align: center; transition: transform 0.2s; }
 .ranking-expand[aria-expanded="true"] .ranking-row-chevron { transform: rotate(180deg); }
 .ranking-gift, .ranking-gift-space { width: 100%; }
-.ranking-gift { display: inline-flex; align-items: center; justify-content: center; gap: 5px; align-self: center; min-height: 38px; margin: 0; padding: 0 8px; white-space: nowrap; }
-.ranking-gift-space { display: block; height: 38px; }
+.ranking-gift { display: inline-flex; align-items: center; justify-content: center; gap: 5px; align-self: center; min-height: 36px; margin: 0; padding: 0 8px; white-space: nowrap; }
+.ranking-gift-space { display: block; height: 36px; }
 .ranking-gift-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
 .ranking-gift:disabled { cursor: default; opacity: 0.55; }
 .ranking-user-details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-right: 104px; padding: 12px; border: 1px solid var(--line); border-top: 0; background: #f7f7f7; }
@@ -314,14 +317,14 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-expand .ranking-collection-count { grid-column: 3 / 5; grid-row: 3; justify-self: end; width: 70px; }
   .ranking-expand .ranking-level-info .gamification-level-image { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
   .ranking-row-chevron { grid-column: 4; grid-row: 1 / 3; }
-  .ranking-gift { grid-column: 2; width: auto; min-height: 32px; }
+  .ranking-gift { grid-column: 2; width: auto; min-height: 36px; }
   .ranking-gift-space { display: none; }
   .ranking-user-details { margin-right: 0; }
 }
 
 .modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(24, 34, 45, 0.45); }
 .modal-overlay[hidden] { display: none; }
-.modal-content { display: grid; gap: 16px; justify-items: center; width: min(420px, 100%); border: 1px solid var(--line); border-radius: 4px; padding: 26px; box-shadow: var(--shadow); background: var(--surface); }
+.modal-content { display: grid; gap: 16px; justify-items: center; width: min(400px, 100%); border: 1px solid var(--line); border-radius: 4px; padding: 22px; box-shadow: var(--shadow); background: var(--surface); }
 .modal-content h2 { margin: 0; }
 .modal-content img { max-width: 100%; max-height: 60vh; border-radius: 12px; }
 .table-thumb { display: block; width: 40px; height: 40px; margin: 0 auto; object-fit: contain; vertical-align: middle; cursor: pointer; }
@@ -384,7 +387,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal { padding: 18px; }
   .modal-ranking { padding: 12px; }
   .ranking-dialog-heading { align-items: flex-start; }
-  .ranking-dialog-heading .button { flex: 0 0 auto; min-height: 38px; }
+  .ranking-dialog-heading .button { flex: 0 0 auto; min-height: 36px; }
   .gamification-details { padding: 12px; }
   .collection-counts-panel { gap: 12px; }
   .collection-counts-panel > span { gap: 6px; }
@@ -407,11 +410,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-fields > .modal-row { grid-column: 1 / -1; }
   .modal-preview { grid-column: 1; grid-row: 2; grid-template-rows: auto auto auto; gap: 6px; }
   .modal-preview img { width: 100px; height: 100px; }
-  .modal textarea { height: 34px; padding: 4px 6px; }
+  .modal textarea { height: 36px; padding: 4px 6px; }
   .modal-row { gap: 4px; }
-  .modal-row .button { min-height: 38px; }
+  .modal-row .button { min-height: 36px; }
   #minifigura-form .modal-fields input, #minifigura-form .modal-fields select { padding: 5px 4px; font-size: 0.78rem; }
-  .modal-row-status .state-toggle, .modal-row-status .eye-toggle { min-height: 34px; }
+  .modal-row-status .state-toggle, .modal-row-status .eye-toggle { min-height: 36px; }
   #minifigura-form .form-error { min-height: 0; }
   .modal .form-actions { grid-column: 1; grid-row: 3; }
 }

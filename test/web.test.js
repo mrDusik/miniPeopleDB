@@ -165,7 +165,12 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
   assert.match(css, /\.gamification-details\[hidden\]\s*\{[^}]*display:\s*none/s);
   assert.match(css, /\.collection-counts-panel\s*\{[^}]*display:\s*flex/s);
-  assert.match(css, /\.filter-state-toggles\s*\{[^}]*align-self:\s*end[^}]*min-height:\s*46px/s);
+  assert.match(css, /\.filter-state-toggles\s*\{[^}]*align-self:\s*end[^}]*min-height:\s*36px/s);
+  assert.match(css, /button\s*\{\s*min-height:\s*36px;\s*\}/);
+  assert.match(css, /\.button\s*\{[^}]*min-height:\s*36px;[^}]*padding:\s*0 12px;/s);
+  assert.match(css, /input, select\s*\{[^}]*padding:\s*8px 12px/s);
+  assert.match(css, /input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):not\(\[type="hidden"\]\), select\s*\{\s*min-height:\s*36px;/);
+  assert.match(css, /\.modal\s*\{[^}]*width:\s*min\(860px, calc\(100% - 32px\)\)[^}]*padding:\s*22px/s);
   assert.match(css, /\.filters-form > \.filter-toggle\s*\{[^}]*align-self:\s*end/);
   assert.match(css, /\.filters-form > #show-all\s*\{[^}]*align-self:\s*end/);
   assert.match(css, /\.filters-form \.form-actions\s*\{[^}]*grid-row:\s*1;[^}]*align-self:\s*end/);
@@ -299,7 +304,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(form.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
   assert.equal(form.querySelector('.modal-preview img').id, 'form-preview-image');
   assert.equal(form.querySelector('.form-actions').parentElement, form);
-  assert.match(css, /#delete-dialog\s*\{\s*width:\s*min\(420px, calc\(100% - 32px\)\)/);
+  assert.match(css, /#delete-dialog\s*\{\s*width:\s*min\(400px, calc\(100% - 32px\)\)/);
   assert.match(css, /#delete-message\s*\{\s*white-space:\s*pre-line;/);
   assert.match(css, /#delete-dialog h2\s*\{\s*margin-bottom:\s*2rem;/);
   assert.match(css, /\.modal form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 250px;[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);

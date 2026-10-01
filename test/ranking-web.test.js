@@ -54,7 +54,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
-  assert.match(styles, /\.modal-ranking \{ width: min\(1400px, calc\(100% - 24px\)\)/);
+  assert.match(styles, /\.modal-ranking \{ width: min\(1280px, calc\(100% - 24px\)\)/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 85px 18px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
