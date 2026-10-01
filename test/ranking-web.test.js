@@ -49,13 +49,14 @@ function installFetch(window, ranking) {
 
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
-  assert.match(styles, /\.gamification-details \{[^}]*width: min\(640px, calc\(100vw - 22px\)\)/);
+  assert.match(styles, /\.gamification-details \{[^}]*width: min\(448px, calc\(100vw - 22px\)\)/);
   assert.match(styles, /\.summary-ranking-row, \.summary-sync-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(1100px, calc\(100% - 24px\)\)/);
-  assert.match(styles, /\.ranking-expand \{ display: grid; grid-template-columns: 36px 22px 42px minmax\(140px, 1fr\) minmax\(220px, auto\) minmax\(105px, auto\) minmax\(80px, auto\) 20px;/);
-  assert.match(styles, /\.global-ranking-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto; align-items: center; gap: 12px; min-width: 1020px; \}/);
+  assert.match(styles, /\.ranking-expand \{ display: grid; grid-template-columns: 36px 22px 42px minmax\(120px, 0\.8fr\) minmax\(230px, 1\.2fr\) minmax\(100px, 0\.6fr\) minmax\(94px, 0\.5fr\) 20px;/);
+  assert.match(styles, /\.global-ranking-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 112px; align-items: center; gap: 12px; min-width: 1020px; \}/);
+  assert.match(styles, /\.ranking-collection-icon \{ width: auto; height: 2\.15rem; object-fit: contain; transform: none; \}/);
   assert.match(styles, /\.ranking-expand \{[^}]*justify-items: start;[^}]*text-align: left;/);
-  assert.match(styles, /\.ranking-level-number \{ color: var\(--ink\); font-size: 1\.75rem; line-height: 1;/);
+  assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 1\.75rem; line-height: 1;/);
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
 });
 
@@ -99,6 +100,7 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   const otherEntry = dom.window.document.querySelector('[data-user-id="user-b"]');
   assert.equal(otherEntry.querySelector('.ranking-gift').parentElement, otherEntry.querySelector('.global-ranking-row'));
   assert.equal(otherEntry.querySelector('.ranking-gift').previousElementSibling, otherEntry.querySelector('.ranking-expand'));
+  assert.equal(firstEntry.querySelector('.ranking-gift-space').parentElement, firstEntry.querySelector('.global-ranking-row'));
 
   const entries = [...dom.window.document.querySelectorAll('.global-ranking-entry')];
   entries[0].querySelector('.ranking-expand').click();
