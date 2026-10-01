@@ -144,7 +144,7 @@ test('el panel de nivel despliega recuento y valor total con la flecha', async (
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.hidden, false);
-  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-ranking-row', 'summary-sync-row', 'summary-achievements-row', 'sync-progress']);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-achievements-row', 'summary-ranking-row', 'summary-sync-row', 'sync-progress']);
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();

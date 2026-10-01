@@ -50,6 +50,7 @@ function installFetch(window, ranking) {
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, calc\(100vw - 22px\)\)/);
+  assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
   assert.match(styles, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
@@ -81,8 +82,8 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   await new Promise((resolve) => setTimeout(resolve, 10));
 
   const details = dom.window.document.querySelector('#gamification-details');
-  assert.equal(details.children[2].querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
-  assert.equal(details.children[3].querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
+  assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
+  assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
   assert.equal(dom.window.document.querySelector('#ranking-main-star').hidden, false);
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);

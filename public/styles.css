@@ -64,6 +64,7 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-details[hidden] { display: none; }
 .gamification-details > * + * { padding-top: 16px; border-top: 1px solid var(--blue); }
 .summary-ranking-row, .summary-sync-row, .summary-achievements-row { display: flex; justify-content: center; align-items: center; }
+.gamification-details .button { min-height: 36px; padding: 0 12px; }
 .summary-ranking-link, .summary-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
 .collection-counts-panel { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
