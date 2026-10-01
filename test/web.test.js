@@ -159,7 +159,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 640px[^}]*margin-left:\s*auto/s);
   assert.match(css, /\.gamification-summary\s*\{ flex: 0 1 640px; min-width: min\(640px, calc\(100vw - 360px\)\); \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
-  assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(448px, calc\(100vw - 22px\)\)/s);
+  assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, calc\(100vw - 22px\)\)/s);
   assert.match(css, /\.user-profile\s*\{[^}]*left:\s*50%[^}]*justify-items:\s*center[^}]*text-align:\s*center[^}]*transform:\s*translateX\(-50%\)/s);
   assert.match(css, /\.user-menu-chevron\s*\{[^}]*color:\s*var\(--ink\)/s);
   assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
