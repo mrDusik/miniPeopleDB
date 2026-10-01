@@ -1,4 +1,5 @@
 import { CategoriasNoDisponiblesError } from './categorias-repository.js';
+import { collectionHighlights } from './collection-highlights.js';
 
 const TABLE = 'minifiguras';
 const FIELD_COLUMNS = [
@@ -402,46 +403,10 @@ export class MinifigurasRepository {
       return rightPrice - leftPrice;
     });
 
-    summary.top5 = summary.topCandidates
-      .sort((left, right) => {
-        const leftPrice = Number.isFinite(left.precio) ? left.precio : -Infinity;
-        const rightPrice = Number.isFinite(right.precio) ? right.precio : -Infinity;
-        if (rightPrice !== leftPrice) {
-          return rightPrice - leftPrice;
-        }
-        if (left.fechaCompra !== right.fechaCompra) {
-          if (left.fechaCompra === undefined) return 1;
-          if (right.fechaCompra === undefined) return -1;
-          return left.fechaCompra.localeCompare(right.fechaCompra);
-        }
-        return right.index - left.index;
-      })
-      .slice(0, 5)
-      .map(({ id, nombre, precio }) => ({ id, nombre, precio }));
+    const { top5Precio, top5Antiguedad } = collectionHighlights(catalogo);
+    summary.top5 = top5Precio;
     delete summary.topCandidates;
-    summary.top5Antiguas = catalogo
-      .map((minifigura, index) => ({
-        id: minifigura.id,
-        nombre: minifigura.nombre,
-        anio: minifigura.anio,
-        precio: Number.isFinite(minifigura.precio) ? minifigura.precio : undefined,
-        estadoColeccion: minifigura.estadoColeccion,
-        index,
-      }))
-      .filter((minifigura) => minifigura.estadoColeccion === 'COLECCIÓN')
-      .sort((left, right) => {
-        if (left.anio !== right.anio) {
-          return left.anio - right.anio;
-        }
-        const leftPrice = left.precio ?? -Infinity;
-        const rightPrice = right.precio ?? -Infinity;
-        if (leftPrice !== rightPrice) {
-          return rightPrice - leftPrice;
-        }
-        return right.index - left.index;
-      })
-      .slice(0, 5)
-      .map(({ id, nombre, anio, precio }) => ({ id, nombre, anio, precio }));
+    summary.top5Antiguas = top5Antiguedad;
     return summary;
   }
 

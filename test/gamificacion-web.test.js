@@ -86,6 +86,21 @@ test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los d
   }
 });
 
+test('usa regalo para logros de tipo regalo y conserva la copa en los demás', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state({ logros: [
+    { id: 'gift', type: 'regalo', nombre: 'Someone liked your collection', descripcion: 'Regalo', bricks: 50, cantidad: 1, total: 50 },
+    { id: 'normal', nombre: 'Normal', descripcion: 'Normal', bricks: 1, cantidad: 1, total: 1 },
+  ] }));
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const [gift, normal] = window.document.querySelectorAll('.achievement-item');
+  assert.equal(gift.querySelector('.achievement-gift-icon').textContent, '🎁');
+  assert.equal(normal.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
+  dom.window.close();
+});
+
 test('muestra una ampliación del nivel al pasar el ratón por la imagen', async () => {
   const dom = createDom();
   const { window } = dom;

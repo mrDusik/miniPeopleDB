@@ -90,7 +90,7 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#catalog-body').children.length, 1);
 
   const dataRequests = requests.filter(({ url }) => url !== '/categorias');
-  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion', '/sincronizacion/brickset']);
+  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion', '/api/ranking', '/sincronizacion/brickset']);
   for (const { init } of dataRequests) {
     assert.equal(init.headers.Authorization, 'Bearer token-navegador');
   }

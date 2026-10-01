@@ -83,3 +83,15 @@ test('el recálculo elimina las contribuciones de figuras borradas', () => {
   assert.deepEqual(nuevosLogros(previous, next), []);
   assert.deepEqual(nuevosLogros(next, previous).find(({ id }) => id === 'omgold').bricksNuevos, 5000);
 });
+
+test('combina regalos persistidos con logros de colección', () => {
+  const state = calcularGamificacion([minifigura()], [], 2);
+  const gift = state.logros.find(({ type }) => type === 'regalo');
+  assert.deepEqual(gift, {
+    id: 'someone-liked-your-collection', type: 'regalo', nombre: 'Someone liked your collection',
+    descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.', bricks: 50,
+    repetible: true, cantidad: 2, total: 100,
+  });
+  assert.equal(state.bricks, calcularGamificacion([minifigura()]).bricks + 100);
+  assert.equal(state.progreso.actual, state.bricks);
+});

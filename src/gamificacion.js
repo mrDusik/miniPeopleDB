@@ -48,6 +48,15 @@ export const OBJETIVOS = [
   { id: 'chill-nancy-im-fine', nombre: "Chill, Nancy. I'm fine", descripcion: 'Añadir la minifigura ST009.', bricks: 700, repetible: false },
 ];
 
+export const LOGRO_REGALO = {
+  id: 'someone-liked-your-collection',
+  type: 'regalo',
+  nombre: 'Someone liked your collection',
+  descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.',
+  bricks: 50,
+  repetible: true,
+};
+
 const CATEGORY_OBJECTIVES = new Map([
   ['bricky-potter', 'Harry Potter'],
   ['bricky-mouse', 'Disney'],
@@ -150,7 +159,7 @@ export function selectLevel(bricks) {
   };
 }
 
-export function calcularGamificacion(catalogo, categorias = []) {
+export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos = 0) {
   const catalogoColeccion = catalogo.filter((minifigura) => minifigura.estadoColeccion === 'COLECCIÓN');
   const logros = OBJETIVOS.map((objective) => {
     const cantidad = achievementCount(objective, catalogoColeccion, categorias);
@@ -164,6 +173,9 @@ export function calcularGamificacion(catalogo, categorias = []) {
       total: cantidad * objective.bricks,
     };
   }).filter((logro) => logro.cantidad > 0);
+  if (Number.isInteger(regalosRecibidos) && regalosRecibidos > 0) {
+    logros.push({ ...LOGRO_REGALO, cantidad: regalosRecibidos, total: regalosRecibidos * LOGRO_REGALO.bricks });
+  }
   const bricks = logros.reduce((total, logro) => total + logro.total, 0);
   return { bricks, ...selectLevel(bricks), logros };
 }

@@ -103,6 +103,12 @@ const gamificationDialogLevel = document.querySelector('#gamification-dialog-lev
 const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
 const gamificationCloseButton = document.querySelector('#gamification-close');
+const rankingDialog = document.querySelector('#ranking-dialog');
+const rankingCloseButton = document.querySelector('#ranking-close');
+const rankingOpenButton = document.querySelector('#open-global-ranking');
+const rankingStatus = document.querySelector('#ranking-status');
+const globalRankingList = document.querySelector('#global-ranking-list');
+const rankingMainStar = document.querySelector('#ranking-main-star');
 
 const pageShell = document.querySelector('.page-shell');
 const authScreen = document.querySelector('#auth-screen');
@@ -155,6 +161,8 @@ let currentSession = null;
 let appStarted = false;
 let syncPollTimer = null;
 let syncPausedByModal = false;
+let rankingEntries = [];
+let expandedRankingUserId = null;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -333,12 +341,16 @@ function differenceCell(minifigura) {
   return element;
 }
 
-function rankingCard(minifigura, position, detail) {
-  const card = document.createElement('button');
-  card.type = 'button';
+function rankingCard(minifigura, position, detail, interactive = true) {
+  const card = document.createElement(interactive ? 'button' : 'span');
+  if (interactive) card.type = 'button';
   card.className = 'ranking-card';
-  card.dataset.action = 'view';
-  card.dataset.id = minifigura.id;
+  if (interactive) {
+    card.dataset.action = 'view';
+    card.dataset.id = minifigura.id;
+  } else {
+    card.classList.add('ranking-card-static');
+  }
   card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
 
   const image = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 48, height: 48, className: 'ranking-img' });
@@ -349,6 +361,14 @@ function rankingCard(minifigura, position, detail) {
 
   card.append(image, caption);
   return card;
+}
+
+function levelImagePath(levelId) {
+  return levelId === 15
+    ? '/level_images/15_spacebaby.jpg'
+    : levelId === 16
+      ? '/level_images/16_spaceman.jpg'
+      : '/level_images/9_forestman.png';
 }
 
 function renderTopFive(topFive) {
@@ -719,7 +739,7 @@ async function loadCatalog() {
   applyFilters();
   setLoading(false);
   setCategoriaControlsEnabled(!isSyncingPrices && categoriasReady);
-  await Promise.all([loadTotal(), loadGamification()]);
+  await Promise.all([loadTotal(), loadGamification(), loadGlobalRanking({ showState: false })]);
   return catalog;
 }
 
@@ -736,6 +756,7 @@ async function revalidate() {
       .catch(() => {}),
     loadTotal(),
     loadGamification(),
+    loadGlobalRanking({ showState: false }),
   ]);
 }
 
@@ -764,14 +785,10 @@ async function loadTotal() {
 
 function renderGamification(state) {
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
-  const levelImagePath = level.id === 15
-    ? '/level_images/15_spacebaby.jpg'
-    : level.id === 16
-      ? '/level_images/16_spaceman.jpg'
-      : '/level_images/9_forestman.png';
-  gamificationLevelImage.src = levelImagePath;
-  gamificationLevelTooltipImage.src = levelImagePath;
-  achievementsHeadingImage.src = levelImagePath;
+  const imagePath = levelImagePath(level.id);
+  gamificationLevelImage.src = imagePath;
+  gamificationLevelTooltipImage.src = imagePath;
+  achievementsHeadingImage.src = imagePath;
   gamificationLevelTooltipImage.alt = `Nivel ${level.id} ${level.nombre}`;
   gamificationLevelNumber.textContent = level.id;
   gamificationLevelName.textContent = level.nombre;
@@ -789,10 +806,15 @@ function renderGamification(state) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
-    const icon = document.createElement('img');
-    icon.className = 'achievement-icon';
-    icon.src = '/toast_images/75206.png';
-    icon.alt = '';
+    const icon = document.createElement(logro.type === 'regalo' ? 'span' : 'img');
+    icon.className = logro.type === 'regalo' ? 'achievement-icon achievement-gift-icon' : 'achievement-icon';
+    if (logro.type === 'regalo') {
+      icon.textContent = '🎁';
+      icon.setAttribute('aria-label', 'Regalo');
+    } else {
+      icon.src = '/toast_images/75206.png';
+      icon.alt = '';
+    }
 
     const info = document.createElement('div');
     info.className = 'achievement-info';
@@ -837,6 +859,146 @@ async function loadGamification() {
     gamificationPercentage.textContent = '0%';
     gamificationPercentage.classList.remove('on-accent');
     gamificationNext.textContent = 'Progreso no disponible';
+  }
+}
+
+function highlightGroup(title, items, mode) {
+  const section = document.createElement('section');
+  section.className = 'ranking-highlight-group';
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  const row = document.createElement('div');
+  row.className = 'ranking-row';
+  for (const [index, minifigura] of items.entries()) {
+    const detail = mode === 'precio' ? formatPrice(minifigura.precio) : minifigura.anio;
+    row.append(rankingCard(minifigura, index + 1, detail, false));
+  }
+  section.append(heading, row);
+  return section;
+}
+
+function setExpandedRankingUser(userId) {
+  expandedRankingUserId = expandedRankingUserId === userId ? null : userId;
+  for (const entry of globalRankingList.querySelectorAll('.global-ranking-entry')) {
+    const expanded = entry.dataset.userId === expandedRankingUserId;
+    entry.querySelector('.ranking-expand').setAttribute('aria-expanded', String(expanded));
+    entry.querySelector('.ranking-user-details').hidden = !expanded;
+  }
+}
+
+function renderGlobalRanking() {
+  const fragment = document.createDocumentFragment();
+  const currentUserId = currentSession?.user?.id;
+  rankingMainStar.hidden = !rankingEntries.some(({ userId }) => userId === currentUserId);
+
+  for (const [index, entry] of rankingEntries.entries()) {
+    const article = document.createElement('article');
+    article.className = 'global-ranking-entry';
+    article.dataset.userId = entry.userId;
+
+    const row = document.createElement('div');
+    row.className = 'global-ranking-row';
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'ranking-expand';
+    expand.setAttribute('aria-expanded', 'false');
+
+    const position = document.createElement('strong');
+    position.className = 'ranking-position';
+    position.textContent = `#${index + 1}`;
+    const star = document.createElement('span');
+    star.className = 'ranking-star';
+    star.textContent = '★';
+    star.hidden = entry.userId !== currentUserId;
+    star.setAttribute('aria-label', 'Tu posición');
+
+    const avatarWrap = document.createElement('span');
+    avatarWrap.className = 'ranking-avatar-wrap';
+    const avatar = document.createElement('img');
+    avatar.className = 'ranking-avatar';
+    avatar.alt = '';
+    const avatarFallback = document.createElement('span');
+    avatarFallback.className = 'ranking-avatar-fallback';
+    avatarFallback.textContent = '👤';
+    avatarFallback.hidden = Boolean(entry.avatarUrl);
+    if (entry.avatarUrl) avatar.src = entry.avatarUrl;
+    else avatar.hidden = true;
+    avatar.addEventListener('error', () => { avatar.hidden = true; avatarFallback.hidden = false; });
+    avatarWrap.append(avatar, avatarFallback);
+
+    const identity = document.createElement('span');
+    identity.className = 'ranking-identity';
+    const name = document.createElement('strong');
+    name.textContent = entry.displayName;
+    const bricks = document.createElement('span');
+    bricks.textContent = `${entry.bricks} Bricks`;
+    identity.append(name, bricks);
+
+    const levelImage = document.createElement('img');
+    levelImage.className = 'ranking-level-image';
+    levelImage.src = entry.imagenNivel || levelImagePath(entry.nivel);
+    levelImage.alt = '';
+    const level = document.createElement('span');
+    level.className = 'ranking-level';
+    level.textContent = `Nivel ${entry.nivel} · ${entry.nombreNivel}`;
+    const collection = document.createElement('span');
+    collection.className = 'ranking-collection-count';
+    collection.textContent = `${entry.totalColeccion} en colección`;
+    const chevron = document.createElement('span');
+    chevron.className = 'ranking-row-chevron';
+    chevron.textContent = '▾';
+    chevron.setAttribute('aria-hidden', 'true');
+    expand.append(position, star, avatarWrap, identity, levelImage, level, collection, chevron);
+    row.append(expand);
+
+    if (entry.userId !== currentUserId) {
+      const gift = document.createElement('button');
+      gift.type = 'button';
+      gift.className = 'button button-secondary ranking-gift';
+      gift.dataset.giftUser = entry.userId;
+      gift.disabled = entry.regaloEnviado;
+      gift.textContent = entry.regaloEnviado ? 'Regalo enviado' : '🎁 50 Bricks';
+      row.append(gift);
+    }
+
+    const details = document.createElement('div');
+    details.className = 'ranking-user-details';
+    details.hidden = true;
+    details.append(
+      highlightGroup('Top 5 por precio', entry.top5Precio ?? [], 'precio'),
+      highlightGroup('Top 5 por antigüedad', entry.top5Antiguedad ?? [], 'antiguedad'),
+    );
+    article.append(row, details);
+    fragment.append(article);
+  }
+  globalRankingList.replaceChildren(fragment);
+  expandedRankingUserId = null;
+}
+
+async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
+  if (showState) {
+    rankingStatus.textContent = 'Cargando ranking...';
+    rankingStatus.className = 'status';
+    globalRankingList.replaceChildren();
+  }
+  try {
+    const response = await apiFetch('/api/ranking');
+    if (!response.ok) throw new Error('RANKING_NO_DISPONIBLE');
+    const result = await response.json();
+    if (!Array.isArray(result)) throw new Error('RANKING_INVALIDO');
+    rankingEntries = result;
+    renderGlobalRanking();
+    rankingStatus.textContent = result.length ? '' : 'Todavía no hay usuarios en el ranking.';
+    rankingStatus.className = 'status';
+    return result;
+  } catch {
+    rankingEntries = [];
+    renderGlobalRanking();
+    if (showState) {
+      rankingStatus.textContent = 'No se pudo cargar el ranking global.';
+      rankingStatus.className = 'status error';
+    }
+    return [];
   }
 }
 
@@ -1220,6 +1382,53 @@ gamificationCloseButton.addEventListener('click', () => {
   gamificationDialog.close();
 });
 
+rankingOpenButton.addEventListener('click', () => {
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
+  rankingDialog.showModal();
+  rankingCloseButton.focus();
+  void loadGlobalRanking();
+});
+
+rankingCloseButton.addEventListener('click', () => {
+  rankingDialog.close();
+});
+
+rankingDialog.addEventListener('close', () => {
+  if (currentSession) rankingOpenButton.focus();
+});
+
+globalRankingList.addEventListener('click', async (event) => {
+  const expand = event.target.closest('.ranking-expand');
+  if (expand) {
+    setExpandedRankingUser(expand.closest('.global-ranking-entry').dataset.userId);
+    return;
+  }
+  const gift = event.target.closest('[data-gift-user]');
+  if (!gift || gift.disabled) return;
+  gift.disabled = true;
+  try {
+    const response = await apiFetch('/api/ranking/regalar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ receptorId: gift.dataset.giftUser }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      if (result.error === 'REGALO_YA_ENVIADO') {
+        gift.textContent = 'Regalo enviado';
+        return;
+      }
+      throw new Error(result.error);
+    }
+    await Promise.all([loadGlobalRanking(), loadGamification()]);
+    showToast('Regalo de 50 Bricks enviado.', 'success');
+  } catch {
+    gift.disabled = false;
+    showToast('No se pudo enviar el regalo.', 'error');
+  }
+});
+
 userMenuToggle.addEventListener('click', () => {
   const expanded = userMenuToggle.getAttribute('aria-expanded') !== 'true';
   userMenuToggle.setAttribute('aria-expanded', String(expanded));
@@ -1563,10 +1772,15 @@ function clearUserData() {
   renderOldestFive([]);
   renderWatchlist([]);
   renderGamification({});
+  rankingEntries = [];
+  expandedRankingUserId = null;
+  rankingMainStar.hidden = true;
+  globalRankingList.replaceChildren();
+  rankingStatus.textContent = '';
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog]) {
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, rankingDialog]) {
     if (dialog.open) dialog.close();
   }
 }

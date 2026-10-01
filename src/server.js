@@ -17,12 +17,20 @@ import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 import { getSupabaseConfig } from './services/supabase.js';
+import {
+  AutorregaloNoPermitidoError,
+  RankingNoDisponibleError,
+  RankingRepository,
+  ReceptorNoEncontradoError,
+  RegaloYaEnviadoError,
+} from './ranking-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion|valoracion|valor-total|sincronizacion\/brickset)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion|valoracion|valor-total|sincronizacion\/brickset|api\/ranking(?:\/regalar)?)$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -109,17 +117,24 @@ export function createServer({
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    let userId;
+    let user;
     try {
       const { data, error } = await client.auth.getUser(token);
-      userId = error ? undefined : data?.user?.id;
+      user = error ? undefined : data?.user;
     } catch {
-      userId = undefined;
+      user = undefined;
     }
+    const userId = user?.id;
     if (!userId) {
       return unauthorized;
     }
 
+    const rankingRepository = new RankingRepository({ client, userId });
+    try {
+      await rankingRepository.syncProfile(user);
+    } catch {
+      return { status: 500, error: 'RANKING_NO_DISPONIBLE' };
+    }
     const gamificacionRepository = new GamificacionRepository({ client, userId, categoriasRepository });
     const repository = new MinifigurasRepository({
       client,
@@ -130,6 +145,7 @@ export function createServer({
     return {
       userId,
       repository,
+      rankingRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
     };
   }
@@ -158,13 +174,14 @@ export function createServer({
     let repository;
     let userId;
     let ensureGamificacion;
+    let rankingRepository;
     if (protectedPath.test(requestUrl.pathname)) {
       const context = await authenticate(request);
       if (context.error) {
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository } = context);
     }
 
     if (requestUrl.pathname === '/categorias') {
@@ -182,6 +199,57 @@ export function createServer({
           return;
         }
         sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/ranking') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await rankingRepository.list());
+      } catch (error) {
+        sendJson(response, 500, { error: error instanceof RankingNoDisponibleError ? error.code : 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/ranking/regalar') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      let payload;
+      try {
+        payload = await readJsonBody(request);
+      } catch {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO', parametro: 'receptorId' });
+        return;
+      }
+      if (Object.keys(payload).length !== 1 || typeof payload.receptorId !== 'string' || !UUID_PATTERN.test(payload.receptorId)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO', parametro: 'receptorId' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await rankingRepository.gift(payload.receptorId));
+      } catch (error) {
+        if (error instanceof AutorregaloNoPermitidoError) {
+          sendJson(response, 400, { error: error.code });
+          return;
+        }
+        if (error instanceof ReceptorNoEncontradoError) {
+          sendJson(response, 404, { error: error.code });
+          return;
+        }
+        if (error instanceof RegaloYaEnviadoError) {
+          sendJson(response, 409, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: error instanceof RankingNoDisponibleError ? error.code : 'ERROR_INTERNO' });
       }
       return;
     }
