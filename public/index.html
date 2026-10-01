@@ -68,6 +68,9 @@
             <div class="summary-sync-row">
               <button type="button" id="sync-prices" class="button button-secondary summary-sync">🔄 Sincronizar Precios</button>
             </div>
+            <div class="summary-achievements-row">
+              <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> Ver Logros</button>
+            </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>
               <span id="sync-progress-label">Actualizando precios: 0 / 0</span>
@@ -306,11 +309,9 @@
           <h2 id="gamification-dialog-title">Logros</h2>
           <p id="gamification-dialog-level" class="eyebrow">0 Duplo</p>
         </div>
-      </div>
-      <ul id="gamification-achievements" class="achievements-list"></ul>
-      <div class="form-actions achievements-actions">
         <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
       </div>
+      <ul id="gamification-achievements" class="achievements-list"></ul>
     </dialog>
 
     <dialog id="ranking-dialog" class="modal modal-ranking" aria-labelledby="ranking-dialog-title">

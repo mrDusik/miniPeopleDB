@@ -100,6 +100,7 @@ const gamificationPercentage = document.querySelector('#gamification-percentage'
 const gamificationNext = document.querySelector('#gamification-next');
 const gamificationDialog = document.querySelector('#gamification-dialog');
 const gamificationDialogLevel = document.querySelector('#gamification-dialog-level');
+const achievementsOpenButton = document.querySelector('#open-achievements');
 const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
 const gamificationCloseButton = document.querySelector('#gamification-close');
@@ -1416,6 +1417,11 @@ firstMinifiguraAccept.addEventListener('click', () => {
 
 gamificationLevelButton.addEventListener('click', () => {
   gamificationDialog.showModal();
+});
+
+achievementsOpenButton.addEventListener('click', () => {
+  gamificationDialog.showModal();
+  gamificationCloseButton.focus();
 });
 
 gamificationCloseButton.addEventListener('click', () => {
