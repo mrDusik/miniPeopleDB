@@ -14,6 +14,7 @@ import {
 } from './minifiguras-repository.js';
 import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
+import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 import { getSupabaseConfig } from './services/supabase.js';
 
@@ -82,9 +83,16 @@ export function createServer({
   createSupabaseClient = createClient,
   fetchImpl,
   scraper,
+  minIntervalMs,
 } = {}) {
   const categoriasRepository = new CategoriasRepository(themesPath);
-  const brickset = scraper ?? new BricksetScraper({ fetchImpl });
+  const configuredInterval = Number(process.env.BRICKSET_MIN_INTERVAL_MS);
+  const effectiveInterval = Number.isFinite(minIntervalMs) ? minIntervalMs : configuredInterval;
+  const brickset = scraper ?? new BricksetScraper({
+    fetchImpl,
+    ...(Number.isFinite(effectiveInterval) ? { minIntervalMs: effectiveInterval } : {}),
+  });
+  const bricksetSyncJobs = createBricksetSyncJobs({ brickset });
   const app = express();
 
   async function authenticate(request) {
@@ -120,6 +128,7 @@ export function createServer({
       onCatalogPersisted: async (catalogo) => gamificacionRepository.recalculate(catalogo),
     });
     return {
+      userId,
       repository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
     };
@@ -147,6 +156,7 @@ export function createServer({
     }
 
     let repository;
+    let userId;
     let ensureGamificacion;
     if (protectedPath.test(requestUrl.pathname)) {
       const context = await authenticate(request);
@@ -154,7 +164,7 @@ export function createServer({
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, ensureGamificacion } = context);
+      ({ repository, userId, ensureGamificacion } = context);
     }
 
     if (requestUrl.pathname === '/categorias') {
@@ -397,39 +407,20 @@ export function createServer({
     }
 
     if (requestUrl.pathname === '/sincronizacion/brickset') {
+      if (request.method === 'GET') {
+        bricksetSyncJobs.refreshRepository(userId, repository);
+        sendJson(response, 200, bricksetSyncJobs.status(userId));
+        return;
+      }
       if (request.method !== 'POST') {
-        response.setHeader('allow', 'POST');
+        response.setHeader('allow', 'GET, POST');
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
         return;
       }
 
       try {
         await ensureGamificacion();
-        const catalogo = await repository.readCatalog();
-        const actualizaciones = new Map();
-        const fallidos = [];
-        const concurrency = Math.max(1, Math.min(Number(process.env.BRICKSET_CONCURRENCY) || 4, catalogo.length || 1));
-        let nextIndex = 0;
-        const worker = async () => {
-          while (nextIndex < catalogo.length) {
-            const minifigura = catalogo[nextIndex++];
-            try {
-              actualizaciones.set(minifigura.id, await brickset.getPrice(minifigura.id));
-            } catch (error) {
-              fallidos.push({ id: minifigura.id, error: error instanceof BricksetPriceError ? error.code : 'BRICKSET_NO_DISPONIBLE' });
-            }
-          }
-        };
-        await Promise.all(Array.from({ length: concurrency }, worker));
-
-        if (actualizaciones.size > 0) {
-          await repository.updatePrices(actualizaciones);
-        }
-        sendJson(response, 200, {
-          actualizados: [...actualizaciones.keys()],
-          fallidos,
-          total: catalogo.length,
-        });
+        sendJson(response, 202, await bricksetSyncJobs.start(userId, repository));
       } catch (error) {
         if (isCategoriasError(error)) {
           sendJson(response, 500, { error: error.code });

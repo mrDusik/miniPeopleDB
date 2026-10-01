@@ -79,10 +79,18 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#user-name').textContent, 'Usuaria A');
   assert.equal($('#user-name').hidden, false);
   assert.equal($('#user-avatar').hidden, true);
+  assert.equal($('#user-profile').hidden, true);
+  $('#user-menu-toggle').click();
+  assert.equal($('#user-menu-toggle').getAttribute('aria-expanded'), 'true');
+  assert.equal($('#user-profile').hidden, false);
+  assert.equal($('#logout').textContent, 'Cerrar sesión');
+  $('#auth-title').click();
+  assert.equal($('#user-menu-toggle').getAttribute('aria-expanded'), 'false');
+  assert.equal($('#user-profile').hidden, true);
   assert.equal($('#catalog-body').children.length, 1);
 
   const dataRequests = requests.filter(({ url }) => url !== '/categorias');
-  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion']);
+  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion', '/sincronizacion/brickset']);
   for (const { init } of dataRequests) {
     assert.equal(init.headers.Authorization, 'Bearer token-navegador');
   }
@@ -96,7 +104,8 @@ test('muestra el avatar de Google y recupera el nombre si la imagen falla', asyn
   await tick();
   assert.equal($('#user-avatar').src, 'https://example.com/avatar.jpg');
   assert.equal($('#user-avatar').hidden, false);
-  assert.equal($('#user-name').hidden, true);
+  assert.equal($('#user-name').hidden, false);
+  assert.equal($('#user-profile').hidden, true);
   assert.equal($('#user-profile').title, 'Usuaria A');
   $('#user-avatar').dispatchEvent(new window.Event('error'));
   assert.equal($('#user-avatar').hidden, true);
@@ -191,11 +200,12 @@ test('al aparecer la primera figura se expanden los paneles sin repetir la bienv
     if (url === '/minifiguras') return { ok: true, status: 200, json: async () => figures };
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: figures.length, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, status: 200, json: async () => ({ estado: 'completada', procesados: figures.length, total: figures.length, actualizados: [], fallidos: [] }) };
   } });
   await tick();
   $('#first-minifigura-dialog').close();
   figures = catalog;
-  $('#show-all').click();
+  $('#sync-prices').click();
   await tick();
   assert.equal($('#first-minifigura-dialog').open, false);
   assert.equal($('#catalog-body').children.length, 1);

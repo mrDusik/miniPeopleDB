@@ -331,6 +331,24 @@ export class MinifigurasRepository {
     return nextCatalog;
   }
 
+  async updatePrice(id, price) {
+    const normalizedId = normalizeId(id);
+    if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) {
+      throw new MinifiguraInvalidaError();
+    }
+
+    const row = await this.run(this.client.from(TABLE)
+      .update({ precio: price })
+      .eq('id', normalizedId)
+      .select()
+      .maybeSingle());
+    if (!row) {
+      return null;
+    }
+    await this.notifyPersisted();
+    return fromRow(row);
+  }
+
   async totalValue() {
     return (await this.valuationSummary()).total;
   }

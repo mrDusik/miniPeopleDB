@@ -66,6 +66,9 @@ const toastRegion = document.querySelector('#toast-region');
 const gamificationLevelButton = document.querySelector('#gamification-level');
 const gamificationToggleButton = document.querySelector('#gamification-toggle');
 const gamificationDetails = document.querySelector('#gamification-details');
+const syncProgress = document.querySelector('#sync-progress');
+const syncProgressBar = document.querySelector('#sync-progress-bar');
+const syncProgressLabel = document.querySelector('#sync-progress-label');
 const gamificationTitle = document.querySelector('#gamification-title');
 const gamificationLevelImage = document.querySelector('.gamification-level-image');
 const gamificationLevelTooltip = document.createElement('div');
@@ -99,7 +102,6 @@ const gamificationDialog = document.querySelector('#gamification-dialog');
 const gamificationDialogLevel = document.querySelector('#gamification-dialog-level');
 const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
-const gamificationAchievementsButton = document.querySelector('#gamification-achievements-button');
 const gamificationCloseButton = document.querySelector('#gamification-close');
 
 const pageShell = document.querySelector('.page-shell');
@@ -109,10 +111,11 @@ const loginButton = document.querySelector('#login-google');
 const logoutButton = document.querySelector('#logout');
 const userName = document.querySelector('#user-name');
 const userProfile = document.querySelector('#user-profile');
+const userMenuToggle = document.querySelector('#user-menu-toggle');
+const userSession = document.querySelector('.user-session');
 const userAvatar = document.querySelector('#user-avatar');
 userAvatar.addEventListener('error', () => {
   userAvatar.hidden = true;
-  userName.hidden = false;
 });
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión ha caducado. Inicia sesión de nuevo.';
 
@@ -128,7 +131,8 @@ const ERROR_MESSAGES = {
 };
 
 let requestSequence = 0;
-let currentFilters = {};
+let activeFilters = {};
+let catalogCache = [];
 let currentCatalog = [];
 let currentEditId = null;
 let currentFormMode = null;
@@ -142,7 +146,6 @@ let subcategoriasPorCategoria = new Map();
 let categoriasReady = false;
 let catalogForOptions = [];
 let hasLoadedFullCatalog = false;
-let syncButtonStates = new Map();
 const pageSize = 10;
 let currentPage = 1;
 let achievementQueue = [];
@@ -150,6 +153,7 @@ let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
 let appStarted = false;
+let syncPollTimer = null;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -198,7 +202,7 @@ function setCategoriaControlsEnabled(enabled) {
   categoriaInput.disabled = !enabled;
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
   newMinifiguraButton.disabled = !enabled;
-  syncPricesButton.disabled = !enabled;
+  syncPricesButton.disabled = !enabled || isSyncingPrices;
 }
 
 categoriaInput.addEventListener('change', () => {
@@ -284,9 +288,24 @@ function normalizedCollectionState(value) {
     : value;
 }
 
-function collectionStateIcon(value) {
+function collectionStateIconSource(value) {
   const state = normalizedCollectionState(value);
-  return state === 'COLECCION' ? '📦' : state === 'BUSCADA' ? '🔍' : value ?? '';
+  return state === 'COLECCION' ? '/status_images/caja.png' : state === 'BUSCADA' ? '/status_images/lupa.png' : null;
+}
+
+function appendCollectionStateIcon(element, value) {
+  const source = collectionStateIconSource(value);
+  if (!source) {
+    element.textContent = value ?? '';
+    return;
+  }
+
+  const image = document.createElement('img');
+  image.className = 'status-icon-image';
+  image.src = source;
+  image.alt = '';
+  image.setAttribute('aria-hidden', 'true');
+  element.append(image);
 }
 
 function collectionStateMeaning(value) {
@@ -321,11 +340,7 @@ function rankingCard(minifigura, position, detail) {
   card.dataset.id = minifigura.id;
   card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
 
-  const image = document.createElement('img');
-  image.className = 'ranking-img';
-  image.alt = minifigura.nombre ?? '';
-  image.addEventListener('error', () => { image.style.display = 'none'; });
-  image.src = imagenUrlPara(minifigura.id);
+  const image = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 48, height: 48, className: 'ranking-img' });
 
   const caption = document.createElement('span');
   caption.className = 'ranking-caption';
@@ -336,23 +351,23 @@ function rankingCard(minifigura, position, detail) {
 }
 
 function renderTopFive(topFive) {
-  topFiveList.replaceChildren();
+  const fragment = document.createDocumentFragment();
   topFive.forEach((minifigura, index) => {
-    topFiveList.append(rankingCard(minifigura, index + 1, formatPrice(minifigura.precio)));
+    fragment.append(rankingCard(minifigura, index + 1, formatPrice(minifigura.precio)));
   });
-  trackButtonsDuringSync(topFiveList);
+  topFiveList.replaceChildren(fragment);
 }
 
 function renderOldestFive(oldestFive) {
-  oldestFiveList.replaceChildren();
+  const fragment = document.createDocumentFragment();
   oldestFive.forEach((minifigura, index) => {
-    oldestFiveList.append(rankingCard(minifigura, index + 1, minifigura.anio));
+    fragment.append(rankingCard(minifigura, index + 1, minifigura.anio));
   });
-  trackButtonsDuringSync(oldestFiveList);
+  oldestFiveList.replaceChildren(fragment);
 }
 
 function renderWatchlist(observed) {
-  watchlistList.replaceChildren();
+  const fragment = document.createDocumentFragment();
   watchlistTitle.textContent = `Seguimiento (${observed.length} / ${maxWatchlistItems})`;
   for (const minifigura of observed) {
     const card = document.createElement('button');
@@ -361,19 +376,17 @@ function renderWatchlist(observed) {
     card.dataset.action = 'view';
     card.dataset.id = minifigura.id;
     card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
-    const image = document.createElement('img');
-    image.src = imagenUrlPara(minifigura.id);
-    image.alt = minifigura.nombre ?? '';
-    image.addEventListener('error', () => { image.style.display = 'none'; });
+    const image = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 128, height: 112 });
     const caption = document.createElement('span');
     const stateIcon = document.createElement('span');
     stateIcon.className = 'watchlist-state-icon';
-    stateIcon.textContent = collectionStateIcon(minifigura.estadoColeccion);
+    appendCollectionStateIcon(stateIcon, minifigura.estadoColeccion);
     stateIcon.title = collectionStateMeaning(minifigura.estadoColeccion);
     caption.append(stateIcon, document.createTextNode(` ${minifigura.id} ${formatPrice(minifigura.precioBrickset)}`));
     card.append(image, caption);
-    watchlistList.append(card);
+    fragment.append(card);
   }
+  watchlistList.replaceChildren(fragment);
 }
 
 function sortCatalog(catalog) {
@@ -415,11 +428,10 @@ function badgeCell(value) {
   const element = document.createElement('td');
   const badge = document.createElement('span');
   const state = normalizedCollectionState(value);
-  const label = collectionStateIcon(value);
   badge.className = `badge ${badgeClassFor(value)}`;
-  badge.textContent = label;
   badge.title = collectionStateMeaning(value);
-  badge.setAttribute('aria-label', label);
+  badge.setAttribute('aria-label', collectionStateMeaning(value));
+  appendCollectionStateIcon(badge, value);
   element.append(badge);
   return element;
 }
@@ -428,15 +440,25 @@ function imagenUrlPara(id) {
   return `https://img.bricklink.com/ItemImage/MN/0/${encodeURIComponent(String(id).toLowerCase())}.png`;
 }
 
+function createLazyImage({ src, alt, width, height, className = '' }) {
+  const image = document.createElement('img');
+  if (className) image.className = className;
+  image.alt = alt ?? '';
+  // Set before src so the browser defers the request.
+  image.setAttribute('loading', 'lazy');
+  image.setAttribute('decoding', 'async');
+  image.setAttribute('width', String(width));
+  image.setAttribute('height', String(height));
+  image.addEventListener('error', () => { image.style.display = 'none'; });
+  image.src = src;
+  return image;
+}
+
 function thumbCell(minifigura) {
   const element = document.createElement('td');
-  const thumb = document.createElement('img');
-  thumb.className = 'table-thumb';
-  thumb.alt = minifigura.nombre ?? '';
+  const thumb = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 40, height: 40, className: 'table-thumb' });
   thumb.dataset.action = 'preview';
   thumb.dataset.id = minifigura.id;
-  thumb.addEventListener('error', () => { thumb.style.display = 'none'; });
-  thumb.src = imagenUrlPara(minifigura.id);
   element.append(thumb);
   return element;
 }
@@ -498,19 +520,60 @@ function actionsCell(minifigura) {
   return element;
 }
 
-function renderCatalog(catalog) {
-  currentCatalog = catalog;
-  currentPage = 1;
+function normalizeClientText(value) {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    : '';
+}
+
+// Mirrors matchesFilters in src/minifiguras-repository.js.
+function matchesClientFilters(minifigura, filters) {
+  if (filters.categoria && normalizeClientText(minifigura.categoria) !== normalizeClientText(filters.categoria)) return false;
+  if (filters.subcategoria && normalizeClientText(minifigura.subcategoria) !== normalizeClientText(filters.subcategoria)) return false;
+  if (filters.nombre && !normalizeClientText(minifigura.nombre).includes(normalizeClientText(filters.nombre))) return false;
+  if (filters.id && !normalizeClientText(minifigura.id).includes(normalizeClientText(filters.id))) return false;
+  if (filters.anio && minifigura.anio !== Number(filters.anio)) return false;
+  if (filters.estadoColeccion && normalizeClientText(minifigura.estadoColeccion) !== normalizeClientText(filters.estadoColeccion)) return false;
+  if (filters.observada && Boolean(minifigura.observada) !== (filters.observada === 'true')) return false;
+  return true;
+}
+
+function applyFilters({ preservePage = false } = {}) {
+  currentCatalog = catalogCache.filter((minifigura) => matchesClientFilters(minifigura, activeFilters));
+  if (!preservePage) currentPage = 1;
   renderCatalogPage();
 }
 
+function setCatalogCache(catalog) {
+  const wasEmpty = hasLoadedFullCatalog && catalogCache.length === 0;
+  hasLoadedFullCatalog = true;
+  catalogCache = catalog;
+  renderDynamicFilterOptions(catalog);
+  for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
+    if (catalog.length === 0) setPanelCollapsed(button, true);
+    else if (wasEmpty) setPanelCollapsed(button, false);
+  }
+}
+
+function upsertCached(minifigura) {
+  const { gamificacion, ...stored } = minifigura;
+  const exists = catalogCache.some((item) => item.id === stored.id);
+  setCatalogCache(exists
+    ? catalogCache.map((item) => (item.id === stored.id ? stored : item))
+    : [...catalogCache, stored]);
+}
+
+function removeCached(id) {
+  setCatalogCache(catalogCache.filter((item) => item.id !== id));
+}
+
 function renderCatalogPage() {
-  catalogBody.replaceChildren();
   resultCount.textContent = `${currentCatalog.length} ${currentCatalog.length === 1 ? 'figura' : 'figuras'}`;
   const sortedCatalog = sortCatalog(currentCatalog);
   const totalPages = Math.max(1, Math.ceil(sortedCatalog.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
+  const fragment = document.createDocumentFragment();
 
   for (const minifigura of sortedCatalog.slice(pageStart, pageStart + pageSize)) {
     const row = document.createElement('tr');
@@ -527,12 +590,12 @@ function renderCatalogPage() {
       differenceCell(minifigura),
       actionsCell(minifigura),
     );
-    catalogBody.append(row);
+    fragment.append(row);
   }
-  trackButtonsDuringSync(catalogBody);
+  catalogBody.replaceChildren(fragment);
   pageStatus.textContent = `Página ${currentPage} de ${totalPages}`;
-  previousPageButton.disabled = currentPage === 1 || isSyncingPrices;
-  nextPageButton.disabled = currentPage === totalPages || isSyncingPrices;
+  previousPageButton.disabled = currentPage === 1;
+  nextPageButton.disabled = currentPage === totalPages;
 
   if (currentCatalog.length === 0) {
     setStatus(hasLoadedFullCatalog && catalogForOptions.length === 0
@@ -543,22 +606,10 @@ function renderCatalogPage() {
   }
 }
 
-function trackButtonsDuringSync(container) {
-  if (!isSyncingPrices) {
-    return;
-  }
-  container.querySelectorAll('button').forEach((button) => {
-    if (!syncButtonStates.has(button)) {
-      syncButtonStates.set(button, button.disabled);
-    }
-    button.disabled = true;
-  });
-}
-
 function setLoading(isLoading) {
-  controls.forEach((control) => { control.disabled = isLoading || isSyncingPrices; });
-  previousPageButton.disabled = isLoading || isSyncingPrices;
-  nextPageButton.disabled = isLoading || isSyncingPrices;
+  controls.forEach((control) => { control.disabled = isLoading; });
+  previousPageButton.disabled = isLoading;
+  nextPageButton.disabled = isLoading;
   if (isLoading) {
     setStatus('Cargando catálogo...');
   } else if (currentCatalog.length > 0) {
@@ -566,79 +617,125 @@ function setLoading(isLoading) {
   }
 }
 
-function setSyncLoading(isLoading) {
-  isSyncingPrices = isLoading;
-  if (isLoading) {
-    syncButtonStates = new Map(
-      [...document.querySelectorAll('button')].map((button) => [button, button.disabled]),
-    );
-    syncButtonStates.forEach((wasDisabled, button) => {
-      button.disabled = true;
-    });
-    return;
+function showSyncProgress(state) {
+  isSyncingPrices = state.estado === 'en_curso';
+  syncPricesButton.disabled = isSyncingPrices || !categoriasReady;
+  syncProgress.hidden = !isSyncingPrices;
+  if (isSyncingPrices) {
+    syncProgressBar.max = state.total;
+    syncProgressBar.value = state.procesados;
+    syncProgressLabel.textContent = `Actualizando precios: ${state.procesados} / ${state.total}`;
   }
-
-  syncButtonStates.forEach((wasDisabled, button) => {
-    button.disabled = wasDisabled;
-  });
-  syncButtonStates.clear();
-  setCategoriaControlsEnabled(categoriasReady);
 }
 
-async function loadCatalog(filters = {}) {
-  currentFilters = filters;
-  const currentRequest = ++requestSequence;
-  const params = new URLSearchParams(
-    Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== ''),
-  );
-  const query = params.toString();
-  setLoading(true);
+async function finishSync(state) {
+  if (syncPollTimer !== null) {
+    clearTimeout(syncPollTimer);
+    syncPollTimer = null;
+  }
+  isSyncingPrices = false;
+  syncProgress.hidden = true;
+  syncPricesButton.disabled = !categoriasReady;
+  await revalidate();
+  showToast(`Actualización de precios terminada: ${state.actualizados.length} actualizadas, ${state.fallidos.length} fallidas.`, 'success');
+}
 
+function scheduleSyncPoll() {
+  if (syncPollTimer === null) {
+    syncPollTimer = setTimeout(pollSync, 2000);
+  }
+}
+
+async function pollSync() {
+  syncPollTimer = null;
   try {
-    const response = await apiFetch(`/minifiguras${query ? `?${query}` : ''}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const response = await apiFetch('/sincronizacion/brickset');
+    if (!response.ok) throw new Error('SYNC_STATUS_ERROR');
+    const state = await response.json();
+    if (state.estado === 'en_curso') {
+      showSyncProgress(state);
+      scheduleSyncPoll();
+    } else if (state.estado === 'completada') {
+      await finishSync(state);
     }
-    const catalog = await response.json();
-    if (!Array.isArray(catalog)) {
-      throw new Error('Respuesta invalida');
+  } catch {
+    if (isSyncingPrices) scheduleSyncPoll();
+  }
+}
+
+async function startSync() {
+  syncPricesButton.disabled = true;
+  try {
+    const response = await apiFetch('/sincronizacion/brickset', { method: 'POST' });
+    const state = await response.json();
+    if (!response.ok) throw new Error(state.error ?? 'BRICKSET_NO_DISPONIBLE');
+    if (state.estado === 'en_curso') {
+      showSyncProgress(state);
+      scheduleSyncPoll();
+    } else {
+      await finishSync(state);
     }
-    if (currentRequest === requestSequence) {
-      if (!query) {
-        const wasEmpty = hasLoadedFullCatalog && catalogForOptions.length === 0;
-        hasLoadedFullCatalog = true;
-        renderDynamicFilterOptions(catalog);
-        for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
-          if (catalog.length === 0) setPanelCollapsed(button, true);
-          else if (wasEmpty) setPanelCollapsed(button, false);
-        }
-      }
-      renderCatalog(catalog);
-      await loadTotal();
-      await loadGamification();
-      return catalog;
-    }
+  } catch {
+    isSyncingPrices = false;
+    syncProgress.hidden = true;
+    syncPricesButton.disabled = !categoriasReady;
+    showToast('No se pudieron actualizar los precios desde Brickset.', 'error');
+  }
+}
+
+async function fetchCatalog() {
+  const response = await apiFetch('/minifiguras');
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const catalog = await response.json();
+  if (!Array.isArray(catalog)) {
+    throw new Error('Respuesta invalida');
+  }
+  return catalog;
+}
+
+async function loadCatalog() {
+  const currentRequest = ++requestSequence;
+  setLoading(true);
+  let catalog;
+  try {
+    catalog = await fetchCatalog();
   } catch {
     if (currentRequest === requestSequence) {
       catalogBody.replaceChildren();
       resultCount.textContent = '';
       categoriasReady = false;
       officialCategorias = [];
-      setCategoriaControlsEnabled(false);
       setStatus('No se pudo cargar el catálogo. Inténtalo de nuevo.', 'error');
-    }
-  } finally {
-    if (currentRequest === requestSequence) {
       setLoading(false);
-      setCategoriaControlsEnabled(!isSyncingPrices && categoriasReady);
+      setCategoriaControlsEnabled(false);
     }
+    return undefined;
   }
+  if (currentRequest !== requestSequence) return undefined;
+  setCatalogCache(catalog);
+  applyFilters();
+  setLoading(false);
+  setCategoriaControlsEnabled(!isSyncingPrices && categoriasReady);
+  await Promise.all([loadTotal(), loadGamification()]);
+  return catalog;
 }
 
-async function refreshCatalogAfterMutation() {
-  const filters = currentFilters;
-  if (Object.values(filters).some((value) => value !== '')) await loadCatalog();
-  await loadCatalog(filters);
+// Keeps the locally applied state if the catalog cannot be refreshed.
+async function revalidate() {
+  const currentRequest = ++requestSequence;
+  await Promise.all([
+    fetchCatalog()
+      .then((catalog) => {
+        if (currentRequest !== requestSequence) return;
+        setCatalogCache(catalog);
+        applyFilters({ preservePage: true });
+      })
+      .catch(() => {}),
+    loadTotal(),
+    loadGamification(),
+  ]);
 }
 
 async function loadTotal() {
@@ -693,7 +790,7 @@ function renderGamification(state) {
 
     const icon = document.createElement('img');
     icon.className = 'achievement-icon';
-    icon.src = '/trophy-icon.svg';
+    icon.src = '/toast_images/75206.png';
     icon.alt = '';
 
     const info = document.createElement('div');
@@ -716,7 +813,7 @@ function renderGamification(state) {
     bricksValue.textContent = logro.total;
     const brickIcon = document.createElement('img');
     brickIcon.className = 'achievement-brick-icon';
-    brickIcon.src = '/brick-red-icon.svg';
+    brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
     brickIcon.alt = 'Bricks';
     bricks.append(bricksValue, brickIcon);
 
@@ -747,7 +844,7 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const messageNode = document.createTextNode(message);
-  if (iconSrc === null) iconSrc = '/87X2Rz8y2ZY.png';
+  if (iconSrc === null) iconSrc = '/toast_images/87X2Rz8y2ZY.png';
   iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
   const icon = iconSrc ? document.createElement('img') : null;
   if (icon) {
@@ -780,9 +877,9 @@ function showGamificationToasts(gamification) {
       return;
     }
     if (logro.kind === 'level') {
-      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', '/trophy-icon.svg', 'before');
+      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', '/toast_images/75206.png', 'before');
     } else {
-      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'task', '/brick-red-icon.svg', 'before');
+      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'task', '/toast_images/hero_2026-01-05_16-38-47-871.webp', 'before');
     }
     setTimeout(showNext, 300);
   };
@@ -853,7 +950,8 @@ function openFormDialog(mode, minifigura) {
 }
 
 async function openMinifiguraView(id) {
-  let minifigura = currentCatalog.find((item) => item.id === id);
+  const normalizedId = String(id).trim().toUpperCase();
+  let minifigura = catalogCache.find((item) => item.id === normalizedId);
   if (!minifigura) {
     try {
       const response = await apiFetch(`/minifiguras?id=${encodeURIComponent(id)}`);
@@ -878,7 +976,8 @@ function updateFormMode() {
   const isCreate = currentFormMode === 'create';
   const isView = currentFormMode === 'view';
   const hasId = formIdInput.value.trim() !== '';
-  const editableFields = [formNombreInput, formDescripcionInput, formEstadoInput, formPrecioCompraInput, formFechaCompraInput];
+  const editableFields = [formNombreInput, formDescripcionInput, formEstadoInput];
+  const purchaseFields = [formPrecioCompraInput, formFechaCompraInput];
   const bricksetFields = [formCategoriaInput, formSubcategoriaInput, formAnioInput, formPrecioInput];
 
   formDialog.classList.toggle('view-mode', isView);
@@ -886,6 +985,10 @@ function updateFormMode() {
   formIdInput.readOnly = !isCreate;
   formIdInput.disabled = isView;
   editableFields.forEach((field) => { field.disabled = isView || (isCreate && !formSynced); });
+  purchaseFields.forEach((field) => {
+    if (formEstadoInput.value === 'BUSCADA') field.value = '';
+    field.disabled = isView || formEstadoInput.value === 'BUSCADA' || (isCreate && !formSynced);
+  });
   formStateToggleButtons.forEach((button) => { button.disabled = isView || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);
@@ -1020,7 +1123,7 @@ form.addEventListener('submit', (event) => {
     : wantedFilterInput.checked && !collectionFilterInput.checked
       ? 'BUSCADA'
       : '';
-  loadCatalog({
+  activeFilters = {
     id: filterValue('id'),
     nombre: filterValue('nombre'),
     categoria: filterValue('categoria'),
@@ -1028,12 +1131,15 @@ form.addEventListener('submit', (event) => {
     anio: filterValue('anio'),
     estadoColeccion: collectionState,
     observada: observedFilterInput.checked ? 'true' : '',
-  });
+  };
+  applyFilters();
 });
 
 showAllButton.addEventListener('click', () => {
   form.reset();
-  loadCatalog();
+  activeFilters = {};
+  renderDynamicFilterOptions(catalogCache);
+  applyFilters();
 });
 
 sortButtons.forEach((button) => {
@@ -1064,29 +1170,7 @@ nextPageButton.addEventListener('click', () => {
   }
 });
 
-syncPricesButton.addEventListener('click', async () => {
-  setSyncLoading(true);
-  showToast('Actualizando precios desde Brickset...', 'success');
-
-  try {
-    const response = await apiFetch('/sincronizacion/brickset', { method: 'POST' });
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
-    }
-
-    await loadCatalog(currentFilters);
-    if (result.fallidos?.length) {
-      showToast(`Precios actualizados: ${result.actualizados.length}. Fallidos: ${result.fallidos.length}.`, 'error');
-    } else {
-      showToast(`Precios actualizados: ${result.actualizados.length}.`, 'success');
-    }
-  } catch {
-    showToast('No se pudieron actualizar los precios desde Brickset.', 'error');
-  } finally {
-    setSyncLoading(false);
-  }
-});
+syncPricesButton.addEventListener('click', startSync);
 
 newMinifiguraButton.addEventListener('click', () => {
   openFormDialog('create');
@@ -1101,12 +1185,29 @@ gamificationLevelButton.addEventListener('click', () => {
   gamificationDialog.showModal();
 });
 
-gamificationAchievementsButton.addEventListener('click', () => {
-  gamificationDialog.showModal();
-});
-
 gamificationCloseButton.addEventListener('click', () => {
   gamificationDialog.close();
+});
+
+userMenuToggle.addEventListener('click', () => {
+  const expanded = userMenuToggle.getAttribute('aria-expanded') !== 'true';
+  userMenuToggle.setAttribute('aria-expanded', String(expanded));
+  userProfile.hidden = !expanded;
+});
+
+document.addEventListener('click', (event) => {
+  if (!userSession.contains(event.target)) {
+    userProfile.hidden = true;
+    userMenuToggle.setAttribute('aria-expanded', 'false');
+  }
+});
+
+userSession.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !userProfile.hidden) {
+    userProfile.hidden = true;
+    userMenuToggle.setAttribute('aria-expanded', 'false');
+    userMenuToggle.focus();
+  }
 });
 
 gamificationToggleButton.addEventListener('click', () => {
@@ -1184,9 +1285,9 @@ async function toggleObserved(minifigura, trigger) {
       }
       return;
     }
-    Object.assign(minifigura, result);
-    renderCatalogPage();
-    await loadTotal();
+    upsertCached(result);
+    applyFilters({ preservePage: true });
+    void revalidate();
   } catch {
     showToast('No se pudo actualizar la observación.', 'error');
   } finally {
@@ -1290,8 +1391,10 @@ minifiguraForm.addEventListener('submit', async (event) => {
     const result = await response.json();
     showGamificationToasts(result.gamificacion);
     closeFormDialog();
-    await refreshCatalogAfterMutation();
+    upsertCached(result);
+    applyFilters({ preservePage: true });
     showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
+    void revalidate();
   } catch {
     const connError = 'No se pudo conectar con el servidor. Intentalo de nuevo.';
     formError.textContent = connError;
@@ -1361,8 +1464,10 @@ deleteConfirmButton.addEventListener('click', async () => {
     }
 
     closeDeleteDialog();
-    await refreshCatalogAfterMutation();
+    removeCached(id);
+    applyFilters({ preservePage: true });
     showToast('Minifigura eliminada correctamente.', 'success');
+    void revalidate();
   } catch {
     showToast('No se pudo conectar con el servidor. Intentalo de nuevo.', 'error');
   } finally {
@@ -1376,6 +1481,20 @@ async function initialize() {
     if (catalog?.length === 0 && currentSession) {
       firstMinifiguraDialog.showModal();
       firstMinifiguraTitle.focus();
+    }
+    if (currentSession) {
+      try {
+        const response = await apiFetch('/sincronizacion/brickset');
+        if (response.ok) {
+          const state = await response.json();
+          if (state.estado === 'en_curso') {
+            showSyncProgress(state);
+            scheduleSyncPoll();
+          }
+        }
+      } catch {
+        // Sync status is optional during initial catalog loading.
+      }
     }
   }
 }
@@ -1393,10 +1512,18 @@ async function apiFetch(url, init = {}) {
 
 function clearUserData() {
   requestSequence += 1;
-  currentFilters = {};
+  if (syncPollTimer !== null) {
+    clearTimeout(syncPollTimer);
+    syncPollTimer = null;
+  }
+  isSyncingPrices = false;
+  syncProgress.hidden = true;
+  syncPricesButton.disabled = true;
+  activeFilters = {};
+  catalogCache = [];
   catalogForOptions = [];
   hasLoadedFullCatalog = false;
-  renderCatalog([]);
+  applyFilters();
   collectionTotal.textContent = formatPrice(0);
   collectionCount.textContent = '0';
   wantedCount.textContent = '0';
@@ -1418,10 +1545,11 @@ function showAuthScreen(message = '') {
   authMessage.textContent = message;
   loginButton.disabled = supabaseClient === null;
   userName.textContent = '';
-  userName.hidden = false;
   userProfile.removeAttribute('title');
   userAvatar.hidden = true;
   userAvatar.removeAttribute('src');
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
 }
 
 function handleSession(session, message = '') {
@@ -1438,7 +1566,8 @@ function handleSession(session, message = '') {
   userName.textContent = name;
   userProfile.title = name;
   userAvatar.hidden = !avatarUrl;
-  userName.hidden = Boolean(avatarUrl);
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
   if (avatarUrl) userAvatar.src = avatarUrl;
   else userAvatar.removeAttribute('src');
   authScreen.hidden = true;

@@ -148,3 +148,76 @@ test('BricksetScraper.getDetails reutiliza la misma peticion que getPrice', asyn
   });
   assert.equal(requestedUrl, 'https://brickset.com/minifigs/col079');
 });
+
+test('serializa peticiones y respeta el intervalo minimo', async () => {
+  let clock = 0;
+  const starts = [];
+  const scraper = new BricksetScraper({
+    minIntervalMs: 100,
+    now: () => clock,
+    sleep: async (duration) => { clock += duration; },
+    fetchImpl: async () => {
+      starts.push(clock);
+      return new Response('<p>Current Value - New</p><span>€1</span>', { status: 200 });
+    },
+  });
+
+  await Promise.all([scraper.getPrice('a'), scraper.getPrice('b'), scraper.getPrice('c')]);
+  assert.deepEqual(starts, [0, 100, 200]);
+});
+
+test('reintenta 429 respetando Retry-After en segundos y fecha HTTP', async () => {
+  let clock = 1_000;
+  const waits = [];
+  let attempts = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    now: () => clock,
+    sleep: async (duration) => { waits.push(duration); clock += duration; },
+    maxRateLimitRetries: 2,
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) return new Response('', { status: 429, headers: { 'Retry-After': '30' } });
+      if (attempts === 2) return new Response('', { status: 429, headers: { 'Retry-After': new Date(clock + 45_000).toUTCString() } });
+      return new Response('<p>Current Value - New</p><span>€2</span>', { status: 200 });
+    },
+  });
+
+  assert.equal(await scraper.getPrice('a'), 2);
+  assert.deepEqual(waits, [30_000, 45_000]);
+});
+
+test('usa la espera por defecto para 429 sin Retry-After y falla con BRICKSET_LIMITE', async () => {
+  let clock = 0;
+  let attempts = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    defaultRetryAfterMs: 500,
+    maxRateLimitRetries: 2,
+    now: () => clock,
+    sleep: async (duration) => { clock += duration; },
+    fetchImpl: async () => {
+      attempts += 1;
+      return new Response('', { status: 429 });
+    },
+  });
+
+  await assert.rejects(() => scraper.getPrice('a'), (error) => error.code === 'BRICKSET_LIMITE');
+  assert.equal(attempts, 3);
+  assert.equal(clock, 1_000);
+});
+
+test('no reintenta errores HTTP distintos de 429', async () => {
+  let attempts = 0;
+  const scraper = new BricksetScraper({
+    retries: 3,
+    minIntervalMs: 0,
+    fetchImpl: async () => {
+      attempts += 1;
+      return new Response('', { status: 503 });
+    },
+  });
+
+  await assert.rejects(() => scraper.getPrice('a'), (error) => error.code === 'BRICKSET_NO_DISPONIBLE');
+  assert.equal(attempts, 1);
+});
