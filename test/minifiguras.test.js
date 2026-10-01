@@ -835,11 +835,11 @@ test('GET /sincronizacion/brickset exige autenticacion y aisla usuarios', async 
   });
 });
 
-test('sincronizacion/brickset rechaza metodos distintos de GET y POST', async () => {
+test('sincronizacion/brickset rechaza metodos distintos de GET, POST y PATCH', async () => {
   await withServer('[]', async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'PATCH' });
+    const response = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'DELETE' });
     assert.equal(response.status, 405);
-    assert.equal(response.headers.get('allow'), 'GET, POST');
+    assert.equal(response.headers.get('allow'), 'GET, POST, PATCH');
     assert.deepEqual(await response.json(), { error: 'METODO_NO_PERMITIDO' });
   });
 });
