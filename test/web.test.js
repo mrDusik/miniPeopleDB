@@ -246,14 +246,13 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.querySelector('#gamification-achievements-button'), null);
     assert.equal(details.children[0].className, 'gamification-progress');
     assert.equal(details.children[1].className, 'collection-counts-panel');
-    assert.equal(details.children[2].className, 'summary-ranking-row');
-    assert.equal(details.children[2].firstElementChild.id, 'open-global-ranking');
+    assert.equal(details.querySelector('#open-global-ranking').parentElement.className, 'summary-ranking-row');
     assert.equal(details.children[1].querySelectorAll(':scope > span').length, 3);
     assert.equal(details.children[1].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
     assert.equal(details.children[1].querySelector('.collection-value img').title, 'Valor total de tu colección');
     assert.equal(details.children[1].querySelector('#collection-total').textContent, '€0,00');
-    assert.equal(details.children[2].firstElementChild.textContent.trim(), '🌐 Ranking Global');
-    assert.equal(details.children[3].firstElementChild.textContent.trim(), '🔄 Sincronizar Precios');
+    assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
+    assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     const countsPanel = details.children[1];
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 3);
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
