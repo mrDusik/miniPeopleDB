@@ -384,9 +384,10 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const catalog = [
-    { id: 'a', nombre: 'A', descripcion: 'A', categoria: 'Space', subcategoria: undefined, anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15 },
-    { id: 'b', nombre: 'B', descripcion: 'B', categoria: 'Collectible Minifigures', subcategoria: 'Team GB', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50 },
-    { id: 'c', nombre: 'C', descripcion: 'C', categoria: 'Space', anio: 2023, precioCompra: 20 },
+    { id: 'a', nombre: 'A', descripcion: 'A', categoria: 'Space', subcategoria: undefined, anio: 2024, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 15, FechaRegistro: '2026-01-04T00:00:00.000Z' },
+    { id: 'b', nombre: 'B', descripcion: 'B', categoria: 'Collectible Minifigures', subcategoria: 'Team GB', anio: 2022, estadoColeccion: 'BUSCADA', precioCompra: 5, precio: 50, FechaRegistro: '2026-01-03T00:00:00.000Z' },
+    { id: 'c', nombre: 'C', descripcion: 'C', categoria: 'Space', anio: 2023, precioCompra: 20, FechaRegistro: '2026-01-02T00:00:00.000Z' },
+    { id: 'd', nombre: 'D', descripcion: 'D', categoria: 'Space', anio: 2021, estadoColeccion: 'COLECCIÓN', precioCompra: 10, precio: 40, FechaRegistro: '2026-01-01T00:00:00.000Z' },
   ];
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
@@ -406,7 +407,7 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
   assert.deepEqual(
     [...window.document.querySelectorAll('#categoria option')].slice(1).map((option) => option.textContent),
-    ['Collectible Minifigures (1)', 'Space (2)'],
+    ['Collectible Minifigures (1)', 'Space (3)'],
   );
   assert.equal(rows()[0].children[9].textContent, '5,00 €');
   assert.equal(rows()[1].children[9].textContent, 'N/A');
@@ -422,11 +423,18 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.equal(rows()[1].children[4].textContent, 'Collectible Minifigures');
   assert.equal(rows()[1].children[5].textContent, 'Team GB');
   window.document.querySelector('[data-sort="anio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['b', 'c', 'a']);
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'b', 'c', 'a']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'b', 'c']);
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'd', 'b', 'c']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['b', 'a', 'c']);
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['b', 'd', 'a', 'c']);
+  window.document.querySelector('[data-sort="diferencia"]').click();
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'd', 'b', 'c']);
+  window.document.querySelector('[data-sort="diferencia"]').click();
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'a', 'b', 'c']);
+  window.document.querySelector('#show-all').click();
+  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'b', 'c', 'd']);
+  assert.equal(window.document.querySelectorAll('.table-sort[data-direction=""]').length, 3);
 
   const editButton = rows().find((row) => row.children[2].textContent === 'c').querySelector('[data-action="edit"]');
   editButton.click();

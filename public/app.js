@@ -427,9 +427,17 @@ function sortCatalog(catalog) {
   }
 
   const direction = activeSort.direction === 'asc' ? 1 : -1;
+  const sortValue = (minifigura) => {
+    if (activeSort.field !== 'diferencia') return minifigura[activeSort.field];
+    if (normalizedCollectionState(minifigura.estadoColeccion) === 'BUSCADA'
+      || !Number.isFinite(minifigura.precio)
+      || !Number.isFinite(minifigura.precioCompra)) return undefined;
+    return minifigura.precio - minifigura.precioCompra;
+  };
+
   return [...catalog].sort((left, right) => {
-    const leftValue = left[activeSort.field];
-    const rightValue = right[activeSort.field];
+    const leftValue = sortValue(left);
+    const rightValue = sortValue(right);
     const leftMissing = !Number.isFinite(leftValue);
     const rightMissing = !Number.isFinite(rightValue);
     if (leftMissing || rightMissing) {
@@ -1372,6 +1380,8 @@ form.addEventListener('submit', (event) => {
 showAllButton.addEventListener('click', () => {
   form.reset();
   activeFilters = {};
+  activeSort = { field: null, direction: 'asc' };
+  sortButtons.forEach((button) => { button.dataset.direction = ''; });
   renderDynamicFilterOptions(catalogCache);
   applyFilters();
 });
