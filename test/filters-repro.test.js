@@ -12,7 +12,7 @@ function figure(id, categoria, subcategoria = undefined) {
   return { id, nombre: id, descripcion: 'Figura', categoria, subcategoria, anio: 2024, estadoColeccion: 'COLECCIÓN' };
 }
 
-test('repro: Buscar envía filtros y muestra solo el resultado filtrado', async () => {
+test('repro: Buscar filtra en memoria y muestra solo el resultado filtrado', async () => {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   const catalog = [figure('space-1', 'Space'), figure('castle-1', 'Castle')];
@@ -21,7 +21,6 @@ test('repro: Buscar envía filtros y muestra solo el resultado filtrado', async 
     requests.push(url);
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
     if (url === '/minifiguras') return { ok: true, json: async () => catalog };
-    if (url.startsWith('/minifiguras?')) return { ok: true, json: async () => [catalog[1]] };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 100 }, logros: [] }) };
     return { ok: false, json: async () => ({}) };
@@ -33,7 +32,7 @@ test('repro: Buscar envía filtros y muestra solo el resultado filtrado', async 
   window.document.querySelector('#categoria').value = 'Castle';
   window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.ok(requests.includes('/minifiguras?categoria=Castle'));
+  assert.deepEqual(requests.filter((url) => url.startsWith('/minifiguras')), ['/minifiguras']);
   assert.deepEqual([...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent), ['castle-1']);
   dom.window.close();
 });

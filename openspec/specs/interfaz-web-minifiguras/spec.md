@@ -22,17 +22,16 @@ El sistema SHALL servir una interfaz web estática desde la ruta raíz del servi
 
 ### Requirement: Filtrar el catálogo desde el panel de búsqueda
 
-La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y observación, y SHALL ofrecer `Buscar` y `Mostrar todo`. El estado SHALL filtrarse con dos toggles de icono `📦` y `🔍`: activar solo uno filtra por ese estado; activar ambos o ninguno no restringe por estado. En escritorio los controles SHALL conservar la disposición en una sola fila cuando el ancho lo permita. Las opciones de categoría y subcategoría SHALL derivarse de las figuras presentes en el catálogo, incluir el contador actual con formato `Nombre (X)`, y subcategoría SHALL depender de la categoría seleccionada. `Mostrar todo` SHALL restaurar `Todas (Total)`, limpiar nombre y desactivar los toggles.
+La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y observación, y SHALL ofrecer `Buscar` y `Mostrar todo`. El filtrado SHALL resolverse en el navegador sobre la caché local del catálogo, sin realizar peticiones al servidor, y SHALL producir los mismos resultados que `GET /minifiguras` con los mismos filtros: coincidencia parcial sin distinguir mayúsculas ni acentos para `id` y `nombre`, y coincidencia exacta sin distinguir mayúsculas ni acentos para `categoria`, `subcategoria` y `estadoColeccion`, y exacta para `anio` y observación. El estado SHALL filtrarse con dos toggles de icono `📦` y `🔍`: activar solo uno filtra por ese estado; activar ambos o ninguno no restringe por estado. En escritorio los controles SHALL conservar la disposición en una sola fila cuando el ancho lo permita. Las opciones de categoría y subcategoría SHALL derivarse de las figuras presentes en el catálogo, incluir el contador actual con formato `Nombre (X)`, y subcategoría SHALL depender de la categoría seleccionada. `Mostrar todo` SHALL restaurar `Todas (Total)`, limpiar nombre y desactivar los toggles.
 
 #### Scenario: Buscar con filtros
 - **WHEN** el usuario completa filtros y activa `Buscar`
-- **THEN** la interfaz solicita `GET /minifiguras` con los parámetros correspondientes
-- **AND** actualiza la tabla
+- **THEN** la interfaz no realiza ninguna petición a `GET /minifiguras`
+- **AND** actualiza la tabla solo con las figuras de la caché que cumplen todos los filtros
 
 #### Scenario: Buscar por nombre
 - **WHEN** el usuario introduce parte del nombre y activa `Buscar`
-- **THEN** la interfaz solicita el filtro `nombre`
-- **AND** actualiza la tabla con las coincidencias
+- **THEN** la tabla muestra las figuras cuyo nombre normalizado contiene el texto normalizado
 
 #### Scenario: Filtrar por estado con iconos
 - **WHEN** el usuario activa solo `📦` o solo `🔍` y selecciona `Buscar`
@@ -43,8 +42,11 @@ La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcatego
 #### Scenario: Mostrar todo
 - **WHEN** el usuario activa `Mostrar todo`
 - **THEN** limpia los filtros
-- **AND** solicita `GET /minifiguras` sin filtros
-- **AND** muestra todo el catálogo
+- **AND** muestra todo el catálogo de la caché sin realizar peticiones al servidor
+
+#### Scenario: Filtrado sin coincidencias
+- **WHEN** ninguna figura de la caché cumple los filtros
+- **THEN** la tabla conserva los encabezados y muestra el estado `No hay minifiguras que coincidan con la consulta.`
 
 #### Scenario: Cambiar la categoría del filtro
 - **WHEN** el usuario selecciona una `categoria` en el panel de filtros
@@ -97,7 +99,7 @@ La interfaz SHALL comunicar cargas, errores locales y errores de Brickset sin bo
 
 ### Requirement: Gestionar datos de compra y precio Brickset
 
-La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el modo lo permita, y `categoria`, `subcategoria`, `anio` y `precio` como campos provenientes de Brickset con estilo `.input-readonly`. SHALL sincronizar individualmente de forma automática al cargar correctamente la imagen de un ID introducido y SHALL ofrecer sincronización masiva; la sincronización individual SHALL aplicar el año actual como fallback cuando Brickset devuelva `0` o no lo devuelva.
+La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el modo lo permita, y `categoria`, `subcategoria`, `anio` y `precio` como campos provenientes de Brickset con estilo `.input-readonly`. SHALL sincronizar individualmente de forma automática al cargar correctamente la imagen de un ID introducido y SHALL ofrecer sincronización masiva en segundo plano; la sincronización individual SHALL aplicar el año actual como fallback cuando Brickset devuelva `0` o no lo devuelva.
 
 #### Scenario: Consulta individual
 - **WHEN** se carga correctamente la imagen del ID válido introducido en el modal de alta o edición
@@ -107,14 +109,52 @@ La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el mod
 #### Scenario: Actualización masiva
 - **WHEN** el usuario activa `Actualizar precios desde Brickset`
 - **THEN** inicia la actualización masiva de `precio` únicamente
-- **AND** muestra Toasts de carga, éxito o error
-- **AND** refresca tabla y resumen al terminar
+- **AND** al terminar refresca tabla y resumen
 - **AND** no modifica `categoria`, `subcategoria` ni `anio` de ninguna minifigura
+
+#### Scenario: Error al iniciar la actualización masiva
+- **WHEN** la API rechaza el inicio de la actualización masiva o no responde
+- **THEN** la interfaz muestra un Toast de error
+- **AND** el botón `🔄` vuelve a estar habilitado
 
 #### Scenario: Fallback de año visible
 - **WHEN** la consulta individual a Brickset devuelve año `0` o ausente
 - **THEN** el campo Año muestra el año actual
 - **AND** el botón Guardar puede habilitarse si se cumplen los demás obligatorios
+
+### Requirement: Mostrar el progreso de la actualización masiva
+
+Mientras la actualización masiva del usuario esté en curso, la interfaz SHALL mantener deshabilitado el botón `🔄`, SHALL mostrar en el panel desplegable del resumen una barra de progreso con el avance `procesados / total` y SHALL consultar periódicamente el estado de la tarea. El resto de la interfaz SHALL permanecer usable. Al completarse, la interfaz SHALL ocultar la barra, habilitar el botón, refrescar tabla y resumen, y mostrar un Toast blanco (estilo de éxito) indicando que la actualización ha terminado con el número de figuras actualizadas y fallidas. Si la tarea termina en la respuesta de inicio, no SHALL mostrarse la barra y solo SHALL mostrarse el Toast final.
+
+#### Scenario: Tarea en curso
+- **WHEN** la respuesta de inicio indica `estado: "en_curso"`
+- **THEN** el botón `🔄` queda deshabilitado
+- **AND** el panel desplegable muestra la barra de progreso con `procesados` de `total`
+- **AND** los filtros, la tabla y las acciones de fila siguen habilitados
+
+#### Scenario: Avance de la tarea
+- **WHEN** una consulta periódica devuelve un `procesados` mayor
+- **THEN** la barra de progreso refleja el nuevo avance
+
+#### Scenario: Fin de la tarea
+- **WHEN** una consulta periódica devuelve `estado: "completada"`
+- **THEN** la barra de progreso se oculta
+- **AND** el botón `🔄` se habilita
+- **AND** se muestra un Toast blanco con el texto `Actualización de precios terminada: X actualizadas, Y fallidas.`
+- **AND** la tabla y el resumen se refrescan
+
+#### Scenario: Tarea instantánea
+- **WHEN** la respuesta de inicio ya indica `estado: "completada"`
+- **THEN** no se muestra la barra de progreso
+- **AND** se muestra el Toast blanco de fin
+
+#### Scenario: Retomar al cargar la página
+- **WHEN** el usuario inicia sesión o recarga la página con una tarea en curso
+- **THEN** la interfaz muestra la barra de progreso y deshabilita el botón `🔄` sin iniciar otra tarea
+
+#### Scenario: Cierre de sesión
+- **WHEN** el usuario cierra sesión con una tarea en curso
+- **THEN** la interfaz deja de consultar el estado y oculta la barra de progreso
 
 ### Requirement: Ordenar la tabla por año y precio
 
@@ -142,17 +182,89 @@ La interfaz SHALL mostrar el `Valor Total de la Colección` en Euros, priorizand
 
 ### Requirement: Crear, editar y eliminar minifiguras
 
-La interfaz SHALL ofrecer creación, edición y eliminación mediante formularios y confirmación explícita, mostrando Toasts tras cada operación.
+La interfaz SHALL ofrecer creación, edición y eliminación mediante formularios y confirmación explícita, mostrando Toasts tras cada operación. Tras una confirmación del servidor, la interfaz SHALL aplicar el resultado a la caché local y volver a renderizar inmediatamente, y SHALL revalidar en segundo plano el catálogo, el resumen y la gamificación sin bloquear los controles. La caché SHALL modificarse únicamente con datos confirmados por el servidor.
 
 #### Scenario: Alta, edición o eliminación exitosa
 - **WHEN** la API confirma la operación
-- **THEN** refresca la tabla conservando filtros
+- **THEN** refresca la tabla desde la caché local conservando filtros
 - **AND** muestra un Toast de éxito
+
+#### Scenario: Alta exitosa
+- **WHEN** la API confirma la creación de una minifigura
+- **THEN** la figura devuelta por el servidor se añade a la caché
+- **AND** la tabla se vuelve a renderizar conservando filtros y orden activos sin esperar a otra petición
+- **AND** muestra un Toast de éxito
+
+#### Scenario: Edición exitosa
+- **WHEN** la API confirma la edición de una minifigura
+- **THEN** la figura de la caché con ese `id` se sustituye por la devuelta por el servidor
+- **AND** la tabla se vuelve a renderizar conservando filtros, orden y página cuando siga existiendo
+- **AND** muestra un Toast de éxito
+
+#### Scenario: Eliminación exitosa
+- **WHEN** la API confirma la eliminación de una minifigura
+- **THEN** la figura se elimina de la caché
+- **AND** la tabla se vuelve a renderizar conservando filtros y orden
+- **AND** muestra un Toast de éxito
+
+#### Scenario: Revalidación en segundo plano
+- **WHEN** se ha aplicado una mutación confirmada a la caché
+- **THEN** la interfaz solicita en segundo plano `GET /minifiguras` sin filtros, el resumen y la gamificación
+- **AND** sustituye la caché por el catálogo recibido y vuelve a renderizar con los filtros activos
+- **AND** los controles de filtrado permanecen habilitados durante la revalidación
+
+#### Scenario: Revalidación fallida
+- **WHEN** la revalidación en segundo plano falla
+- **THEN** la interfaz conserva la caché y la tabla actualizadas localmente
+- **AND** no muestra el error bloqueante de carga del catálogo
 
 #### Scenario: Operación rechazada
 - **WHEN** la API devuelve un error
-- **THEN** conserva los datos existentes
+- **THEN** la caché y la tabla no se modifican
 - **AND** muestra un mensaje o Toast de error
+
+### Requirement: Mantener una caché local del catálogo por sesión
+
+La interfaz SHALL cargar el catálogo completo del usuario autenticado mediante una única petición `GET /minifiguras` sin parámetros al iniciar la sesión y SHALL mantenerlo en memoria como fuente para filtrado, ordenación, paginación, apertura de detalles y opciones dinámicas de filtros. La caché SHALL mantenerse solo en memoria, SHALL vaciarse al cerrar o expirar la sesión y SHALL revalidarse tras mutaciones, cambios de observación y sincronización masiva de precios. Si una revalidación anterior responde después de otra más reciente, su resultado SHALL descartarse.
+
+#### Scenario: Carga inicial
+- **WHEN** el usuario inicia sesión
+- **THEN** la interfaz solicita `GET /minifiguras` sin parámetros una sola vez
+- **AND** renderiza la tabla y las opciones de filtros a partir de esa respuesta
+
+#### Scenario: Ordenar y paginar sin red
+- **WHEN** el usuario ordena por `Año` o `Precio` o cambia de página
+- **THEN** la interfaz no realiza peticiones al servidor
+
+#### Scenario: Alternar observación
+- **WHEN** la API confirma el cambio de observación de una figura
+- **THEN** la caché refleja el nuevo valor de `observada`
+- **AND** un filtro de observación activo se reaplica sobre la caché actualizada
+
+#### Scenario: Cerrar sesión
+- **WHEN** la sesión se cierra o expira
+- **THEN** la caché se vacía
+- **AND** ningún dato del usuario anterior se muestra al iniciar otra sesión
+
+#### Scenario: Respuesta obsoleta
+- **WHEN** una revalidación iniciada antes responde después que otra iniciada más tarde
+- **THEN** la interfaz ignora la respuesta más antigua
+
+### Requirement: Renderizar imágenes y tarjetas de forma eficiente
+
+La interfaz SHALL minimizar el trabajo de renderizado al mostrar la colección: las miniaturas de la tabla y las imágenes de las tarjetas de rankings y watchlist SHALL declarar carga diferida (`loading="lazy"`), decodificación asíncrona (`decoding="async"`) y dimensiones explícitas; las tarjetas de rankings y watchlist SHALL usar `content-visibility: auto` con un tamaño intrínseco reservado; y cada renderizado de página SHALL insertar las filas en el DOM en una única operación.
+
+#### Scenario: Atributos de imagen
+- **WHEN** se renderiza una miniatura de tabla o una imagen de tarjeta de ranking o watchlist
+- **THEN** la imagen tiene `loading="lazy"`, `decoding="async"` y atributos `width` y `height`
+
+#### Scenario: Estilos de contención
+- **WHEN** se cargan los estilos de la interfaz
+- **THEN** las tarjetas de rankings y watchlist declaran `content-visibility: auto` y `contain-intrinsic-size`
+
+#### Scenario: Inserción única por página
+- **WHEN** se renderiza una página del catálogo
+- **THEN** el cuerpo de la tabla se reemplaza en una sola operación con todas las filas de la página
 
 ### Requirement: Rellenar Categoría, Subcategoría y Año desde Brickset en el formulario
 

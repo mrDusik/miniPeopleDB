@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MiniPeopleDB</title>
-  <link rel="icon" type="image/svg+xml" href="/brick-red-icon.svg">
+  <link rel="icon" type="image/webp" href="/toast_images/hero_2026-01-05_16-38-47-871.webp">
   <link rel="stylesheet" href="/styles.css">
   <script src="/vendor/supabase.js" defer></script>
   <script src="/app.js?v=panel-toggles-1" defer></script>
@@ -21,13 +21,6 @@
   </section>
   <main class="page-shell" hidden>
     <header class="page-header">
-      <div class="user-session">
-        <span id="user-profile" class="user-profile">
-          <img id="user-avatar" class="user-avatar" alt="" hidden>
-          <span id="user-name" class="user-name"></span>
-        </span>
-        <button type="button" id="logout" class="button button-secondary button-small">Cerrar sesión</button>
-      </div>
       <div class="header-top">
         <div class="brand-heading">
           <h1>MiniPeopleDB</h1>
@@ -35,13 +28,24 @@
         </div>
         <section class="gamification-summary" aria-labelledby="gamification-title">
           <div class="gamification-main">
+            <div class="user-session">
+              <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
+                <img id="user-avatar" class="user-avatar" alt="" hidden>
+                <span class="user-avatar-fallback" aria-hidden="true">👤</span>
+                <span class="user-menu-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div id="user-profile" class="user-profile" hidden>
+                <span id="user-name" class="user-name"></span>
+                <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
+              </div>
+            </div>
             <button type="button" id="gamification-level" class="gamification-level" aria-haspopup="dialog">
               <span id="gamification-title" class="gamification-level-title"><img class="gamification-level-image" src="/level_images/9_forestman.png" alt=""><span id="gamification-level-number">0</span> <span id="gamification-level-name">Duplo</span></span>
-              <span class="gamification-bricks-value">
-                <strong id="gamification-bricks">0</strong>
-                <img class="gamification-brick-icon" src="/brick-red-icon.svg" alt="Bricks">
-              </span>
             </button>
+            <span class="gamification-bricks-value">
+              <strong id="gamification-bricks">0</strong>
+              <img class="gamification-brick-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="Bricks">
+            </span>
             <button type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
           </div>
           <div id="gamification-details" class="gamification-details" hidden>
@@ -52,15 +56,9 @@
               </div>
               <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
             </div>
-            <div class="gamification-achievements-row">
-              <button type="button" id="gamification-achievements-button" class="button button-secondary gamification-achievements-button" aria-haspopup="dialog">
-                <img class="gamification-trophy-icon" src="/trophy-icon.svg" alt="">
-                <span>Logros</span>
-              </button>
-            </div>
             <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
-              <span><span class="count-icon" title="Colección" aria-hidden="true">📦</span><strong id="collection-count">0</strong></span>
-              <span><span class="count-icon" title="Búsqueda" aria-hidden="true">🔍</span><strong id="wanted-count">0</strong></span>
+              <span><img class="count-icon status-icon-image" src="/status_images/caja.png" alt="" title="Colección"><strong id="collection-count">0</strong></span>
+              <span><img class="count-icon status-icon-image" src="/status_images/lupa.png" alt="" title="Búsqueda"><strong id="wanted-count">0</strong></span>
             </div>
             <div class="collection-summary" aria-live="polite">
               <button type="button" id="sync-prices" class="button button-secondary button-icon summary-sync" aria-label="Actualizar precios desde Brickset" title="Actualizar precios desde Brickset">🔄</button>
@@ -68,6 +66,10 @@
                 <span>Valor total:</span>
                 <strong id="collection-total">€0,00</strong>
               </div>
+            </div>
+            <div id="sync-progress" class="sync-progress" hidden>
+              <progress id="sync-progress-bar" max="0" value="0"></progress>
+              <span id="sync-progress-label">Actualizando precios: 0 / 0</span>
             </div>
           </div>
         </section>
@@ -137,12 +139,12 @@
         <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
           <legend class="visually-hidden">Estado</legend>
           <label class="filter-toggle" title="Colección">
-            <input id="filter-coleccion" type="checkbox" aria-label="Filtrar 📦">
-            <span class="filter-symbol" title="Colección" aria-hidden="true">📦</span>
+            <input id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
+            <img class="filter-symbol status-icon-image" src="/status_images/caja.png" title="Colección" alt="">
           </label>
           <label class="filter-toggle" title="Búsqueda">
-            <input id="filter-buscada" type="checkbox" aria-label="Filtrar 🔍">
-            <span class="filter-symbol" title="Búsqueda" aria-hidden="true">🔍</span>
+            <input id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
+            <img class="filter-symbol status-icon-image" src="/status_images/lupa.png" title="Búsqueda" alt="">
           </label>
         </fieldset>
         <label class="filter-toggle">
@@ -198,7 +200,7 @@
     </section>
 
     <dialog id="first-minifigura-dialog" class="modal first-minifigura-dialog" aria-labelledby="first-minifigura-title">
-      <img src="/brick-red-icon.svg" alt="" class="first-minifigura-icon">
+      <img src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="" class="first-minifigura-icon">
       <h2 id="first-minifigura-title" tabindex="-1">Tu colección empieza aquí</h2>
       <p>Añade tu primera minifigura para ganar unos Bricks</p>
       <button type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
@@ -222,12 +224,12 @@
               <div class="modal-state-control">
                 <label class="visually-hidden" for="form-estadoColeccion">Estado *</label>
                 <select id="form-estadoColeccion" name="estadoColeccion" class="visually-hidden">
-                  <option value="COLECCIÓN" selected>📦</option>
-                  <option value="BUSCADA">🔍</option>
+                  <option value="COLECCIÓN" selected>Colección</option>
+                  <option value="BUSCADA">Búsqueda</option>
                 </select>
                 <div id="form-state-toggles" class="form-state-toggles" role="group" aria-label="Estado">
-                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección">📦</button>
-                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda">🔍</button>
+                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección"><img class="status-icon-image" src="/status_images/caja.png" alt=""></button>
+                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda"><img class="status-icon-image" src="/status_images/lupa.png" alt=""></button>
                 </div>
               </div>
               <button type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false">👁️</button>

@@ -100,4 +100,4 @@ npm start
 
 La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales: usan un cliente Supabase simulado (`test-support/supabase-mock.js`).
 
-La concurrencia de la sincronización masiva puede ajustarse con `BRICKSET_CONCURRENCY`; por defecto es `4`.
+Las peticiones a Brickset se serializan y respetan un intervalo mínimo global de 9 segundos. Puede ajustarse con `BRICKSET_MIN_INTERVAL_MS`; la sincronización masiva se ejecuta en segundo plano y expone su progreso en la interfaz.

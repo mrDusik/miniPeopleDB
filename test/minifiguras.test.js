@@ -788,23 +788,59 @@ test('consulta los datos individuales de Brickset y actualiza precios de forma m
     throw new Error('URL inesperada');
   };
 
-  await withServerOptions(catalog, { fetchImpl }, async (baseUrl) => {
+  await withServerOptions(catalog, { fetchImpl, minIntervalMs: 0 }, async (baseUrl, supabase) => {
     const individual = await fetch(`${baseUrl}/minifiguras/a/brickset`);
     assert.equal(individual.status, 200);
     assert.deepEqual(await individual.json(), { id: 'A', categoria: 'Space', anio: 2023, precio: 35.5 });
 
     const sync = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'POST' });
-    assert.equal(sync.status, 200);
-    assert.deepEqual(await sync.json(), {
-      actualizados: ['A'],
-      fallidos: [{ id: 'B', error: 'BRICKSET_PRECIO_NO_DISPONIBLE' }],
-      total: 2,
-    });
+    assert.equal(sync.status, 202);
+    assert.deepEqual(await sync.json(), { estado: 'en_curso', procesados: 0, total: 2, actualizados: [], fallidos: [] });
+
+    let status;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      status = await fetch(`${baseUrl}/sincronizacion/brickset`);
+      const result = await status.json();
+      if (result.estado === 'completada') {
+        assert.deepEqual(result, {
+          estado: 'completada',
+          procesados: 2,
+          total: 2,
+          actualizados: ['A'],
+          fallidos: [{ id: 'B', error: 'BRICKSET_PRECIO_NO_DISPONIBLE' }],
+        });
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(status?.status, 200);
+    assert.equal(supabase.rows('minifiguras').find((item) => item.id === 'A').precio, 35.5);
 
     const persisted = await fetch(`${baseUrl}/minifiguras`);
     const items = await persisted.json();
     assert.equal(items.find((item) => item.id === 'A').precio, 35.5);
     assert.equal(items.find((item) => item.id === 'B').precio, 20);
+  });
+});
+
+test('GET /sincronizacion/brickset exige autenticacion y aisla usuarios', async () => {
+  await withServer(JSON.stringify([makeMinifigura({ id: 'a' })]), async (baseUrl) => {
+    const anonymous = await globalThis.fetch(`${baseUrl}/sincronizacion/brickset`);
+    assert.equal(anonymous.status, 401);
+
+    const own = await fetch(`${baseUrl}/sincronizacion/brickset`);
+    assert.deepEqual(await own.json(), { estado: 'inactiva' });
+    const other = await authFetch(OTHER_TOKEN)(`${baseUrl}/sincronizacion/brickset`);
+    assert.deepEqual(await other.json(), { estado: 'inactiva' });
+  });
+});
+
+test('sincronizacion/brickset rechaza metodos distintos de GET y POST', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'PATCH' });
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('allow'), 'GET, POST');
+    assert.deepEqual(await response.json(), { error: 'METODO_NO_PERMITIDO' });
   });
 });
 
@@ -947,6 +983,25 @@ test('updatePrices persiste solo los precios cambiados del usuario', async () =>
     { id: 'A', precio: 15, user_id: TEST_USER.id },
     { id: 'B', precio: 20, user_id: TEST_USER.id },
   ]);
+});
+
+test('updatePrice actualiza solo el precio y notifica la persistencia', async () => {
+  const { repository, supabase } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 })], {
+    onCatalogPersisted: async (catalog) => catalog,
+  });
+
+  await repository.updatePrice('a', 15);
+  const row = supabase.rows('minifiguras')[0];
+  assert.equal(row.precio, 15);
+  assert.equal(row.id, 'A');
+});
+
+test('updatePrice no recrea figuras eliminadas y rechaza precios invalidos', async () => {
+  const { repository, supabase } = repositoryWith([]);
+
+  assert.equal(await repository.updatePrice('missing', 15), null);
+  await assert.rejects(() => repository.updatePrice('missing', -1), (error) => error.code === 'MINIFIGURA_INVALIDA');
+  assert.equal(supabase.rows('minifiguras').length, 0);
 });
 
 test('el repositorio no permite operar sin catálogo oficial de temas', async () => {

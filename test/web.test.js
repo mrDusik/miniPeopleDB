@@ -62,9 +62,9 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const script = await fetch(`${baseUrl}/app.js`);
     assert.equal(script.status, 200);
     assert.match(script.headers.get('content-type'), /^text\/javascript/);
-    assert.match(await script.text(), /iconSrc = '\/87X2Rz8y2ZY\.png'/);
+    assert.match(await script.text(), /iconSrc = '\/toast_images\/87X2Rz8y2ZY\.png'/);
 
-    const toastImage = await fetch(`${baseUrl}/87X2Rz8y2ZY.png`);
+    const toastImage = await fetch(`${baseUrl}/toast_images/87X2Rz8y2ZY.png`);
     assert.equal(toastImage.status, 200);
     assert.match(toastImage.headers.get('content-type'), /^image\/png/);
 
@@ -88,7 +88,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
 
-    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="BUSCADA">🔍</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
+    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       assert.match(html, /id="filter-coleccion"/);
       assert.match(html, /id="filter-buscada"/);
@@ -96,10 +96,10 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     assert.ok(html.indexOf('name="nombre"') < html.indexOf('name="id"'));
     assert.match(html, /id="show-all"[^>]*>Mostrar todo<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
     assert.match(html, /aria-label="Filtrar observadas"[^>]*title="Filtrar observadas"/);
-    assert.match(html, /<span class="filter-symbol" title="Colección" aria-hidden="true">📦<\/span>/);
-    assert.match(html, /<span class="filter-symbol" title="Búsqueda" aria-hidden="true">🔍<\/span>/);
+    assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/caja\.png" title="Colección" alt="">/);
+    assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/lupa\.png" title="Búsqueda" alt="">/);
     assert.match(html, /<span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️<\/span>/);
-    assert.match(script, /URLSearchParams/);
+    assert.match(script, /matchesClientFilters/);
     assert.match(script, /replaceChildren/);
     assert.match(script, /No se pudo cargar el catálogo/);
   });
@@ -126,11 +126,17 @@ test('las acciones de editar y eliminar permanecen en una sola fila', async () =
   assert.doesNotMatch(css, /\.actions-cell\s*\{[^}]*display:\s*flex/s);
     assert.match(css, /\.filters-form\s*\{[^}]*84px 38px auto auto/s);
   assert.match(css, /\.filters-form \.form-actions\s*\{\s*grid-column:\s*9/);
-    assert.match(css, /\.filter-toggle \.filter-symbol, \.filter-toggle \.eye-symbol\s*\{\s*font-size:\s*1\.25rem;\s*opacity:\s*0\.4/);
+    assert.match(css, /\.filter-toggle \.filter-symbol, \.filter-toggle \.eye-symbol\s*\{[^}]*opacity:\s*0\.4/);
   assert.match(css, /\.eye-icon\s*\{[^}]*font-size:\s*1\.5rem/s);
   assert.match(css, /\.badge\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*font-size:\s*1\.5rem/s);
   assert.match(css, /\.actions-buttons\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
   assert.match(script, /actions\.className = 'actions-buttons'/);
+});
+
+test('los modales usan bordes neutros como los paneles principales', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.modal\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
+  assert.match(css, /\.modal-content\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
 });
 
 test('la interfaz centra el contenido, iguala la tipografia del resumen y elimina la linea de rankings', async () => {
@@ -146,11 +152,14 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.modal label\s*\{[^}]*text-align:\s*left/s);
   assert.match(css, /\.results-heading\s*\{[^}]*justify-content:\s*space-between/s);
   assert.match(css, /\.header-top\s*\{[^}]*display:\s*flex/s);
+  assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
   assert.match(css, /\.brand-heading\s*\{[^}]*justify-items:\s*end/s);
   assert.match(css, /\.brand-heading \.eyebrow\s*\{[^}]*text-align:\s*right/s);
-  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s);
-  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 1 520px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
+  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 560px[^}]*margin-left:\s*auto/s);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*max-content/s);
+  assert.match(css, /\.user-profile\s*\{[^}]*left:\s*50%[^}]*justify-items:\s*center[^}]*text-align:\s*center[^}]*transform:\s*translateX\(-50%\)/s);
+  assert.match(css, /\.user-menu-chevron\s*\{[^}]*color:\s*var\(--ink\)/s);
   assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
   assert.match(css, /\.gamification-details\[hidden\]\s*\{[^}]*display:\s*none/s);
   assert.match(css, /\.collection-counts-panel\s*\{[^}]*display:\s*flex/s);
@@ -160,8 +169,9 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.filters-form \.form-actions\s*\{[^}]*grid-row:\s*1;[^}]*align-self:\s*end/);
   assert.match(css, /\.modal-preview img\s*\{[^}]*object-fit:\s*contain;\s*\}/);
   assert.match(css, /\.collection-summary-content strong\s*\{[^}]*font:\s*700 1\.2rem Arial, sans-serif/s);
-  assert.match(css, /\.gamification-level strong\s*\{[^}]*font-size:\s*1\.05rem/s);
+  assert.match(css, /\.gamification-bricks-value strong\s*\{[^}]*line-height:\s*1/s);
   assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif/s);
+  assert.match(css, /\.gamification-level-title\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /#gamification-level-number\s*\{[^}]*font-size:\s*1\.75rem/s);
   assert.match(css, /\.gamification-meter > span\s*\{[^}]*position:\s*absolute/s);
   assert.match(css, /\.toast-task\s*\{[^}]*color:\s*white;\s*background:\s*#00449e;\s*border-color:\s*#00449e/s);
@@ -183,6 +193,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
 test('la pagina referencia los modales, las acciones por fila y el contenedor de toasts', async () => {
   await withServer(async (baseUrl) => {
     const html = await (await fetch(`${baseUrl}/`)).text();
+    const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 
     for (const expected of [
       'id="new-minifigura"',
@@ -225,22 +236,25 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(headerTop.children[0].className, 'brand-heading');
     assert.equal(headerTop.children[1].className, 'gamification-summary');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['gamification-level', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-level', 'gamification-bricks-value', 'gamification-toggle']);
+    assert.equal(main.querySelector('#user-avatar').parentElement.id, 'user-menu-toggle');
+    assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
     const details = document.querySelector('#gamification-details');
     assert.ok(details.hidden);
+    assert.equal(details.querySelector('#gamification-achievements-button'), null);
     assert.equal(details.children[0].className, 'gamification-progress');
-    assert.equal(details.children[1].className, 'gamification-achievements-row');
-    assert.equal(details.children[2].className, 'collection-counts-panel');
-    assert.equal(details.children[3].className, 'collection-summary');
-    const countsPanel = details.children[2];
+    assert.equal(details.children[1].className, 'collection-counts-panel');
+    assert.equal(details.children[2].className, 'collection-summary');
+    const countsPanel = details.children[1];
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
-    for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['SPAN', 'STRONG']);
-    const collectionSummary = details.children[3];
+    for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
+    const collectionSummary = details.children[2];
     assert.equal(collectionSummary.children[0].id, 'sync-prices');
     assert.equal(collectionSummary.children[1].className, 'collection-summary-content');
     assert.equal(collectionSummary.children[1].children[0].textContent, 'Valor total:');
     assert.equal(document.querySelector('#sync-prices').textContent, '🔄');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
+    assert.match(css, /\.summary-sync\.button-icon\s*\{[^}]*line-height:\s*1;/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading').lastElementChild.textContent, 'BY MRDUSIK');
     assert.doesNotMatch(document.querySelector('#form-dialog').textContent, /Preview/i);
@@ -335,7 +349,7 @@ test('app.js gestiona alta, edicion y eliminacion mediante POST, PUT y DELETE', 
     assert.match(script, /data-sort/);
     assert.match(script, /sortCatalog/);
     assert.match(script, /querySelectorAll\('input, select, button'\)/);
-    assert.match(script, /setSyncLoading/);
+    assert.match(script, /startSync/);
     assert.doesNotMatch(script, /normalized === 'deseada'|normalized === 'vendida'/);
   });
 });
@@ -388,11 +402,11 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.equal(rows()[0].children[9].textContent, '5,00 €');
   assert.equal(rows()[1].children[9].textContent, 'N/A');
   assert.equal(rows()[2].children[9].textContent, '?');
-  assert.equal(rows()[0].children[7].querySelector('.badge').textContent, '📦');
-  assert.equal(rows()[0].children[7].querySelector('.badge').getAttribute('aria-label'), '📦');
+  assert.equal(rows()[0].children[7].querySelector('.badge img').getAttribute('src'), '/status_images/caja.png');
+  assert.equal(rows()[0].children[7].querySelector('.badge').getAttribute('aria-label'), 'Colección');
   assert.equal(rows()[0].children[7].querySelector('.badge').title, 'Colección');
-  assert.equal(rows()[1].children[7].querySelector('.badge').textContent, '🔍');
-  assert.equal(rows()[1].children[7].querySelector('.badge').getAttribute('aria-label'), '🔍');
+  assert.equal(rows()[1].children[7].querySelector('.badge img').getAttribute('src'), '/status_images/lupa.png');
+  assert.equal(rows()[1].children[7].querySelector('.badge').getAttribute('aria-label'), 'Búsqueda');
   assert.equal(rows()[1].children[7].querySelector('.badge').title, 'Búsqueda');
   assert.ok(rows()[0].children[9].querySelector('.difference-positive'));  assert.equal(rows()[0].children[4].textContent, 'Space');
   assert.equal(rows()[0].children[5].textContent, '');
@@ -554,11 +568,15 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalogRequests = [];
+  const catalog = [
+    { id: 'OWNED', nombre: 'Propia', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' },
+    { id: 'WANTED', nombre: 'Buscada', categoria: 'Space', anio: 2024, estadoColeccion: 'BUSCADA' },
+  ];
   window.fetch = async (url) => {
     if (url.startsWith('/minifiguras')) catalogRequests.push(url);
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
-    return { ok: true, json: async () => [] };
+    return { ok: true, json: async () => catalog };
   };
 
   window.eval(script);
@@ -568,15 +586,16 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
   const submitFilters = async () => {
     window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    return new URL(catalogRequests.at(-1), 'http://localhost').searchParams.get('estadoColeccion');
+    return [...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent).sort();
   };
 
   collectionToggle.checked = true;
-  assert.equal(await submitFilters(), 'COLECCIÓN');
+  assert.deepEqual(await submitFilters(), ['OWNED']);
   wantedToggle.checked = true;
-  assert.equal(await submitFilters(), null);
+  assert.deepEqual(await submitFilters(), ['OWNED', 'WANTED']);
   collectionToggle.checked = false;
-  assert.equal(await submitFilters(), 'BUSCADA');
+  assert.deepEqual(await submitFilters(), ['WANTED']);
+  assert.deepEqual(catalogRequests, ['/minifiguras']);
   dom.window.close();
 });
 
@@ -677,7 +696,7 @@ test('la interfaz mantiene bloqueados los controles de temas tras sincronizar si
   const { window } = dom;
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => [] };
-    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 0 }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'completada', procesados: 0, total: 0, actualizados: [], fallidos: [] }) };
     if (url === '/minifiguras' || url === '/valoracion') return { ok: true, json: async () => url === '/valoracion' ? { total: 0, enColeccion: 0, buscadas: 0 } : [] };
     return { ok: false, json: async () => ({}) };
   };
@@ -710,7 +729,7 @@ test('la interfaz rechaza entradas de temas con propiedades adicionales o nombre
   dom.window.close();
 });
 
-test('la sincronización deshabilita los botones mientras está en curso', async () => {
+test('la sincronización deshabilita solo su botón mientras está en curso', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -726,9 +745,11 @@ test('la sincronización deshabilita los botones mientras está en curso', async
     estadoColeccion: 'COLECCIÓN',
   }];
   let releaseSync;
-  const syncPending = new Promise((resolve) => { releaseSync = resolve; });
+  let syncStatus = 'en_curso';
   window.fetch = async (url) => {
-    if (url === '/sincronizacion/brickset') return syncPending;
+    if (url === '/sincronizacion/brickset' && syncStatus === 'en_curso') {
+      return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], fallidos: [] }) };
+    }
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/minifiguras' || url === '/valoracion') return {
       ok: true,
@@ -743,25 +764,15 @@ test('la sincronización deshabilita los botones mientras está en curso', async
 
   const syncPromise = window.document.querySelector('#sync-prices').click();
   void syncPromise;
-  assert.ok([...window.document.querySelectorAll('button')].every((button) => button.disabled));
-  releaseSync({ ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 0 }) });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  for (const selector of [
-    '#show-all',
-    '#new-minifigura',
-    '#sync-prices',
-    '.table-sort',
-    '#form-cancel',
-    '#delete-cancel',
-    '[data-action="edit"]',
-    '[data-action="delete"]',
-  ]) {
-    assert.equal(window.document.querySelector(selector).disabled, false, `${selector} debe reactivarse`);
-  }
+  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
+  assert.equal(window.document.querySelector('#show-all').disabled, false);
+  assert.equal(window.document.querySelector('#new-minifigura').disabled, false);
+  assert.equal(window.document.querySelector('#sync-progress').hidden, false);
+  syncStatus = 'completada';
   dom.window.close();
 });
 
-test('la sincronización mantiene bloqueadas las acciones creadas al refrescar el catálogo', async () => {
+test('la sincronización mantiene utilizables las acciones creadas al refrescar el catálogo', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -779,7 +790,7 @@ test('la sincronización mantiene bloqueadas las acciones creadas al refrescar e
   const summaryPending = new Promise((resolve) => { releaseSummary = resolve; });
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
-    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ actualizados: [], fallidos: [], total: 1 }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], fallidos: [] }) };
     if (url === '/minifiguras') return { ok: true, json: async () => catalog };
     if (url === '/valoracion') {
       valuationCalls += 1;
@@ -795,23 +806,11 @@ test('la sincronización mantiene bloqueadas las acciones creadas al refrescar e
   window.document.querySelector('#sync-prices').click();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(window.document.querySelector('[data-action="edit"]').disabled, true);
-  assert.equal(window.document.querySelector('[data-action="delete"]').disabled, true);
-  assert.equal(window.document.querySelector('#categoria').disabled, true);
-  assert.equal(window.document.querySelector('#new-minifigura').disabled, true);
-  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
-
-  releaseSummary({
-    ok: true,
-    json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }),
-  });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
   assert.equal(window.document.querySelector('[data-action="edit"]').disabled, false);
   assert.equal(window.document.querySelector('[data-action="delete"]').disabled, false);
   assert.equal(window.document.querySelector('#categoria').disabled, false);
   assert.equal(window.document.querySelector('#new-minifigura').disabled, false);
-  assert.equal(window.document.querySelector('#sync-prices').disabled, false);
+  assert.equal(window.document.querySelector('#sync-prices').disabled, true);
   dom.window.close();
 });
 
@@ -924,7 +923,8 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => valuation };
     if (url.includes('/observada') && options.method === 'PUT') {
-      return { ok: true, json: async () => ({ ...catalog[1], observada: true }) };
+      catalog[1] = { ...catalog[1], observada: true };
+      return { ok: true, json: async () => catalog[1] };
     }
     return { ok: true, json: async () => catalog };
   };
@@ -938,13 +938,19 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
   const watchlistCard = window.document.querySelector('.watchlist-card');
   assert.equal(watchlistCard.title, window.document.querySelector('.ranking-card').title);
   assert.equal(watchlistCard.querySelector('.watchlist-state-icon').title, 'Colección');
-  assert.match(watchlistCard.textContent, /^📦 HIGH 30,00/);
+  assert.equal(watchlistCard.querySelector('.watchlist-state-icon img').getAttribute('src'), '/status_images/caja.png');
+  assert.match(css, /\.watchlist-card \.status-icon-image\s*\{\s*width:\s*1\.5rem;\s*height:\s*1\.5rem;/);
+  assert.match(css, /\.status-icon-image\[src\$="caja\.png"\]\s*\{\s*transform:\s*scale\(1\.2\);/);
+  assert.match(css, /\.watchlist-card \.watchlist-state-icon img\[src\$="caja\.png"\]\s*\{\s*margin-right:\s*2px;/);
+  assert.match(watchlistCard.textContent, /^ HIGH 30,00/);
   assert.equal(window.document.querySelector('.eye-icon.active').title, 'Seguimiento');
   assert.equal(window.document.querySelector('.filter-symbol').title, 'Colección');
   assert.equal(window.document.querySelectorAll('.filter-symbol')[1].title, 'Búsqueda');
   assert.equal(window.document.querySelector('.eye-symbol').title, 'Seguimiento');
   assert.equal(window.document.querySelectorAll('.count-icon')[0].title, 'Colección');
   assert.equal(window.document.querySelectorAll('.count-icon')[1].title, 'Búsqueda');
+  assert.match(css, /\.watchlist-row\s*\{[^}]*justify-content:\s*flex-start;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/);
+  assert.match(css, /\.watchlist-card\s*\{\s*scroll-snap-align:\s*start;/);
   assert.match(css, /\.watchlist-card:hover\s*\{[^}]*border-color:\s*var\(--accent\)/s);
   assert.equal(window.document.querySelector('#collection-count').textContent, '1');
   assert.equal(window.document.querySelector('#wanted-count').textContent, '1');
@@ -964,9 +970,16 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const catalog = [{ id: 'VIEW-1', nombre: 'Vista', categoria: 'Space', anio: 2024, estadoColeccion: 'BUSCADA', precio: 20, observada: true }];
   let lookups = 0;
-  window.fetch = async (url) => {
+  const submittedPayloads = [];
+  window.fetch = async (url, options = {}) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 20, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [], observadas: [] }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'inactiva' }) };
+    if (options.method === 'PUT' || options.method === 'POST') {
+      const payload = JSON.parse(options.body);
+      submittedPayloads.push(payload);
+      return { ok: true, json: async () => payload };
+    }
     if (url.endsWith('/brickset')) {
       lookups += 1;
       return { ok: true, json: async () => ({ id: 'NEW-1', categoria: 'Space', anio: 2024, precio: 18 }) };
@@ -1031,6 +1044,26 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   collectionToggle.click();
   assert.equal(window.document.querySelector('#form-estadoColeccion').value, 'COLECCIÓN');
   assert.equal(wantedToggle.getAttribute('aria-pressed'), 'false');
+  const purchaseDate = window.document.querySelector('#form-fechaCompra');
+  const purchasePrice = window.document.querySelector('#form-precioCompra');
+  purchaseDate.value = '2024-01-15';
+  purchasePrice.value = '12.50';
+  wantedToggle.click();
+  assert.equal(purchaseDate.value, '');
+  assert.equal(purchasePrice.value, '');
+  assert.equal(purchaseDate.disabled, true);
+  assert.equal(purchasePrice.disabled, true);
+  collectionToggle.click();
+  assert.equal(purchaseDate.disabled, false);
+  assert.equal(purchasePrice.disabled, false);
+  wantedToggle.click();
+  window.document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(submittedPayloads[0].estadoColeccion, 'BUSCADA');
+  assert.equal('fechaCompra' in submittedPayloads[0], false);
+  assert.equal('precioCompra' in submittedPayloads[0], false);
   window.document.querySelector('#form-cancel').click();
 
   window.document.querySelector('#new-minifigura').click();
@@ -1041,5 +1074,24 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(window.document.querySelector('#form-submit').disabled, true);
   assert.equal(collectionToggle.getAttribute('aria-pressed'), 'true');
   assert.equal(followToggle.getAttribute('aria-pressed'), 'false');
+  window.document.querySelector('#form-id').value = 'new-1';
+  window.document.querySelector('#form-id').dispatchEvent(new window.Event('input'));
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  purchaseDate.value = '2024-02-20';
+  purchasePrice.value = '25';
+  wantedToggle.click();
+  assert.equal(purchaseDate.value, '');
+  assert.equal(purchasePrice.value, '');
+  assert.equal(purchaseDate.disabled, true);
+  assert.equal(purchasePrice.disabled, true);
+  window.document.querySelector('#form-nombre').value = 'Nueva';
+  window.document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(submittedPayloads[1].estadoColeccion, 'BUSCADA');
+  assert.equal('fechaCompra' in submittedPayloads[1], false);
+  assert.equal('precioCompra' in submittedPayloads[1], false);
   dom.window.close();
 });

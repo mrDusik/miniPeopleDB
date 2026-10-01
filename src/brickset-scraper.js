@@ -86,10 +86,27 @@ export function parseBricksetDetails(html) {
 }
 
 export class BricksetScraper {
-  constructor({ fetchImpl = globalThis.fetch, timeoutMs = 8000, retries = 1 } = {}) {
+  constructor({
+    fetchImpl = globalThis.fetch,
+    timeoutMs = 8000,
+    retries = 0,
+    minIntervalMs = 9000,
+    defaultRetryAfterMs = 60000,
+    maxRateLimitRetries = 3,
+    now = Date.now,
+    sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+  } = {}) {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
     this.retries = retries;
+    this.minIntervalMs = minIntervalMs;
+    this.defaultRetryAfterMs = defaultRetryAfterMs;
+    this.maxRateLimitRetries = maxRateLimitRetries;
+    this.now = now;
+    this.sleep = sleep;
+    this.queue = Promise.resolve();
+    this.lastRequestAt = null;
+    this.blockedUntil = 0;
   }
 
   async _fetchHtml(id) {
@@ -97,9 +114,39 @@ export class BricksetScraper {
       throw new BricksetPriceError('BRICKSET_ID_INVALIDO');
     }
 
+    const operation = this.queue.then(() => this._fetchHtmlQueued(id));
+    this.queue = operation.catch(() => {});
+    return operation;
+  }
+
+  async _wait(duration) {
+    if (duration > 0) {
+      await this.sleep(duration);
+    }
+  }
+
+  parseRetryAfter(response) {
+    const value = response.headers?.get('retry-after');
+    if (!value) {
+      return this.defaultRetryAfterMs;
+    }
+    if (/^\d+(?:\.\d+)?$/.test(value.trim())) {
+      return Number(value) * 1000;
+    }
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? Math.max(0, timestamp - this.now()) : this.defaultRetryAfterMs;
+  }
+
+  async _fetchHtmlQueued(id) {
     const url = `${BRICKSET_BASE_URL}${encodeURIComponent(id)}`;
     let lastError;
+    let rateLimitRetries = 0;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+      const waitUntil = this.lastRequestAt === null
+        ? this.blockedUntil
+        : Math.max(this.blockedUntil, this.lastRequestAt + this.minIntervalMs);
+      await this._wait(waitUntil - this.now());
+      this.lastRequestAt = this.now();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -111,15 +158,30 @@ export class BricksetScraper {
           },
           signal: controller.signal,
         });
+        if (response.status === 429) {
+          if (rateLimitRetries >= this.maxRateLimitRetries) {
+            throw new BricksetPriceError('BRICKSET_LIMITE');
+          }
+          const retryAfter = this.parseRetryAfter(response);
+          this.blockedUntil = this.now() + retryAfter;
+          rateLimitRetries += 1;
+          attempt -= 1;
+          continue;
+        }
         if (!response.ok) {
           console.error(`[BricksetScraper] HTTP ${response.status} al consultar ${url}`);
-          throw new BricksetPriceError(response.status === 404 ? 'BRICKSET_NO_ENCONTRADO' : 'BRICKSET_NO_DISPONIBLE');
+          const error = new BricksetPriceError(response.status === 404 ? 'BRICKSET_NO_ENCONTRADO' : 'BRICKSET_NO_DISPONIBLE');
+          error.noRetry = true;
+          throw error;
         }
         return { html: await response.text(), url };
       } catch (error) {
         lastError = error instanceof BricksetPriceError
           ? error
           : new BricksetPriceError(error?.name === 'AbortError' ? 'BRICKSET_TIMEOUT' : 'BRICKSET_NO_DISPONIBLE');
+        if (lastError.code === 'BRICKSET_LIMITE' || error?.noRetry || (error instanceof BricksetPriceError && !['BRICKSET_TIMEOUT', 'BRICKSET_NO_DISPONIBLE'].includes(error.code))) {
+          throw lastError;
+        }
         if (!(error instanceof BricksetPriceError)) {
           console.error(`[BricksetScraper] Error de red al consultar ${url}: ${error?.message ?? error}`);
         }
