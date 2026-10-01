@@ -994,6 +994,11 @@ function renderGlobalRanking() {
       giftIcon.setAttribute('aria-hidden', 'true');
       gift.append(giftAmount, giftIcon);
       row.append(gift);
+    } else {
+      const giftSpace = document.createElement('span');
+      giftSpace.className = 'ranking-gift-space';
+      giftSpace.setAttribute('aria-hidden', 'true');
+      row.append(giftSpace);
     }
 
     const details = document.createElement('div');
