@@ -806,11 +806,11 @@ function renderGamification(state) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
-    const icon = document.createElement(logro.type === 'regalo' ? 'span' : 'img');
-    icon.className = logro.type === 'regalo' ? 'achievement-icon achievement-gift-icon' : 'achievement-icon';
+    const icon = document.createElement('img');
+    icon.className = 'achievement-icon';
     if (logro.type === 'regalo') {
-      icon.textContent = '🎁';
-      icon.setAttribute('aria-label', 'Regalo');
+      icon.src = '/toast_images/regalo.jpg';
+      icon.alt = 'Regalo';
     } else {
       icon.src = '/toast_images/75206.png';
       icon.alt = '';
@@ -936,7 +936,7 @@ function renderGlobalRanking() {
     name.className = 'ranking-name';
     name.textContent = formatRankingDisplayName(entry.displayName);
     const bricks = document.createElement('span');
-    bricks.className = 'ranking-bricks';
+    bricks.className = 'gamification-bricks-value ranking-bricks';
     const bricksValue = document.createElement('strong');
     bricksValue.textContent = entry.bricks;
     const brickIcon = document.createElement('img');
@@ -945,16 +945,19 @@ function renderGlobalRanking() {
     brickIcon.alt = 'Bricks';
     bricks.append(bricksValue, brickIcon);
 
+    const levelInfo = document.createElement('span');
+    levelInfo.className = 'ranking-level-info';
     const levelImage = document.createElement('img');
-    levelImage.className = 'ranking-level-image';
+    levelImage.className = 'gamification-level-image';
     levelImage.src = entry.imagenNivel || levelImagePath(entry.nivel);
     levelImage.alt = '';
-    const level = document.createElement('span');
-    level.className = 'ranking-level-name';
-    level.textContent = entry.nombreNivel;
     const levelNumber = document.createElement('strong');
     levelNumber.className = 'ranking-level-number';
     levelNumber.textContent = entry.nivel;
+    const levelName = document.createElement('span');
+    levelName.className = 'ranking-level-name';
+    levelName.textContent = entry.nombreNivel;
+    levelInfo.append(levelImage, levelNumber, levelName);
     const collection = document.createElement('span');
     collection.className = 'ranking-collection-count';
     collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
@@ -971,7 +974,7 @@ function renderGlobalRanking() {
     chevron.className = 'ranking-row-chevron';
     chevron.textContent = '▾';
     chevron.setAttribute('aria-hidden', 'true');
-    expand.append(position, star, avatarWrap, name, levelImage, levelNumber, level, bricks, collection, chevron);
+    expand.append(position, star, avatarWrap, name, levelInfo, bricks, collection, chevron);
     row.append(expand);
 
     if (entry.userId !== currentUserId) {
