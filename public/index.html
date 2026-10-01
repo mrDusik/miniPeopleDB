@@ -61,13 +61,15 @@
               <span><img class="count-icon status-icon-image" src="/status_images/caja.png" alt="" title="Colección"><strong id="collection-count">0</strong></span>
               <span><img class="count-icon status-icon-image" src="/status_images/lupa.png" alt="" title="Búsqueda"><strong id="wanted-count">0</strong></span>
             </div>
+            <div class="summary-ranking-row">
+              <button type="button" id="open-global-ranking" class="button button-secondary button-icon summary-ranking-link" aria-label="Ranking Global" title="Ranking Global"><span aria-hidden="true">🌐</span></button>
+            </div>
             <div class="collection-summary" aria-live="polite">
               <button type="button" id="sync-prices" class="button button-secondary button-icon summary-sync" aria-label="Actualizar precios desde Brickset" title="Actualizar precios desde Brickset">🔄</button>
               <div class="collection-summary-content">
                 <span>Valor total:</span>
                 <strong id="collection-total">€0,00</strong>
               </div>
-              <button type="button" id="open-global-ranking" class="ranking-menu-link summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>

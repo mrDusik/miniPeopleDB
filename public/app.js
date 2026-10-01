@@ -906,7 +906,7 @@ function renderGlobalRanking() {
     row.className = 'global-ranking-row';
     const expand = document.createElement('button');
     expand.type = 'button';
-    expand.className = 'ranking-expand';
+    expand.className = `ranking-expand${entry.userId === currentUserId ? ' ranking-expand-current' : ''}`;
     expand.setAttribute('aria-expanded', 'false');
 
     const position = document.createElement('strong');
@@ -932,9 +932,8 @@ function renderGlobalRanking() {
     avatar.addEventListener('error', () => { avatar.hidden = true; avatarFallback.hidden = false; });
     avatarWrap.append(avatar, avatarFallback);
 
-    const identity = document.createElement('span');
-    identity.className = 'ranking-identity';
     const name = document.createElement('strong');
+    name.className = 'ranking-name';
     name.textContent = formatRankingDisplayName(entry.displayName);
     const bricks = document.createElement('span');
     bricks.className = 'ranking-bricks';
@@ -945,23 +944,34 @@ function renderGlobalRanking() {
     brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
     brickIcon.alt = 'Bricks';
     bricks.append(bricksValue, brickIcon);
-    identity.append(name, bricks);
 
     const levelImage = document.createElement('img');
     levelImage.className = 'ranking-level-image';
     levelImage.src = entry.imagenNivel || levelImagePath(entry.nivel);
     levelImage.alt = '';
     const level = document.createElement('span');
-    level.className = 'ranking-level';
-    level.textContent = `${entry.nivel} ${entry.nombreNivel}`;
+    level.className = 'ranking-level-name';
+    level.textContent = entry.nombreNivel;
+    const levelNumber = document.createElement('strong');
+    levelNumber.className = 'ranking-level-number';
+    levelNumber.textContent = entry.nivel;
     const collection = document.createElement('span');
     collection.className = 'ranking-collection-count';
-    collection.textContent = `${entry.totalColeccion} en colección`;
+    collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
+    collection.title = `${entry.totalColeccion} en colección`;
+    const collectionIcon = document.createElement('img');
+    collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon';
+    collectionIcon.src = '/status_images/caja.png';
+    collectionIcon.alt = '';
+    collectionIcon.setAttribute('aria-hidden', 'true');
+    const collectionCount = document.createElement('strong');
+    collectionCount.textContent = entry.totalColeccion;
+    collection.append(collectionIcon, collectionCount);
     const chevron = document.createElement('span');
     chevron.className = 'ranking-row-chevron';
     chevron.textContent = '▾';
     chevron.setAttribute('aria-hidden', 'true');
-    expand.append(position, star, avatarWrap, identity, levelImage, level, collection, chevron);
+    expand.append(position, star, avatarWrap, name, levelImage, levelNumber, level, bricks, collection, chevron);
     row.append(expand);
 
     if (entry.userId !== currentUserId) {
@@ -970,7 +980,16 @@ function renderGlobalRanking() {
       gift.className = 'button button-secondary ranking-gift';
       gift.dataset.giftUser = entry.userId;
       gift.disabled = entry.regaloEnviado;
-      gift.textContent = entry.regaloEnviado ? 'Regalo enviado' : '🎁 50 Bricks';
+      gift.setAttribute('aria-label', entry.regaloEnviado ? 'Regalo ya enviado' : 'Enviar 50 Bricks');
+      gift.title = entry.regaloEnviado ? 'Regalo ya enviado' : 'Enviar 50 Bricks';
+      const giftAmount = document.createElement('span');
+      giftAmount.textContent = '+50';
+      const giftIcon = document.createElement('img');
+      giftIcon.className = 'ranking-gift-icon';
+      giftIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+      giftIcon.alt = '';
+      giftIcon.setAttribute('aria-hidden', 'true');
+      gift.append(giftAmount, giftIcon);
       row.append(gift);
     }
 
