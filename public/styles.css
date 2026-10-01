@@ -210,6 +210,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .description-field textarea { height: 100%; min-height: 0; }
 .description-field > span { text-align: left; white-space: nowrap; }
 .modal-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 14px; }
+.modal-row > label, .modal-row input { min-width: 0; }
 .modal-fields > .modal-row { grid-column: 1 / -1; }
 .modal-row-status { grid-template-columns: minmax(0, 1fr) auto; }
 .required-label > span::after, span.required-label::after { content: ' *'; }

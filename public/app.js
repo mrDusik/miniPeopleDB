@@ -154,6 +154,7 @@ let supabaseClient = null;
 let currentSession = null;
 let appStarted = false;
 let syncPollTimer = null;
+let syncPausedByModal = false;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -920,6 +921,7 @@ function openFormDialog(mode, minifigura) {
     showToast('No se pueden crear minifiguras sin cargar las categorías oficiales.', 'error');
     return;
   }
+  pauseSyncForModal();
   currentFormMode = mode;
   imageLookupSequence += 1;
   currentEditId = mode === 'edit' ? minifigura.id : null;
@@ -1032,6 +1034,35 @@ function isFormValid() {
 function closeFormDialog() {
   if (formDialog.open) {
     formDialog.close();
+  }
+  resumeSyncForModal();
+}
+
+async function pauseSyncForModal() {
+  if (!isSyncingPrices) return;
+  syncPausedByModal = true;
+  try {
+    await apiFetch('/sincronizacion/brickset', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accion: 'pausar' }),
+    });
+  } catch {
+    // Transparente para el usuario: si la pausa falla, la sincronización sigue en segundo plano.
+  }
+}
+
+async function resumeSyncForModal() {
+  if (!syncPausedByModal) return;
+  syncPausedByModal = false;
+  try {
+    await apiFetch('/sincronizacion/brickset', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accion: 'reanudar' }),
+    });
+  } catch {
+    // Transparente para el usuario: el servidor reanudará en el próximo sondeo.
   }
 }
 
@@ -1519,6 +1550,7 @@ function clearUserData() {
   isSyncingPrices = false;
   syncProgress.hidden = true;
   syncPricesButton.disabled = true;
+  syncPausedByModal = false;
   activeFilters = {};
   catalogCache = [];
   catalogForOptions = [];

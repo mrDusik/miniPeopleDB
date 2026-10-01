@@ -8,12 +8,25 @@ function snapshot(task) {
   };
 }
 
+function createGate() {
+  let resolve;
+  const promise = new Promise((resolveGate) => { resolve = resolveGate; });
+  return { promise, resolve };
+}
+
+async function waitWhilePaused(task) {
+  while (task.pausado) {
+    await task.gate.promise;
+  }
+}
+
 export function createBricksetSyncJobs({ brickset }) {
   const tasks = new Map();
   const starts = new Map();
 
   async function process(task) {
     for (const minifigura of task.catalogo) {
+      if (task.pausado) await waitWhilePaused(task);
       try {
         const precio = await brickset.getPrice(minifigura.id);
         const persisted = await task.repository.updatePrice(minifigura.id, precio);
@@ -53,6 +66,8 @@ export function createBricksetSyncJobs({ brickset }) {
         fallidos: [],
         catalogo,
         repository,
+        pausado: false,
+        gate: null,
       };
       tasks.set(userId, task);
       if (task.estado === 'en_curso') {
@@ -80,5 +95,24 @@ export function createBricksetSyncJobs({ brickset }) {
     }
   }
 
-  return { start, status, refreshRepository };
+  function pause(userId) {
+    const task = tasks.get(userId);
+    if (task?.estado === 'en_curso' && !task.pausado) {
+      task.pausado = true;
+      task.gate = createGate();
+    }
+  }
+
+  function resume(userId) {
+    const task = tasks.get(userId);
+    if (task?.pausado) {
+      task.pausado = false;
+      task.gate.resolve();
+      task.gate = null;
+    }
+  }
+
+  return {
+    start, status, refreshRepository, pause, resume,
+  };
 }

@@ -412,8 +412,27 @@ export function createServer({
         sendJson(response, 200, bricksetSyncJobs.status(userId));
         return;
       }
+      if (request.method === 'PATCH') {
+        let payload;
+        try {
+          payload = await readJsonBody(request);
+        } catch {
+          sendJson(response, 400, { error: 'MINIFIGURA_INVALIDA' });
+          return;
+        }
+        if (payload.accion === 'pausar') {
+          bricksetSyncJobs.pause(userId);
+        } else if (payload.accion === 'reanudar') {
+          bricksetSyncJobs.resume(userId);
+        } else {
+          sendJson(response, 400, { error: 'ACCION_INVALIDA' });
+          return;
+        }
+        sendJson(response, 200, bricksetSyncJobs.status(userId));
+        return;
+      }
       if (request.method !== 'POST') {
-        response.setHeader('allow', 'GET, POST');
+        response.setHeader('allow', 'GET, POST, PATCH');
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
         return;
       }
