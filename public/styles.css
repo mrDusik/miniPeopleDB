@@ -254,7 +254,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
 .achievements-actions { justify-content: flex-end; padding-top: 17px; border-top: 1px solid var(--line); }
-.modal-ranking { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
+.modal-ranking { width: min(1400px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 2px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
@@ -278,11 +278,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-level-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ranking-bricks, .ranking-collection-count { display: flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; }
 .ranking-bricks { grid-column: 4; grid-row: 1 / 3; }
-.ranking-bricks .gamification-brick-icon { height: 1.55rem; }
+.ranking-bricks .gamification-brick-icon { width: 1.55rem; height: 1.55rem; object-fit: contain; }
 .ranking-bricks strong { color: var(--ink); font: 700 1.05rem Arial, sans-serif; line-height: 1; }
 .ranking-collection-count { grid-column: 5; grid-row: 1 / 3; }
 .ranking-collection-count strong { color: var(--ink); font: 700 1.05rem Arial, sans-serif; line-height: 1; }
-.ranking-collection-icon { width: auto; height: 1.7rem; object-fit: contain; transform: none; }
+.ranking-collection-count .ranking-collection-icon { width: 1.55rem; height: 1.55rem; object-fit: contain; transform: none; }
 .ranking-row-chevron { grid-column: 6; grid-row: 1 / 3; font-size: 1.2rem; text-align: center; transition: transform 0.2s; }
 .ranking-expand[aria-expanded="true"] .ranking-row-chevron { transform: rotate(180deg); }
 .ranking-gift, .ranking-gift-space { width: 100%; }
@@ -296,6 +296,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-highlight-group h3 { margin: 0 0 8px; font: 700 0.9rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; }
 .ranking-card-static { cursor: default; }
 .ranking-card-static:hover { border-color: var(--line); }
+
+@media (max-width: 1400px) {
+  .ranking-user-details { grid-template-columns: 1fr; }
+  .ranking-highlight-group { max-width: 600px; }
+}
 
 @media (max-width: 700px) {
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
