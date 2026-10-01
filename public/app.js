@@ -877,6 +877,12 @@ function highlightGroup(title, items, mode) {
   return section;
 }
 
+function formatRankingDisplayName(displayName) {
+  const [firstName, ...rest] = String(displayName ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!firstName) return 'Usuario';
+  return [firstName, ...rest.map((name) => `${Array.from(name)[0]}.`)].join(' ');
+}
+
 function setExpandedRankingUser(userId) {
   expandedRankingUserId = expandedRankingUserId === userId ? null : userId;
   for (const entry of globalRankingList.querySelectorAll('.global-ranking-entry')) {
@@ -929,9 +935,16 @@ function renderGlobalRanking() {
     const identity = document.createElement('span');
     identity.className = 'ranking-identity';
     const name = document.createElement('strong');
-    name.textContent = entry.displayName;
+    name.textContent = formatRankingDisplayName(entry.displayName);
     const bricks = document.createElement('span');
-    bricks.textContent = `${entry.bricks} Bricks`;
+    bricks.className = 'ranking-bricks';
+    const bricksValue = document.createElement('strong');
+    bricksValue.textContent = entry.bricks;
+    const brickIcon = document.createElement('img');
+    brickIcon.className = 'gamification-brick-icon';
+    brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+    brickIcon.alt = 'Bricks';
+    bricks.append(bricksValue, brickIcon);
     identity.append(name, bricks);
 
     const levelImage = document.createElement('img');
@@ -940,7 +953,7 @@ function renderGlobalRanking() {
     levelImage.alt = '';
     const level = document.createElement('span');
     level.className = 'ranking-level';
-    level.textContent = `Nivel ${entry.nivel} · ${entry.nombreNivel}`;
+    level.textContent = `${entry.nivel} ${entry.nombreNivel}`;
     const collection = document.createElement('span');
     collection.className = 'ranking-collection-count';
     collection.textContent = `${entry.totalColeccion} en colección`;

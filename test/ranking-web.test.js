@@ -49,19 +49,25 @@ function installFetch(window, ranking) {
 
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
+  assert.match(styles, /\.gamification-details \{[^}]*width: max-content/s);
+  assert.match(styles, /\.collection-summary \{ display: grid; grid-template-columns: 40px minmax\(0, 1fr\)/);
+  assert.match(styles, /\.summary-ranking-link \{ grid-column: 1 \/ -1; justify-self: start;/);
   assert.match(styles, /\.modal-ranking \{ width: min\(1100px, calc\(100% - 24px\)\)/);
   assert.match(styles, /\.ranking-expand \{ grid-template-columns: 32px 16px 38px minmax\(0, 1fr\) 34px 20px;/);
+  assert.match(styles, /\.ranking-expand \{[^}]*justify-items: start;[^}]*text-align: left;/);
+  assert.match(styles, /\.ranking-level \{ color: var\(--ink\); font: 700 1rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif;/);
 });
 
 test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
   const dom = createDom();
-  const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria A', bricks: 300 }), entry()];
+  const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria Ana Pérez', bricks: 300 }), entry()];
   installFetch(dom.window, ranking);
   dom.window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 10));
 
   const details = dom.window.document.querySelector('#gamification-details');
   assert.equal(details.children[2].querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
+  assert.equal(details.children[2].children[2].id, 'open-global-ranking');
   assert.equal(dom.window.document.querySelector('#ranking-main-star').hidden, false);
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);
@@ -72,6 +78,11 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 2);
   assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-star').hidden, false);
   assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-gift'), null);
+  const firstEntry = dom.window.document.querySelector('[data-user-id="user-a"]');
+  assert.equal(firstEntry.querySelector('.ranking-identity strong').textContent, 'Usuaria A. P.');
+  assert.equal(firstEntry.querySelector('.ranking-bricks strong').textContent, '300');
+  assert.equal(firstEntry.querySelector('.ranking-bricks img').alt, 'Bricks');
+  assert.equal(firstEntry.querySelector('.ranking-level').textContent, '4 Citizen');
 
   const entries = [...dom.window.document.querySelectorAll('.global-ranking-entry')];
   entries[0].querySelector('.ranking-expand').click();
