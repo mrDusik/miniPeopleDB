@@ -49,13 +49,13 @@ function installFetch(window, ranking) {
 
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
-  assert.match(styles, /\.gamification-details \{[^}]*width: max-content/s);
-  assert.match(styles, /\.collection-summary \{ display: grid; grid-template-columns: 40px minmax\(0, 1fr\)/);
-  assert.match(styles, /\.summary-ranking-row \{ display: flex; align-items: center; \}/);
+  assert.match(styles, /\.gamification-details \{[^}]*width: min\(640px, calc\(100vw - 22px\)\)/);
+  assert.match(styles, /\.summary-ranking-row, \.summary-sync-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(1100px, calc\(100% - 24px\)\)/);
-  assert.match(styles, /\.ranking-expand \{ display: grid; grid-template-columns: 36px 22px 42px minmax\(110px, 1fr\) 40px 34px minmax\(100px, 0\.8fr\) 78px 66px 20px;/);
+  assert.match(styles, /\.ranking-expand \{ display: grid; grid-template-columns: 36px 22px 42px minmax\(140px, 1fr\) minmax\(220px, auto\) minmax\(105px, auto\) minmax\(80px, auto\) 20px;/);
+  assert.match(styles, /\.global-ranking-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto; align-items: center; gap: 12px; min-width: 1020px; \}/);
   assert.match(styles, /\.ranking-expand \{[^}]*justify-items: start;[^}]*text-align: left;/);
-  assert.match(styles, /\.ranking-level-number \{ color: var\(--blue\); font: 700 1\.55rem\/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif;/);
+  assert.match(styles, /\.ranking-level-number \{ color: var\(--ink\); font-size: 1\.75rem; line-height: 1;/);
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
 });
 
@@ -67,14 +67,15 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   await new Promise((resolve) => setTimeout(resolve, 10));
 
   const details = dom.window.document.querySelector('#gamification-details');
-  assert.equal(details.children[2].querySelector('#open-global-ranking').textContent, '🌐');
-  assert.equal(details.children[3].querySelector('#sync-prices').nextElementSibling.querySelector('span').textContent, 'Valor total:');
+  assert.equal(details.children[2].querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
+  assert.equal(details.children[3].querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
   assert.equal(dom.window.document.querySelector('#ranking-main-star').hidden, false);
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);
   dom.window.document.querySelector('#open-global-ranking').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, true);
+  assert.doesNotMatch(dom.window.document.querySelector('#ranking-dialog').textContent, /Comunidad/i);
   assert.equal(dom.window.document.activeElement.id, 'ranking-close');
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 2);
   assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-star').hidden, false);
@@ -84,13 +85,20 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.equal(firstEntry.querySelector('.ranking-bricks strong').textContent, '300');
   assert.equal(firstEntry.querySelector('.ranking-bricks img').alt, 'Bricks');
   assert.equal(firstEntry.querySelector('.ranking-level-number').textContent, '4');
+  assert.equal(firstEntry.querySelector('.ranking-level-info .gamification-level-image').getAttribute('src'), '/level_images/9_forestman.png');
   assert.equal(firstEntry.querySelector('.ranking-level-name').textContent, 'Citizen');
   assert.equal(firstEntry.querySelector('.ranking-collection-count strong').textContent, '2');
   assert.equal(firstEntry.querySelector('.ranking-collection-icon').getAttribute('src'), '/status_images/caja.png');
   assert.deepEqual([...firstEntry.querySelector('.ranking-expand').children].map((element) => element.className), [
-    'ranking-position', 'ranking-star', 'ranking-avatar-wrap', 'ranking-name', 'ranking-level-image',
-    'ranking-level-number', 'ranking-level-name', 'ranking-bricks', 'ranking-collection-count', 'ranking-row-chevron',
+    'ranking-position', 'ranking-star', 'ranking-avatar-wrap', 'ranking-name', 'ranking-level-info',
+    'gamification-bricks-value ranking-bricks', 'ranking-collection-count', 'ranking-row-chevron',
   ]);
+  assert.deepEqual([...firstEntry.querySelector('.ranking-level-info').children].map((element) => element.className), [
+    'gamification-level-image', 'ranking-level-number', 'ranking-level-name',
+  ]);
+  const otherEntry = dom.window.document.querySelector('[data-user-id="user-b"]');
+  assert.equal(otherEntry.querySelector('.ranking-gift').parentElement, otherEntry.querySelector('.global-ranking-row'));
+  assert.equal(otherEntry.querySelector('.ranking-gift').previousElementSibling, otherEntry.querySelector('.ranking-expand'));
 
   const entries = [...dom.window.document.querySelectorAll('.global-ranking-entry')];
   entries[0].querySelector('.ranking-expand').click();

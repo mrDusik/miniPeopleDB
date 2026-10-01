@@ -40,11 +40,11 @@ function state(overrides = {}) {
 test('renderiza el nivel, progreso y modal de desglose', async () => {
   const dom = createDom();
   const { window } = dom;
-  window.fetch = baseFetch([], state());
+  window.fetch = baseFetch([], state({ nivel: { id: 8, nombre: 'Three-Seven-Five', umbral: 750 } }));
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Redbeard');
+  assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Three-Seven-Five');
   assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), '/level_images/9_forestman.png');
   assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), '/level_images/9_forestman.png');
   assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820 Bricks');
@@ -55,7 +55,7 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(window.document.querySelector('#gamification-dialog').open, false);
   window.document.querySelector('#gamification-level-name').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
-  assert.equal(window.document.querySelector('#gamification-dialog-level').textContent, '8 Redbeard');
+  assert.equal(window.document.querySelector('#gamification-dialog-level').textContent, '8 Three-Seven-Five');
   const achievement = window.document.querySelector('#gamification-achievements li');
   assert.equal(achievement.className, 'achievement-item');
   assert.equal(achievement.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
@@ -86,7 +86,7 @@ test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los d
   }
 });
 
-test('usa regalo para logros de tipo regalo y conserva la copa en los demás', async () => {
+test('usa regalo.jpg en logros de tipo regalo y conserva la copa en los demás', async () => {
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state({ logros: [
@@ -96,7 +96,8 @@ test('usa regalo para logros de tipo regalo y conserva la copa en los demás', a
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
   const [gift, normal] = window.document.querySelectorAll('.achievement-item');
-  assert.equal(gift.querySelector('.achievement-gift-icon').textContent, '🎁');
+  assert.equal(gift.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/regalo.jpg');
+  assert.equal(gift.querySelector('.achievement-icon').alt, 'Regalo');
   assert.equal(normal.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
   dom.window.close();
 });
@@ -134,7 +135,7 @@ test('el panel de nivel despliega recuento y valor total con la flecha', async (
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.hidden, false);
-  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-ranking-row', 'collection-summary', 'sync-progress']);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-ranking-row', 'summary-sync-row', 'sync-progress']);
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();
