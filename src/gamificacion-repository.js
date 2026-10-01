@@ -27,6 +27,7 @@ function isValidLogro(value) {
     && value.bricks >= 0
     && Number.isInteger(value.cantidad)
     && value.cantidad > 0
+    && (value.type === undefined || value.type === 'regalo')
     && value.total === value.bricks * value.cantidad;
 }
 
@@ -101,7 +102,8 @@ export class GamificacionRepository {
 
   async calculate(catalogo) {
     const categorias = this.categoriasRepository ? await this.categoriasRepository.read() : [];
-    return calcularGamificacion(catalogo, categorias);
+    const regalos = await this.run(this.client.rpc('regalos_recibidos_count'));
+    return calcularGamificacion(catalogo, categorias, regalos ?? 0);
   }
 
   async recalculate(catalogo) {

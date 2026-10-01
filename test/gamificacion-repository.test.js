@@ -3,7 +3,7 @@ import test from 'node:test';
 import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { categoriasMock } from '../test-support/fixtures.js';
-import { TEST_USER, createTestClient, createTestSupabase } from '../test-support/server.js';
+import { OTHER_USER, TEST_USER, createTestClient, createTestSupabase } from '../test-support/server.js';
 
 const catalogo = [{ id: 'ONE', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN', precio: 20 }];
 
@@ -73,4 +73,15 @@ test('recalcula y persiste gamificacion tras una mutacion del catalogo', async (
   await repository.create({ id: 'nueva', nombre: 'Nueva', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN', precio: 20 });
   assert.ok(repository.lastGamification.state.bricks > 0);
   assert.equal(supabase.rows('gamificacion')[0].bricks, repository.lastGamification.state.bricks);
+});
+
+test('conserva los regalos recibidos al recalcular tras cambios del catálogo', async () => {
+  const supabase = createTestSupabase();
+  supabase.seed('regalos_enviados', undefined, [{ donante_id: OTHER_USER.id, receptor_id: TEST_USER.id }]);
+  const gamification = gamificationWith(supabase);
+  const first = await gamification.recalculate(catalogo);
+  const second = await gamification.recalculate([]);
+  assert.equal(first.state.logros.find(({ type }) => type === 'regalo').total, 50);
+  assert.equal(second.state.bricks, 50);
+  assert.equal(second.state.logros.find(({ type }) => type === 'regalo').cantidad, 1);
 });

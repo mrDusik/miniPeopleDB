@@ -30,6 +30,7 @@
           <div class="gamification-main">
             <div class="user-session">
               <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
+                <span id="ranking-main-star" class="ranking-star" aria-label="Top 10" title="Top 10" hidden>★</span>
                 <img id="user-avatar" class="user-avatar" alt="" hidden>
                 <span class="user-avatar-fallback" aria-hidden="true">👤</span>
                 <span class="user-menu-chevron" aria-hidden="true">▾</span>
@@ -66,6 +67,7 @@
                 <span>Valor total:</span>
                 <strong id="collection-total">€0,00</strong>
               </div>
+              <button type="button" id="open-global-ranking" class="ranking-menu-link summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>
@@ -310,6 +312,18 @@
       <div class="form-actions achievements-actions">
         <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
       </div>
+    </dialog>
+
+    <dialog id="ranking-dialog" class="modal modal-ranking" aria-labelledby="ranking-dialog-title">
+      <div class="ranking-dialog-heading">
+        <div>
+          <p class="eyebrow">Comunidad</p>
+          <h2 id="ranking-dialog-title">Ranking Global</h2>
+        </div>
+        <button type="button" id="ranking-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <p id="ranking-status" class="status" role="status" aria-live="polite"></p>
+      <div id="global-ranking-list" class="global-ranking-list"></div>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>

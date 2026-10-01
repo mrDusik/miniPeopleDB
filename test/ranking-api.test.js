@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createSupabaseMock } from '../test-support/supabase-mock.js';
+import { TEST_TOKEN, OTHER_TOKEN, authFetch, startTestServer } from '../test-support/server.js';
+
+const RANKING_USER = { id: '00000000-0000-4000-8000-00000000000a', email: 'a@example.com' };
+const OTHER_RANKING_USER = { id: '00000000-0000-4000-8000-00000000000b', email: 'b@example.com' };
+
+function rankingSupabase() {
+  const supabase = createSupabaseMock({ users: {
+    [TEST_TOKEN]: { ...RANKING_USER, user_metadata: { full_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' } },
+    [OTHER_TOKEN]: { ...OTHER_RANKING_USER, user_metadata: { name: 'Grace Google', avatar_url: 'https://example.com/grace.png' } },
+  } });
+  supabase.seed('gamificacion', RANKING_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
+  supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [] }]);
+  supabase.seed('perfiles_publicos', OTHER_RANKING_USER.id, [{ display_name: 'Grace', avatar_url: 'https://example.com/grace.png' }]);
+  supabase.seed('minifiguras', OTHER_RANKING_USER.id, [
+    { id: 'HIGH', nombre: 'High', estado_coleccion: 'COLECCIÓN', precio: 50, anio: 2020 },
+    { id: 'OLD', nombre: 'Old', estado_coleccion: 'COLECCIÓN', precio: 5, anio: 1980 },
+    { id: 'WANTED', nombre: 'Wanted', estado_coleccion: 'BUSCADA', precio: 500, anio: 1970 },
+  ]);
+  return supabase;
+}
+
+test('GET /api/ranking exige autenticación y devuelve solo el contrato público', async () => {
+  const context = await startTestServer({ supabase: rankingSupabase() });
+  try {
+    assert.equal((await fetch(`${context.baseUrl}/api/ranking`)).status, 401);
+    const response = await authFetch(TEST_TOKEN)(`${context.baseUrl}/api/ranking`);
+    assert.equal(response.status, 200);
+    const ranking = await response.json();
+    assert.equal(ranking[0].userId, OTHER_RANKING_USER.id);
+    assert.equal(ranking[0].totalColeccion, 2);
+    assert.deepEqual(ranking[0].top5Precio.map(({ id }) => id), ['HIGH', 'OLD']);
+    assert.equal('email' in ranking[0], false);
+    assert.deepEqual(context.supabase.rows('perfiles_publicos', RANKING_USER.id).map(({ display_name, avatar_url }) => ({ display_name, avatar_url })), [
+      { display_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' },
+    ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('POST /api/ranking/regalar aplica validación y errores de dominio sin suplantación', async () => {
+  const context = await startTestServer({ supabase: rankingSupabase() });
+  const post = (body) => authFetch(TEST_TOKEN)(`${context.baseUrl}/api/ranking/regalar`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  try {
+    assert.deepEqual(await (await post({ receptorId: OTHER_RANKING_USER.id })).json(), { ok: true });
+    assert.equal(context.supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 250);
+    assert.equal(context.supabase.rows('gamificacion', RANKING_USER.id)[0].bricks, 100);
+
+    const duplicate = await post({ receptorId: OTHER_RANKING_USER.id });
+    assert.equal(duplicate.status, 409);
+    assert.deepEqual(await duplicate.json(), { error: 'REGALO_YA_ENVIADO' });
+
+    const self = await post({ receptorId: RANKING_USER.id });
+    assert.equal(self.status, 400);
+    assert.deepEqual(await self.json(), { error: 'AUTORREGALO_NO_PERMITIDO' });
+
+    const missing = await post({ receptorId: '00000000-0000-4000-8000-000000000099' });
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { error: 'RECEPTOR_NO_ENCONTRADO' });
+
+    const spoof = await post({ receptorId: OTHER_RANKING_USER.id, donanteId: OTHER_RANKING_USER.id });
+    assert.equal(spoof.status, 400);
+    assert.deepEqual(await spoof.json(), { error: 'PARAMETRO_INVALIDO', parametro: 'receptorId' });
+    assert.equal(context.supabase.rows('regalos_enviados').length, 1);
+  } finally {
+    await context.close();
+  }
+});

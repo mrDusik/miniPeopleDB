@@ -43,6 +43,10 @@ body {
 .logout-link { border: 0; padding: 4px 0; color: var(--accent-dark); background: transparent; cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 .logout-link:hover { color: var(--accent); }
 .logout-link:disabled { cursor: wait; opacity: 0.55; }
+.ranking-menu-link { display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 4px 0; color: var(--blue); background: transparent; cursor: pointer; font: 700 0.85rem Arial, sans-serif; white-space: nowrap; }
+.ranking-menu-link:hover { color: var(--accent-dark); }
+.ranking-star { color: #d49b00; font-size: 1.1rem; line-height: 1; }
+.ranking-star[hidden] { display: none; }
 .user-avatar:not([hidden]) { display: block; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .user-avatar-fallback { display: grid; place-items: center; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; background: var(--surface); font-size: 1.2rem; }
 .user-avatar:not([hidden]) + .user-avatar-fallback { display: none; }
@@ -59,9 +63,10 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-details { position: absolute; top: calc(100% + 4px); right: -1px; z-index: 20; display: grid; gap: 16px; width: max-content; max-width: calc(100vw - 22px); padding: 12px 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: var(--shadow); }
 .gamification-details[hidden] { display: none; }
 .gamification-details > * + * { padding-top: 16px; border-top: 1px solid var(--blue); }
-.collection-summary { display: flex; align-items: center; justify-content: flex-start; gap: 16px; min-width: 0; font: 700 0.9rem Arial, sans-serif; }
+.collection-summary { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 16px; min-width: 0; font: 700 0.9rem Arial, sans-serif; }
 .collection-summary-content { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .collection-summary-content strong { color: var(--ink); font: 700 1.2rem Arial, sans-serif; }
+.summary-ranking-link { margin-left: auto; }
 .collection-counts-panel { display: flex; align-items: center; justify-content: center; gap: 24px; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 16px; }
 .gamification-details .count-icon { width: 40px; text-align: center; }
@@ -250,6 +255,37 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
 .achievements-actions { justify-content: flex-end; padding-top: 17px; border-top: 1px solid var(--line); }
+.achievement-gift-icon { display: grid; place-items: center; font-size: 1.65rem; }
+
+.modal-ranking { width: min(1100px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; }
+.ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
+.ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
+.ranking-dialog-heading h2 { margin: 0; }
+.global-ranking-list { display: grid; gap: 8px; max-height: calc(100vh - 190px); overflow-y: auto; padding: 2px 4px 2px 0; }
+.global-ranking-entry { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 4px; background: var(--surface); }
+.global-ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+.ranking-expand { display: grid; grid-template-columns: 42px 22px 48px minmax(130px, 1fr) 44px minmax(150px, 0.8fr) minmax(110px, auto) 24px; align-items: center; gap: 9px; min-width: 0; border: 0; padding: 10px 12px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
+.ranking-expand:hover { background: #f7f7f7; }
+.ranking-expand:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.ranking-position { color: var(--blue); font-size: 1rem; text-align: center; }
+.ranking-avatar-wrap { display: grid; place-items: center; width: 42px; height: 42px; }
+.ranking-avatar, .ranking-avatar-fallback { grid-area: 1 / 1; width: 42px; height: 42px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
+.ranking-avatar-fallback { display: grid; place-items: center; background: white; }
+.ranking-avatar-fallback[hidden], .ranking-avatar[hidden] { display: none; }
+.ranking-identity { display: grid; gap: 3px; min-width: 0; }
+.ranking-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-identity span, .ranking-level, .ranking-collection-count { color: var(--muted); font: 700 0.75rem Arial, sans-serif; }
+.ranking-level-image { width: 40px; height: 40px; object-fit: contain; }
+.ranking-row-chevron { font-size: 1.2rem; text-align: center; transition: transform 0.2s; }
+.ranking-expand[aria-expanded="true"] .ranking-row-chevron { transform: rotate(180deg); }
+.ranking-gift { align-self: center; margin-right: 10px; min-height: 38px; }
+.ranking-gift:disabled { cursor: default; opacity: 0.55; }
+.ranking-user-details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-top: 1px solid var(--line); background: #f7f7f7; }
+.ranking-user-details[hidden] { display: none; }
+.ranking-highlight-group { min-width: 0; padding: 10px; border: 1px solid var(--line); background: white; }
+.ranking-highlight-group h3 { margin: 0 0 8px; font: 700 0.9rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; }
+.ranking-card-static { cursor: default; }
+.ranking-card-static:hover { border-color: var(--line); }
 
 .modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(24, 34, 45, 0.45); }
 .modal-overlay[hidden] { display: none; }
@@ -283,6 +319,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .filters-form .form-actions { grid-column: 1 / -1; }
   .filter-state-toggles { justify-content: flex-start; }
   .rankings { grid-template-columns: 1fr; }
+  .ranking-expand { grid-template-columns: 36px 18px 42px minmax(120px, 1fr) 40px minmax(110px, auto) 22px; }
+  .ranking-collection-count { display: none; }
+  .ranking-user-details { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -299,7 +338,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .collection-counts-panel > span { gap: 6px; }
   .collection-counts-panel strong { font-size: 1.1rem; }
   .count-icon { font-size: 1.15rem; }
-  .gamification-summary { padding: 12px; }
+  .gamification-summary { flex: 1 1 auto; width: 100%; min-width: 0; padding: 12px; }
   .gamification-main { grid-template-columns: 54px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 0 8px; }
   .user-session { grid-column: 1; grid-row: 1 / 3; }
   .user-avatar:not([hidden]), .user-avatar-fallback { width: 34px; height: 34px; }
@@ -313,6 +352,19 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   #gamification-toggle { grid-column: 3; grid-row: 1; }
   .section-heading .panel-toggle { margin-right: -14px; }
   .modal { padding: 18px; }
+  .modal-ranking { padding: 12px; }
+  .ranking-dialog-heading { align-items: flex-start; }
+  .ranking-dialog-heading .button { flex: 0 0 auto; min-height: 38px; }
+  .global-ranking-row { grid-template-columns: minmax(0, 1fr); }
+  .ranking-expand { grid-template-columns: 32px 16px 38px minmax(0, 1fr) 34px 20px; gap: 6px; padding: 9px 7px; }
+  .ranking-position { font-size: 0.82rem; }
+  .ranking-avatar-wrap, .ranking-avatar, .ranking-avatar-fallback { width: 36px; height: 36px; }
+  .ranking-level-image { width: 32px; height: 32px; }
+  .ranking-level, .ranking-collection-count { display: none; }
+  .ranking-gift { width: calc(100% - 14px); margin: 0 7px 9px; }
+  .ranking-user-details { padding: 7px; }
+  .ranking-highlight-group { overflow-x: auto; padding: 7px; }
+  .ranking-highlight-group .ranking-row { min-width: 420px; }
   .modal form { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 10px; }
   .modal-row.modal-row-identity { gap: 6px; }
   .modal-row-identity label { font-size: 0.68rem; }
