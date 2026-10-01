@@ -63,7 +63,7 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-details { position: absolute; top: calc(100% + 4px); right: -1px; z-index: 20; display: grid; gap: 16px; width: min(381px, calc(100vw - 22px)); max-width: calc(100vw - 22px); padding: 12px 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: var(--shadow); }
 .gamification-details[hidden] { display: none; }
 .gamification-details > * + * { padding-top: 16px; border-top: 1px solid var(--blue); }
-.summary-ranking-row, .summary-sync-row { display: flex; justify-content: center; align-items: center; }
+.summary-ranking-row, .summary-sync-row, .summary-achievements-row { display: flex; justify-content: center; align-items: center; }
 .summary-ranking-link, .summary-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
 .collection-counts-panel { display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -253,9 +253,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks { display: flex; align-items: center; gap: 6px; }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
-.achievements-actions { justify-content: flex-end; padding-top: 17px; border-top: 1px solid var(--line); }
+.achievements-heading .button { margin-left: auto; flex: 0 0 auto; }
 .modal-ranking { width: min(1400px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
-.ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 2px solid var(--blue); }
+.ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 190px); overflow-y: auto; padding: 4px 4px 4px 0; }

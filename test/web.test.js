@@ -259,7 +259,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
-    assert.match(css, /\.summary-ranking-row, \.summary-sync-row \{ display: flex; justify-content: center; align-items: center; \}/);
+    assert.match(css, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading').lastElementChild.textContent, 'BY MRDUSIK');
     assert.doesNotMatch(document.querySelector('#form-dialog').textContent, /Preview/i);

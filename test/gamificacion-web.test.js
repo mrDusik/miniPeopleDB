@@ -66,6 +66,15 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
   window.document.querySelector('#gamification-close').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, false);
+  window.document.querySelector('#gamification-toggle').click();
+  const achievementsButton = window.document.querySelector('#open-achievements');
+  assert.equal(achievementsButton.textContent.trim(), '🏆 Ver Logros');
+  achievementsButton.click();
+  assert.equal(window.document.querySelector('#gamification-dialog').open, true);
+  assert.equal(window.document.activeElement.id, 'gamification-close');
+  assert.equal(window.document.querySelector('#gamification-close').parentElement.className, 'achievements-heading');
+  assert.equal(window.document.querySelector('.achievements-actions'), null);
+  window.document.querySelector('#gamification-close').click();
   window.document.querySelector('#gamification-level').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
   dom.window.close();
@@ -135,7 +144,7 @@ test('el panel de nivel despliega recuento y valor total con la flecha', async (
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.hidden, false);
-  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-ranking-row', 'summary-sync-row', 'sync-progress']);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-ranking-row', 'summary-sync-row', 'summary-achievements-row', 'sync-progress']);
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();
