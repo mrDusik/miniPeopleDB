@@ -53,6 +53,12 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.summary-ranking-row, \.summary-sync-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) auto auto 18px;/);
+  assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
+  assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
+  assert.match(styles, /\.ranking-expand \.ranking-star \{[^}]*left: 39px; top: 50%;/);
+  assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; \}/);
+  assert.match(styles, /\.ranking-collection-count \{ grid-column: 5; grid-row: 1 \/ 3; \}/);
+  assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 700px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 0\.9rem; line-height: 1;/);
