@@ -1040,8 +1040,8 @@ function renderGlobalRanking() {
     details.className = 'ranking-user-details';
     details.hidden = true;
     details.append(
-      highlightGroup('Top 5 por precio', entry.top5Precio ?? [], 'precio'),
-      highlightGroup('Top 5 por antigüedad', entry.top5Antiguedad ?? [], 'antiguedad'),
+      highlightGroup('Top 3 por precio', (entry.top5Precio ?? []).slice(0, 3), 'precio'),
+      highlightGroup('Top 3 por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 3), 'antiguedad'),
     );
     article.append(row, details);
     fragment.append(article);

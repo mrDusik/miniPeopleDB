@@ -54,7 +54,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
-  assert.match(styles, /\.modal-ranking \{ width: min\(1280px, calc\(100% - 24px\)\)/);
+  assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
+  assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ min-width: 252px; \}/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 85px 18px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
@@ -130,6 +131,33 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   dom.window.document.querySelector('#ranking-close').click();
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
   assert.equal(dom.window.document.activeElement.id, 'open-global-ranking');
+  dom.window.close();
+});
+
+test('el modal muestra solo los tres primeros destacados por precio y antigüedad', async () => {
+  const dom = createDom();
+  const top5Precio = Array.from({ length: 5 }, (_, index) => ({
+    id: `PRICE-${index}`, nombre: `Price ${index}`, precio: 50 - index,
+  }));
+  const top5Antiguedad = Array.from({ length: 5 }, (_, index) => ({
+    id: `OLD-${index}`, nombre: `Old ${index}`, anio: 1980 + index, precio: 5,
+  }));
+  installFetch(dom.window, [entry({ top5Precio, top5Antiguedad })]);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('.ranking-expand').click();
+
+  const groups = [...dom.window.document.querySelectorAll('.ranking-highlight-group')];
+  assert.deepEqual(groups.map((group) => group.querySelector('h3').textContent), [
+    'Top 3 por precio', 'Top 3 por antigüedad',
+  ]);
+  for (const [index, items] of [top5Precio, top5Antiguedad].entries()) {
+    const cards = [...groups[index].querySelectorAll('.ranking-card-static')];
+    assert.equal(cards.length, 3);
+    assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.slice(0, 3).map(({ nombre }) => nombre));
+  }
   dom.window.close();
 });
 

@@ -263,7 +263,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievements-heading-bricks { margin-left: auto; }
 .achievements-heading-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; }
 .achievements-heading .button { flex: 0 0 auto; }
-.modal-ranking { width: min(1280px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
+.modal-ranking { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
@@ -402,7 +402,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-level-info { gap: 6px; }
   .ranking-user-details { padding: 7px; }
   .ranking-highlight-group { overflow-x: auto; padding: 7px; }
-  .ranking-highlight-group .ranking-row { min-width: 420px; }
+  .ranking-highlight-group .ranking-row { min-width: 252px; }
   .modal form { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 10px; }
   .modal-row.modal-row-identity { gap: 6px; }
   .modal-row-identity label { font-size: 0.68rem; }
