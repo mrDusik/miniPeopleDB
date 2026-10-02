@@ -260,7 +260,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks { display: flex; align-items: center; gap: 6px; }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
-.achievements-heading .button { margin-left: auto; flex: 0 0 auto; }
+.achievements-heading-bricks { margin-left: auto; }
+.achievements-heading-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; }
+.achievements-heading .button { flex: 0 0 auto; }
 .modal-ranking { width: min(1280px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; border-top: 5px solid var(--accent); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
