@@ -47,7 +47,8 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Three-Seven-Five');
   assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), '/level_images/8_redbearb.png');
   assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), '/level_images/8_redbearb.png');
-  assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820 Bricks');
+  assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820');
+  assert.equal(window.document.querySelector('#gamification-dialog-bricks').textContent, '820');
   assert.equal(window.document.querySelector('#gamification-progress').value, 28);
   assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
   assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
@@ -82,6 +83,8 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
 
 test('usa la imagen disponible de cada nivel y Forestman como fallback', async () => {
   const levels = [
+    [0, '/level_images/0_duplo.png'], [1, '/level_images/1_stud.png'],
+    [2, '/level_images/2_plate.png'],
     [3, '/level_images/3_threesevenfive.png'], [4, '/level_images/4_citizen.png'],
     [5, '/level_images/5_skeleton.png'], [6, '/level_images/6_pirate.png'],
     [7, '/level_images/7_captain.png'], [8, '/level_images/8_redbearb.png'],
@@ -89,7 +92,11 @@ test('usa la imagen disponible de cada nivel y Forestman como fallback', async (
     [11, '/level_images/11_wolfpackmaster.png'], [12, '/level_images/12_ninja.png'],
     [13, '/level_images/13_rx.png'], [14, '/level_images/14_dragonform.png'],
     [15, '/level_images/15_spacebaby.jpg'], [16, '/level_images/16_spaceman.jpg'],
-    [17, '/level_images/17_blacktron.png'], [18, '/level_images/9_forestman.png'],
+    [17, '/level_images/17_blacktron.png'], [18, '/level_images/18_technic.png'],
+    [19, '/level_images/19_majisto.png'], [20, '/level_images/20_castleknight.png'],
+    [21, '/level_images/21_chromegold.png'], [22, '/level_images/22_woodenduck.png'],
+    [23, '/level_images/23_billund.png'], [24, '/level_images/24_mrkirk.png'],
+    [25, '/level_images/25_mrgold.png'], [26, '/level_images/9_forestman.png'],
   ];
   for (const [levelId, imagePath] of levels) {
     const dom = createDom();

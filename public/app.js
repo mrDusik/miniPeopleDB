@@ -76,6 +76,7 @@ const gamificationLevelTooltipImage = document.createElement('img');
 const gamificationLevelNumber = document.querySelector('#gamification-level-number');
 const gamificationLevelName = document.querySelector('#gamification-level-name');
 const gamificationBricks = document.querySelector('#gamification-bricks');
+const gamificationDialogBricks = document.querySelector('#gamification-dialog-bricks');
 const gamificationProgress = document.querySelector('#gamification-progress');
 
 function showLevelImageTooltip() {
@@ -366,6 +367,9 @@ function rankingCard(minifigura, position, detail, interactive = true) {
 
 function levelImagePath(levelId) {
   const images = {
+    0: '/level_images/0_duplo.png',
+    1: '/level_images/1_stud.png',
+    2: '/level_images/2_plate.png',
     3: '/level_images/3_threesevenfive.png',
     4: '/level_images/4_citizen.png',
     5: '/level_images/5_skeleton.png',
@@ -381,6 +385,14 @@ function levelImagePath(levelId) {
     15: '/level_images/15_spacebaby.jpg',
     16: '/level_images/16_spaceman.jpg',
     17: '/level_images/17_blacktron.png',
+    18: '/level_images/18_technic.png',
+    19: '/level_images/19_majisto.png',
+    20: '/level_images/20_castleknight.png',
+    21: '/level_images/21_chromegold.png',
+    22: '/level_images/22_woodenduck.png',
+    23: '/level_images/23_billund.png',
+    24: '/level_images/24_mrkirk.png',
+    25: '/level_images/25_mrgold.png',
   };
   return images[levelId] || '/level_images/9_forestman.png';
 }
@@ -815,7 +827,8 @@ function renderGamification(state) {
   gamificationLevelNumber.textContent = level.id;
   gamificationLevelName.textContent = level.nombre;
   gamificationDialogLevel.textContent = `${level.id} ${level.nombre}`;
-  gamificationBricks.textContent = `${state.bricks ?? 0} Bricks`;
+  gamificationBricks.textContent = `${state.bricks ?? 0}`;
+  gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
   gamificationProgress.value = state.progreso?.porcentaje ?? 0;
   gamificationPercentage.textContent = `${Math.round(gamificationProgress.value)}%`;
   gamificationPercentage.classList.toggle('on-accent', gamificationProgress.value >= 50);
@@ -876,7 +889,8 @@ async function loadGamification() {
     gamificationLevelNumber.textContent = '';
     gamificationLevelName.textContent = 'Nivel no disponible';
     gamificationDialogLevel.textContent = 'Nivel no disponible';
-    gamificationBricks.textContent = '0 Bricks';
+    gamificationBricks.textContent = '0';
+    gamificationDialogBricks.textContent = '0';
     gamificationProgress.value = 0;
     gamificationPercentage.textContent = '0%';
     gamificationPercentage.classList.remove('on-accent');
