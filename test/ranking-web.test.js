@@ -85,7 +85,8 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
   assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
   assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, false);
-  assert.equal(dom.window.document.querySelector('#ranking-main-globe').textContent, '🌐');
+  assert.equal(dom.window.document.querySelector('#ranking-main-globe > span').textContent, '🌐');
+  assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);
   dom.window.document.querySelector('#open-global-ranking').click();
@@ -132,6 +133,44 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   dom.window.close();
 });
 
+test('el globo abre el ranking, muestra medallas o posición y actualiza su presencia', async () => {
+  const dom = createDom();
+  const ranking = [entry({ userId: 'user-a' })];
+  installFetch(dom.window, ranking);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  const globe = document.querySelector('#ranking-main-globe');
+  assert.equal(globe.tagName, 'BUTTON');
+  assert.equal(globe.closest('#user-menu-toggle'), null);
+  assert.equal(globe.title, 'En Top Global');
+  assert.equal(globe.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(globe.getAttribute('aria-controls'), 'ranking-dialog');
+
+  for (const [index, marker] of ['🥇', '🥈', '🥉', '#4'].entries()) {
+    if (index > 0) ranking.unshift(entry({ userId: `other-${index}` }));
+    globe.click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(document.querySelector('#ranking-dialog').open, true);
+    assert.equal(document.activeElement.id, 'ranking-close');
+    assert.equal(document.querySelector('#user-profile').hidden, true);
+    assert.equal(document.querySelector('#user-menu-toggle').getAttribute('aria-expanded'), 'false');
+    assert.equal(document.querySelector('#ranking-main-position').textContent, marker);
+    assert.ok(globe.getAttribute('aria-label').includes(`posición ${index + 1}`));
+    document.querySelector('#ranking-close').click();
+    assert.equal(document.activeElement, globe);
+  }
+
+  ranking.pop();
+  globe.click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(globe.hidden, true);
+  assert.equal(document.querySelector('#ranking-main-position').textContent, '');
+  document.querySelector('#ranking-close').click();
+  assert.equal(document.activeElement.id, 'open-global-ranking');
+  dom.window.close();
+});
+
 test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', async () => {
   const dom = createDom();
   const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria A', bricks: 300 }), entry()];
@@ -152,6 +191,7 @@ test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', 
   dom.window.__supabaseStub.setSession('SIGNED_OUT', null);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, true);
+  assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '');
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 0);
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
   dom.window.close();

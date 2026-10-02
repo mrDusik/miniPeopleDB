@@ -28,7 +28,7 @@ Cada fila del modal SHALL mostrar avatar de Google, nombre visible, Bricks, imag
 
 ### Requirement: Indicar la presencia del usuario autenticado en el Top 10
 
-Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un icono de globo junto a su avatar en el panel de nivel principal y SHALL NOT mostrar una estrella junto a su fila del ranking. Si no figura, el icono de globo SHALL estar ausente.
+Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un botón con icono de globo junto a su avatar en el panel de nivel principal y SHALL NOT mostrar una estrella junto a su fila del ranking. El botón SHALL abrir el modal Ranking Global y SHALL mostrar el tooltip `En Top Global`. Debajo del globo SHALL mostrar la medalla 🥇, 🥈 o 🥉 para las posiciones 1, 2 o 3 respectivamente, o la posición con formato `#4` desde la cuarta posición. Si no figura, el botón SHALL estar ausente.
 
 #### Scenario: Usuario dentro del Top 10
 - **WHEN** la respuesta del ranking contiene el `userId` de la sesión
@@ -37,6 +37,16 @@ Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un icon
 #### Scenario: Usuario fuera del Top 10
 - **WHEN** la respuesta del ranking no contiene el `userId` de la sesión
 - **THEN** no se muestra el icono de globo en el panel de nivel ni una estrella junto a la fila del ranking
+
+#### Scenario: Abrir el ranking desde el globo
+- **WHEN** el usuario activa el globo del panel de nivel
+- **THEN** se abre el modal Ranking Global sin abrir el menú de usuario
+- **AND** al cerrar el modal el foco vuelve al globo si sigue visible
+
+#### Scenario: Mostrar posición en el panel de nivel
+- **WHEN** el usuario figura en el ranking
+- **THEN** debajo del globo se muestra la medalla correspondiente si ocupa una de las tres primeras posiciones, o su posición con prefijo `#` en los demás casos
+- **AND** el tooltip del globo indica `En Top Global`
 
 ### Requirement: Desplegar destacados en acordeón exclusivo
 
