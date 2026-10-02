@@ -45,7 +45,10 @@ body {
 .logout-link:disabled { cursor: wait; opacity: 0.55; }
 .ranking-menu-link { display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 4px 0; color: var(--blue); background: transparent; cursor: pointer; font: 700 0.85rem Arial, sans-serif; white-space: nowrap; }
 .ranking-menu-link:hover { color: var(--accent-dark); }
-.ranking-main-globe { color: var(--blue); font-size: 1.1rem; line-height: 1; }
+.ranking-main-globe { display: grid; justify-items: center; align-content: center; gap: 3px; width: 32px; height: 42px; margin-right: 4px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--blue); cursor: pointer; font: inherit; font-size: 1.1rem; line-height: 1; }
+.ranking-main-globe:hover { background: #eeeeee; }
+.ranking-main-globe:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.ranking-main-position { font-size: 0.8rem; font-weight: 700; line-height: 1; }
 .ranking-main-globe[hidden] { display: none; }
 .user-avatar:not([hidden]) { display: block; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .user-avatar-fallback { display: grid; place-items: center; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; background: var(--surface); font-size: 1.2rem; }

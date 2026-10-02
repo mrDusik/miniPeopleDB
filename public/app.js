@@ -917,7 +917,12 @@ function setExpandedRankingUser(userId) {
 function renderGlobalRanking() {
   const fragment = document.createDocumentFragment();
   const currentUserId = currentSession?.user?.id;
-  rankingMainGlobe.hidden = !rankingEntries.some(({ userId }) => userId === currentUserId);
+  const currentUserIndex = rankingEntries.findIndex(({ userId }) => userId === currentUserId);
+  rankingMainGlobe.hidden = currentUserIndex === -1;
+  rankingMainGlobe.querySelector('#ranking-main-position').textContent = currentUserIndex === -1
+    ? '' : ['🥇', '🥈', '🥉'][currentUserIndex] ?? `#${currentUserIndex + 1}`;
+  rankingMainGlobe.setAttribute('aria-label', currentUserIndex === -1
+    ? 'En Top Global' : `En Top Global, posición ${currentUserIndex + 1}. Abrir Ranking Global`);
 
   for (const [index, entry] of rankingEntries.entries()) {
     const article = document.createElement('article');
@@ -1445,20 +1450,24 @@ gamificationCloseButton.addEventListener('click', () => {
   gamificationDialog.close();
 });
 
-rankingOpenButton.addEventListener('click', () => {
-  userProfile.hidden = true;
-  userMenuToggle.setAttribute('aria-expanded', 'false');
-  rankingDialog.showModal();
-  rankingCloseButton.focus();
-  void loadGlobalRanking();
-});
+let rankingTrigger = rankingOpenButton;
+for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
+  trigger.addEventListener('click', () => {
+    rankingTrigger = trigger;
+    userProfile.hidden = true;
+    userMenuToggle.setAttribute('aria-expanded', 'false');
+    rankingDialog.showModal();
+    rankingCloseButton.focus();
+    void loadGlobalRanking();
+  });
+}
 
 rankingCloseButton.addEventListener('click', () => {
   rankingDialog.close();
 });
 
 rankingDialog.addEventListener('close', () => {
-  if (currentSession) rankingOpenButton.focus();
+  if (currentSession) (rankingTrigger.hidden ? rankingOpenButton : rankingTrigger).focus();
 });
 
 globalRankingList.addEventListener('click', async (event) => {
@@ -1838,6 +1847,8 @@ function clearUserData() {
   rankingEntries = [];
   expandedRankingUserId = null;
   rankingMainGlobe.hidden = true;
+  rankingMainGlobe.querySelector('#ranking-main-position').textContent = '';
+  rankingMainGlobe.setAttribute('aria-label', 'En Top Global');
   globalRankingList.replaceChildren();
   rankingStatus.textContent = '';
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {

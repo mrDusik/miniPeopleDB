@@ -29,8 +29,11 @@
         <section class="gamification-summary" aria-labelledby="gamification-title">
           <div class="gamification-main">
             <div class="user-session">
+              <button type="button" id="ranking-main-globe" class="ranking-main-globe" aria-label="En Top Global" aria-haspopup="dialog" aria-controls="ranking-dialog" title="En Top Global" hidden>
+                <span aria-hidden="true">🌐</span>
+                <span id="ranking-main-position" class="ranking-main-position" aria-hidden="true"></span>
+              </button>
               <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
-                <span id="ranking-main-globe" class="ranking-main-globe" role="img" aria-label="Top 10" title="Top 10" hidden>🌐</span>
                 <img id="user-avatar" class="user-avatar" alt="" hidden>
                 <span class="user-avatar-fallback" aria-hidden="true">👤</span>
                 <span class="user-menu-chevron" aria-hidden="true">▾</span>
