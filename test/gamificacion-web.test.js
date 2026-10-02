@@ -45,8 +45,8 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(window.document.querySelector('#gamification-title').textContent, '8 Three-Seven-Five');
-  assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), '/level_images/9_forestman.png');
-  assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), '/level_images/9_forestman.png');
+  assert.equal(window.document.querySelector('.gamification-level-image').getAttribute('src'), '/level_images/8_redbearb.png');
+  assert.equal(window.document.querySelector('.achievements-heading-icon').getAttribute('src'), '/level_images/8_redbearb.png');
   assert.equal(window.document.querySelector('#gamification-bricks').textContent, '820 Bricks');
   assert.equal(window.document.querySelector('#gamification-progress').value, 28);
   assert.equal(window.document.querySelector('#gamification-percentage').textContent, '28%');
@@ -80,8 +80,18 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   dom.window.close();
 });
 
-test('usa Spacebaby en el nivel 15, Spaceman en el nivel 16 y Forestman en los demas', async () => {
-  for (const [levelId, imagePath] of [[15, '/level_images/15_spacebaby.jpg'], [16, '/level_images/16_spaceman.jpg'], [8, '/level_images/9_forestman.png']]) {
+test('usa la imagen disponible de cada nivel y Forestman como fallback', async () => {
+  const levels = [
+    [3, '/level_images/3_threesevenfive.png'], [4, '/level_images/4_citizen.png'],
+    [5, '/level_images/5_skeleton.png'], [6, '/level_images/6_pirate.png'],
+    [7, '/level_images/7_captain.png'], [8, '/level_images/8_redbearb.png'],
+    [9, '/level_images/9_forestman.png'], [10, '/level_images/10_wolfpack.png'],
+    [11, '/level_images/11_wolfpackmaster.png'], [12, '/level_images/12_ninja.png'],
+    [13, '/level_images/13_rx.png'], [14, '/level_images/14_dragonform.png'],
+    [15, '/level_images/15_spacebaby.jpg'], [16, '/level_images/16_spaceman.jpg'],
+    [17, '/level_images/17_blacktron.png'], [18, '/level_images/9_forestman.png'],
+  ];
+  for (const [levelId, imagePath] of levels) {
     const dom = createDom();
     const { window } = dom;
     window.fetch = baseFetch([], state({ nivel: { id: levelId, nombre: 'Nivel de prueba' } }));

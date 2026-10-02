@@ -12,11 +12,11 @@ test('sincroniza perfil validado y mapea el contrato público del ranking', asyn
   const supabase = createTestSupabase();
   const repository = new RankingRepository({ client: createTestClient(supabase), userId: TEST_USER.id });
   await repository.syncProfile({ user_metadata: { full_name: ' Ada ', avatar_url: ' https://example.com/a.png ' } });
-  supabase.seed('gamificacion', TEST_USER.id, [{ bricks: 20, nivel: { id: 1, nombre: 'Stud' } }]);
+  supabase.seed('gamificacion', TEST_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' } }]);
   const [entry] = await repository.list();
   assert.deepEqual(entry, {
-    userId: TEST_USER.id, avatarUrl: 'https://example.com/a.png', displayName: 'Ada', bricks: 20,
-    nivel: 1, nombreNivel: 'Stud', imagenNivel: '/level_images/9_forestman.png', totalColeccion: 0,
+    userId: TEST_USER.id, avatarUrl: 'https://example.com/a.png', displayName: 'Ada', bricks: 100,
+    nivel: 3, nombreNivel: 'Three-Seven-Five', imagenNivel: '/level_images/3_threesevenfive.png', totalColeccion: 0,
     top5Precio: [], top5Antiguedad: [], regaloEnviado: false,
   });
 });

@@ -64,7 +64,7 @@ Se añadirá la tercera fila del menú, el diálogo y plantillas de fila mediant
 
 El `userId` de sesión se comparará con las entradas para las estrellas y para omitir el botón propio. `regaloEnviado` inicializa el botón deshabilitado; durante POST también se deshabilita para impedir dobles envíos. Al confirmar, se recargan ranking y gamificación. Los logros elegirán `🎁` cuando `type === "regalo"` y conservarán la imagen actual en los demás casos.
 
-La URL de `imagenNivel` se resolverá con el mismo helper que usa `renderGamification`: activos específicos para 15 y 16 y el fallback existente para los demás niveles.
+La URL de `imagenNivel` se resolverá con el mismo helper que usa `renderGamification`: cada nivel con un archivo correspondiente en `public/level_images/` usa ese activo, y los niveles sin imagen propia conservan el fallback de Forestman.
 
 ### Pruebas por frontera
 

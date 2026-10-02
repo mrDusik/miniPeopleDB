@@ -45,8 +45,8 @@ body {
 .logout-link:disabled { cursor: wait; opacity: 0.55; }
 .ranking-menu-link { display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 4px 0; color: var(--blue); background: transparent; cursor: pointer; font: 700 0.85rem Arial, sans-serif; white-space: nowrap; }
 .ranking-menu-link:hover { color: var(--accent-dark); }
-.ranking-star { color: #d49b00; font-size: 1.1rem; line-height: 1; }
-.ranking-star[hidden] { display: none; }
+.ranking-main-globe { color: var(--blue); font-size: 1.1rem; line-height: 1; }
+.ranking-main-globe[hidden] { display: none; }
 .user-avatar:not([hidden]) { display: block; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .user-avatar-fallback { display: grid; place-items: center; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; background: var(--surface); font-size: 1.2rem; }
 .user-avatar:not([hidden]) + .user-avatar-fallback { display: none; }
@@ -270,7 +270,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-expand:hover { background: #f4f8ff; }
 .ranking-expand:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .ranking-position { grid-column: 1; grid-row: 1 / 3; align-self: start; color: var(--blue); font-size: 1rem; }
-.ranking-expand .ranking-star { position: absolute; left: 39px; top: 50%; font-size: 0.8rem; transform: translateY(-50%); }
 .ranking-avatar-wrap { display: grid; grid-column: 2; grid-row: 1 / 3; place-items: center; width: 40px; height: 40px; }
 .ranking-avatar, .ranking-avatar-fallback { grid-area: 1 / 1; width: 40px; height: 40px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .ranking-avatar-fallback { display: grid; place-items: center; background: white; }
@@ -310,7 +309,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
   .ranking-expand { grid-column: 1 / -1; grid-template-columns: 32px 40px minmax(0, 1fr) 18px; grid-template-rows: 24px 28px 30px; gap: 0 8px; padding: 8px 10px; }
   .ranking-position { grid-column: 1; }
-  .ranking-expand .ranking-star { left: 33px; top: 34px; }
   .ranking-avatar-wrap { grid-column: 2; }
   .ranking-name, .ranking-level-info { grid-column: 3; }
   .ranking-expand .ranking-bricks { grid-column: 2 / 4; grid-row: 3; justify-self: start; width: 85px; }

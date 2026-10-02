@@ -10,6 +10,8 @@ Permite comparar de forma segura el progreso público de los coleccionistas y re
 
 El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios con mayor número de Bricks, ordenados por `bricks` descendente y, en caso de empate, por `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
 
+`imagenNivel` SHALL apuntar a la imagen disponible del nivel en `public/level_images/`; cuando no exista un activo para ese nivel, SHALL usar `/level_images/9_forestman.png`.
+
 #### Scenario: Obtener el Top 10
 - **WHEN** un usuario autenticado consulta `GET /api/ranking` y existen más de 10 usuarios con gamificación
 - **THEN** recibe `200` con exactamente los 10 primeros según el orden definido

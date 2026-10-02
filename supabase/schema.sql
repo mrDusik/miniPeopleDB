@@ -185,8 +185,21 @@ as $$
     coalesce((top_users.nivel->>'id')::integer, 0) as nivel,
     coalesce(top_users.nivel->>'nombre', 'Duplo') as nombre_nivel,
     case coalesce((top_users.nivel->>'id')::integer, 0)
+      when 3 then '/level_images/3_threesevenfive.png'
+      when 4 then '/level_images/4_citizen.png'
+      when 5 then '/level_images/5_skeleton.png'
+      when 6 then '/level_images/6_pirate.png'
+      when 7 then '/level_images/7_captain.png'
+      when 8 then '/level_images/8_redbearb.png'
+      when 9 then '/level_images/9_forestman.png'
+      when 10 then '/level_images/10_wolfpack.png'
+      when 11 then '/level_images/11_wolfpackmaster.png'
+      when 12 then '/level_images/12_ninja.png'
+      when 13 then '/level_images/13_rx.png'
+      when 14 then '/level_images/14_dragonform.png'
       when 15 then '/level_images/15_spacebaby.jpg'
       when 16 then '/level_images/16_spaceman.jpg'
+      when 17 then '/level_images/17_blacktron.png'
       else '/level_images/9_forestman.png'
     end as imagen_nivel,
     (select count(*) from public.minifiguras m where m.user_id = top_users.user_id and m.estado_coleccion = 'COLECCIÓN') as total_coleccion,
