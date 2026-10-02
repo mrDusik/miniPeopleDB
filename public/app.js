@@ -394,7 +394,7 @@ function levelImagePath(levelId) {
     24: '/level_images/24_mrkirk.png',
     25: '/level_images/25_mrgold.png',
   };
-  return images[levelId] || '/level_images/9_forestman.png';
+  return images[levelId] || images[0];
 }
 
 function renderTopFive(topFive) {
