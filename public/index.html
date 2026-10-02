@@ -12,8 +12,7 @@
 <body>
   <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title" hidden>
     <div class="auth-card">
-      <h1 id="auth-title">MiniPeopleDB</h1>
-      <p class="auth-eyebrow">BY MRDUSIK</p>
+      <h1 id="auth-title"><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
       <p>Inicia sesión para gestionar tu colección.</p>
       <button type="button" id="login-google" class="button button-primary">Iniciar sesión con Google</button>
       <p id="auth-message" class="status error" role="alert"></p>
@@ -23,8 +22,7 @@
     <header class="page-header">
       <div class="header-top">
         <div class="brand-heading">
-          <h1>MiniPeopleDB</h1>
-          <p class="eyebrow">BY MRDUSIK</p>
+          <h1><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
         </div>
         <section class="gamification-summary" aria-labelledby="gamification-title">
           <div class="gamification-main">
@@ -50,6 +48,10 @@
               <strong id="gamification-bricks">0</strong>
               <img class="gamification-brick-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="Bricks">
             </span>
+            <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
+              <span><img class="count-icon status-icon-image" src="/status_images/caja.png" alt="Colección" title="Colección"><strong id="collection-count">0</strong></span>
+              <span><img class="count-icon status-icon-image" src="/status_images/lupa.png" alt="Búsqueda" title="Búsqueda"><strong id="wanted-count">0</strong></span>
+            </div>
             <button type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
           </div>
           <div id="gamification-details" class="gamification-details" hidden>
@@ -60,19 +62,13 @@
               </div>
               <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
             </div>
-            <div class="collection-counts-panel" aria-label="Recuento de minifiguras y valor total">
-              <span><img class="count-icon status-icon-image" src="/status_images/caja.png" alt="" title="Colección"><strong id="collection-count">0</strong></span>
-              <span><img class="count-icon status-icon-image" src="/status_images/lupa.png" alt="" title="Búsqueda"><strong id="wanted-count">0</strong></span>
-              <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
-            </div>
             <div class="summary-achievements-row">
               <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> Ver Logros</button>
-            </div>
-            <div class="summary-ranking-row">
               <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
             </div>
             <div class="summary-sync-row">
               <button type="button" id="sync-prices" class="button button-secondary summary-sync">🔄 Sincronizar Precios</button>
+              <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>

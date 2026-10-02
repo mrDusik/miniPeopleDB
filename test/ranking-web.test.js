@@ -49,9 +49,9 @@ function installFetch(window, ranking) {
 
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
-  assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, calc\(100vw - 22px\)\)/);
+  assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
   assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
-  assert.match(styles, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
+  assert.match(styles, /\.summary-sync-row, \.summary-achievements-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
@@ -75,7 +75,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
 });
 
-test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
+test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
   const dom = createDom();
   const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria Ana Pérez', bricks: 300 }), entry()];
   installFetch(dom.window, ranking);

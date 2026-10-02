@@ -39,6 +39,12 @@ test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', asy
   await tick();
   assert.equal($('#auth-screen').hidden, false);
   assert.equal($('.page-shell').hidden, true);
+  assert.equal($('#auth-screen').getAttribute('aria-labelledby'), 'auth-title');
+  assert.equal($('#auth-title img').getAttribute('src'), $('.brand-heading img').getAttribute('src'));
+  assert.equal($('#auth-title img').alt, 'MiniPeopleDB');
+  assert.equal($('#auth-title').textContent, '');
+  assert.equal($('.auth-eyebrow'), null);
+  assert.match(styles, /\.auth-card h1 \{ width: min\(280px, 100%\); margin: 0; \}/);
   assert.equal($('#login-google').textContent, 'Iniciar sesión con Google');
   assert.equal($('#login-google').disabled, false);
   assert.deepEqual(requests, []);
