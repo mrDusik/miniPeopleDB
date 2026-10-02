@@ -96,7 +96,7 @@ test('usa la imagen disponible de cada nivel y Forestman como fallback', async (
     [19, '/level_images/19_majisto.png'], [20, '/level_images/20_castleknight.png'],
     [21, '/level_images/21_chromegold.png'], [22, '/level_images/22_woodenduck.png'],
     [23, '/level_images/23_billund.png'], [24, '/level_images/24_mrkirk.png'],
-    [25, '/level_images/25_mrgold.png'], [26, '/level_images/9_forestman.png'],
+    [25, '/level_images/25_mrgold.png'], [26, '/level_images/0_duplo.png'],
   ];
   for (const [levelId, imagePath] of levels) {
     const dom = createDom();

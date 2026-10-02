@@ -44,7 +44,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const html = await page.text();
     assert.match(html, /id="filters-form"/);
     const levelTitle = new JSDOM(html).window.document.querySelector('#gamification-title');
-    assert.equal(levelTitle.firstElementChild.getAttribute('src'), '/level_images/9_forestman.png');
+    assert.equal(levelTitle.firstElementChild.getAttribute('src'), '/level_images/0_duplo.png');
     assert.equal(levelTitle.firstElementChild.getAttribute('alt'), '');
     assert.equal(levelTitle.children[1].id, 'gamification-level-number');
 
