@@ -26,17 +26,17 @@ Cada fila del modal SHALL mostrar avatar de Google, nombre visible, Bricks, imag
 - **WHEN** una fila corresponde al usuario de la sesión
 - **THEN** la fila no muestra un control para regalarse Bricks
 
-### Requirement: Distinguir al usuario autenticado clasificado
+### Requirement: Indicar la presencia del usuario autenticado en el Top 10
 
-Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar una estrella junto a su fila del ranking y otra a la izquierda de su avatar en el panel de nivel principal. Si no figura, ambas distinciones SHALL estar ausentes.
+Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un icono de globo junto a su avatar en el panel de nivel principal y SHALL NOT mostrar una estrella junto a su fila del ranking. Si no figura, el icono de globo SHALL estar ausente.
 
 #### Scenario: Usuario dentro del Top 10
 - **WHEN** la respuesta del ranking contiene el `userId` de la sesión
-- **THEN** se muestran las dos estrellas de distinción
+- **THEN** se muestra el icono de globo en el panel de nivel y no se muestra ninguna estrella junto a la fila del ranking
 
 #### Scenario: Usuario fuera del Top 10
 - **WHEN** la respuesta del ranking no contiene el `userId` de la sesión
-- **THEN** no se muestra ninguna estrella de ranking para el usuario
+- **THEN** no se muestra el icono de globo en el panel de nivel ni una estrella junto a la fila del ranking
 
 ### Requirement: Desplegar destacados en acordeón exclusivo
 

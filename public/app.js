@@ -109,7 +109,7 @@ const rankingCloseButton = document.querySelector('#ranking-close');
 const rankingOpenButton = document.querySelector('#open-global-ranking');
 const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
-const rankingMainStar = document.querySelector('#ranking-main-star');
+const rankingMainGlobe = document.querySelector('#ranking-main-globe');
 
 const pageShell = document.querySelector('.page-shell');
 const authScreen = document.querySelector('#auth-screen');
@@ -365,11 +365,24 @@ function rankingCard(minifigura, position, detail, interactive = true) {
 }
 
 function levelImagePath(levelId) {
-  return levelId === 15
-    ? '/level_images/15_spacebaby.jpg'
-    : levelId === 16
-      ? '/level_images/16_spaceman.jpg'
-      : '/level_images/9_forestman.png';
+  const images = {
+    3: '/level_images/3_threesevenfive.png',
+    4: '/level_images/4_citizen.png',
+    5: '/level_images/5_skeleton.png',
+    6: '/level_images/6_pirate.png',
+    7: '/level_images/7_captain.png',
+    8: '/level_images/8_redbearb.png',
+    9: '/level_images/9_forestman.png',
+    10: '/level_images/10_wolfpack.png',
+    11: '/level_images/11_wolfpackmaster.png',
+    12: '/level_images/12_ninja.png',
+    13: '/level_images/13_rx.png',
+    14: '/level_images/14_dragonform.png',
+    15: '/level_images/15_spacebaby.jpg',
+    16: '/level_images/16_spaceman.jpg',
+    17: '/level_images/17_blacktron.png',
+  };
+  return images[levelId] || '/level_images/9_forestman.png';
 }
 
 function renderTopFive(topFive) {
@@ -904,7 +917,7 @@ function setExpandedRankingUser(userId) {
 function renderGlobalRanking() {
   const fragment = document.createDocumentFragment();
   const currentUserId = currentSession?.user?.id;
-  rankingMainStar.hidden = !rankingEntries.some(({ userId }) => userId === currentUserId);
+  rankingMainGlobe.hidden = !rankingEntries.some(({ userId }) => userId === currentUserId);
 
   for (const [index, entry] of rankingEntries.entries()) {
     const article = document.createElement('article');
@@ -921,12 +934,6 @@ function renderGlobalRanking() {
     const position = document.createElement('strong');
     position.className = 'ranking-position';
     position.textContent = `#${index + 1}`;
-    const star = document.createElement('span');
-    star.className = 'ranking-star';
-    star.textContent = '★';
-    star.hidden = entry.userId !== currentUserId;
-    star.setAttribute('aria-label', 'Tu posición');
-
     const avatarWrap = document.createElement('span');
     avatarWrap.className = 'ranking-avatar-wrap';
     const avatar = document.createElement('img');
@@ -983,7 +990,7 @@ function renderGlobalRanking() {
     chevron.className = 'ranking-row-chevron';
     chevron.textContent = '▾';
     chevron.setAttribute('aria-hidden', 'true');
-    expand.append(position, star, avatarWrap, name, levelInfo, bricks, collection, chevron);
+    expand.append(position, avatarWrap, name, levelInfo, bricks, collection, chevron);
     row.append(expand);
 
     if (entry.userId !== currentUserId) {
@@ -1830,7 +1837,7 @@ function clearUserData() {
   renderGamification({});
   rankingEntries = [];
   expandedRankingUserId = null;
-  rankingMainStar.hidden = true;
+  rankingMainGlobe.hidden = true;
   globalRankingList.replaceChildren();
   rankingStatus.textContent = '';
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {

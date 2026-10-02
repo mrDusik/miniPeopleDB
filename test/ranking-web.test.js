@@ -58,7 +58,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 85px 18px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
-  assert.match(styles, /\.ranking-expand \.ranking-star \{[^}]*left: 39px; top: 50%;/);
+  assert.doesNotMatch(styles, /\.ranking-expand \.ranking-star/);
   assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; grid-template-columns: minmax\(0, 1fr\) 1\.55rem; width: 100px; \}/);
   assert.match(styles, /\.ranking-bricks strong \{ justify-self: end;/);
   assert.match(styles, /\.ranking-collection-count \{ grid-column: 5; grid-row: 1 \/ 3; grid-template-columns: 1\.55rem minmax\(0, 1fr\); width: 85px; \}/);
@@ -84,7 +84,8 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   const details = dom.window.document.querySelector('#gamification-details');
   assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
   assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
-  assert.equal(dom.window.document.querySelector('#ranking-main-star').hidden, false);
+  assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, false);
+  assert.equal(dom.window.document.querySelector('#ranking-main-globe').textContent, '🌐');
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);
   dom.window.document.querySelector('#open-global-ranking').click();
@@ -93,7 +94,7 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.doesNotMatch(dom.window.document.querySelector('#ranking-dialog').textContent, /Comunidad/i);
   assert.equal(dom.window.document.activeElement.id, 'ranking-close');
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 2);
-  assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-star').hidden, false);
+  assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-star'), null);
   assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-gift'), null);
   const firstEntry = dom.window.document.querySelector('[data-user-id="user-a"]');
   assert.equal(firstEntry.querySelector('.ranking-name').textContent, 'Usuaria A. P.');
@@ -105,7 +106,7 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.equal(firstEntry.querySelector('.ranking-collection-count strong').textContent, '2');
   assert.equal(firstEntry.querySelector('.ranking-collection-icon').getAttribute('src'), '/status_images/caja.png');
   assert.deepEqual([...firstEntry.querySelector('.ranking-expand').children].map((element) => element.className), [
-    'ranking-position', 'ranking-star', 'ranking-avatar-wrap', 'ranking-name', 'ranking-level-info',
+    'ranking-position', 'ranking-avatar-wrap', 'ranking-name', 'ranking-level-info',
     'gamification-bricks-value ranking-bricks', 'ranking-collection-count', 'ranking-row-chevron',
   ]);
   assert.deepEqual([...firstEntry.querySelector('.ranking-level-info').children].map((element) => element.className), [
@@ -150,7 +151,7 @@ test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', 
 
   dom.window.__supabaseStub.setSession('SIGNED_OUT', null);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(dom.window.document.querySelector('#ranking-main-star').hidden, true);
+  assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, true);
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 0);
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
   dom.window.close();
