@@ -4,7 +4,7 @@
 
 ### Requirement: Abrir el Ranking Global desde el panel de nivel
 
-El menú desplegable del panel de nivel SHALL incluir en su tercera fila un control con icono de globo y texto `Ranking Global`. Al activarlo SHALL abrir un modal visualmente consistente con la aplicación y solicitar el ranking autenticado.
+La cabecera SHALL usar la imagen local de `public/logo_images/` en lugar del texto de marca y autor, con un ancho menor que el texto anterior y el panel de nivel ampliado a su derecha en escritorio. El panel de nivel SHALL mostrar los iconos y recuentos de colección y búsqueda sin abrir el desplegable. El menú desplegable SHALL mostrar el progreso en su primera fila, los controles `Ver Logros` y `Ranking Global` juntos en una misma línea en su segunda fila, y `Sincronizar Precios` seguido del icono de billete y valor total de la colección en su tercera y última fila de controles. Al activar `Ranking Global` SHALL abrir un modal visualmente consistente con la aplicación y solicitar el ranking autenticado.
 
 #### Scenario: Abrir el modal
 - **WHEN** el usuario activa `Ranking Global`

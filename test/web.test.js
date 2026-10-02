@@ -48,6 +48,12 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     assert.equal(levelTitle.firstElementChild.getAttribute('alt'), '');
     assert.equal(levelTitle.children[1].id, 'gamification-level-number');
 
+    const logo = new JSDOM(html).window.document.querySelector('.brand-logo');
+    assert.equal(logo.alt, 'MiniPeopleDB');
+    const logoImage = await fetch(`${baseUrl}${logo.getAttribute('src')}`);
+    assert.equal(logoImage.status, 200);
+    assert.match(logoImage.headers.get('content-type'), /^image\/png/);
+
     const levelImage = await fetch(`${baseUrl}/level_images/9_forestman.png`);
     assert.equal(levelImage.status, 200);
     assert.match(levelImage.headers.get('content-type'), /^image\/png/);
@@ -153,13 +159,13 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.results-heading\s*\{[^}]*justify-content:\s*space-between/s);
   assert.match(css, /\.header-top\s*\{[^}]*display:\s*flex/s);
   assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
-  assert.match(css, /\.brand-heading\s*\{[^}]*justify-items:\s*end/s);
-  assert.match(css, /\.brand-heading \.eyebrow\s*\{[^}]*text-align:\s*right/s);
-  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
-  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 640px[^}]*margin-left:\s*auto/s);
-  assert.match(css, /\.gamification-summary\s*\{ flex: 0 1 640px; min-width: min\(640px, calc\(100vw - 360px\)\); \}/);
+  assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 280px/s);
+  assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
+  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto auto/s);
+  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 800px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
-  assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, calc\(100vw - 22px\)\)/s);
+  assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
   assert.match(css, /\.user-profile\s*\{[^}]*left:\s*50%[^}]*justify-items:\s*center[^}]*text-align:\s*center[^}]*transform:\s*translateX\(-50%\)/s);
   assert.match(css, /\.user-menu-chevron\s*\{[^}]*color:\s*var\(--ink\)/s);
   assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
@@ -230,7 +236,6 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
       'Diferencia',
       'data-sort="anio"',
       'data-sort="precio"',
-      'BY MRDUSIK',
       'id="delete-dialog"',
       'id="delete-confirm"',
       'id="delete-cancel"',
@@ -243,29 +248,32 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(headerTop.children[0].className, 'brand-heading');
     assert.equal(headerTop.children[1].className, 'gamification-summary');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-level', 'gamification-bricks-value', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-level', 'gamification-bricks-value', 'collection-counts-panel', 'gamification-toggle']);
     assert.equal(main.querySelector('#user-avatar').parentElement.id, 'user-menu-toggle');
     assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
     const details = document.querySelector('#gamification-details');
     assert.ok(details.hidden);
     assert.equal(details.querySelector('#gamification-achievements-button'), null);
     assert.equal(details.children[0].className, 'gamification-progress');
-    assert.equal(details.children[1].className, 'collection-counts-panel');
-    assert.equal(details.querySelector('#open-global-ranking').parentElement.className, 'summary-ranking-row');
-    assert.equal(details.children[1].querySelectorAll(':scope > span').length, 3);
-    assert.equal(details.children[1].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
-    assert.equal(details.children[1].querySelector('.collection-value img').title, 'Valor total de tu colección');
-    assert.equal(details.children[1].querySelector('#collection-total').textContent, '€0,00');
+    assert.equal(details.children[1].className, 'summary-achievements-row');
+    assert.equal(details.querySelector('#open-global-ranking').parentElement, details.querySelector('#open-achievements').parentElement);
+    assert.equal(details.children[2].className, 'summary-sync-row');
+    assert.equal(details.children[2].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
+    assert.equal(details.children[2].querySelector('.collection-value img').title, 'Valor total de tu colección');
+    assert.equal(details.children[2].querySelector('#collection-total').textContent, '€0,00');
+    assert.equal(details.children[2].children[0].id, 'sync-prices');
+    assert.equal(details.children[2].children[1].className, 'collection-value');
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
-    const countsPanel = details.children[1];
-    assert.equal(countsPanel.querySelectorAll(':scope > span').length, 3);
+    const countsPanel = main.querySelector('.collection-counts-panel');
+    assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
-    assert.match(css, /\.summary-ranking-row, \.summary-sync-row, \.summary-achievements-row \{ display: flex; justify-content: center; align-items: center; \}/);
+    assert.match(css, /\.summary-sync-row, \.summary-achievements-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
-    assert.equal(document.querySelector('.brand-heading').lastElementChild.textContent, 'BY MRDUSIK');
+    assert.equal(document.querySelector('.brand-heading img').alt, 'MiniPeopleDB');
+    assert.equal(document.querySelector('.brand-heading').textContent.trim(), '');
     assert.doesNotMatch(document.querySelector('#form-dialog').textContent, /Preview/i);
   });
 });

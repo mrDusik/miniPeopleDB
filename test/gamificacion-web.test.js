@@ -147,7 +147,7 @@ test('muestra una ampliación del nivel al pasar el ratón por la imagen', async
   dom.window.close();
 });
 
-test('el panel de nivel despliega recuento y valor total con la flecha', async () => {
+test('el panel mantiene los recuentos visibles y despliega acciones y valor con la flecha', async () => {
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state());
@@ -158,10 +158,13 @@ test('el panel de nivel despliega recuento y valor total con la flecha', async (
   const details = window.document.querySelector('#gamification-details');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
   assert.equal(details.hidden, true);
+  assert.equal(window.document.querySelector('#collection-count').closest('.gamification-main') !== null, true);
+  assert.equal(window.document.querySelector('#wanted-count').closest('.gamification-main') !== null, true);
+  assert.equal(details.querySelector('.collection-counts-panel'), null);
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.hidden, false);
-  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'collection-counts-panel', 'summary-achievements-row', 'summary-ranking-row', 'summary-sync-row', 'sync-progress']);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'summary-achievements-row', 'summary-sync-row', 'sync-progress']);
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();
