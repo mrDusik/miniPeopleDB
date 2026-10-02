@@ -159,9 +159,11 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.results-heading\s*\{[^}]*justify-content:\s*space-between/s);
   assert.match(css, /\.header-top\s*\{[^}]*display:\s*flex/s);
   assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
-  assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 280px/s);
+  assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 320px/s);
   assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
-  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto auto/s);
+  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(0, 1fr\) auto auto/s);
+  assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) Arial, sans-serif/);
+  assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
   assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 800px[^}]*margin-left:\s*auto/s);
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
@@ -248,7 +250,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(headerTop.children[0].className, 'brand-heading');
     assert.equal(headerTop.children[1].className, 'gamification-summary');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-level', 'gamification-bricks-value', 'collection-counts-panel', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-bricks-value', 'gamification-level', 'collection-counts-panel', 'gamification-toggle']);
     assert.equal(main.querySelector('#user-avatar').parentElement.id, 'user-menu-toggle');
     assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
     const details = document.querySelector('#gamification-details');
