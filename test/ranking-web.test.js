@@ -101,7 +101,7 @@ test('abre el Top 10 desde la tercera fila del panel de nivel, distingue la sesi
   assert.equal(firstEntry.querySelector('.ranking-bricks strong').textContent, '300');
   assert.equal(firstEntry.querySelector('.ranking-bricks img').alt, 'Bricks');
   assert.equal(firstEntry.querySelector('.ranking-level-number').textContent, '4');
-  assert.equal(firstEntry.querySelector('.ranking-level-info .gamification-level-image').getAttribute('src'), '/level_images/9_forestman.png');
+  assert.equal(firstEntry.querySelector('.ranking-level-info .gamification-level-image').getAttribute('src'), '/level_images/4_citizen.png');
   assert.equal(firstEntry.querySelector('.ranking-level-name').textContent, 'Citizen');
   assert.equal(firstEntry.querySelector('.ranking-collection-count strong').textContent, '2');
   assert.equal(firstEntry.querySelector('.ranking-collection-icon').getAttribute('src'), '/status_images/caja.png');

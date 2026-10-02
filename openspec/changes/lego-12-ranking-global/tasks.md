@@ -27,7 +27,7 @@
 - [x] 4.4 Implementar el acordeón exclusivo y reutilizar las tarjetas/tooltip de precio y antigüedad en modo no interactivo; verificar `aria-expanded`, cierre automático, criterios visibles y que las tarjetas no abren detalles ni modifican datos.
 - [x] 4.5 Implementar el envío de 50 Bricks con botón ausente en la fila propia, deshabilitado por `regaloEnviado` o durante POST, y refresco canónico de ranking/gamificación tras éxito; verificar éxito, doble clic, error y deshabilitación permanente por destinatario.
 - [x] 4.6 Renderizar `🎁` para logros con `type: "regalo"` y conservar la copa actual para el resto; verificar ambos tipos en `test/gamificacion-web.test.js`.
-- [x] 4.7 Asignar a cada nivel su imagen disponible y conservar Forestman como fallback en UI y ranking; verificar el mapeo en `test/gamificacion-web.test.js`.
+- [x] 4.7 Asignar a cada nivel su imagen disponible y conservar Forestman como fallback en UI y filas del ranking; verificar el mapeo en `test/gamificacion-web.test.js` y `test/ranking-web.test.js`.
 
 ## 5. Verificación integral
 

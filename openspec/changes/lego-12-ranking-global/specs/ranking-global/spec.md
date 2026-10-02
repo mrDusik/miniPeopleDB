@@ -25,6 +25,11 @@ El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL d
 - **WHEN** existen menos de 10 usuarios con gamificación
 - **THEN** la respuesta contiene todos los usuarios disponibles sin rellenar posiciones artificiales
 
+#### Scenario: Imagen de nivel en cada fila
+- **WHEN** una fila del ranking muestra el nivel de un usuario
+- **THEN** muestra el activo local asociado al ID de ese nivel
+- **AND** usa la imagen de Forestman cuando no existe un activo específico
+
 ### Requirement: Consultar los destacados de cada colección clasificada
 
 Cada entrada de `GET /api/ranking` SHALL incluir `top5Precio` y `top5Antiguedad`, limitados a minifiguras del usuario en estado `COLECCIÓN`. `top5Precio` SHALL usar exactamente el orden y los desempates de `top5` en la valoración de la colección, y `top5Antiguedad` SHALL usar exactamente el orden y los desempates de `top5Antiguas`. Cada elemento SHALL limitarse a los datos necesarios para renderizar la misma imagen, texto y tooltip que en la pantalla principal.
