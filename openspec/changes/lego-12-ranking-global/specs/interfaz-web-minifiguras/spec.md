@@ -50,11 +50,15 @@ Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un bot�
 
 ### Requirement: Desplegar destacados en acordeón exclusivo
 
-Al activar una fila o su flecha, la interfaz SHALL desplegar sus Top 5 por precio y antigüedad. Las tarjetas SHALL reutilizar la presentación, imagen y tooltip de las tarjetas equivalentes de la pantalla principal, pero SHALL ser no interactivas. Solo una fila SHALL permanecer desplegada a la vez.
+Al activar una fila o su flecha, la interfaz SHALL desplegar solo sus Top 3 por precio y antigüedad, tomando los tres primeros elementos de cada Top 5 recibido de la API sin alterar su orden. Las tarjetas SHALL reutilizar la presentación, imagen y tooltip de las tarjetas equivalentes de la pantalla principal, pero SHALL ser no interactivas. Solo una fila SHALL permanecer desplegada a la vez.
 
 #### Scenario: Abrir una fila
 - **WHEN** el usuario activa una fila cerrada
 - **THEN** se muestran sus dos grupos de destacados y la fila se anuncia como expandida
+
+#### Scenario: Limitar el tamaño de los destacados
+- **WHEN** la API devuelve cinco destacados por precio y cinco por antigüedad
+- **THEN** el modal muestra solo los tres primeros de cada grupo con los títulos `Top 3 por precio` y `Top 3 por antigüedad`
 
 #### Scenario: Abrir una segunda fila
 - **WHEN** una fila está abierta y el usuario activa otra
