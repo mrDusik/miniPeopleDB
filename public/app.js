@@ -965,7 +965,7 @@ function renderGlobalRanking() {
     levelInfo.className = 'ranking-level-info';
     const levelImage = document.createElement('img');
     levelImage.className = 'gamification-level-image';
-    levelImage.src = entry.imagenNivel || levelImagePath(entry.nivel);
+    levelImage.src = levelImagePath(entry.nivel);
     levelImage.alt = '';
     const levelNumber = document.createElement('strong');
     levelNumber.className = 'ranking-level-number';
