@@ -156,6 +156,10 @@ export function createServer({
   app.get('/vendor/supabase.js', (request, response) => {
     response.sendFile(supabaseBrowserBundle);
   });
+  // Endpoint de salud para UptimeRobot / Render Keep-Alive
+  app.get('/health', (request, response) => {
+    response.status(200).send('OK');
+  });
   app.use(express.static(publicDirectory));
   app.use(async (request, response) => {
     const requestUrl = new URL(request.url, 'http://localhost');
