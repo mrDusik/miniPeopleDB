@@ -1040,6 +1040,38 @@ test('las rutas de datos exigen autenticacion y /categorias sigue publica', asyn
   });
 });
 
+test('las respuestas de mutacion no devuelven propiedades DNA persistidas en logros previos', async () => {
+  const supabase = createTestSupabase();
+  supabase.seed('gamificacion', TEST_USER.id, [{
+    bricks: 1,
+    nivel: { id: 0, nombre: 'Duplo' },
+    siguiente_nivel: { id: 1, nombre: 'Stud' },
+    progreso: { actual: 1, desde: 0, hasta: 20, porcentaje: 5 },
+    logros: [{
+      id: 'new-mini-person', nombre: 'New mini person', bricks: 1, repetible: true, cantidad: 1, total: 1,
+      rarity_hunter: 5, dna_weights: { fan: 20 }, dna: { porcentajes: { collector: 60 } },
+    }],
+  }]);
+  const server = await startTestServer({ supabase });
+  try {
+    const response = await fetch(`${server.baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
+      body: JSON.stringify(makeMinifigura()),
+    });
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.ok(Array.isArray(body.gamificacion.state.logros));
+    for (const logro of body.gamificacion.state.logros) {
+      assert.equal('rarity_hunter' in logro, false);
+      assert.equal('dna_weights' in logro, false);
+      assert.equal('dna' in logro, false);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
 test('cada usuario solo ve y modifica sus propias minifiguras aunque compartan id', async () => {
   const supabase = createTestSupabase([makeMinifigura({ id: 'shared', nombre: 'De A' })]);
   supabase.seed('minifiguras', 'otro-usuario-sin-token', [{ id: 'AJENA', nombre: 'Ajena', categoria: 'Space' }]);

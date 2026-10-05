@@ -24,7 +24,7 @@ function entry(overrides = {}) {
     userId: 'user-b', avatarUrl: 'https://example.com/b.png', displayName: 'Grace', bricks: 200,
     nivel: 4, nombreNivel: 'Citizen', imagenNivel: '/level_images/9_forestman.png', totalColeccion: 2,
     top5Precio: [{ id: 'HIGH', nombre: 'High', precio: 50 }],
-    top5Antiguedad: [{ id: 'OLD', nombre: 'Old', anio: 1980, precio: 5 }], regaloEnviado: false,
+    top5Antiguedad: [{ id: 'OLD', nombre: 'Old', anio: 1980, precio: 5 }], regaloEnviado: false, dnaPrincipal: 'Explorer',
     ...overrides,
   };
 }
@@ -51,12 +51,16 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
   assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
-  assert.match(styles, /\.summary-sync-row, \.summary-achievements-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
+  assert.match(styles, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
+  assert.match(styles, /\.achievements-heading \{ display: grid; grid-template-columns: 48px minmax\(0, 1fr\) auto; \}/);
+  assert.match(styles, /\.achievements-heading-text \{ grid-column: 2 \/ -1; grid-row: 1; \}/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
+  assert.doesNotMatch(styles, /\.modal-ranking \{[^}]*border-top:/);
   assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ min-width: 252px; \}/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 85px 18px;/);
+  assert.match(styles, /\.ranking-expand \{[^}]*grid-template-rows: 22px minmax\(30px, auto\);[^}]*min-height: 68px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
   assert.doesNotMatch(styles, /\.ranking-expand \.ranking-star/);
@@ -68,7 +72,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
-  assert.match(styles, /@media \(max-width: 700px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);
   assert.match(styles, /\.ranking-expand \.ranking-collection-count \{ grid-column: 3 \/ 5; grid-row: 3; justify-self: end; width: 70px; \}/);
   assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 0\.9rem; line-height: 1;/);
@@ -112,11 +116,23 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
     'gamification-bricks-value ranking-bricks', 'ranking-collection-count', 'ranking-row-chevron',
   ]);
   assert.deepEqual([...firstEntry.querySelector('.ranking-level-info').children].map((element) => element.className), [
-    'gamification-level-image', 'ranking-level-number', 'ranking-level-name',
+    'gamification-level-image', 'ranking-level-number', 'ranking-level-name', 'ranking-dna-principal',
   ]);
+  assert.equal(firstEntry.querySelector('.ranking-level-info').parentElement, firstEntry.querySelector('.ranking-expand'));
+  assert.match(styles, /\.ranking-level-info \{[^}]*flex-wrap: wrap;[^}]*overflow: visible/);
+  assert.match(styles, /\.ranking-level-name \{[^}]*overflow-wrap: anywhere; white-space: normal;/);
+  assert.match(styles, /\.ranking-dna-principal \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
+  assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, 'Explorer');
+  assert.equal(firstEntry.querySelector('.ranking-dna-principal').tagName, 'SPAN');
+  assert.equal(firstEntry.querySelector('.ranking-dna-principal').tabIndex, -1);
   const otherEntry = dom.window.document.querySelector('[data-user-id="user-b"]');
   assert.equal(otherEntry.querySelector('.ranking-gift').parentElement, otherEntry.querySelector('.global-ranking-row'));
-  assert.equal(otherEntry.querySelector('.ranking-gift').previousElementSibling, otherEntry.querySelector('.ranking-expand'));
+  assert.equal(otherEntry.querySelector('.ranking-gift').previousElementSibling, otherEntry.querySelector('.ranking-summary'));
+  assert.equal(firstEntry.querySelector('.ranking-achievements'), null);
+  assert.match(styles, /\.ranking-summary \.ranking-expand \{ grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 70px 18px;/);
+  assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 5; width: 70px; \}/);
+  assert.match(styles, /\.ranking-summary \.ranking-expand \.ranking-collection-count \{ grid-column: 1 \/ 3; grid-row: 3;/);
+  assert.match(styles, /\.ranking-summary \.ranking-expand \{ grid-template-columns: 32px 40px minmax\(0, 1fr\) 18px; grid-template-rows: 40px minmax\(30px, auto\) 36px; \}/);
   assert.equal(firstEntry.querySelector('.ranking-gift-space').parentElement, firstEntry.querySelector('.global-ranking-row'));
 
   const entries = [...dom.window.document.querySelectorAll('.global-ranking-entry')];
@@ -131,6 +147,23 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   dom.window.document.querySelector('#ranking-close').click();
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
   assert.equal(dom.window.document.activeElement.id, 'open-global-ranking');
+  dom.window.close();
+});
+
+test('las filas del ranking no ofrecen logros y conservan la expansion al clicar', async () => {
+  const dom = createDom();
+  const calls = installFetch(dom.window, [entry({ displayName: 'Grace Hopper' })]);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const entryElement = document.querySelector('.global-ranking-entry');
+  assert.equal(entryElement.querySelector('.ranking-achievements'), null);
+  entryElement.querySelector('.ranking-expand').click();
+  assert.equal(entryElement.querySelector('.ranking-user-details').hidden, false);
+  assert.equal(document.querySelector('#gamification-dialog').open, false);
+  assert.equal(calls.some(({ url }) => url.endsWith('/logros')), false);
   dom.window.close();
 });
 
@@ -158,6 +191,228 @@ test('el modal muestra solo los tres primeros destacados por precio y antigüeda
     assert.equal(cards.length, 3);
     assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.slice(0, 3).map(({ nombre }) => nombre));
   }
+  dom.window.close();
+});
+
+test('solo ofrece buscadas ajenas ausentes del catalogo completo independiente de filtros y pagina', async () => {
+  const dom = createDom();
+  const highlights = [{ id: 'owned', nombre: 'Owned', precio: 10 }, { id: 'wanted', nombre: 'Wanted', precio: 5 }, { id: 'NEW', nombre: 'New', precio: 1 }];
+  installFetch(dom.window, [entry({ userId: 'user-a', top5Precio: highlights }), entry({ top5Precio: highlights, top5Antiguedad: highlights })]);
+  const originalFetch = dom.window.fetch;
+  const catalog = Array.from({ length: 11 }, (_, index) => ({ id: `F-${index}`, nombre: 'Figura', categoria: 'Space', anio: 2024, estadoColeccion: 'COLECCIÓN' }));
+  catalog.push({ id: ' OWNED ', nombre: 'Fuera', categoria: 'Space', estadoColeccion: 'COLECCIÓN' }, { id: 'WANTED', nombre: 'Fuera', categoria: 'Space', estadoColeccion: 'BUSCADA' });
+  dom.window.fetch = async (url, options) => url === '/minifiguras'
+    ? { ok: true, json: async () => catalog } : originalFetch(url, options);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#nombre').value = 'sin coincidencias';
+  document.querySelector('#filters-form').dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('[data-user-id="user-a"] .ranking-add-wanted'), null);
+  const buttons = [...document.querySelectorAll('.ranking-add-wanted')];
+  assert.equal(buttons.length, 2);
+  assert.ok(buttons.every((button) => button.dataset.wantedId === 'NEW' && button.title === 'Añadir a buscadas'));
+  dom.window.close();
+});
+
+test('no ofrece alta mientras el catalogo completo esta pendiente', async () => {
+  const dom = createDom();
+  installFetch(dom.window, [entry()]);
+  const originalFetch = dom.window.fetch;
+  dom.window.fetch = async (url, options) => url === '/minifiguras' ? new Promise(() => {}) : originalFetch(url, options);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(dom.window.document.querySelectorAll('.ranking-card-static').length, 2);
+  assert.equal(dom.window.document.querySelector('.ranking-add-wanted'), null);
+  dom.window.close();
+});
+
+test('alta rapida precarga metadatos, fija BUSCADA y deja nombre, descripcion y seguimiento editables', async () => {
+  const dom = createDom();
+  const figure = { id: 'HIGH', nombre: 'Nombre ajeno', descripcion: 'Privado', categoria: 'Space', anio: 2020, precio: 50, observada: true };
+  const calls = installFetch(dom.window, [entry({ top5Precio: [figure] })]);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  document.querySelector('.ranking-expand').click();
+  document.querySelector('.ranking-add-wanted').click();
+  assert.equal(document.querySelector('#form-dialog').open, true);
+  assert.equal(document.querySelector('#form-dialog-title').textContent, 'Editar minifigura');
+  assert.equal(document.querySelector('#form-id').disabled, true);
+  assert.equal(document.querySelector('#form-id').value, 'HIGH');
+  assert.equal(document.querySelector('#form-nombre').value, '');
+  assert.equal(document.querySelector('#form-descripcion').value, '');
+  assert.equal(document.querySelector('#form-nombre').disabled, false);
+  assert.equal(document.querySelector('#form-estadoColeccion').value, 'BUSCADA');
+  assert.equal(document.querySelector('#form-estadoColeccion').disabled, true);
+  assert.ok([...document.querySelectorAll('[data-form-state]')].every((button) => button.disabled));
+  assert.equal(document.querySelector('#form-observada').disabled, false);
+  assert.equal(document.querySelector('#form-observada').getAttribute('aria-pressed'), 'false');
+  document.querySelector('#form-observada').click();
+  assert.equal(document.querySelector('#form-observada').getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('#form-precioCompra').disabled, true);
+  assert.equal(document.querySelector('#form-fechaCompra').value, '');
+  assert.equal(document.querySelector('#form-categoria').value, 'Space');
+  assert.equal(document.querySelector('#form-anio').value, '2020');
+  assert.equal(document.querySelector('#form-precio').value, '50');
+  document.querySelector('#form-preview-image').dispatchEvent(new dom.window.Event('load'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls.filter(({ url }) => url.startsWith('/minifiguras/') && url.endsWith('/brickset')).length, 0);
+  assert.equal(document.querySelector('#form-submit').disabled, true);
+  document.querySelector('#form-nombre').value = 'Mi figura';
+  document.querySelector('#form-nombre').dispatchEvent(new dom.window.Event('input'));
+  assert.equal(document.querySelector('#form-submit').disabled, false);
+  dom.window.close();
+});
+
+test('alta rapida completa metadatos ausentes con Brickset y bloquea guardar si falla', async () => {
+  for (const success of [true, false]) {
+    const dom = createDom();
+    installFetch(dom.window, [entry()]);
+    const originalFetch = dom.window.fetch;
+    let resolveLookup;
+    dom.window.fetch = async (url, options) => url.startsWith('/minifiguras/') && url.endsWith('/brickset') ? new Promise((resolve) => { resolveLookup = resolve; }) : originalFetch(url, options);
+    dom.window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const document = dom.window.document;
+    document.querySelector('#open-global-ranking').click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    document.querySelector('.ranking-add-wanted').click();
+    document.querySelector('#form-nombre').value = 'Mi figura';
+    document.querySelector('#form-nombre').dispatchEvent(new dom.window.Event('input'));
+    assert.equal(document.querySelector('#form-submit').disabled, true);
+    resolveLookup({ ok: success, json: async () => ({ categoria: 'Space', anio: 0, precio: 15 }) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('#form-submit').disabled, !success);
+    if (success) assert.equal(document.querySelector('#form-anio').value, String(new Date().getFullYear()));
+    else assert.match(document.querySelector('#toast-region').textContent, /No se encontraron datos/);
+    dom.window.close();
+  }
+});
+
+test('alta rapida usa POST una vez, conserva filtros y oculta todas las acciones del ID tras confirmacion', async () => {
+  const dom = createDom();
+  const figure = { id: 'HIGH', nombre: 'Ajeno', categoria: 'Space', anio: 2020, precio: 50 };
+  const calls = installFetch(dom.window, [entry({ top5Precio: [figure], top5Antiguedad: [figure] })]);
+  const originalFetch = dom.window.fetch;
+  const catalog = [];
+  let resolvePost;
+  dom.window.fetch = async (url, options = {}) => {
+    if (url === '/minifiguras' && options.method === 'POST') {
+      calls.push({ url, options });
+      return new Promise((resolve) => { resolvePost = resolve; });
+    }
+    if (url === '/minifiguras') return { ok: true, json: async () => catalog };
+    return originalFetch(url, options);
+  };
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#nombre').value = 'sin coincidencias';
+  document.querySelector('#filters-form').dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  document.querySelector('.ranking-expand').click();
+  document.querySelector('.ranking-add-wanted').click();
+  const form = document.querySelector('#minifigura-form');
+  form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  assert.equal(resolvePost, undefined);
+  document.querySelector('#form-nombre').value = 'Mi figura';
+  document.querySelector('#form-observada').click();
+  document.querySelector('#form-estadoColeccion').value = 'COLECCIÓN';
+  document.querySelector('#form-precioCompra').value = '99';
+  form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  const posts = calls.filter(({ options }) => options?.method === 'POST');
+  assert.equal(posts.length, 1);
+  const payload = JSON.parse(posts[0].options.body);
+  assert.equal(posts[0].url, '/minifiguras');
+  assert.equal(payload.id, 'HIGH');
+  assert.equal(payload.nombre, 'Mi figura');
+  assert.equal(payload.descripcion, '');
+  assert.equal(payload.estadoColeccion, 'BUSCADA');
+  assert.equal(payload.observada, true);
+  assert.equal('precioCompra' in payload, false);
+  assert.equal('user_id' in payload, false);
+  assert.equal(document.querySelectorAll('.ranking-add-wanted').length, 2);
+  catalog.push({ ...payload, FechaRegistro: '2026-10-02T00:00:00Z' });
+  resolvePost({ ok: true, json: async () => catalog[0] });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(document.querySelector('#form-dialog').open, false);
+  assert.equal(document.querySelector('.ranking-add-wanted'), null);
+  assert.equal(document.querySelector('.ranking-user-details').hidden, false);
+  assert.equal(document.querySelector('#nombre').value, 'sin coincidencias');
+  assert.equal(document.activeElement.className.startsWith('ranking-expand'), true);
+  assert.equal(figure.nombre, 'Ajeno');
+  dom.window.close();
+});
+
+test('alta rapida mantiene errores de duplicado, seguimiento y servidor sin mutar cache', async () => {
+  for (const [status, error] of [[409, 'ID_DUPLICADO'], [400, 'LIMITE_OBSERVADAS'], [500, 'CATALOGO_NO_DISPONIBLE']]) {
+    const dom = createDom();
+    const figure = { id: 'HIGH', nombre: 'Ajeno', categoria: 'Space', anio: 2020, precio: 50 };
+    installFetch(dom.window, [entry({ top5Precio: [figure], top5Antiguedad: [] })]);
+    const originalFetch = dom.window.fetch;
+    let duplicateConfirmed = false;
+    dom.window.fetch = async (url, options = {}) => {
+      if (url === '/minifiguras' && options.method === 'POST') {
+        duplicateConfirmed = status === 409;
+        return { ok: false, status, json: async () => ({ error }) };
+      }
+      if (url === '/minifiguras' && duplicateConfirmed) return { ok: true, json: async () => [{ ...figure, estadoColeccion: 'BUSCADA' }] };
+      return originalFetch(url, options);
+    };
+    dom.window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const document = dom.window.document;
+    document.querySelector('#open-global-ranking').click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    document.querySelector('.ranking-add-wanted').click();
+    document.querySelector('#form-nombre').value = 'Mi figura';
+    document.querySelector('#minifigura-form').dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(document.querySelector('#form-dialog').open, true);
+    assert.notEqual(document.querySelector('#form-error').textContent, '');
+    if (status === 409) assert.equal(document.querySelector('.ranking-add-wanted'), null);
+    else assert.ok(document.querySelector('.ranking-add-wanted'));
+    if (error === 'LIMITE_OBSERVADAS') assert.match(document.querySelector('.toast-warning').textContent, /Máximo 10/);
+    dom.window.close();
+  }
+});
+
+test('cancelar alta rapida restaura foco y permisos ordinarios e ignora fallback tardio', async () => {
+  const dom = createDom();
+  const calls = installFetch(dom.window, [entry()]);
+  const originalFetch = dom.window.fetch;
+  let resolveLookup;
+  dom.window.fetch = async (url, options) => url.startsWith('/minifiguras/') && url.endsWith('/brickset')
+    ? new Promise((resolve) => { resolveLookup = resolve; }) : originalFetch(url, options);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const trigger = document.querySelector('.ranking-add-wanted');
+  trigger.click();
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert.equal(document.activeElement, trigger);
+  document.querySelector('#ranking-close').click();
+  document.querySelector('#new-minifigura').click();
+  resolveLookup({ ok: true, json: async () => ({ categoria: 'Space', anio: 2020, precio: 20 }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#form-id').disabled, false);
+  assert.equal(document.querySelector('#form-id').value, '');
+  assert.equal(document.querySelector('#form-estadoColeccion').value, 'COLECCIÓN');
+  assert.equal(document.querySelector('#form-categoria').value, '');
+  assert.equal(calls.filter(({ options }) => options.method === 'POST').length, 0);
+  dom.window.__supabaseStub.setSession('SIGNED_OUT', null);
+  assert.equal(document.querySelector('#form-dialog').open, false);
   dom.window.close();
 });
 

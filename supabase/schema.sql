@@ -54,6 +54,138 @@ create table if not exists public.gamificacion (
   constraint gamificacion_logros_array_check check (jsonb_typeof(logros) = 'array')
 );
 
+create table if not exists public.dna_ponderaciones (
+  logro_id text primary key,
+  rarity_hunter smallint not null,
+  collector smallint not null,
+  explorer smallint not null,
+  fan smallint not null,
+  constraint dna_ponderaciones_pesos_check check (
+    rarity_hunter between 0 and 100
+    and collector between 0 and 100
+    and explorer between 0 and 100
+    and fan between 0 and 100
+  ),
+  constraint dna_ponderaciones_suma_check check (
+    (logro_id = 'someone-liked-your-collection' and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
+    or (logro_id <> 'someone-liked-your-collection' and rarity_hunter + collector + explorer + fan = 100)
+  )
+);
+
+insert into public.dna_ponderaciones (logro_id, rarity_hunter, collector, explorer, fan)
+values
+  ('new-mini-person', 5, 60, 15, 20),
+  ('woah', 50, 30, 10, 10),
+  ('deal-master', 75, 15, 5, 5),
+  ('masterpiece', 90, 5, 0, 5),
+  ('holy-grail', 95, 5, 0, 0),
+  ('omgold', 95, 0, 0, 5),
+  ('lets-go', 5, 20, 60, 15),
+  ('collector', 10, 80, 0, 10),
+  ('step-by-step', 5, 15, 70, 10),
+  ('bricky-potter', 0, 10, 20, 70),
+  ('bricky-mouse', 0, 10, 20, 70),
+  ('its-a-me-mario', 0, 10, 20, 70),
+  ('green-hill-zone', 0, 10, 20, 70),
+  ('dimensional', 10, 10, 30, 50),
+  ('warsie', 0, 10, 20, 70),
+  ('in-ny-i-was', 60, 5, 5, 30),
+  ('welcome-to-the-upsidedown', 30, 10, 10, 50),
+  ('chill-nancy-im-fine', 40, 10, 10, 40),
+  ('someone-liked-your-collection', 0, 0, 0, 0)
+on conflict (logro_id) do update set
+  rarity_hunter = excluded.rarity_hunter,
+  collector = excluded.collector,
+  explorer = excluded.explorer,
+  fan = excluded.fan;
+
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
+create or replace function private.dna_calcular(p_usuario_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+  with weighted as (
+    select
+      case
+        when jsonb_typeof(achievement.item->'cantidad') = 'number'
+          and (achievement.item->>'cantidad')::numeric > 0
+        then (achievement.item->>'cantidad')::numeric * weights.rarity_hunter::numeric
+        else 0::numeric
+      end as rarity_hunter,
+      case
+        when jsonb_typeof(achievement.item->'cantidad') = 'number'
+          and (achievement.item->>'cantidad')::numeric > 0
+        then (achievement.item->>'cantidad')::numeric * weights.collector::numeric
+        else 0::numeric
+      end as collector,
+      case
+        when jsonb_typeof(achievement.item->'cantidad') = 'number'
+          and (achievement.item->>'cantidad')::numeric > 0
+        then (achievement.item->>'cantidad')::numeric * weights.explorer::numeric
+        else 0::numeric
+      end as explorer,
+      case
+        when jsonb_typeof(achievement.item->'cantidad') = 'number'
+          and (achievement.item->>'cantidad')::numeric > 0
+        then (achievement.item->>'cantidad')::numeric * weights.fan::numeric
+        else 0::numeric
+      end as fan
+    from public.gamificacion gamification
+    cross join lateral jsonb_array_elements(gamification.logros) as achievement(item)
+    join public.dna_ponderaciones weights on weights.logro_id = achievement.item->>'id'
+    where gamification.user_id = p_usuario_id
+      and weights.logro_id <> 'someone-liked-your-collection'
+  ), scores as (
+    select
+      coalesce(sum(rarity_hunter), 0)::numeric as rarity_hunter,
+      coalesce(sum(collector), 0)::numeric as collector,
+      coalesce(sum(explorer), 0)::numeric as explorer,
+      coalesce(sum(fan), 0)::numeric as fan
+    from weighted
+  ), totals as (
+    select *, rarity_hunter + collector + explorer + fan as total
+    from scores
+  )
+  select jsonb_build_object(
+    'principal', case
+      when total = 0 then 'Newbie'
+      when explorer >= collector and explorer >= fan and explorer >= rarity_hunter then 'Explorer'
+      when collector >= fan and collector >= rarity_hunter then 'Collector'
+      when fan >= rarity_hunter then 'Fan'
+      else 'Rarity Hunter'
+    end,
+    'porcentajes', jsonb_build_object(
+      'rarityHunter', case when total = 0 then 0::numeric else rarity_hunter * 100 / total end,
+      'explorer', case when total = 0 then 0::numeric else explorer * 100 / total end,
+      'collector', case when total = 0 then 0::numeric else collector * 100 / total end,
+      'fan', case when total = 0 then 0::numeric else fan * 100 / total end
+    )
+  )
+  from totals;
+$$;
+
+create or replace function public.gamificacion_dna()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_usuario_id uuid := auth.uid();
+begin
+  if v_usuario_id is null then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  return private.dna_calcular(v_usuario_id);
+end;
+$$;
+
 create table if not exists public.perfiles_publicos (
   user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
   display_name text not null,
@@ -81,6 +213,7 @@ create index if not exists regalos_enviados_receptor_idx
 
 alter table public.minifiguras enable row level security;
 alter table public.gamificacion enable row level security;
+alter table public.dna_ponderaciones enable row level security;
 alter table public.perfiles_publicos enable row level security;
 alter table public.regalos_enviados enable row level security;
 
@@ -153,7 +286,10 @@ create policy "Users can update their public profile"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-create or replace function public.ranking_global()
+begin;
+drop function if exists public.ranking_global();
+
+create function public.ranking_global()
 returns table (
   user_id uuid,
   avatar_url text,
@@ -165,14 +301,15 @@ returns table (
   total_coleccion bigint,
   top5_precio jsonb,
   top5_antiguedad jsonb,
-  regalo_enviado boolean
+  regalo_enviado boolean,
+  dna_principal text
 )
 language sql
 security definer
 set search_path = public, pg_temp
 as $$
   with top_users as (
-    select g.user_id, g.bricks, g.nivel
+    select g.user_id, g.bricks, g.nivel, g.logros
     from public.gamificacion g
     order by g.bricks desc, g.user_id asc
     limit 10
@@ -204,9 +341,9 @@ as $$
     end as imagen_nivel,
     (select count(*) from public.minifiguras m where m.user_id = top_users.user_id and m.estado_coleccion = 'COLECCIÓN') as total_coleccion,
     coalesce((
-      select jsonb_agg(jsonb_build_object('id', ranked.id, 'nombre', ranked.nombre, 'precio', ranked.precio) order by ranked.position)
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', ranked.id, 'nombre', ranked.nombre, 'precio', ranked.precio, 'categoria', ranked.categoria, 'subcategoria', ranked.subcategoria, 'anio', ranked.anio)) order by ranked.position)
       from (
-        select m.id, m.nombre, m.precio, row_number() over (order by m.precio desc nulls last, m.fecha_compra asc nulls last, m.fecha_registro desc) as position
+        select m.id, m.nombre, m.precio, m.categoria, m.subcategoria, m.anio, row_number() over (order by m.precio desc nulls last, m.fecha_compra asc nulls last, m.fecha_registro desc) as position
         from public.minifiguras m
         where m.user_id = top_users.user_id and m.estado_coleccion = 'COLECCIÓN'
         order by m.precio desc nulls last, m.fecha_compra asc nulls last, m.fecha_registro desc
@@ -214,9 +351,9 @@ as $$
       ) ranked
     ), '[]'::jsonb) as top5_precio,
     coalesce((
-      select jsonb_agg(jsonb_build_object('id', ranked.id, 'nombre', ranked.nombre, 'anio', ranked.anio, 'precio', ranked.precio) order by ranked.position)
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', ranked.id, 'nombre', ranked.nombre, 'anio', ranked.anio, 'precio', ranked.precio, 'categoria', ranked.categoria, 'subcategoria', ranked.subcategoria)) order by ranked.position)
       from (
-        select m.id, m.nombre, m.anio, m.precio, row_number() over (order by m.anio asc nulls last, m.precio desc nulls last, m.fecha_registro desc) as position
+        select m.id, m.nombre, m.anio, m.precio, m.categoria, m.subcategoria, row_number() over (order by m.anio asc nulls last, m.precio desc nulls last, m.fecha_registro desc) as position
         from public.minifiguras m
         where m.user_id = top_users.user_id and m.estado_coleccion = 'COLECCIÓN'
         order by m.anio asc nulls last, m.precio desc nulls last, m.fecha_registro desc
@@ -226,11 +363,44 @@ as $$
     exists (
       select 1 from public.regalos_enviados r
       where r.donante_id = auth.uid() and r.receptor_id = top_users.user_id
-    ) as regalo_enviado
+    ) as regalo_enviado,
+    private.dna_calcular(top_users.user_id)->>'principal' as dna_principal
   from top_users
   left join public.perfiles_publicos p on p.user_id = top_users.user_id
   where auth.uid() is not null
   order by top_users.bricks desc, top_users.user_id asc;
+$$;
+
+create or replace function public.ranking_logros(p_usuario_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with top_users as (
+    select g.user_id, g.bricks, g.nivel, g.logros
+    from public.gamificacion g
+    order by g.bricks desc, g.user_id asc
+    limit 10
+  )
+  select jsonb_build_object(
+    'userId', g.user_id,
+    'displayName', coalesce(p.display_name, 'Coleccionista'),
+    'bricks', g.bricks,
+    'nivel', jsonb_build_object('id', coalesce((g.nivel->>'id')::integer, 0), 'nombre', coalesce(g.nivel->>'nombre', 'Duplo')),
+    'logros', coalesce((
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+        'id', item->'id', 'type', item->'type', 'nombre', item->'nombre',
+        'descripcion', item->'descripcion', 'bricks', item->'bricks',
+        'repetible', item->'repetible', 'cantidad', item->'cantidad', 'total', item->'total'
+      )) order by position)
+      from jsonb_array_elements(g.logros) with ordinality as achievements(item, position)
+    ), '[]'::jsonb)
+  )
+  from top_users g
+  left join public.perfiles_publicos p on p.user_id = g.user_id
+  where g.user_id = p_usuario_id and auth.uid() is not null;
 $$;
 
 create or replace function public.regalar_bricks(p_receptor_id uuid)
@@ -342,8 +512,15 @@ as $$
 $$;
 
 revoke all on function public.ranking_global() from public, anon;
+revoke all on function public.ranking_logros(uuid) from public, anon;
 revoke all on function public.regalar_bricks(uuid) from public, anon;
 revoke all on function public.regalos_recibidos_count() from public, anon;
+revoke all on function private.dna_calcular(uuid) from public, anon, authenticated;
+revoke all on function public.gamificacion_dna() from public, anon;
+revoke all on table public.dna_ponderaciones from public, anon, authenticated;
 grant execute on function public.ranking_global() to authenticated;
+grant execute on function public.ranking_logros(uuid) to authenticated;
 grant execute on function public.regalar_bricks(uuid) to authenticated;
 grant execute on function public.regalos_recibidos_count() to authenticated;
+grant execute on function public.gamificacion_dna() to authenticated;
+commit;

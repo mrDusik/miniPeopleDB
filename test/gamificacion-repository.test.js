@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from '../src/gamificacion-repository.js';
+import { GamificacionDnaNoDisponibleError, GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { categoriasMock } from '../test-support/fixtures.js';
 import { OTHER_USER, TEST_USER, createTestClient, createTestSupabase } from '../test-support/server.js';
@@ -84,4 +84,30 @@ test('conserva los regalos recibidos al recalcular tras cambios del catálogo', 
   assert.equal(first.state.logros.find(({ type }) => type === 'regalo').total, 50);
   assert.equal(second.state.bricks, 50);
   assert.equal(second.state.logros.find(({ type }) => type === 'regalo').cantidad, 1);
+});
+
+test('dna consulta una RPC fresca por JWT y valida solo su proyeccion agregada', async () => {
+  const supabase = createTestSupabase();
+  supabase.seed('gamificacion', TEST_USER.id, [{ logros: [{ id: 'new-mini-person', cantidad: 1 }] }]);
+  supabase.seed('gamificacion', OTHER_USER.id, [{ logros: [{ id: 'woah', cantidad: 1 }] }]);
+  const ownRepository = new GamificacionRepository({ client: createTestClient(supabase), userId: TEST_USER.id });
+  const otherRepository = new GamificacionRepository({ client: createTestClient(supabase, 'token-usuario-b'), userId: OTHER_USER.id });
+  const ownBefore = supabase.rows('gamificacion', TEST_USER.id);
+  assert.deepEqual(await ownRepository.dna(), {
+    principal: 'Collector', porcentajes: { rarityHunter: 5, explorer: 15, collector: 60, fan: 20 },
+  });
+  assert.deepEqual(await otherRepository.dna(), {
+    principal: 'Rarity Hunter', porcentajes: { rarityHunter: 50, explorer: 10, collector: 30, fan: 10 },
+  });
+  await createTestClient(supabase).from('gamificacion').update({ logros: [{ id: 'woah', cantidad: 2 }] }).eq('user_id', TEST_USER.id);
+  assert.equal((await ownRepository.dna()).porcentajes.rarityHunter, 50);
+  assert.deepEqual(supabase.rows('gamificacion', TEST_USER.id), [{ ...ownBefore[0], logros: [{ id: 'woah', cantidad: 2 }] }]);
+  assert.equal(ownRepository.initialization, null);
+
+  supabase.failNext('gamificacion_dna');
+  await assert.rejects(ownRepository.dna(), GamificacionDnaNoDisponibleError);
+  const malformed = new GamificacionRepository({ client: { rpc: async () => ({ data: {
+    principal: 'Newbie', porcentajes: { rarityHunter: 1, explorer: 0, collector: 0, fan: 0 }, private: 'secret',
+  }, error: null }) } });
+  await assert.rejects(malformed.dna(), GamificacionDnaNoDisponibleError);
 });

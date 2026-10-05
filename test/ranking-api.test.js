@@ -12,7 +12,7 @@ function rankingSupabase() {
     [OTHER_TOKEN]: { ...OTHER_RANKING_USER, user_metadata: { name: 'Grace Google', avatar_url: 'https://example.com/grace.png' } },
   } });
   supabase.seed('gamificacion', RANKING_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
-  supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [] }]);
+  supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] }]);
   supabase.seed('perfiles_publicos', OTHER_RANKING_USER.id, [{ display_name: 'Grace', avatar_url: 'https://example.com/grace.png' }]);
   supabase.seed('minifiguras', OTHER_RANKING_USER.id, [
     { id: 'HIGH', nombre: 'High', estado_coleccion: 'COLECCIÓN', precio: 50, anio: 2020 },
@@ -30,12 +30,48 @@ test('GET /api/ranking exige autenticación y devuelve solo el contrato público
     assert.equal(response.status, 200);
     const ranking = await response.json();
     assert.equal(ranking[0].userId, OTHER_RANKING_USER.id);
+    assert.equal(ranking[0].dnaPrincipal, 'Rarity Hunter');
+    assert.equal(ranking[1].dnaPrincipal, 'Newbie');
+    assert.equal('porcentajes' in ranking[0], false);
+    assert.equal('dnaPonderaciones' in ranking[0], false);
     assert.equal(ranking[0].totalColeccion, 2);
     assert.deepEqual(ranking[0].top5Precio.map(({ id }) => id), ['HIGH', 'OLD']);
     assert.equal('email' in ranking[0], false);
     assert.deepEqual(context.supabase.rows('perfiles_publicos', RANKING_USER.id).map(({ display_name, avatar_url }) => ({ display_name, avatar_url })), [
       { display_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' },
     ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('GET logros exige sesion, valida UUID y proyecta datos sin modificar gamificacion', async () => {
+  const context = await startTestServer({ supabase: rankingSupabase() });
+  const path = `${context.baseUrl}/api/ranking/${OTHER_RANKING_USER.id}/logros`;
+  const get = authFetch(TEST_TOKEN);
+  try {
+    const before = context.supabase.rows('gamificacion');
+    assert.equal((await fetch(path)).status, 401);
+    const response = await get(path);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { userId: OTHER_RANKING_USER.id, displayName: 'Grace', bricks: 200,
+      nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] });
+    assert.deepEqual(context.supabase.rows('gamificacion'), before);
+    const invalid = await get(`${context.baseUrl}/api/ranking/invalido/logros`);
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { error: 'USUARIO_INVALIDO' });
+    const missing = await get(`${context.baseUrl}/api/ranking/00000000-0000-4000-8000-000000000099/logros`);
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { error: 'USUARIO_NO_ENCONTRADO' });
+    context.supabase.failNext('ranking_logros', { message: 'secret details' });
+    const failure = await get(path);
+    assert.equal(failure.status, 500);
+    assert.deepEqual(await failure.json(), { error: 'LOGROS_NO_DISPONIBLES' });
+    for (let index = 0; index < 10; index += 1) {
+      context.supabase.seed('gamificacion', `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`, [{ bricks: 1000 }]);
+    }
+    assert.equal((await get(path)).status, 404);
+    assert.equal((await get(path, { method: 'POST' })).status, 405);
   } finally {
     await context.close();
   }

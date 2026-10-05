@@ -12,24 +12,26 @@ import {
   MinifiguraNoEncontradaError,
   MinifigurasRepository,
 } from './minifiguras-repository.js';
-import { GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
+import { GamificacionDnaNoDisponibleError, GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 import { getSupabaseConfig } from './services/supabase.js';
 import {
   AutorregaloNoPermitidoError,
+  LogrosNoDisponiblesError,
   RankingNoDisponibleError,
   RankingRepository,
   ReceptorNoEncontradoError,
   RegaloYaEnviadoError,
+  UsuarioNoEncontradoError,
 } from './ranking-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion|valoracion|valor-total|sincronizacion\/brickset|api\/ranking(?:\/regalar)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/ranking(?:\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -147,6 +149,7 @@ export function createServer({
       repository,
       rankingRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
+      readGamificationDna: () => gamificacionRepository.dna(),
     };
   }
 
@@ -175,13 +178,14 @@ export function createServer({
     let userId;
     let ensureGamificacion;
     let rankingRepository;
+    let readGamificationDna;
     if (protectedPath.test(requestUrl.pathname)) {
       const context = await authenticate(request);
       if (context.error) {
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, readGamificationDna } = context);
     }
 
     if (requestUrl.pathname === '/categorias') {
@@ -213,6 +217,27 @@ export function createServer({
         sendJson(response, 200, await rankingRepository.list());
       } catch (error) {
         sendJson(response, 500, { error: error instanceof RankingNoDisponibleError ? error.code : 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    const achievementsRoute = /^\/api\/ranking\/([^/]+)\/logros$/.exec(requestUrl.pathname);
+    if (achievementsRoute) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      const targetId = achievementsRoute[1];
+      if (!UUID_PATTERN.test(targetId)) {
+        sendJson(response, 400, { error: 'USUARIO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await rankingRepository.achievements(targetId.toLowerCase()));
+      } catch (error) {
+        const status = error instanceof UsuarioNoEncontradoError ? 404 : 500;
+        sendJson(response, status, { error: error instanceof UsuarioNoEncontradoError || error instanceof LogrosNoDisponiblesError ? error.code : 'ERROR_INTERNO' });
       }
       return;
     }
@@ -369,6 +394,20 @@ export function createServer({
 
       response.setHeader('allow', 'GET, POST');
       sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+
+    if (requestUrl.pathname === '/gamificacion/dna') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await readGamificationDna());
+      } catch (error) {
+        sendJson(response, 500, { error: error instanceof GamificacionDnaNoDisponibleError ? error.code : 'DNA_NO_DISPONIBLE' });
+      }
       return;
     }
 

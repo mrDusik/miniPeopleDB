@@ -47,6 +47,7 @@ async function setup({ catalog = [], valuation = emptyValuation, onFetch } = {})
     if (url === '/categorias') return ok(JSON.parse(categoriasMockRaw));
     if (url === '/valoracion') return ok(valuation);
     if (url === '/gamificacion') return ok(gamification);
+    if (url === '/gamificacion/dna') return ok({ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } });
     if (url === '/minifiguras' && method === 'GET') return ok(state.catalog);
     return { ok: false, status: 500, json: async () => ({ error: 'ERROR_INTERNO' }) };
   };
@@ -271,6 +272,43 @@ test('alternar observación reaplica el filtro activo sobre la caché', async ()
 
   assert.equal(control.pending.length, 1);
   assert.deepEqual(renderedIds(document), ['B']);
+  dom.window.close();
+});
+
+test('el DNA se refresca tras cambiar estado y actualiza el diálogo abierto', async () => {
+  const dnaStates = [
+    { principal: 'Explorer', porcentajes: { rarityHunter: 0, explorer: 100, collector: 0, fan: 0 } },
+    { principal: 'Fan', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 100 } },
+    { principal: 'Fan', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 100 } },
+    { principal: 'Collector', porcentajes: { rarityHunter: 0, explorer: 0, collector: 100, fan: 0 } },
+  ];
+  let dnaReads = 0;
+  const catalog = [figure('A')];
+  const { dom, window, document } = await setup({
+    catalog,
+    onFetch: (url, options = {}) => {
+      if (url === '/gamificacion/dna') return ok(dnaStates[Math.min(dnaReads++, dnaStates.length - 1)]);
+      if (url === '/minifiguras/A/observada' && options.method === 'PUT') return ok({ ...catalog[0], observada: true });
+      return undefined;
+    },
+  });
+  assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Explorer');
+  document.querySelector('#catalog-body [data-action="observe"][data-id="A"]').click();
+  await flush();
+  await flush();
+  assert.equal(dnaReads, 2);
+  assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Fan');
+
+  document.querySelector('#open-dna-inline').click();
+  await flush();
+  assert.equal(document.querySelector('#dna-dialog').open, true);
+  assert.equal(dnaReads, 3);
+  await window.eval('revalidate()');
+  assert.equal(dnaReads, 4);
+  assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Collector');
+  const collectorLegend = [...document.querySelectorAll('.dna-legend-item')]
+    .find((legendItem) => legendItem.querySelector('strong').textContent === 'Collector');
+  assert.equal(collectorLegend.querySelector('.dna-percentage').textContent, '100%');
   dom.window.close();
 });
 

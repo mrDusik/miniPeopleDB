@@ -18,6 +18,34 @@ export class GamificacionInvalidaError extends Error {
   }
 }
 
+export class GamificacionDnaNoDisponibleError extends Error {
+  constructor() {
+    super('El DNA no esta disponible');
+    this.name = 'GamificacionDnaNoDisponibleError';
+    this.code = 'DNA_NO_DISPONIBLE';
+  }
+}
+
+const DNA_PERCENTAGE_KEYS = ['rarityHunter', 'explorer', 'collector', 'fan'];
+const DNA_PRINCIPALS = new Set(['Newbie', 'Rarity Hunter', 'Explorer', 'Collector', 'Fan']);
+const LOGRO_FIELDS = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+
+function validateDna(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !DNA_PRINCIPALS.has(value.principal)
+    || !value.porcentajes || typeof value.porcentajes !== 'object' || Array.isArray(value.porcentajes)) {
+    throw new GamificacionDnaNoDisponibleError();
+  }
+  const porcentajes = Object.fromEntries(DNA_PERCENTAGE_KEYS.map((key) => [key, value.porcentajes[key]]));
+  if (DNA_PERCENTAGE_KEYS.some((key) => !Number.isFinite(porcentajes[key]) || porcentajes[key] < 0 || porcentajes[key] > 100)) {
+    throw new GamificacionDnaNoDisponibleError();
+  }
+  const total = Object.values(porcentajes).reduce((sum, percentage) => sum + percentage, 0);
+  if (value.principal === 'Newbie' ? total !== 0 : Math.abs(total - 100) > 0.01) {
+    throw new GamificacionDnaNoDisponibleError();
+  }
+  return { principal: value.principal, porcentajes };
+}
+
 function isValidLogro(value) {
   return value !== null
     && typeof value === 'object'
@@ -47,7 +75,15 @@ function validateState(value) {
   if (value.progreso === null || typeof value.progreso !== 'object' || typeof value.progreso.porcentaje !== 'number') {
     throw new GamificacionInvalidaError();
   }
-  return value;
+  return {
+    bricks: value.bricks,
+    nivel: value.nivel,
+    siguienteNivel: value.siguienteNivel ?? null,
+    progreso: value.progreso,
+    logros: value.logros.map((logro) => Object.fromEntries(
+      LOGRO_FIELDS.filter((field) => Object.hasOwn(logro, field)).map((field) => [field, logro[field]]),
+    )),
+  };
 }
 
 export class GamificacionRepository {
@@ -70,6 +106,16 @@ export class GamificacionRepository {
       throw new GamificacionNoDisponibleError();
     }
     return result.data;
+  }
+
+  async dna() {
+    try {
+      const { data, error } = await this.client.rpc('gamificacion_dna');
+      if (error) throw error;
+      return validateDna(data);
+    } catch {
+      throw new GamificacionDnaNoDisponibleError();
+    }
   }
 
   // Returns null when the user has no stored state yet.
