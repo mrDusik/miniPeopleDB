@@ -1,3 +1,4 @@
 sup.env
 .env*
 node_modules/
+/supabase/.temp/
