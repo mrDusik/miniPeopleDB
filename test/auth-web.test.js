@@ -14,8 +14,8 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function startApp({ session, signInError, fetchImpl } = {}) {
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+function startApp({ session, signInError, fetchImpl, url = 'http://localhost/' } = {}) {
+  const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
@@ -27,6 +27,7 @@ function startApp({ session, signInError, fetchImpl } = {}) {
     if (url === '/minifiguras') return { ok: true, status: 200, json: async () => catalog };
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (url === '/gamificacion/dna') return { ok: true, status: 200, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
   window.eval(withSupabaseSession(appScript, { session, signInError }));
@@ -66,6 +67,20 @@ test('iniciar sesion usa Google con PKCE y redirige al origen de la aplicacion',
   dom.window.close();
 });
 
+for (const url of ['http://localhost:3000/', 'http://127.0.0.1:3000/', 'http://localhost:3001/', 'https://minipeopledb.onrender.com/']) {
+  test(`el login conserva el origen y puerto de ${url} sin incluir parametros OAuth`, async () => {
+    const { dom, window, $ } = startApp({ session: null, url: `${url}?code=previous-code#previous-token` });
+    try {
+      await tick();
+      $('#login-google').click();
+      await tick();
+      assert.equal(window.__supabaseStub.calls.signInWithOAuth[0].options.redirectTo, url);
+    } finally {
+      dom.window.close();
+    }
+  });
+}
+
 test('un error del proveedor OAuth mantiene la pantalla de acceso con un aviso', async () => {
   const { dom, $ } = startApp({ session: null, signInError: 'provider disabled' });
   await tick();
@@ -96,7 +111,7 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#catalog-body').children.length, 1);
 
   const dataRequests = requests.filter(({ url }) => url !== '/categorias');
-  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion', '/api/ranking', '/sincronizacion/brickset']);
+  assert.deepEqual(dataRequests.map(({ url }) => url), ['/minifiguras', '/valoracion', '/gamificacion', '/api/ranking', '/gamificacion/dna', '/sincronizacion/brickset']);
   for (const { init } of dataRequests) {
     assert.equal(init.headers.Authorization, 'Bearer token-navegador');
   }
@@ -224,6 +239,9 @@ test('cerrar sesion vacia los datos y vuelve a la pantalla de acceso', async () 
   const { dom, window, $ } = startApp();
   await tick();
   assert.equal($('#catalog-body').children.length, 1);
+  $('#open-dna-inline').click();
+  await tick();
+  assert.equal($('#dna-dialog').open, true);
   $('#logout').click();
   await tick();
   assert.equal(JSON.stringify(window.__supabaseStub.calls.signOut), '[null]');
@@ -231,6 +249,39 @@ test('cerrar sesion vacia los datos y vuelve a la pantalla de acceso', async () 
   assert.equal($('.page-shell').hidden, true);
   assert.equal($('#catalog-body').children.length, 0);
   assert.equal($('#user-name').textContent, '');
+  assert.equal($('#dna-dialog').open, false);
+  assert.equal($('#gamification-dna-principal').textContent, 'DNA no disponible');
+  dom.window.close();
+});
+
+test('una lectura DNA tardia de la cuenta anterior no reemplaza el principal tras cambiar de usuario', async () => {
+  const sessionA = { access_token: 'token-a', user: { id: 'user-a', email: 'a@example.com' } };
+  const sessionB = { access_token: 'token-b', user: { id: 'user-b', email: 'b@example.com' } };
+  let resolveOldDna;
+  let dnaRequests = 0;
+  const { dom, window, $ } = startApp({ session: sessionA, fetchImpl: async (url) => {
+    if (url === '/categorias') return { ok: true, status: 200, json: async () => JSON.parse(categoriasMockRaw) };
+    if (url === '/minifiguras') return { ok: true, status: 200, json: async () => catalog };
+    if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
+    if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (url === '/api/ranking') return { ok: true, status: 200, json: async () => [] };
+    if (url === '/sincronizacion/brickset') return { ok: true, status: 200, json: async () => ({ estado: 'inactiva' }) };
+    if (url === '/gamificacion/dna') {
+      dnaRequests += 1;
+      if (dnaRequests === 1) return new Promise((resolve) => { resolveOldDna = resolve; });
+      return { ok: true, status: 200, json: async () => ({ principal: 'Fan', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 100 } }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  } });
+  await tick();
+  assert.equal(typeof resolveOldDna, 'function');
+  window.__supabaseStub.setSession('SIGNED_IN', sessionB);
+  await tick();
+  await tick();
+  assert.equal($('#gamification-dna-principal').textContent, 'Fan');
+  resolveOldDna({ ok: true, status: 200, json: async () => ({ principal: 'Explorer', porcentajes: { rarityHunter: 0, explorer: 100, collector: 0, fan: 0 } }) });
+  await tick();
+  assert.equal($('#gamification-dna-principal').textContent, 'Fan');
   dom.window.close();
 });
 

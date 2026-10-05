@@ -15,13 +15,20 @@ function createDom() {
   return dom;
 }
 
-function baseFetch(catalogo, gamificacion, postResponse) {
+function baseFetch(catalogo, gamificacion, postResponse, dnaState) {
   return async (url, options = {}) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
     if (url === '/minifiguras' && options.method === 'POST') return { ok: true, status: 201, json: async () => postResponse };
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => catalogo };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: catalogo.length, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, json: async () => gamificacion };
+    if (url === '/gamificacion/dna') {
+      if (dnaState === false) return { ok: false, status: 500, json: async () => ({ error: 'DNA_NO_DISPONIBLE' }) };
+      const value = typeof dnaState === 'function' ? await dnaState() : dnaState ?? {
+        principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 },
+      };
+      return { ok: true, status: 200, json: async () => value };
+    }
     return { ok: false, json: async () => ({}) };
   };
 }
@@ -78,6 +85,25 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   window.document.querySelector('#gamification-close').click();
   window.document.querySelector('#gamification-level').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
+  dom.window.close();
+});
+
+test('renderizar logros ajenos no cambia el panel y abrir propios restaura su contenido', async () => {
+  const dom = createDom();
+  dom.window.fetch = baseFetch([], state());
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  dom.window.eval("renderAchievements({ bricks: 50, nivel: { id: 1, nombre: 'Stud' }, logros: [] }, 'Logros de Ada')");
+  const document = dom.window.document;
+  assert.equal(document.querySelector('#gamification-dialog-title').textContent, 'Logros de Ada');
+  assert.equal(document.querySelector('#gamification-dialog-bricks').textContent, '50');
+  assert.equal(document.querySelector('#gamification-bricks').textContent, '820');
+  assert.equal(document.querySelector('#gamification-level-number').textContent, '8');
+  assert.equal(document.querySelector('#gamification-progress').value, 28);
+  document.querySelector('#open-achievements').click();
+  assert.equal(document.querySelector('#gamification-dialog-title').textContent, 'Logros');
+  assert.equal(document.querySelector('#gamification-dialog-bricks').textContent, '820');
+  assert.equal(document.querySelector('.achievement-name').textContent, 'New mini person');
   dom.window.close();
 });
 
@@ -164,9 +190,93 @@ test('el panel mantiene los recuentos visibles y despliega acciones y valor con 
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.hidden, false);
-  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'summary-achievements-row', 'summary-sync-row', 'sync-progress']);
+  assert.deepEqual([...details.children].map((element) => element.className), ['gamification-progress', 'summary-achievements-row', 'summary-ranking-row', 'summary-sync-row', 'sync-progress']);
+  assert.equal(window.document.querySelector('#open-dna').parentElement, window.document.querySelector('#open-achievements').parentElement);
+  assert.equal(window.document.querySelector('#open-dna').getAttribute('aria-controls'), 'dna-dialog');
+  assert.equal(window.document.querySelector('#open-dna-inline').tagName, 'BUTTON');
+  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: Newbie');
+  assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Newbie');
+  window.eval("renderGamificationDna({ principal: 'Explorer', porcentajes: { explorer: 100 } })");
+  assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Explorer');
+  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: Explorer');
   toggle.click();
   assert.equal(details.hidden, true);
+  dom.window.close();
+});
+
+test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco de retorno', async () => {
+  const dom = createDom();
+  const document = dom.window.document;
+  const dnaState = { principal: 'Fan', porcentajes: { rarityHunter: 10, explorer: 20, collector: 30, fan: 40 } };
+  dom.window.fetch = baseFetch([], state(), undefined, dnaState);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const inlineTrigger = document.querySelector('#open-dna-inline');
+  inlineTrigger.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const dialog = document.querySelector('#dna-dialog');
+  const chart = document.querySelector('#dna-chart');
+  assert.equal(dialog.open, true);
+  assert.equal(document.activeElement.id, 'dna-close');
+  assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Fan');
+  assert.match(chart.style.getPropertyValue('--dna-gradient'), /conic-gradient/);
+  assert.match(chart.style.getPropertyValue('--dna-gradient'), /0% 10%/);
+  assert.match(chart.style.getPropertyValue('--dna-gradient'), /10% 30%/);
+  assert.deepEqual([...document.querySelectorAll('.dna-legend-item strong:first-of-type')].map((item) => item.textContent), [
+    'Fan', 'Collector', 'Explorer', 'Rarity Hunter',
+  ]);
+  assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['40%', '30%', '20%', '10%']);
+  assert.deepEqual([...document.querySelectorAll('.dna-swatch')].map((item) => item.className), [
+    'dna-swatch dna-swatch-fan', 'dna-swatch dna-swatch-collector', 'dna-swatch dna-swatch-explorer', 'dna-swatch dna-swatch-rarity',
+  ]);
+  assert.match(document.querySelector('.dna-legend').textContent, /Busca piezas raras y valiosas/);
+  assert.match(document.querySelector('.dna-legend').textContent, /Descubre categorías y subcategorías/);
+  assert.match(document.querySelector('.dna-legend').textContent, /Amplía y completa la colección/);
+  assert.match(document.querySelector('.dna-legend').textContent, /afinidad por temáticas y personajes/);
+  document.querySelector('#dna-close').click();
+  dialog.dispatchEvent(new dom.window.Event('close'));
+  assert.equal(dialog.open, false);
+  assert.equal(document.activeElement, inlineTrigger);
+
+  const dropdownTrigger = document.querySelector('#open-dna');
+  dropdownTrigger.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  dialog.dispatchEvent(new dom.window.Event('close'));
+  assert.equal(dialog.open, false);
+  assert.equal(document.activeElement, dropdownTrigger);
+  dom.window.close();
+});
+
+test('DNA muestra estado de error con reintento y Newbie sin segmentos inventados', async () => {
+  const dom = createDom();
+  const document = dom.window.document;
+  const success = baseFetch([], state(), undefined, { principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } });
+  let attempts = 0;
+  dom.window.fetch = async (url, options) => {
+    if (url === '/gamificacion/dna') {
+      attempts += 1;
+      if (attempts === 2) return { ok: false, status: 500, json: async () => ({ error: 'DNA_NO_DISPONIBLE' }) };
+    }
+    return success(url, options);
+  };
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts, 1);
+  document.querySelector('#open-dna').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#dna-status').textContent, 'No se pudo cargar el DNA.');
+  const retry = document.querySelector('#dna-retry');
+  assert.equal(retry.hidden, false);
+  retry.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const chart = document.querySelector('#dna-chart');
+  assert.equal(chart.hidden, false);
+  assert.equal(chart.classList.contains('dna-chart-empty'), true);
+  assert.equal(chart.style.getPropertyValue('--dna-gradient'), '');
+  assert.equal(document.querySelector('#dna-status').textContent, 'Newbie');
+  assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['0%', '0%', '0%', '0%']);
   dom.window.close();
 });
 

@@ -13,7 +13,7 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function startSyncApp({ statusStates = [], postState, session = undefined } = {}) {
+function startSyncApp({ statusStates = [], postState, session = undefined, dnaStates = [] } = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -28,12 +28,14 @@ function startSyncApp({ statusStates = [], postState, session = undefined } = {}
   window.clearTimeout = (id) => timers.delete(id);
   const requests = [];
   let statusIndex = 0;
+  let dnaIndex = 0;
   window.fetch = async (url, init = {}) => {
     requests.push({ url, method: init.method ?? 'GET' });
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
     if (url === '/minifiguras') return { ok: true, json: async () => catalog };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 } }) };
+    if (url === '/gamificacion/dna') return { ok: true, json: async () => dnaStates[Math.min(dnaIndex++, dnaStates.length - 1)] ?? { principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } } };
     if (url === '/sincronizacion/brickset') {
       if (init.method === 'POST') return postState;
       return { ok: true, json: async () => statusStates[Math.min(statusIndex++, statusStates.length - 1)] ?? { estado: 'inactiva' } };
@@ -53,6 +55,10 @@ function startSyncApp({ statusStates = [], postState, session = undefined } = {}
 test('muestra progreso, actualiza el sondeo y muestra el toast exacto al completar', async () => {
   const app = startSyncApp({
     postState: { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 2, actualizados: [], fallidos: [] }) },
+    dnaStates: [
+      { principal: 'Explorer', porcentajes: { rarityHunter: 0, explorer: 100, collector: 0, fan: 0 } },
+      { principal: 'Collector', porcentajes: { rarityHunter: 0, explorer: 0, collector: 100, fan: 0 } },
+    ],
     statusStates: [
       { estado: 'inactiva' },
       { estado: 'en_curso', procesados: 1, total: 2, actualizados: ['A-1'], fallidos: [] },
@@ -77,8 +83,11 @@ test('muestra progreso, actualiza el sondeo y muestra el toast exacto al complet
   app.timers.clear();
   await finishPoll();
   await tick();
+  await tick();
   assert.equal(app.$('#sync-progress').hidden, true);
   assert.equal(app.$('#sync-prices').disabled, false);
+  assert.equal(app.$('#gamification-dna-principal').textContent, 'Collector');
+  assert.equal(app.requests.filter(({ url }) => url === '/gamificacion/dna').length, 2);
   const toast = app.$('#toast-region .toast-success');
   assert.equal(toast.textContent, 'Actualización de precios terminada: 1 actualizadas, 1 fallidas.');
   app.dom.window.close();

@@ -15,6 +15,27 @@ const COLUMN_DEFAULTS = {
   regalos_enviados: () => ({ fecha: new Date().toISOString() }),
 };
 
+const DNA_WEIGHTS = {
+  'new-mini-person': [5, 60, 15, 20],
+  woah: [50, 30, 10, 10],
+  'deal-master': [75, 15, 5, 5],
+  masterpiece: [90, 5, 0, 5],
+  'holy-grail': [95, 5, 0, 0],
+  omgold: [95, 0, 0, 5],
+  'lets-go': [5, 20, 60, 15],
+  collector: [10, 80, 0, 10],
+  'step-by-step': [5, 15, 70, 10],
+  'bricky-potter': [0, 10, 20, 70],
+  'bricky-mouse': [0, 10, 20, 70],
+  'its-a-me-mario': [0, 10, 20, 70],
+  'green-hill-zone': [0, 10, 20, 70],
+  dimensional: [10, 10, 30, 50],
+  warsie: [0, 10, 20, 70],
+  'in-ny-i-was': [60, 5, 5, 30],
+  'welcome-to-the-upsidedown': [30, 10, 10, 50],
+  'chill-nancy-im-fine': [40, 10, 10, 40],
+};
+
 const MINIFIGURA_COLUMNS = [
   ['id', 'id'],
   ['nombre', 'nombre'],
@@ -39,6 +60,29 @@ export function minifiguraToRow(minifigura) {
 }
 
 const clone = (value) => structuredClone(value);
+
+function calculateDna(logros, additionalWeights = {}) {
+  const scores = { rarityHunter: 0, collector: 0, explorer: 0, fan: 0 };
+  for (const logro of logros || []) {
+    const weights = additionalWeights[logro.id] ?? DNA_WEIGHTS[logro.id];
+    const cantidad = Number(logro.cantidad);
+    if (!weights || logro.id === 'someone-liked-your-collection' || !Number.isFinite(cantidad) || cantidad <= 0) continue;
+    scores.rarityHunter += cantidad * weights[0];
+    scores.collector += cantidad * weights[1];
+    scores.explorer += cantidad * weights[2];
+    scores.fan += cantidad * weights[3];
+  }
+  const total = Object.values(scores).reduce((sum, score) => sum + score, 0);
+  const principal = total === 0
+    ? 'Newbie'
+    : scores.explorer >= scores.collector && scores.explorer >= scores.fan && scores.explorer >= scores.rarityHunter ? 'Explorer'
+      : scores.collector >= scores.fan && scores.collector >= scores.rarityHunter ? 'Collector'
+        : scores.fan >= scores.rarityHunter ? 'Fan' : 'Rarity Hunter';
+  return {
+    principal,
+    porcentajes: Object.fromEntries(Object.entries(scores).map(([name, score]) => [name, total === 0 ? 0 : (score / total) * 100])),
+  };
+}
 
 function rlsError() {
   return { code: '42501', message: 'new row violates row-level security policy' };
@@ -138,6 +182,25 @@ export function createSupabaseMock({ users = {} } = {}) {
       return { data: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === uid).length, error: null };
     }
 
+    if (name === 'gamificacion_dna') {
+      const gamification = tables.gamificacion.find(({ user_id }) => user_id === uid);
+      return { data: calculateDna(gamification?.logros ?? []), error: null };
+    }
+
+    if (name === 'ranking_logros') {
+      const target = [...tables.gamificacion]
+        .sort((left, right) => right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
+        .slice(0, 10).find(({ user_id }) => user_id === parameters.p_usuario_id);
+      if (!target) return { data: null, error: null };
+      const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === target.user_id);
+      const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+      return { data: clone({
+        userId: target.user_id, displayName: profile?.display_name ?? 'Coleccionista', bricks: target.bricks,
+        nivel: { id: target.nivel?.id ?? 0, nombre: target.nivel?.nombre ?? 'Duplo' },
+        logros: target.logros.map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
+      }), error: null };
+    }
+
     if (name === 'ranking_global') {
       const data = [...tables.gamificacion]
         .sort((left, right) => right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
@@ -150,6 +213,10 @@ export function createSupabaseMock({ users = {} } = {}) {
             fechaCompra: row.fecha_compra, FechaRegistro: row.fecha_registro, estadoColeccion: row.estado_coleccion,
           }));
           const highlights = collectionHighlights(domainCollection);
+          const withMetadata = (items) => items.map((item) => {
+            const row = collection.find(({ id }) => id === item.id);
+            return Object.fromEntries(Object.entries({ ...item, categoria: row.categoria, subcategoria: row.subcategoria, anio: row.anio }).filter(([, value]) => value != null));
+          });
           const levelId = gamification.nivel?.id ?? 0;
           return {
             user_id: gamification.user_id,
@@ -176,9 +243,10 @@ export function createSupabaseMock({ users = {} } = {}) {
               17: '/level_images/17_blacktron.png',
             })[levelId] ?? '/level_images/9_forestman.png',
             total_coleccion: collection.length,
-            top5_precio: highlights.top5Precio,
-            top5_antiguedad: highlights.top5Antiguedad,
+            top5_precio: withMetadata(highlights.top5Precio),
+            top5_antiguedad: withMetadata(highlights.top5Antiguedad),
             regalo_enviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
+            dna_principal: calculateDna(gamification.logros ?? []).principal,
           };
         });
       return { data: clone(data), error: null };
@@ -268,6 +336,9 @@ export function createSupabaseMock({ users = {} } = {}) {
 
   return {
     createClient,
+    calculateDna(logros, additionalWeights) {
+      return clone(calculateDna(logros, additionalWeights));
+    },
     seed(table, userId, rows) {
       for (const row of rows) {
         const identity = table === 'regalos_enviados' ? {} : { user_id: userId };

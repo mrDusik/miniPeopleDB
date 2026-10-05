@@ -75,6 +75,7 @@ const gamificationLevelTooltip = document.createElement('div');
 const gamificationLevelTooltipImage = document.createElement('img');
 const gamificationLevelNumber = document.querySelector('#gamification-level-number');
 const gamificationLevelName = document.querySelector('#gamification-level-name');
+const gamificationDnaPrincipal = document.querySelector('#gamification-dna-principal');
 const gamificationBricks = document.querySelector('#gamification-bricks');
 const gamificationDialogBricks = document.querySelector('#gamification-dialog-bricks');
 const gamificationProgress = document.querySelector('#gamification-progress');
@@ -100,14 +101,23 @@ gamificationLevelImage.addEventListener('blur', hideLevelImageTooltip);
 const gamificationPercentage = document.querySelector('#gamification-percentage');
 const gamificationNext = document.querySelector('#gamification-next');
 const gamificationDialog = document.querySelector('#gamification-dialog');
+const gamificationDialogTitle = document.querySelector('#gamification-dialog-title');
+const achievementsStatus = document.querySelector('#achievements-status');
 const gamificationDialogLevel = document.querySelector('#gamification-dialog-level');
 const achievementsOpenButton = document.querySelector('#open-achievements');
 const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
 const gamificationCloseButton = document.querySelector('#gamification-close');
+const dnaDialog = document.querySelector('#dna-dialog');
+const dnaDialogCloseButton = document.querySelector('#dna-close');
+const dnaDialogStatus = document.querySelector('#dna-status');
+const dnaChart = document.querySelector('#dna-chart');
+const dnaLegend = document.querySelector('#dna-legend');
+const dnaRetryButton = document.querySelector('#dna-retry');
 const rankingDialog = document.querySelector('#ranking-dialog');
 const rankingCloseButton = document.querySelector('#ranking-close');
 const rankingOpenButton = document.querySelector('#open-global-ranking');
+const dnaOpenButtons = [document.querySelector('#open-dna-inline'), document.querySelector('#open-dna')];
 const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
 const rankingMainGlobe = document.querySelector('#ranking-main-globe');
@@ -146,6 +156,8 @@ let currentEditId = null;
 let currentFormMode = null;
 let formSynced = false;
 let imageLookupSequence = 0;
+let formTrigger = null;
+let formSending = false;
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
@@ -165,6 +177,11 @@ let syncPollTimer = null;
 let syncPausedByModal = false;
 let rankingEntries = [];
 let expandedRankingUserId = null;
+let ownGamification = null;
+let ownDnaState = null;
+let dnaDialogTrigger = null;
+let dnaRequestSequence = 0;
+let achievementsTrigger = null;
 
 anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
@@ -603,6 +620,7 @@ function setCatalogCache(catalog) {
   const wasEmpty = hasLoadedFullCatalog && catalogCache.length === 0;
   hasLoadedFullCatalog = true;
   catalogCache = catalog;
+  updateRankingWantedActions();
   renderDynamicFilterOptions(catalog);
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     if (catalog.length === 0) setPanelCollapsed(button, true);
@@ -774,6 +792,7 @@ async function loadCatalog() {
   setLoading(false);
   setCategoriaControlsEnabled(!isSyncingPrices && categoriasReady);
   await Promise.all([loadTotal(), loadGamification(), loadGlobalRanking({ showState: false })]);
+  await loadGamificationDna();
   return catalog;
 }
 
@@ -792,6 +811,7 @@ async function revalidate() {
     loadGamification(),
     loadGlobalRanking({ showState: false }),
   ]);
+  await loadGamificationDna();
 }
 
 async function loadTotal() {
@@ -818,17 +838,15 @@ async function loadTotal() {
 }
 
 function renderGamification(state) {
+  ownGamification = state;
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
   const imagePath = levelImagePath(level.id);
   gamificationLevelImage.src = imagePath;
   gamificationLevelTooltipImage.src = imagePath;
-  achievementsHeadingImage.src = imagePath;
   gamificationLevelTooltipImage.alt = `Nivel ${level.id} ${level.nombre}`;
   gamificationLevelNumber.textContent = level.id;
   gamificationLevelName.textContent = level.nombre;
-  gamificationDialogLevel.textContent = `${level.id} ${level.nombre}`;
   gamificationBricks.textContent = `${state.bricks ?? 0}`;
-  gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
   gamificationProgress.value = state.progreso?.porcentaje ?? 0;
   gamificationPercentage.textContent = `${Math.round(gamificationProgress.value)}%`;
   gamificationPercentage.classList.toggle('on-accent', gamificationProgress.value >= 50);
@@ -836,6 +854,103 @@ function renderGamification(state) {
   gamificationNext.textContent = state.siguienteNivel
     ? `Próximo nivel: ${state.siguienteNivel.id} ${state.siguienteNivel.nombre}`
     : 'Nivel máximo alcanzado';
+  renderAchievements(state);
+}
+
+function renderGamificationDna(state) {
+  ownDnaState = state;
+  const principal = state?.principal ?? 'DNA no disponible';
+  gamificationDnaPrincipal.textContent = principal;
+  dnaOpenButtons[0].setAttribute('aria-label', `Abrir DNA: ${principal}`);
+}
+
+const DNA_TRAITS = [
+  { key: 'rarityHunter', name: 'Rarity Hunter', description: 'Busca piezas raras y valiosas.', color: 'rarity' },
+  { key: 'explorer', name: 'Explorer', description: 'Descubre categorías y subcategorías.', color: 'explorer' },
+  { key: 'collector', name: 'Collector', description: 'Amplía y completa la colección.', color: 'collector' },
+  { key: 'fan', name: 'Fan', description: 'Muestra afinidad por temáticas y personajes.', color: 'fan' },
+];
+
+function renderDnaLoading() {
+  dnaDialogStatus.textContent = 'Cargando DNA…';
+  dnaChart.hidden = true;
+  dnaLegend.hidden = true;
+  dnaLegend.replaceChildren();
+  dnaRetryButton.hidden = true;
+}
+
+function renderDnaError() {
+  dnaDialogStatus.textContent = 'No se pudo cargar el DNA.';
+  dnaChart.hidden = true;
+  dnaLegend.hidden = true;
+  dnaRetryButton.hidden = false;
+}
+
+function renderDnaDialog(state) {
+  const isNewbie = state.principal === 'Newbie';
+  dnaChart.hidden = false;
+  dnaChart.classList.toggle('dna-chart-empty', isNewbie);
+  dnaChart.setAttribute('aria-label', isNewbie
+    ? 'DNA Newbie: cuatro proporciones en cero'
+    : `DNA de tu colección: ${DNA_TRAITS.map(({ key, name }) => `${name} ${state.porcentajes[key]}%`).join(', ')}`);
+  if (isNewbie) {
+    dnaChart.style.removeProperty('--dna-gradient');
+    dnaDialogStatus.textContent = 'Newbie';
+  } else {
+    let position = 0;
+    const stops = DNA_TRAITS.map(({ key, color }, index) => {
+      const start = position;
+      position += state.porcentajes[key];
+      const end = index === DNA_TRAITS.length - 1 ? 100 : Math.min(100, position);
+      return `var(--dna-${color}) ${start}% ${end}%`;
+    });
+    dnaChart.style.setProperty('--dna-gradient', `conic-gradient(${stops.join(', ')})`);
+    dnaDialogStatus.textContent = '';
+  }
+  const traitsByPercentage = DNA_TRAITS
+    .map((trait, index) => ({ trait, index }))
+    .sort((left, right) => state.porcentajes[right.trait.key] - state.porcentajes[left.trait.key] || left.index - right.index)
+    .map(({ trait }) => trait);
+  dnaLegend.replaceChildren(...traitsByPercentage.map(({ key, name, description, color }) => {
+    const item = document.createElement('li');
+    item.className = 'dna-legend-item';
+    const swatch = document.createElement('span');
+    swatch.className = `dna-swatch dna-swatch-${color}`;
+    swatch.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('strong');
+    label.textContent = name;
+    const percentage = document.createElement('strong');
+    percentage.className = 'dna-percentage';
+    percentage.textContent = `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[key])}%`;
+    const detail = document.createElement('span');
+    detail.className = 'dna-description';
+    detail.textContent = description;
+    item.append(swatch, label, percentage, detail);
+    return item;
+  }));
+  dnaLegend.hidden = false;
+  dnaRetryButton.hidden = true;
+}
+
+async function loadDnaDialog() {
+  if (dnaDialog.open) await loadGamificationDna(true);
+}
+
+function openDnaDialog(trigger) {
+  dnaDialogTrigger = trigger;
+  renderDnaLoading();
+  dnaDialog.showModal();
+  dnaDialogCloseButton.focus();
+  void loadDnaDialog();
+}
+
+function renderAchievements(state, title = 'Logros') {
+  const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
+  gamificationDialogTitle.textContent = title;
+  achievementsHeadingImage.src = levelImagePath(level.id);
+  gamificationDialogLevel.textContent = `${level.id} ${level.nombre}`;
+  gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
+  achievementsStatus.textContent = state.logros?.length ? '' : 'No hay logros.';
   gamificationAchievements.replaceChildren();
   for (const logro of state.logros ?? []) {
     const item = document.createElement('li');
@@ -881,11 +996,15 @@ function renderGamification(state) {
 }
 
 async function loadGamification() {
+  const sessionUserId = currentSession?.user?.id;
   try {
     const response = await apiFetch('/gamificacion');
     if (!response.ok) throw new Error('GAMIFICACION_NO_DISPONIBLE');
-    renderGamification(await response.json());
+    const state = await response.json();
+    if (sessionUserId !== currentSession?.user?.id) return;
+    renderGamification(state);
   } catch {
+    if (sessionUserId !== currentSession?.user?.id) return;
     gamificationLevelNumber.textContent = '';
     gamificationLevelName.textContent = 'Nivel no disponible';
     gamificationDialogLevel.textContent = 'Nivel no disponible';
@@ -898,7 +1017,57 @@ async function loadGamification() {
   }
 }
 
-function highlightGroup(title, items, mode) {
+async function loadGamificationDna(showLoading = false) {
+  const sessionUserId = currentSession?.user?.id;
+  const sequence = ++dnaRequestSequence;
+  if (showLoading) renderDnaLoading();
+  try {
+    const response = await apiFetch('/gamificacion/dna');
+    if (!response.ok) throw new Error('DNA_NO_DISPONIBLE');
+    const state = await response.json();
+    if (sequence !== dnaRequestSequence || sessionUserId !== currentSession?.user?.id) return;
+    renderGamificationDna(state);
+    if (dnaDialog.open) renderDnaDialog(state);
+  } catch {
+    if (sequence !== dnaRequestSequence || sessionUserId !== currentSession?.user?.id) return;
+    if (!ownDnaState) gamificationDnaPrincipal.textContent = 'DNA no disponible';
+    if (dnaDialog.open) renderDnaError();
+  }
+}
+
+function ownsMinifigura(id) {
+  const canonicalId = String(id).trim().toUpperCase();
+  return catalogCache.some((item) => String(item.id).trim().toUpperCase() === canonicalId);
+}
+
+function updateRankingWantedActions() {
+  for (const card of globalRankingList.querySelectorAll('[data-ranking-id]')) {
+    const eligible = hasLoadedFullCatalog && currentSession && card.dataset.ownerUser !== currentSession.user.id && !ownsMinifigura(card.dataset.rankingId);
+    const existing = card.querySelector('.ranking-add-wanted');
+    if (!eligible) {
+      existing?.remove();
+      continue;
+    }
+    if (existing) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ranking-add-wanted';
+    button.dataset.wantedId = card.dataset.rankingId;
+    button.dataset.ownerUser = card.dataset.ownerUser;
+    button.title = 'Añadir a buscadas';
+    button.setAttribute('aria-label', 'Añadir a buscadas');
+    const plus = document.createElement('span');
+    plus.textContent = '+';
+    plus.setAttribute('aria-hidden', 'true');
+    const icon = document.createElement('img');
+    icon.src = '/status_images/lupa.png';
+    icon.alt = '';
+    button.append(plus, icon);
+    card.append(button);
+  }
+}
+
+function highlightGroup(title, items, mode, ownerUserId) {
   const section = document.createElement('section');
   section.className = 'ranking-highlight-group';
   const heading = document.createElement('h3');
@@ -907,7 +1076,10 @@ function highlightGroup(title, items, mode) {
   row.className = 'ranking-row';
   for (const [index, minifigura] of items.entries()) {
     const detail = mode === 'precio' ? formatPrice(minifigura.precio) : minifigura.anio;
-    row.append(rankingCard(minifigura, index + 1, detail, false));
+    const card = rankingCard(minifigura, index + 1, detail, false);
+    card.dataset.rankingId = minifigura.id;
+    card.dataset.ownerUser = ownerUserId;
+    row.append(card);
   }
   section.append(heading, row);
   return section;
@@ -929,6 +1101,9 @@ function setExpandedRankingUser(userId) {
 }
 
 function renderGlobalRanking() {
+  const focused = document.activeElement;
+  const focusedUserId = focused?.closest('.global-ranking-entry')?.dataset.userId;
+  const focusSelector = focused?.matches('.ranking-gift') ? '.ranking-gift' : '.ranking-expand';
   const fragment = document.createDocumentFragment();
   const currentUserId = currentSession?.user?.id;
   const currentUserIndex = rankingEntries.findIndex(({ userId }) => userId === currentUserId);
@@ -992,7 +1167,10 @@ function renderGlobalRanking() {
     const levelName = document.createElement('span');
     levelName.className = 'ranking-level-name';
     levelName.textContent = entry.nombreNivel;
-    levelInfo.append(levelImage, levelNumber, levelName);
+    const dnaPrincipal = document.createElement('span');
+    dnaPrincipal.className = 'ranking-dna-principal';
+    dnaPrincipal.textContent = entry.dnaPrincipal ?? 'Newbie';
+    levelInfo.append(levelImage, levelNumber, levelName, dnaPrincipal);
     const collection = document.createElement('span');
     collection.className = 'ranking-collection-count';
     collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
@@ -1010,7 +1188,10 @@ function renderGlobalRanking() {
     chevron.textContent = '▾';
     chevron.setAttribute('aria-hidden', 'true');
     expand.append(position, avatarWrap, name, levelInfo, bricks, collection, chevron);
-    row.append(expand);
+    const summary = document.createElement('div');
+    summary.className = 'ranking-summary';
+    summary.append(expand);
+    row.append(summary);
 
     if (entry.userId !== currentUserId) {
       const gift = document.createElement('button');
@@ -1040,17 +1221,27 @@ function renderGlobalRanking() {
     details.className = 'ranking-user-details';
     details.hidden = true;
     details.append(
-      highlightGroup('Top 3 por precio', (entry.top5Precio ?? []).slice(0, 3), 'precio'),
-      highlightGroup('Top 3 por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 3), 'antiguedad'),
+      highlightGroup('Top 3 por precio', (entry.top5Precio ?? []).slice(0, 3), 'precio', entry.userId),
+      highlightGroup('Top 3 por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 3), 'antiguedad', entry.userId),
     );
     article.append(row, details);
     fragment.append(article);
   }
   globalRankingList.replaceChildren(fragment);
-  expandedRankingUserId = null;
+  updateRankingWantedActions();
+  for (const article of globalRankingList.children) {
+    const expanded = article.dataset.userId === expandedRankingUserId;
+    article.querySelector('.ranking-expand').setAttribute('aria-expanded', String(expanded));
+    article.querySelector('.ranking-user-details').hidden = !expanded;
+  }
+  if (focusedUserId && rankingDialog.open) {
+    const entry = [...globalRankingList.children].find((item) => item.dataset.userId === focusedUserId);
+    (entry?.querySelector(focusSelector) ?? rankingCloseButton).focus();
+  }
 }
 
 async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
+  const sessionUserId = currentSession?.user?.id;
   if (showState) {
     rankingStatus.textContent = 'Cargando ranking...';
     rankingStatus.className = 'status';
@@ -1060,6 +1251,7 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
     const response = await apiFetch('/api/ranking');
     if (!response.ok) throw new Error('RANKING_NO_DISPONIBLE');
     const result = await response.json();
+    if (sessionUserId !== currentSession?.user?.id) return [];
     if (!Array.isArray(result)) throw new Error('RANKING_INVALIDO');
     rankingEntries = result;
     renderGlobalRanking();
@@ -1067,6 +1259,8 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
     rankingStatus.className = 'status';
     return result;
   } catch {
+    if (sessionUserId !== currentSession?.user?.id) return [];
+    if (!showState) return [];
     rankingEntries = [];
     renderGlobalRanking();
     if (showState) {
@@ -1153,20 +1347,22 @@ function mostrarImagenMinifigura(id, nombre) {
   preloader.src = url;
 }
 
-function openFormDialog(mode, minifigura) {
+function openFormDialog(mode, minifigura, trigger = null) {
   if (!categoriasReady) {
     showToast('No se pueden crear minifiguras sin cargar las categorías oficiales.', 'error');
     return;
   }
   pauseSyncForModal();
   currentFormMode = mode;
+  formTrigger = trigger;
+  formSending = false;
   imageLookupSequence += 1;
   currentEditId = mode === 'edit' ? minifigura.id : null;
-  formSynced = mode !== 'create';
+  formSynced = mode !== 'create' && mode !== 'ranking-create';
   minifiguraForm.reset();
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
-  formDialogTitle.textContent = mode === 'edit' ? 'Editar minifigura' : mode === 'view' ? 'Ver minifigura' : 'Nueva minifigura';
+  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minifigura' : mode === 'view' ? 'Ver minifigura' : 'Nueva minifigura';
 
   if (mode !== 'create') {
     formIdInput.value = minifigura.id ?? '';
@@ -1184,8 +1380,22 @@ function openFormDialog(mode, minifigura) {
     formPreviewImage.alt = minifigura.nombre ?? '';
   }
 
+  if (mode === 'ranking-create') {
+    formIdInput.value = String(minifigura.id).trim().toUpperCase();
+    formNombreInput.value = '';
+    formDescripcionInput.value = '';
+    formEstadoInput.value = 'BUSCADA';
+    formPrecioCompraInput.value = '';
+    formFechaCompraInput.value = '';
+    formObservedButton.setAttribute('aria-pressed', 'false');
+    formSynced = hasFormMetadata();
+  }
   updateFormMode();
   formDialog.showModal();
+  if (mode === 'ranking-create') {
+    formNombreInput.focus();
+    if (!formSynced) void loadFormBricksetData();
+  }
 }
 
 async function openMinifiguraView(id) {
@@ -1213,6 +1423,7 @@ async function openMinifiguraView(id) {
 
 function updateFormMode() {
   const isCreate = currentFormMode === 'create';
+  const isRankingCreate = currentFormMode === 'ranking-create';
   const isView = currentFormMode === 'view';
   const hasId = formIdInput.value.trim() !== '';
   const editableFields = [formNombreInput, formDescripcionInput, formEstadoInput];
@@ -1222,13 +1433,13 @@ function updateFormMode() {
   formDialog.classList.toggle('view-mode', isView);
   formIdInput.closest('.modal-row-identity').classList.toggle('view-mode', isView);
   formIdInput.readOnly = !isCreate;
-  formIdInput.disabled = isView;
-  editableFields.forEach((field) => { field.disabled = isView || (isCreate && !formSynced); });
+  formIdInput.disabled = !isCreate;
+  editableFields.forEach((field) => { field.disabled = isView || (isCreate && !formSynced) || (isRankingCreate && field === formEstadoInput); });
   purchaseFields.forEach((field) => {
     if (formEstadoInput.value === 'BUSCADA') field.value = '';
     field.disabled = isView || formEstadoInput.value === 'BUSCADA' || (isCreate && !formSynced);
   });
-  formStateToggleButtons.forEach((button) => { button.disabled = isView || (isCreate && !formSynced); });
+  formStateToggleButtons.forEach((button) => { button.disabled = isView || isRankingCreate || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);
     field.readOnly = true;
@@ -1237,7 +1448,7 @@ function updateFormMode() {
   updateFormToggleStates();
   formDialogTitle.hidden = isView;
   formSubmitButton.hidden = isView;
-  formSubmitButton.disabled = isView || !isFormValid();
+  formSubmitButton.disabled = isView || formSending || (isRankingCreate && !formSynced) || !isFormValid();
   formCancelButton.textContent = isView ? 'Cerrar' : 'Cancelar';
   formPreviewImage.hidden = !formIdInput.value.trim();
 }
@@ -1256,6 +1467,13 @@ function updateFormToggleStates() {
   formObservedButton.classList.toggle('inactive', !isObserved);
   formObservedButton.setAttribute('aria-label', isObserved ? 'Dejar de seguir' : 'Seguir');
   formObservedButton.title = 'Seguimiento';
+}
+
+function hasFormMetadata() {
+  return formCategoriaInput.value.trim() !== ''
+    && officialCategorias.some(({ categoria }) => categoria === formCategoriaInput.value.trim())
+    && Number.isInteger(Number(formAnioInput.value)) && Number(formAnioInput.value) > 0
+    && formPrecioInput.value.trim() !== '' && Number.isFinite(Number(formPrecioInput.value)) && Number(formPrecioInput.value) >= 0;
 }
 
 function isFormValid() {
@@ -1323,14 +1541,14 @@ function buildPayloadFromForm() {
   }
 
   const estadoColeccion = formEstadoInput.value.trim();
-  payload.estadoColeccion = estadoColeccion || 'COLECCIÓN';
+  payload.estadoColeccion = currentFormMode === 'ranking-create' ? 'BUSCADA' : estadoColeccion || 'COLECCIÓN';
 
   const precioCompraRaw = formPrecioCompraInput.value.trim();
-  if (precioCompraRaw !== '') {
+  if (precioCompraRaw !== '' && currentFormMode !== 'ranking-create') {
     payload.precioCompra = Number(precioCompraRaw);
   }
   const fechaCompra = formFechaCompraInput.value.trim();
-  if (fechaCompra !== '') {
+  if (fechaCompra !== '' && currentFormMode !== 'ranking-create') {
     payload.fechaCompra = fechaCompra;
   }
   const precioRaw = formPrecioInput.value.trim();
@@ -1451,17 +1669,48 @@ firstMinifiguraAccept.addEventListener('click', () => {
   openFormDialog('create');
 });
 
-gamificationLevelButton.addEventListener('click', () => {
-  gamificationDialog.showModal();
-});
-
-achievementsOpenButton.addEventListener('click', () => {
+function openOwnAchievements(trigger) {
+  achievementsTrigger = trigger;
+  renderAchievements(ownGamification ?? {});
   gamificationDialog.showModal();
   gamificationCloseButton.focus();
+}
+
+function restoreRankingFocus(trigger) {
+  if (!currentSession || !rankingDialog.open) return;
+  const userId = trigger?.closest('.global-ranking-entry')?.dataset.userId ?? trigger?.dataset.ownerUser;
+  const entry = [...globalRankingList.children].find((item) => item.dataset.userId === userId);
+  const target = trigger?.isConnected ? trigger : entry?.querySelector('.ranking-expand') ?? rankingCloseButton;
+  target.focus();
+}
+
+gamificationLevelButton.addEventListener('click', () => openOwnAchievements(gamificationLevelButton));
+achievementsOpenButton.addEventListener('click', () => openOwnAchievements(achievementsOpenButton));
+
+for (const trigger of dnaOpenButtons) {
+  trigger.addEventListener('click', () => openDnaDialog(trigger));
+}
+
+dnaDialogCloseButton.addEventListener('click', () => dnaDialog.close());
+dnaRetryButton.addEventListener('click', () => { void loadDnaDialog(); });
+dnaDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  dnaDialog.close();
+});
+dnaDialog.addEventListener('close', () => {
+  dnaRequestSequence += 1;
+  if (dnaDialogTrigger?.isConnected) dnaDialogTrigger.focus();
+  dnaDialogTrigger = null;
 });
 
 gamificationCloseButton.addEventListener('click', () => {
   gamificationDialog.close();
+});
+
+gamificationDialog.addEventListener('close', () => {
+  if (rankingDialog.open) restoreRankingFocus(achievementsTrigger);
+  else if (currentSession && achievementsTrigger?.isConnected) achievementsTrigger.focus();
+  achievementsTrigger = null;
 });
 
 let rankingTrigger = rankingOpenButton;
@@ -1471,6 +1720,7 @@ for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
     userProfile.hidden = true;
     userMenuToggle.setAttribute('aria-expanded', 'false');
     rankingDialog.showModal();
+    expandedRankingUserId = null;
     rankingCloseButton.focus();
     void loadGlobalRanking();
   });
@@ -1485,6 +1735,19 @@ rankingDialog.addEventListener('close', () => {
 });
 
 globalRankingList.addEventListener('click', async (event) => {
+  const wanted = event.target.closest('[data-wanted-id]');
+  if (wanted) {
+    if (!hasLoadedFullCatalog || !currentSession || wanted.dataset.ownerUser === currentSession.user.id) return;
+    if (ownsMinifigura(wanted.dataset.wantedId)) {
+      updateRankingWantedActions();
+      showToast(messageForErrorCode('ID_DUPLICADO'), 'error');
+      return;
+    }
+    const entry = rankingEntries.find(({ userId }) => userId === wanted.dataset.ownerUser);
+    const figure = [...(entry?.top5Precio ?? []), ...(entry?.top5Antiguedad ?? [])].find(({ id }) => id === wanted.dataset.wantedId);
+    if (figure) openFormDialog('ranking-create', figure, wanted);
+    return;
+  }
   const expand = event.target.closest('.ranking-expand');
   if (expand) {
     setExpandedRankingUser(expand.closest('.global-ranking-entry').dataset.userId);
@@ -1508,6 +1771,7 @@ globalRankingList.addEventListener('click', async (event) => {
       throw new Error(result.error);
     }
     await Promise.all([loadGlobalRanking(), loadGamification()]);
+    await loadGamificationDna();
     showToast('Regalo de 50 Bricks enviado.', 'success');
   } catch {
     gift.disabled = false;
@@ -1632,8 +1896,22 @@ imageModal.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !imageModal.hidden) {
+  if (event.key !== 'Escape') return;
+  if (!imageModal.hidden) {
+    event.preventDefault();
     closeImageModal();
+  } else if (dnaDialog.open) {
+    event.preventDefault();
+    dnaDialog.close();
+  } else if (gamificationDialog.open) {
+    event.preventDefault();
+    gamificationDialog.close();
+  } else if (formDialog.open) {
+    event.preventDefault();
+    closeFormDialog();
+  } else if (rankingDialog.open) {
+    event.preventDefault();
+    rankingDialog.close();
   }
 });
 
@@ -1643,6 +1921,9 @@ formCancelButton.addEventListener('click', () => {
 
 formDialog.addEventListener('close', () => {
   imageLookupSequence += 1;
+  formSending = false;
+  restoreRankingFocus(formTrigger);
+  formTrigger = null;
   currentEditId = null;
   currentFormMode = null;
   formSynced = false;
@@ -1681,7 +1962,16 @@ formStateToggleButtons.forEach((button) => {
 
 minifiguraForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!currentFormMode || currentFormMode === 'view' || formSending) return;
   formError.textContent = '';
+
+  const isRankingCreate = currentFormMode === 'ranking-create';
+  if (isRankingCreate && (!formSynced || !hasFormMetadata())) return;
+  if (isRankingCreate && ownsMinifigura(formIdInput.value)) {
+    formError.textContent = messageForErrorCode('ID_DUPLICADO');
+    updateRankingWantedActions();
+    return;
+  }
 
   const payload = buildPayloadFromForm();
   const validationError = validatePayload(payload);
@@ -1691,6 +1981,10 @@ minifiguraForm.addEventListener('submit', async (event) => {
   }
 
   const isEdit = currentEditId !== null;
+  const sessionUserId = currentSession?.user?.id;
+  const formSequence = imageLookupSequence;
+  const isCurrent = () => formSequence === imageLookupSequence && sessionUserId === currentSession?.user?.id && formDialog.open;
+  formSending = true;
   formSubmitButton.disabled = true;
 
   try {
@@ -1700,6 +1994,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
       headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
       body: JSON.stringify(payload),
     });
+    if (!isCurrent()) return;
 
     if (!response.ok) {
       let errorCode;
@@ -1708,30 +2003,41 @@ minifiguraForm.addEventListener('submit', async (event) => {
       } catch {
         errorCode = undefined;
       }
+      if (!isCurrent()) return;
+      if (errorCode === 'LIMITE_OBSERVADAS') {
+        formError.textContent = 'Límite alcanzado: Máximo 10 minifiguras en observación';
+        showToast(formError.textContent, 'warning');
+        return;
+      }
       const errorMessage = messageForErrorCode(errorCode);
       formError.textContent = errorMessage;
       showToast(errorMessage, 'error');
+      if (isRankingCreate && errorCode === 'ID_DUPLICADO') void revalidate();
       return;
     }
 
     const result = await response.json();
+    if (!isCurrent()) return;
     showGamificationToasts(result.gamificacion);
-    closeFormDialog();
     upsertCached(result);
     applyFilters({ preservePage: true });
+    closeFormDialog();
     showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
     void revalidate();
   } catch {
+    if (!isCurrent()) return;
     const connError = 'No se pudo conectar con el servidor. Intentalo de nuevo.';
     formError.textContent = connError;
     showToast(connError, 'error');
   } finally {
-    formSubmitButton.disabled = false;
-    updateFormMode();
+    if (formSequence === imageLookupSequence) {
+      formSending = false;
+      updateFormMode();
+    }
   }
 });
 
-formPreviewImage.addEventListener('load', async () => {
+async function loadFormBricksetData() {
   if (!formDialog.open || currentFormMode === 'view') return;
   const id = formIdInput.value.trim();
   if (!id || formPreviewImage.src !== imagenUrlPara(id)) return;
@@ -1749,7 +2055,7 @@ formPreviewImage.addEventListener('load', async () => {
     formSubcategoriaInput.value = result.subcategoria ?? '';
     formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
     formPrecioInput.value = result.precio;
-    formSynced = true;
+    formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
     showToast('Datos de Brickset actualizados.', 'success');
@@ -1758,6 +2064,10 @@ formPreviewImage.addEventListener('load', async () => {
       showToast('No se encontraron datos en Brickset para el ID especificado', 'error');
     }
   }
+}
+
+formPreviewImage.addEventListener('load', () => {
+  if (currentFormMode !== 'ranking-create') void loadFormBricksetData();
 });
 
 deleteCancelButton.addEventListener('click', () => {
@@ -1838,6 +2148,16 @@ async function apiFetch(url, init = {}) {
 
 function clearUserData() {
   requestSequence += 1;
+  dnaRequestSequence += 1;
+  ownDnaState = null;
+  dnaDialogTrigger = null;
+  renderGamificationDna(null);
+  if (dnaDialog.open) dnaDialog.close();
+  achievementsTrigger = null;
+  ownGamification = null;
+  formTrigger = null;
+  imageLookupSequence += 1;
+  formSending = false;
   if (syncPollTimer !== null) {
     clearTimeout(syncPollTimer);
     syncPollTimer = null;
@@ -1868,7 +2188,7 @@ function clearUserData() {
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, rankingDialog]) {
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog]) {
     if (dialog.open) dialog.close();
   }
 }
@@ -1887,6 +2207,10 @@ function showAuthScreen(message = '') {
 }
 
 function handleSession(session, message = '') {
+  if (appStarted && currentSession?.user?.id && session?.user?.id && currentSession.user.id !== session.user.id) {
+    clearUserData();
+    appStarted = false;
+  }
   currentSession = session;
   if (!session) {
     if (appStarted) clearUserData();

@@ -68,7 +68,10 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const script = await fetch(`${baseUrl}/app.js`);
     assert.equal(script.status, 200);
     assert.match(script.headers.get('content-type'), /^text\/javascript/);
-    assert.match(await script.text(), /iconSrc = '\/toast_images\/87X2Rz8y2ZY\.png'/);
+    const scriptText = await script.text();
+    assert.match(scriptText, /iconSrc = '\/toast_images\/87X2Rz8y2ZY\.png'/);
+    const clientAssets = `${html}\n${await styles.text()}\n${scriptText}`;
+    assert.doesNotMatch(clientAssets, /dna_ponderaciones|rarity_hunter|new-mini-person/);
 
     const toastImage = await fetch(`${baseUrl}/toast_images/87X2Rz8y2ZY.png`);
     assert.equal(toastImage.status, 200);
@@ -94,13 +97,13 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
 
-    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Mostrar todo', 'id="catalog-body"']) {
+    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       assert.match(html, /id="filter-coleccion"/);
       assert.match(html, /id="filter-buscada"/);
     }
     assert.ok(html.indexOf('name="nombre"') < html.indexOf('name="id"'));
-    assert.match(html, /id="show-all"[^>]*>Mostrar todo<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
+    assert.match(html, /id="show-all"[^>]*>Reestablecer<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
     assert.match(html, /aria-label="Filtrar observadas"[^>]*title="Filtrar observadas"/);
     assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/caja\.png" title="Colección" alt="">/);
     assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/lupa\.png" title="Búsqueda" alt="">/);
@@ -164,7 +167,9 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(0, 1fr\) auto auto/s);
   assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) Arial, sans-serif/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
-  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 800px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 840px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.gamification-level-stack \{ display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; \}/);
+  assert.match(css, /\.gamification-level-stack \.gamification-level \{ flex: 0 1 auto; width: auto; \}/);
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
@@ -250,21 +255,36 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(headerTop.children[0].className, 'brand-heading');
     assert.equal(headerTop.children[1].className, 'gamification-summary');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-bricks-value', 'gamification-level', 'collection-counts-panel', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
+    assert.deepEqual([...main.querySelector('.gamification-level-stack').children].map((element) => element.className), ['gamification-level', 'gamification-dna-row']);
     assert.equal(main.querySelector('#user-avatar').parentElement.id, 'user-menu-toggle');
+    assert.equal(main.querySelector('#open-dna-inline').className, 'gamification-dna-name');
+    assert.equal(main.querySelector('#open-dna-inline').tagName, 'BUTTON');
+    assert.equal(main.querySelector('#gamification-dna-principal').textContent, 'Newbie');
+    assert.equal(main.querySelector('#open-dna-inline img, #open-dna-inline svg'), null);
+    assert.match(css, /\.gamification-dna-name \{[^}]*color: var\(--ink\)[^}]*font: italic 700 0\.75rem/);
+    assert.match(css, /\.gamification-dna-name:hover \{ color: var\(--accent\); background: transparent; \}/);
+    assert.doesNotMatch(css, /\.modal-dna \{[^}]*border-top:/);
+    assert.match(css, /\.dna-chart \{ width: min\(180px, 30vw\);/);
+    assert.match(css, /\.dna-chart \{ width: min\(150px, 48vw\); \}/);
     assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
     const details = document.querySelector('#gamification-details');
     assert.ok(details.hidden);
     assert.equal(details.querySelector('#gamification-achievements-button'), null);
     assert.equal(details.children[0].className, 'gamification-progress');
     assert.equal(details.children[1].className, 'summary-achievements-row');
-    assert.equal(details.querySelector('#open-global-ranking').parentElement, details.querySelector('#open-achievements').parentElement);
-    assert.equal(details.children[2].className, 'summary-sync-row');
-    assert.equal(details.children[2].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
-    assert.equal(details.children[2].querySelector('.collection-value img').title, 'Valor total de tu colección');
-    assert.equal(details.children[2].querySelector('#collection-total').textContent, '€0,00');
-    assert.equal(details.children[2].children[0].id, 'sync-prices');
-    assert.equal(details.children[2].children[1].className, 'collection-value');
+    assert.equal(details.querySelector('#open-dna').parentElement, details.querySelector('#open-achievements').parentElement);
+    assert.equal(details.querySelector('#open-dna').getAttribute('aria-label'), null);
+    assert.equal(details.querySelector('#open-dna').textContent.trim(), '🧬 DNA');
+    assert.equal(details.querySelector('#open-dna').parentElement, details.querySelector('#open-achievements').parentElement);
+    assert.notEqual(details.querySelector('#open-global-ranking').parentElement, details.querySelector('#open-achievements').parentElement);
+    assert.equal(details.children[2].className, 'summary-ranking-row');
+    assert.equal(details.children[3].className, 'summary-sync-row');
+    assert.equal(details.children[3].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
+    assert.equal(details.children[3].querySelector('.collection-value img').title, 'Valor total de tu colección');
+    assert.equal(details.children[3].querySelector('#collection-total').textContent, '€0,00');
+    assert.equal(details.children[3].children[0].id, 'sync-prices');
+    assert.equal(details.children[3].children[1].className, 'collection-value');
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     const countsPanel = main.querySelector('.collection-counts-panel');
@@ -272,7 +292,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
-    assert.match(css, /\.summary-sync-row, \.summary-achievements-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
+    assert.match(css, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading img').alt, 'MiniPeopleDB');
     assert.equal(document.querySelector('.brand-heading').textContent.trim(), '');
@@ -449,6 +469,30 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const editButton = rows().find((row) => row.children[2].textContent === 'c').querySelector('[data-action="edit"]');
   editButton.click();
   assert.equal(window.document.querySelector('#form-estadoColeccion').value, '');
+  assert.equal(window.document.querySelector('#form-id').disabled, true);
+  assert.equal(window.document.querySelector('#form-nombre').disabled, false);
+  assert.equal(window.document.querySelector('#form-descripcion').disabled, false);
+  assert.equal(window.document.querySelector('#form-observada').disabled, false);
+  assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
+  assert.equal(window.eval('buildPayloadFromForm().id'), 'c');
+  assert.equal(catalog[2].FechaRegistro, '2026-01-02T00:00:00.000Z');
+  window.document.querySelector('#form-cancel').click();
+  window.document.querySelector('#new-minifigura').click();
+  assert.equal(window.document.querySelector('#form-id').disabled, false);
+  dom.window.close();
+});
+
+test('los indicadores requeridos son rojos sin colorear etiquetas ni campos opcionales', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(html);
+  assert.match(css, /\.required-label > span::after, span\.required-label::after \{ content: ' \*'; color: var\(--accent\); \}/);
+  assert.match(css, /#form-dialog\.view-mode .*required-label.*content: ''/);
+  for (const input of dom.window.document.querySelectorAll('input[required]')) {
+    assert.ok(input.closest('.required-label') || input.closest('label').querySelector('.required-label'));
+  }
+  assert.equal(dom.window.document.querySelector('#form-descripcion').closest('.required-label'), null);
+  assert.equal(dom.window.document.querySelector('#form-subcategoria').closest('label').querySelector('.required-label'), null);
   dom.window.close();
 });
 

@@ -1,5 +1,19 @@
 const PROFILE_TABLE = 'perfiles_publicos';
 
+export class LogrosNoDisponiblesError extends Error {
+  constructor() {
+    super('Los logros no estan disponibles');
+    this.code = 'LOGROS_NO_DISPONIBLES';
+  }
+}
+
+export class UsuarioNoEncontradoError extends Error {
+  constructor() {
+    super('El usuario no esta en el ranking');
+    this.code = 'USUARIO_NO_ENCONTRADO';
+  }
+}
+
 export class RankingNoDisponibleError extends Error {
   constructor() {
     super('El ranking global no esta disponible');
@@ -87,7 +101,20 @@ export class RankingRepository {
       top5Precio: row.top5_precio ?? [],
       top5Antiguedad: row.top5_antiguedad ?? [],
       regaloEnviado: row.regalo_enviado === true,
+      dnaPrincipal: row.dna_principal,
     }));
+  }
+
+  async achievements(targetId) {
+    const data = await this.run(this.client.rpc('ranking_logros', { p_usuario_id: targetId }), () => new LogrosNoDisponiblesError());
+    if (data === null) throw new UsuarioNoEncontradoError();
+    if (!data || !Array.isArray(data.logros) || !data.nivel) throw new LogrosNoDisponiblesError();
+    const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+    return {
+      userId: data.userId, displayName: data.displayName, bricks: data.bricks,
+      nivel: { id: data.nivel.id, nombre: data.nivel.nombre },
+      logros: data.logros.map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
+    };
   }
 
   async gift(receiverId) {
