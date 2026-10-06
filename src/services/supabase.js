@@ -40,3 +40,14 @@ export function getSupabaseConfig({ env = process.env, envPath = defaultEnvPath 
 	}
 	return url && anonKey ? { url, anonKey } : null;
 }
+
+export function getSupabaseAdminConfig({ env = process.env, envPath = defaultEnvPath } = {}) {
+	let url = env.SUPABASE_URL;
+	let serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	if (!url || !serviceRoleKey) {
+		const fileValues = readEnvFile(envPath);
+		url ||= fileValues.SUPABASE_URL;
+		serviceRoleKey ||= fileValues.SUPABASE_SERVICE_ROLE_KEY;
+	}
+	return url && serviceRoleKey ? { url, serviceRoleKey } : null;
+}

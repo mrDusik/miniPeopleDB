@@ -54,6 +54,21 @@ create table if not exists public.gamificacion (
   constraint gamificacion_logros_array_check check (jsonb_typeof(logros) = 'array')
 );
 
+create table if not exists public.gamificacion_categoria_version (
+  singleton boolean primary key default true check (singleton),
+  fingerprint text not null default '',
+  updated_at timestamptz not null default now(),
+  constraint gamificacion_categoria_fingerprint_check check (fingerprint = '' or fingerprint ~ '^[0-9a-f]{64}$')
+);
+
+insert into public.gamificacion_categoria_version (singleton, fingerprint)
+values (true, '')
+on conflict (singleton) do nothing;
+
+alter table public.gamificacion_categoria_version enable row level security;
+revoke all on table public.gamificacion_categoria_version from public, anon, authenticated;
+grant select on table public.gamificacion_categoria_version to service_role;
+
 create table if not exists public.dna_ponderaciones (
   logro_id text primary key,
   rarity_hunter smallint not null,
@@ -288,6 +303,66 @@ create policy "Users can update their public profile"
 
 begin;
 drop function if exists public.ranking_global();
+
+create or replace function public.aplicar_recalculo_gamificacion_categorias(
+  p_fingerprint text,
+  p_estados jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_fingerprint text;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'RECALCULO_CATEGORIAS_NO_AUTORIZADO';
+  end if;
+  if p_fingerprint is null or p_fingerprint !~ '^[0-9a-f]{64}$'
+    or p_estados is null or jsonb_typeof(p_estados) is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'RECALCULO_CATEGORIAS_INVALIDO';
+  end if;
+
+  select fingerprint into v_fingerprint
+  from public.gamificacion_categoria_version
+  where singleton = true
+  for update;
+
+  if v_fingerprint = p_fingerprint then
+    return false;
+  end if;
+
+  insert into public.gamificacion (
+    user_id, bricks, nivel, siguiente_nivel, progreso, logros, updated_at
+  )
+  select
+    (estado->>'user_id')::uuid,
+    (estado->>'bricks')::integer,
+    estado->'nivel',
+    case when estado->'siguiente_nivel' = 'null'::jsonb then null else estado->'siguiente_nivel' end,
+    estado->'progreso',
+    estado->'logros',
+    now()
+  from jsonb_array_elements(p_estados) as estados(estado)
+  on conflict (user_id) do update set
+    bricks = excluded.bricks,
+    nivel = excluded.nivel,
+    siguiente_nivel = excluded.siguiente_nivel,
+    progreso = excluded.progreso,
+    logros = excluded.logros,
+    updated_at = excluded.updated_at;
+
+  update public.gamificacion_categoria_version
+  set fingerprint = p_fingerprint, updated_at = now()
+  where singleton = true;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) from public, anon, authenticated;
+grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) to service_role;
 
 create function public.ranking_global()
 returns table (

@@ -38,6 +38,19 @@ El sistema SHALL mantener el formato JSON de las respuestas existentes (`id`, `n
 - **WHEN** se realizan dos `GET /minifiguras` consecutivos sin cambios
 - **THEN** ambas respuestas contienen la misma colección en el mismo orden por `FechaRegistro`
 
+### Requirement: Limitar el acceso privilegiado al recálculo automático de categorías
+
+Las operaciones ordinarias de usuario SHALL seguir usando el JWT autenticado y RLS, y las consultas de ranking y mutaciones de regalos SHALL NOT usar `service_role`. Se permite una excepción exclusiva para el proceso backend que recalcula gamificación después de un cambio válido en `data/categorias-brickset.json`: SHALL llamar únicamente a la RPC administrativa definida para aplicar el lote de estados y su fingerprint, SHALL requerir `service_role`, y SHALL mantener la clave fuera de respuestas HTTP y código de navegador. La RPC SHALL rechazar roles distintos de `service_role` y SHALL persistir lote y fingerprint en una sola transacción.
+
+#### Scenario: Intento de llamar al recálculo administrativo con sesión de usuario
+- **WHEN** un rol `anon` o `authenticated` invoca la RPC de recálculo global
+- **THEN** la base de datos rechaza la operación sin modificar filas
+
+#### Scenario: Recalcular después de cambiar categorías
+- **WHEN** el proceso backend aplica la huella nueva del catálogo
+- **THEN** cada fila de gamificación se calcula desde las minifiguras actuales y los regalos recibidos
+- **AND** la siguiente lectura de DNA y Ranking Global refleja los valores persistidos
+
 ### Requirement: Reportar errores de persistencia de forma controlada
 
 Los fallos de comunicación o de consulta con Supabase SHALL traducirse a respuestas HTTP consistentes sin exponer mensajes, códigos internos, URLs ni claves de Supabase. Una violación de clave primaria en el alta SHALL traducirse en `409 ID_DUPLICADO`.

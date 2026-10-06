@@ -26,7 +26,7 @@ Desarrollado siguiendo la metodología **Spec-Driven Development (SDD)** asistid
   * Manejo estandarizado de errores HTTP y códigos de negocio (`ID_DUPLICADO`, `ID_INVALIDO`, `MINIFIGURA_NO_ENCONTRADA`, `MINIFIGURA_INVALIDA`).
 * **Autenticación y persistencia multiusuario (Supabase):**
   * Inicio de sesión con Google (Supabase Auth, flujo PKCE). La interfaz envía el token en `Authorization: Bearer` y la API responde `401 NO_AUTENTICADO` sin sesión válida.
-  * Minifiguras y gamificación se guardan por usuario en las tablas `minifiguras` y `gamificacion` (`supabase/schema.sql`), protegidas por RLS. El servidor usa la clave `anon` con el JWT del usuario; nunca una clave de servicio.
+  * Minifiguras y gamificación se guardan por usuario en las tablas `minifiguras` y `gamificacion` (`supabase/schema.sql`), protegidas por RLS. Las operaciones ordinarias usan la clave `anon` con el JWT del usuario. Un reconciliador backend aislado usa `service_role` únicamente para la RPC transaccional de recálculo global tras cambios del JSON de categorías; nunca expone esa clave al navegador ni a rutas de usuario.
   * Las categorías oficiales de Brickset siguen en `data/categorias-brickset.json`.
 
 ### Valoración y moneda
@@ -91,7 +91,7 @@ mi-proyecto/
 1. Aplica `supabase/schema.sql` en el SQL Editor de Supabase.
 2. En Supabase › Authentication › Providers habilita **Google** (Client ID y Secret de Google Cloud).
 3. En Supabase › Authentication › URL Configuration configura las URLs de retorno como se explica abajo.
-4. Define `SUPABASE_URL` y `SUPABASE_ANON_KEY` como variables de entorno o en un fichero `sup.env` en la raíz (excluido de Git). `sup.env.example` muestra el formato; usa la clave pública `anon`, nunca `service_role`. `SUPABASE_URL` es la URL del proyecto Supabase, no la de Render.
+4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). La clave de servicio es obligatoria para el reconciliador, solo se lee en backend y nunca debe copiarse al navegador, logs o repositorio. El resto de las rutas sigue usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la de Render.
 
 ```bash
 npm install
@@ -99,7 +99,7 @@ npm test
 npm start
 ```
 
-La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales: usan un cliente Supabase simulado (`test-support/supabase-mock.js`).
+Aplica `supabase/schema.sql` para instalar la RPC de recálculo y sus permisos antes de arrancar. La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales reales: las rutas de usuario usan `test-support/supabase-mock.js` y la RPC administrativa se valida con PGlite.
 
 ### Desarrollo local en cualquier rama
 
@@ -157,7 +157,7 @@ Cada logro puede exponer `id`, `type`, `nombre`, `descripcion`, `bricks`, `repet
 
 Las tarjetas Top 3 por precio y antigüedad de otros usuarios muestran una lupa con más solo si el ID no existe en el catálogo completo propio, ni en `COLECCIÓN` ni en `BUSCADA`, independientemente de filtros o página. El alta rápida abre el modal con ID deshabilitado y sombreado, metadatos e imagen precargados, Nombre y Descripción vacíos, BUSCADA fijo y seguimiento editable. Nombre es obligatorio; Descripción es opcional. No copia datos personales ni compras del propietario. Guardar usa el `POST /minifiguras` existente y crea un registro del usuario autenticado; `409 ID_DUPLICADO` no sobrescribe datos. El límite de seguimiento sigue siendo diez figuras. Los campos obligatorios muestran sus asteriscos en rojo; la edición propia mantiene estado, seguimiento y compra editables según las reglas vigentes.
 
-**Despliegue:** aplicar primero `supabase/schema.sql` en un Supabase de pruebas autorizado y después en el destino. Añade `ranking_logros(uuid)` y amplía los metadatos públicos de ambos Top 5, sin cambiar tablas, ordenaciones ni políticas RLS privadas. Después desplegar backend y frontend, en ese orden. Usar clave `anon` y JWT, nunca `service_role`; no abrir políticas de lectura general para gamificación ni minifiguras.
+**Despliegue:** aplicar primero `supabase/schema.sql` en un Supabase de pruebas autorizado y después en el destino. Después configurar `SUPABASE_SERVICE_ROLE_KEY` solo como secreto backend y desplegar el servidor. El proceso compara la huella del JSON al arrancar y vigila cambios mientras corre; un cambio válido recalcula en una transacción la gamificación existente de todos los usuarios. La RPC está restringida a `service_role`; no abre políticas generales ni habilita consultas privilegiadas en rutas de usuario. Mantener `anon` + JWT para toda operación ordinaria y nunca enviar la clave de servicio al frontend.
 
 Antes de desplegar, verificar en el entorno SQL real que public/anon no pueden ejecutar `ranking_logros`, authenticated solo recibe la proyección del Top 10, las lecturas directas de tablas siguen aisladas por usuario y consultar logros no modifica registros. Registrar los resultados; sin entorno autorizado esta comprobación queda pendiente y bloquea el despliegue, aunque los tests con mock pasen.
 

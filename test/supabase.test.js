@@ -7,22 +7,30 @@ import { PGlite } from '@electric-sql/pglite';
 import { calcularGamificacion, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
-import { getSupabaseConfig } from '../src/services/supabase.js';
+import { getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
 test('getSupabaseConfig devuelve null sin variables ni sup.env', () => {
   assert.equal(getSupabaseConfig({ env: {}, envPath: join(tmpdir(), 'no-existe-sup.env') }), null);
+  assert.equal(getSupabaseAdminConfig({ env: {}, envPath: join(tmpdir(), 'no-existe-sup.env') }), null);
 });
 
 test('getSupabaseConfig prioriza variables de entorno y usa sup.env como alternativa', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'supabase-config-'));
   const envPath = join(directory, 'sup.env');
   await writeFile(envPath, '# comentario\nSUPABASE_URL=https://file.supabase.co\nSUPABASE_ANON_KEY=file-key\n');
+    await writeFile(envPath, '# comentario\nSUPABASE_URL=https://file.supabase.co\nSUPABASE_ANON_KEY=file-key\nSUPABASE_SERVICE_ROLE_KEY=server-key\n');
+  await writeFile(envPath, '# comentario\nSUPABASE_URL=https://file.supabase.co\nSUPABASE_ANON_KEY=file-key\nSUPABASE_SERVICE_ROLE_KEY=server-key\n');
   try {
     assert.deepEqual(getSupabaseConfig({ env: {}, envPath }), { url: 'https://file.supabase.co', anonKey: 'file-key' });
     assert.deepEqual(
       getSupabaseConfig({ env: { SUPABASE_URL: 'https://env.supabase.co', SUPABASE_ANON_KEY: 'env-key' }, envPath }),
       { url: 'https://env.supabase.co', anonKey: 'env-key' },
+    );
+    assert.deepEqual(getSupabaseAdminConfig({ env: {}, envPath }), { url: 'https://file.supabase.co', serviceRoleKey: 'server-key' });
+    assert.deepEqual(
+      getSupabaseAdminConfig({ env: { SUPABASE_URL: 'https://env.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'env-server-key' }, envPath }),
+      { url: 'https://env.supabase.co', serviceRoleKey: 'env-server-key' },
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -179,8 +187,12 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       create schema auth;
       create role anon;
       create role authenticated;
+      create role service_role;
       create function auth.uid() returns uuid language sql as $$
         select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
       $$;
       create table auth.users (
         instance_id uuid, id uuid primary key, aud text, role text, email text unique,
