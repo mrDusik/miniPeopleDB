@@ -22,7 +22,7 @@ El sistema SHALL servir una interfaz web estática desde la ruta raíz del servi
 
 ### Requirement: Filtrar el catálogo desde el panel de búsqueda
 
-La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y observación, y SHALL ofrecer `Buscar` y `Mostrar todo`. El filtrado SHALL resolverse en el navegador sobre la caché local del catálogo, sin realizar peticiones al servidor, y SHALL producir los mismos resultados que `GET /minifiguras` con los mismos filtros: coincidencia parcial sin distinguir mayúsculas ni acentos para `id` y `nombre`, y coincidencia exacta sin distinguir mayúsculas ni acentos para `categoria`, `subcategoria` y `estadoColeccion`, y exacta para `anio` y observación. El estado SHALL filtrarse con dos toggles de icono `📦` y `🔍`: activar solo uno filtra por ese estado; activar ambos o ninguno no restringe por estado. En escritorio los controles SHALL conservar la disposición en una sola fila cuando el ancho lo permita. Las opciones de categoría y subcategoría SHALL derivarse de las figuras presentes en el catálogo, incluir el contador actual con formato `Nombre (X)`, y subcategoría SHALL depender de la categoría seleccionada. `Mostrar todo` SHALL restaurar `Todas (Total)`, limpiar nombre y desactivar los toggles.
+La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y observación, y SHALL ofrecer `Buscar` y `Mostrar todo`. El filtrado SHALL resolverse en el navegador sobre la caché local del catálogo, sin realizar peticiones al servidor, y SHALL producir los mismos resultados que `GET /minifiguras` con los mismos filtros: coincidencia parcial sin distinguir mayúsculas ni acentos para `id` y `nombre`, y coincidencia exacta sin distinguir mayúsculas ni acentos para `categoria`, `subcategoria` y `estadoColeccion`, y exacta para `anio` y observación. El estado SHALL filtrarse con dos toggles de icono `📦` y `🔍`: activar solo uno filtra por ese estado; activar ambos o ninguno no restringe por estado. En escritorio los controles SHALL conservar la disposición en una sola fila cuando el ancho lo permita. Las opciones de categoría y subcategoría SHALL derivarse de las figuras presentes en el catálogo y subcategoría SHALL depender de la categoría seleccionada. Cuando exista un total conocido positivo de Brickset, la etiqueta SHALL mostrar `Nombre: X de Total (P%)`, con P igual a X por 100 dividido por Total, formato español y como máximo un decimal. El denominador SHALL ser el total conocido, no el inventario del usuario ni la suma visible del desplegable. Para totales cero o desconocidos SHALL conservar `Nombre (X)` sin inventar porcentajes. `Mostrar todo` SHALL restaurar `Todas (Total)`, limpiar nombre y desactivar los toggles.
 
 #### Scenario: Buscar con filtros
 - **WHEN** el usuario completa filtros y activa `Buscar`
@@ -66,6 +66,13 @@ La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcatego
 - **AND** los años y sus totales reflejan los iconos y la categoría y subcategoría seleccionadas
 - **AND** la opción `Todos (Total)` elimina la restricción de año
 - **AND** restablecer los filtros restaura los años y totales del catálogo completo
+
+#### Scenario: Mostrar progreso sobre el total conocido de Brickset
+- **WHEN** el filtro muestra 53 figuras de una categoría cuyo total conocido es 500
+- **THEN** su etiqueta incluye `53 de 500 (10,6%)`
+- **AND** una subcategoría con 53 figuras y total conocido 100 incluye `53 de 100 (53%)`
+- **AND** cambiar los iconos recalcula el parcial y porcentaje sin modificar el total conocido ni solicitar datos adicionales
+- **AND** años y otras opciones sin total conocido conservan el recuento simple, nunca un porcentaje sobre el inventario como sustituto
 
 ### Requirement: Mostrar resultados en una tabla dinámica
 

@@ -198,6 +198,12 @@ function catalogMatchingStateFilters() {
   return catalogForOptions.filter((minifigura) => matchesClientFilters(minifigura, selectedStateFilters()));
 }
 
+function formatFilterOption(nombre, count, total) {
+  if (!Number.isInteger(total) || total <= 0) return `${nombre} (${count})`;
+  const percentage = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(count * 100 / total);
+  return `${nombre}: ${count} de ${total} (${percentage}%)`;
+}
+
 function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   const previousValue = selectElement.value;
   const matchingCatalog = catalogMatchingStateFilters().filter((minifigura) => !categoria || minifigura.categoria === categoria);
@@ -207,9 +213,11 @@ function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
       .map((minifigura) => [minifigura.subcategoria, 0]),
   ).keys()];
   const counts = new Map(subcategorias.map((subcategoria) => [subcategoria, matchingCatalog.filter((minifigura) => minifigura.subcategoria === subcategoria).length]));
+  const officialSubcategories = officialCategorias.find((item) => item.categoria === categoria)?.subcategorias ?? [];
   selectElement.replaceChildren(new Option(`${placeholderText} (${matchingCatalog.length})`, ''));
   for (const subcategoria of subcategorias.sort()) {
-    selectElement.append(new Option(`${subcategoria} (${counts.get(subcategoria)})`, subcategoria));
+    const total = officialSubcategories.find((item) => item.subcategoria === subcategoria)?.total;
+    selectElement.append(new Option(formatFilterOption(subcategoria, counts.get(subcategoria), total), subcategoria));
   }
   selectElement.value = subcategorias.includes(previousValue) ? previousValue : '';
   selectElement.disabled = !categoriasReady || subcategorias.length === 0;
@@ -226,7 +234,8 @@ function renderCategoryOptions(categorias) {
   const selectedCategoria = categoriaInput.value;
   categoriaInput.replaceChildren(new Option(`Todas (${matchingCatalog.length})`, ''));
   for (const categoria of categoryNames) {
-    categoriaInput.append(new Option(`${categoria} (${categoryCounts.get(categoria)})`, categoria));
+    const total = categorias.find((item) => item.categoria === categoria)?.total;
+    categoriaInput.append(new Option(formatFilterOption(categoria, categoryCounts.get(categoria), total), categoria));
   }
   categoriaInput.value = categoryNames.includes(selectedCategoria) ? selectedCategoria : '';
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
