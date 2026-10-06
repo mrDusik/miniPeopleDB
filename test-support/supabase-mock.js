@@ -184,6 +184,7 @@ export function createSupabaseMock({ users = {} } = {}) {
 
     if (name === 'ranking_global') {
       const criterio = parameters?.p_criterio ?? 'nivel';
+      const selectedTraitName = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
       const value = (row) => criterio === 'nivel' ? row.nivel?.id ?? 0
         : criterio === 'coleccion'
           ? tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === row.user_id && estado_coleccion === 'COLECCIÓN').length
@@ -240,7 +241,8 @@ export function createSupabaseMock({ users = {} } = {}) {
             top5_antiguedad: withMetadata(highlights.top5Antiguedad),
             regalo_enviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
             dna_principal: dna.principal,
-            dna_rasgos: dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
+            dna_rasgos: selectedTraitName ? [{ nombre: selectedTraitName, porcentaje: dna.porcentajes[criterio] }]
+              : dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
           };
         });
       return { data: clone(data), error: null };

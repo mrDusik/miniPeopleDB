@@ -54,7 +54,13 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   const normal = [entry({ userId: 'user-a' }), entry()];
   const alternative = [entry(), entry({ userId: 'user-a' })];
   const criteria = ['coleccion', 'rarityHunter', 'collector', 'explorer', 'fan'];
-  const calls = installFetch(dom.window, normal, Object.fromEntries(criteria.map((criterio) => [criterio, alternative])));
+  const traitNames = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' };
+  const calls = installFetch(dom.window, normal, Object.fromEntries(criteria.map((criterio) => [criterio,
+    criterio === 'coleccion' ? alternative : alternative.map((row, index) => ({ ...row,
+      dnaPrincipal: index === 1 ? 'Newbie' : row.dnaPrincipal,
+      dnaRasgos: [{ nombre: traitNames[criterio], porcentaje: index === 1 ? 0 : 12.5 }],
+    })),
+  ])));
   dom.window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 10));
   dom.window.document.querySelector('#open-global-ranking').click();
@@ -63,7 +69,7 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   assert.equal(select.value, 'nivel');
   assert.deepEqual([...select.options].map(({ textContent }) => textContent), ['Nivel', 'Colección', 'Rarity Hunter', 'Collector', 'Explorer', 'Fan']);
   assert.equal(select.parentElement.nextElementSibling.id, 'global-ranking-list');
-  assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-end;/);
+  assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-start;/);
   for (const criterio of [...criteria, 'nivel']) {
     select.value = criterio;
     select.dispatchEvent(new dom.window.Event('change'));
@@ -71,6 +77,9 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
     assert.ok(calls.some(({ url }) => url === (criterio === 'nivel' ? '/api/ranking' : `/api/ranking?criterio=${criterio}`)));
     assert.equal(dom.window.document.querySelector('.global-ranking-entry').dataset.userId, criterio === 'nivel' ? 'user-a' : 'user-b');
     assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
+    assert.deepEqual([...dom.window.document.querySelectorAll('.ranking-dna-principal')].map(({ textContent }) => textContent),
+      traitNames[criterio] ? [`12,5% ${traitNames[criterio]}`, `0% ${traitNames[criterio]}`]
+        : ['60,5% Explorer / 30% Collector', '60,5% Explorer / 30% Collector']);
   }
   dom.window.close();
 });

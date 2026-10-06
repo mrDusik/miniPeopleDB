@@ -10,7 +10,7 @@ Permite comparar de forma segura el progreso público de los coleccionistas y re
 
 El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios mejor clasificados por el criterio elegido, aplicado en Supabase antes del límite. El parámetro opcional `criterio` SHALL aceptar exclusivamente `nivel` (por defecto), `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; los valores inválidos, vacíos o repetidos SHALL devolver `400` con `{ "error": "PARAMETRO_INVALIDO", "parametro": "criterio" }`. Nivel SHALL ordenar por nivel descendente y Bricks descendente, Colección por número de figuras en estado `COLECCIÓN` descendente, y cada rasgo por su porcentaje DNA completo descendente, usando cero para Newbie. Todos los criterios SHALL desempatar por nivel descendente, Bricks descendente y finalmente `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
 
-El modal SHALL incluir un selector alineado a la derecha encima de los botones de regalar Bricks, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
+El modal SHALL incluir un selector alineado a la izquierda encima de las filas del ranking, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
 
 #### Scenario: Elegir un criterio alternativo
 - **WHEN** el usuario selecciona Colección o un rasgo DNA
@@ -23,10 +23,16 @@ El modal SHALL incluir un selector alineado a la derecha encima de los botones d
 
 `imagenNivel` SHALL apuntar a la imagen disponible del nivel en `public/level_images/`; cuando no exista un activo para ese nivel, SHALL usar `/level_images/9_forestman.png`.
 
-Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, con un maximo de dos objetos que contienen exclusivamente `nombre` y `porcentaje`: primero el principal calculado por Supabase y despues el rasgo restante de mayor proporcion, usando el orden estable Rarity Hunter, Explorer, Collector, Fan en caso de empate del segundo rasgo. Newbie SHALL devolver `dnaRasgos: []`. Las ponderaciones y la distribucion completa de cuatro rasgos SHALL permanecer privadas.
+Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, cuyos objetos contienen exclusivamente `nombre` y `porcentaje`. Para Nivel y Colección, `dnaRasgos` SHALL incluir como máximo dos objetos: primero el principal calculado por Supabase y después el rasgo restante de mayor proporción, usando el orden estable Rarity Hunter, Explorer, Collector, Fan en caso de empate del segundo rasgo; Newbie SHALL devolver `dnaRasgos: []`. Para un criterio DNA, `dnaRasgos` SHALL incluir exclusivamente el nombre y porcentaje del rasgo seleccionado, aunque no sea uno de los dos principales; Newbie SHALL devolver ese rasgo con porcentaje cero. Las ponderaciones y la distribución completa de cuatro rasgos SHALL permanecer privadas.
+
+#### Scenario: Mostrar el rasgo DNA seleccionado
+- **WHEN** el usuario selecciona Rarity Hunter, Collector, Explorer o Fan
+- **THEN** cada fila muestra exclusivamente el porcentaje del rasgo seleccionado seguido de su nombre, conservando el estilo habitual
+- **AND** Newbie muestra cero por ciento y el nombre del rasgo seleccionado
+- **AND** al volver a Nivel o Colección se restauran los dos rasgos principales o el texto Newbie
 
 #### Scenario: Mostrar los dos rasgos publicos
-- **WHEN** se abre el ranking global de un usuario con DNA calculado
+- **WHEN** se abre el ranking global de un usuario con DNA calculado usando Nivel o Colección
 - **THEN** su fila muestra los dos rasgos con el porcentaje antes del nombre, igual que el panel propio y conservando el tamaño actual de 0.68rem
 - **AND** el numero y nombre de nivel aparecen en negro
 - **AND** los usuarios Newbie muestran solo ese texto, sin porcentajes inventados
