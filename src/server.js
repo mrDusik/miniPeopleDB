@@ -16,7 +16,8 @@ import { GamificacionDnaNoDisponibleError, GamificacionInvalidaError, Gamificaci
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
-import { getSupabaseConfig } from './services/supabase.js';
+import { CategoryGamificationRecalculator } from './category-gamification-recalculator.js';
+import { getSupabaseAdminConfig, getSupabaseConfig } from './services/supabase.js';
 import {
   AutorregaloNoPermitidoError,
   LogrosNoDisponiblesError,
@@ -689,9 +690,38 @@ export function createServer({
   return createHttpServer(app);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+async function startApplication() {
+  const adminConfig = getSupabaseAdminConfig();
+  if (!adminConfig) {
+    throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY para recalcular gamificación tras cambios de categorías');
+  }
+
+  const categoriasRepository = new CategoriasRepository(defaultCategoriasPath);
+  const adminClient = createClient(adminConfig.url, adminConfig.serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const recalculator = new CategoryGamificationRecalculator({
+    client: adminClient,
+    categoriasRepository,
+  });
+  try {
+    await recalculator.start();
+  } catch (error) {
+    recalculator.close();
+    throw error;
+  }
+
   const port = Number(process.env.PORT || 3000);
-  createServer().listen(port, () => {
+  const server = createServer().listen(port, () => {
     console.log(`Servidor escuchando en http://localhost:${port}`);
+  });
+  server.once('close', () => recalculator.close());
+  return server;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  startApplication().catch((error) => {
+    console.error(`[startup] ${error.message}`);
+    process.exitCode = 1;
   });
 }

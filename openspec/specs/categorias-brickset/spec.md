@@ -68,3 +68,31 @@ La actualización del catálogo de categorías SHALL ser atómica y SHALL permit
 - **WHEN** la escritura o sustitución del nuevo archivo falla durante una sincronización
 - **THEN** la ejecución informa un fallo controlado
 - **AND** el archivo anterior permanece legible y completo
+
+### Requirement: Recalcular la gamificación al cambiar el catálogo de categorías
+
+El servidor SHALL calcular una huella SHA-256 del catálogo de categorías validado y SHALL detectar cambios tanto al arrancar como mientras el proceso esté activo. Cuando la huella difiera de la última aplicada, SHALL recalcular la gamificación de todos los usuarios que tengan una fila en `gamificacion`, minifiguras o regalos recibidos, usando sus minifiguras y regalos persistidos junto con el catálogo actual. SHALL guardar el lote de estados y la nueva huella en una única transacción idempotente. Un JSON inválido o un fallo de lectura, cálculo o persistencia SHALL NOT cambiar la huella aplicada; un cambio válido SHALL reintentarse automáticamente ante fallo transitorio.
+
+El recálculo global SHALL ejecutarse únicamente en backend mediante una RPC administrativa específica, accesible solo al rol `service_role`. La clave SHALL mantenerse en configuración de servidor y SHALL NOT exponerse por `/config/supabase`, al navegador ni a operaciones ordinarias de usuario, que SHALL seguir usando JWT y RLS. El recálculo SHALL conservar la contribución de regalos recibidos.
+
+#### Scenario: Cambio de categorías con gamificación existente
+- **WHEN** el archivo de categorías válido cambia y el servidor detecta una huella distinta
+- **THEN** recalcula y persiste `logros`, `bricks`, `nivel` y `progreso` para todos los usuarios existentes en el estado de gamificación
+- **AND** no modifica filas de minifiguras, perfiles ni regalos
+- **AND** guarda la huella solo junto con el lote aplicado correctamente
+
+#### Scenario: Cambio de categorías con el servidor detenido
+- **WHEN** el archivo cambia mientras el servidor está detenido
+- **THEN** el servidor compara la huella persistida durante el siguiente arranque
+- **AND** aplica el recálculo antes de empezar a atender peticiones
+
+#### Scenario: DNA y Ranking Global tras el recálculo
+- **WHEN** el recálculo cambia los logros, Bricks o nivel de un usuario
+- **THEN** la siguiente lectura calcula su DNA desde los logros vigentes
+- **AND** la siguiente consulta del Ranking Global usa los Bricks y nivel persistidos vigentes
+- **AND** no se ejecuta un recálculo separado de DNA o Ranking Global
+
+#### Scenario: Catálogo inválido o fallo del recálculo global
+- **WHEN** el JSON es inválido o la lectura/persistencia global falla
+- **THEN** el servidor no marca esa huella como aplicada
+- **AND** conserva el último fingerprint válido y reintenta cuando el catálogo vuelva a ser legible o ante un nuevo intento
