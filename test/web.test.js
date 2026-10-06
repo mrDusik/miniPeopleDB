@@ -444,7 +444,7 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
   assert.deepEqual(
     [...window.document.querySelectorAll('#categoria option')].slice(1).map((option) => option.textContent),
-    ['Collectible Minifigures (1)', 'Space (3)'],
+    ['Collectible Minifigures: 1 de 845 (0,1%)', 'Space: 3 de 230 (1,3%)'],
   );
   assert.equal(rows()[0].children[9].textContent, '5,00 €');
   assert.equal(rows()[1].children[9].textContent, 'N/A');
@@ -607,6 +607,45 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   dom.window.close();
 });
 
+test('los filtros muestran parcial, total conocido de Brickset y porcentaje sin inventar totales', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const categories = [{ categoria: 'Space', total: 500, subcategorias: [{ subcategoria: 'Classic', total: 100 }, { subcategoria: 'Unknown' }] }, { categoria: 'Zero', total: 0, subcategorias: [] }];
+  const catalog = [
+    ...Array.from({ length: 53 }, (_, index) => ({ id: `OWNED-${index}`, categoria: 'Space', subcategoria: 'Classic', anio: 2024, estadoColeccion: 'COLECCIÓN' })),
+    { id: 'WANTED', categoria: 'Space', subcategoria: 'Unknown', anio: 2020, estadoColeccion: 'BUSCADA' },
+    { id: 'ZERO', categoria: 'Zero', anio: 2024, estadoColeccion: 'BUSCADA' },
+  ];
+  const requests = [];
+  window.fetch = async (url) => {
+    requests.push(url);
+    if (url === '/categorias') return { ok: true, json: async () => categories };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 53, buscadas: 2 }) };
+    return { ok: true, json: async () => catalog };
+  };
+  const options = (id) => [...window.document.querySelector(`#${id}`).options].map((option) => option.textContent);
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(options('categoria'), ['Todas (55)', 'Space: 54 de 500 (10,8%)', 'Zero (1)']);
+    window.document.querySelector('#filter-coleccion').click();
+    assert.deepEqual(options('categoria'), ['Todas (53)', 'Space: 53 de 500 (10,6%)']);
+    const category = window.document.querySelector('#categoria');
+    category.value = 'Space';
+    category.dispatchEvent(new window.Event('change'));
+    assert.deepEqual(options('subcategoria'), ['Todas (53)', 'Classic: 53 de 100 (53%)']);
+    assert.deepEqual(options('anio'), ['Todos (53)', '2024 (53)']);
+    window.document.querySelector('#filter-buscada').click();
+    assert.deepEqual(options('subcategoria'), ['Todas (54)', 'Classic: 53 de 100 (53%)', 'Unknown (1)']);
+    assert.equal(category.value, 'Space');
+    assert.deepEqual(requests.filter((url) => url.startsWith('/minifiguras')), ['/minifiguras']);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('los filtros muestran los toggles de estado y listan los temas y años registrados', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
@@ -631,7 +670,7 @@ test('los filtros muestran los toggles de estado y listan los temas y años regi
   assert.equal(window.document.querySelector('#filter-buscada').checked, false);
   assert.deepEqual(
     [...window.document.querySelectorAll('#categoria option')].map((option) => option.textContent),
-    ['Todas (2)', 'Castle (1)', 'Space (1)'],
+    ['Todas (2)', 'Castle: 1 de 100 (1%)', 'Space: 1 de 230 (0,4%)'],
   );
   assert.equal(window.document.querySelector('#anio').tagName, 'SELECT');
   assert.deepEqual(
@@ -663,7 +702,11 @@ test('los iconos recalculan categorias, subcategorias y años sin opciones de to
   const countedOptions = (figures, field, placeholder) => {
     const values = [...new Set(figures.map((figure) => figure[field]))];
     values.sort(field === 'anio' ? (left, right) => right - left : undefined);
-    return [`${placeholder} (${figures.length})`, ...values.map((value) => `${value} (${figures.filter((figure) => figure[field] === value).length})`)];
+    return [`${placeholder} (${figures.length})`, ...values.map((value) => {
+      const count = figures.filter((figure) => figure[field] === value).length;
+      const total = field === 'categoria' ? JSON.parse(officialCategoriasRaw).find(({ categoria }) => categoria === value)?.total : undefined;
+      return total > 0 ? `${value}: ${count} de ${total} (${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(count * 100 / total)}%)` : `${value} (${count})`;
+    })];
   };
 
   try {
@@ -717,7 +760,7 @@ test('los iconos recalculan categorias, subcategorias y años sin opciones de to
     assert.equal(category.value, '');
     assert.equal(year.value, '');
     window.document.querySelector('#show-all').click();
-    assert.deepEqual(options('categoria'), ['Todas (4)', 'Castle (1)', 'Space (3)']);
+    assert.deepEqual(options('categoria'), ['Todas (4)', 'Castle: 1 de 100 (1%)', 'Space: 3 de 230 (1,3%)']);
     assert.deepEqual(options('anio'), ['Todos (4)', '2024 (2)', '2020 (1)', '1980 (1)']);
     year.value = '2024';
     window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
