@@ -1975,6 +1975,12 @@ imageModalCloseButton.addEventListener('click', () => {
   closeImageModal();
 });
 
+formPreviewImage.addEventListener('click', () => {
+  if (window.matchMedia('(max-width: 600px)').matches && formIdInput.value.trim()) {
+    mostrarImagenMinifigura(formIdInput.value, formNombreInput.value);
+  }
+});
+
 imageModal.addEventListener('click', (event) => {
   if (event.target === imageModal) {
     closeImageModal();

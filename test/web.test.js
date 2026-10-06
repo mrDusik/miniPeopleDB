@@ -186,6 +186,8 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
   assert.equal(declarations.get('.results-panel th:nth-child(1), .results-panel td:nth-child(1)'), undefined);
   assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
+  assert.equal(declarations.get('.results-panel .actions-buttons')?.getPropertyValue('width'), '100%');
+  assert.equal(declarations.get('.results-panel .button-icon.button-small')?.getPropertyValue('flex'), '1 1 0');
   assert.deepEqual([1, 3, 8, 9, 11].map((column) => Number.parseInt(declarations.get(`.results-panel th:nth-child(${column})`)?.getPropertyValue('width'), 10)).reduce((total, width) => total + width, 0), 100);
   assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
   assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
@@ -591,6 +593,8 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  const smartphoneViewport = { matches: true };
+  window.matchMedia = () => smartphoneViewport;
   window.Image = class ImageStub {
     set src(url) { this.onload(); }
   };
@@ -638,9 +642,21 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
     assert.equal(window.document.querySelector('#form-id').value, expectedId);
     assert.equal(window.document.querySelector('#form-descripcion').value, expectedDescription);
     assert.equal(window.document.querySelector('#form-id').disabled, true);
+    if (expectedId === 'RANK1') {
+      window.document.querySelector('#form-preview-image').click();
+      assert.equal(window.document.querySelector('#image-modal').hidden, false);
+      assert.equal(window.document.querySelector('#image-modal-title').textContent, 'RANK1');
+      assert.equal(window.document.querySelector('#image-modal-name').textContent, 'Figura ranking');
+      window.document.querySelector('#image-modal-close').click();
+    }
     assert.equal(window.document.querySelector('#image-modal').hidden, true);
     window.document.querySelector('#form-cancel').click();
   }
+  smartphoneViewport.matches = false;
+  window.document.querySelector('.watchlist-card').click();
+  window.document.querySelector('#form-preview-image').click();
+  assert.equal(window.document.querySelector('#image-modal').hidden, true);
+  window.document.querySelector('#form-cancel').click();
   thumbnail.click();
   assert.equal(window.document.querySelector('#image-modal').hidden, false);
   assert.equal(window.document.querySelector('#image-modal-title').textContent, 'ST008');

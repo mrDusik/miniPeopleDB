@@ -681,12 +681,12 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .results-panel th:nth-child(8) { width: 15%; }
   .results-panel th:nth-child(9) { width: 22%; }
   .results-panel th:nth-child(11) { width: 29%; }
-  .results-panel .actions-buttons { gap: 4px; }
-  .results-panel .button-icon.button-small { flex: 0 0 32px; width: 32px; }
+  .results-panel .actions-buttons { width: 100%; gap: 4px; }
+  .results-panel .button-icon.button-small { flex: 1 1 0; width: auto; }
   #form-dialog #minifigura-form { grid-template-rows: auto auto auto auto; }
   #form-dialog .modal-preview { display: contents; }
   #form-dialog .modal-preview-heading { grid-column: 1; grid-row: 1; }
   #form-dialog .modal-form-column { grid-column: 1; grid-row: 2; }
-  #form-dialog .modal-preview img { grid-column: 1; grid-row: 3; justify-self: center; }
+  #form-dialog .modal-preview img { grid-column: 1; grid-row: 3; justify-self: center; cursor: pointer; }
   #form-dialog .form-actions { grid-column: 1; grid-row: 4; }
 }
