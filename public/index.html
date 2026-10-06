@@ -149,22 +149,24 @@
             <option value="" selected>Todos</option>
           </select>
         </label>
-        <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
-          <legend class="visually-hidden">Estado</legend>
-          <label class="filter-toggle" title="Colección">
-            <input id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
-            <img class="filter-symbol status-icon-image" src="/status_images/caja.png" title="Colección" alt="">
+        <div class="filter-state-row">
+          <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
+            <legend class="visually-hidden">Estado</legend>
+            <label class="filter-toggle" title="Colección">
+              <input id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
+              <img class="filter-symbol status-icon-image" src="/status_images/caja.png" title="Colección" alt="">
+            </label>
+            <label class="filter-toggle" title="Búsqueda">
+              <input id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
+              <img class="filter-symbol status-icon-image" src="/status_images/lupa.png" title="Búsqueda" alt="">
+            </label>
+          </fieldset>
+          <label class="filter-toggle">
+            <span class="visually-hidden">Observadas</span>
+            <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
+            <span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️</span>
           </label>
-          <label class="filter-toggle" title="Búsqueda">
-            <input id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
-            <img class="filter-symbol status-icon-image" src="/status_images/lupa.png" title="Búsqueda" alt="">
-          </label>
-        </fieldset>
-        <label class="filter-toggle">
-          <span class="visually-hidden">Observadas</span>
-          <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
-          <span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️</span>
-        </label>
+        </div>
         <button type="button" id="show-all" class="button button-secondary">Reestablecer</button>
         <div class="form-actions">
           <button type="submit" id="filter-submit" class="button button-primary">Buscar</button>
