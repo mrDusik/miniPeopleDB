@@ -335,8 +335,10 @@
       </div>
       <div class="dna-dialog-body">
         <div id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden></div>
-        <p id="dna-status" class="dna-status" role="status" aria-live="polite">Cargando DNA…</p>
-        <ul id="dna-legend" class="dna-legend" aria-label="Rasgos DNA" hidden></ul>
+        <div class="dna-legend-panel">
+          <p id="dna-status" class="dna-status" role="status" aria-live="polite">Cargando DNA…</p>
+          <ul id="dna-legend" class="dna-legend" aria-label="Rasgos DNA" hidden></ul>
+        </div>
       </div>
       <button type="button" id="dna-retry" class="button button-secondary" hidden>Reintentar</button>
     </dialog>

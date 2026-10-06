@@ -269,10 +269,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .dna-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .dna-dialog-heading h2 { margin: 0; }
 .dna-dialog-body { display: grid; grid-template-columns: minmax(130px, 180px) minmax(0, 1fr); align-items: center; gap: 20px; }
+.dna-legend-panel { display: grid; gap: 16px; min-width: 0; }
 .dna-chart { width: min(180px, 30vw); aspect-ratio: 1; border: 1px solid var(--line); border-radius: 50%; background: conic-gradient(var(--dna-rarity) 0% 25%, var(--dna-explorer) 25% 50%, var(--dna-collector) 50% 75%, var(--dna-fan) 75% 100%); }
 .dna-chart:not(.dna-chart-empty) { background: var(--dna-gradient); }
 .dna-chart-empty { background: var(--dna-empty); }
-.dna-status { grid-column: 1 / -1; margin: 0; color: var(--muted); font: 700 0.95rem Arial, sans-serif; text-align: center; }
+.dna-status { margin: 0; color: var(--muted); font: 700 0.95rem Arial, sans-serif; text-align: center; }
 .dna-status:empty { display: none; }
 .dna-legend { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .dna-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 4px 9px; min-width: 0; }

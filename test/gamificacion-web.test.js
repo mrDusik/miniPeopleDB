@@ -259,6 +259,7 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   assert.deepEqual([...document.querySelectorAll('.dna-swatch')].map((item) => item.className), [
     'dna-swatch dna-swatch-fan', 'dna-swatch dna-swatch-collector', 'dna-swatch dna-swatch-explorer', 'dna-swatch dna-swatch-rarity',
   ]);
+  assert.equal(document.querySelector('#dna-status').parentElement, document.querySelector('#dna-legend').parentElement);
   assert.match(document.querySelector('.dna-legend').textContent, /Busca piezas raras y valiosas/);
   assert.match(document.querySelector('.dna-legend').textContent, /Descubre categorías y subcategorías/);
   assert.match(document.querySelector('.dna-legend').textContent, /Amplía y completa la colección/);
@@ -305,6 +306,7 @@ test('DNA muestra estado de error con reintento y Newbie sin segmentos inventado
   assert.equal(chart.classList.contains('dna-chart-empty'), true);
   assert.equal(chart.style.getPropertyValue('--dna-gradient'), '');
   assert.equal(document.querySelector('#dna-status').textContent, 'Newbie');
+  assert.equal(document.querySelector('#dna-status').parentElement, document.querySelector('#dna-legend').parentElement);
   assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['0%', '0%', '0%', '0%']);
   dom.window.close();
 });
