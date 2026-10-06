@@ -148,6 +148,25 @@ test('los modales usan bordes neutros como los paneles principales', async () =>
   assert.match(css, /\.modal-content\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
 });
 
+test('los ajustes responsive quedan aislados de escritorio y ordenan los controles', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style>');
+  dom.window.document.querySelector('style').textContent = css;
+  const rules = [...dom.window.document.styleSheets[0].cssRules];
+  const responsive = rules.find((rule) => rule.conditionText === '(max-width: 1024px), (max-width: 1366px) and (hover: none) and (pointer: coarse)');
+  assert.ok(responsive, 'Los ajustes deben limitarse a pantallas pequenas o tablets tactiles');
+  const declarations = new Map([...responsive.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(declarations.get('body').getPropertyValue('min-width'), '0');
+  assert.equal(declarations.get('.filters-form').getPropertyValue('grid-auto-flow'), 'row');
+  assert.equal(declarations.get('.brand-heading').getPropertyValue('margin'), '0 auto');
+  assert.equal(declarations.get('.filters-form .form-actions').getPropertyValue('grid-row'), 'auto');
+  assert.equal(declarations.get('.filters-form > #show-all').getPropertyValue('grid-column'), '2');
+  assert.equal(declarations.get('.gamification-level-stack .gamification-level').getPropertyValue('grid-row'), '1 / 3');
+  assert.equal(declarations.get('.gamification-meter').getPropertyValue('min-width'), '0');
+  assert.equal(declarations.get('#form-dialog').getPropertyValue('overflow-y'), 'auto');
+  dom.window.close();
+});
+
 test('la interfaz centra el contenido, iguala la tipografia del resumen y elimina la linea de rankings', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /body\s*\{[^}]*text-align:\s*center/s);
