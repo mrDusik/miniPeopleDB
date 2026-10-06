@@ -83,7 +83,7 @@ test('el mock protege perfiles y expone solo la proyección global mediante RPC'
   });
   assert.equal((await mock.createClient('url', 'key').rpc('gamificacion_dna')).error.code, '42501');
   assert.deepEqual(Object.keys(ranking[0]).sort(), [
-    'avatar_url', 'bricks', 'display_name', 'dna_principal', 'imagen_nivel', 'nivel', 'nombre_nivel', 'regalo_enviado',
+    'avatar_url', 'bricks', 'display_name', 'dna_principal', 'dna_rasgos', 'imagen_nivel', 'nivel', 'nombre_nivel', 'regalo_enviado',
     'top5_antiguedad', 'top5_precio', 'total_coleccion', 'user_id',
   ]);
   assert.equal(ranking[0].dna_principal, 'Newbie');
@@ -259,11 +259,23 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       await db.query('update public.gamificacion set logros = $2 where user_id = $1', [dnaUser, JSON.stringify(logros)]);
       const beforeDnaRead = (await db.query('select to_jsonb(g) as row from public.gamificacion g where user_id = $1', [dnaUser])).rows[0].row;
       const sqlResult = (await db.query('select private.dna_calcular($1) as data', [dnaUser])).rows[0].data;
-      const rankingResult = (await db.query('select dna_principal from public.ranking_global()')).rows;
+      const rankingResult = (await db.query('select dna_principal, dna_rasgos from public.ranking_global()')).rows;
       const mockResult = dnaMock.calculateDna(logros, additionalWeights);
       assert.equal(sqlResult.principal, expectedPrincipal);
       assert.equal(rankingResult.length, 1);
       assert.equal(rankingResult[0].dna_principal, expectedPrincipal);
+      const expectedTraits = [
+        ['rarityHunter', 'Rarity Hunter'], ['explorer', 'Explorer'], ['collector', 'Collector'], ['fan', 'Fan'],
+      ].map(([key, nombre], ordinal) => ({ nombre, porcentaje: expectedPercentages[key], ordinal }));
+      expectedTraits.sort((left, right) => Number(right.nombre === expectedPrincipal) - Number(left.nombre === expectedPrincipal)
+        || right.porcentaje - left.porcentaje || left.ordinal - right.ordinal);
+      const summary = rankingResult[0].dna_rasgos;
+      assert.equal(summary.length, expectedPrincipal === 'Newbie' ? 0 : 2);
+      summary.forEach((trait, index) => {
+        assert.deepEqual(Object.keys(trait).sort(), ['nombre', 'porcentaje']);
+        assert.equal(trait.nombre, expectedTraits[index].nombre);
+        assert.ok(Math.abs(Number(trait.porcentaje) - expectedTraits[index].porcentaje) < 1e-10);
+      });
       assert.equal(mockResult.principal, expectedPrincipal);
       for (const [name, expected] of Object.entries(expectedPercentages)) {
         assert.ok(Math.abs(Number(sqlResult.porcentajes[name]) - expected) < 1e-10, `${name}: SQL=${sqlResult.porcentajes[name]}, esperado=${expected}`);

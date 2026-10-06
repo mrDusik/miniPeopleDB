@@ -19,23 +19,24 @@ test('sincroniza perfil validado y mapea el contrato público del ranking', asyn
   assert.deepEqual(entry, {
     userId: TEST_USER.id, avatarUrl: 'https://example.com/a.png', displayName: 'Ada', bricks: 100,
     nivel: 3, nombreNivel: 'Three-Seven-Five', imagenNivel: '/level_images/3_threesevenfive.png', totalColeccion: 0,
-    top5Precio: [], top5Antiguedad: [], regaloEnviado: false, dnaPrincipal: 'Newbie',
+    top5Precio: [], top5Antiguedad: [], regaloEnviado: false, dnaPrincipal: 'Newbie', dnaRasgos: [],
   });
 });
 
-test('proyecta solo el caracter DNA publico del ranking', async () => {
+test('proyecta solo los dos rasgos DNA publicos del ranking sin ponderaciones', async () => {
   const repository = new RankingRepository({ client: { async rpc(name) {
     assert.equal(name, 'ranking_global');
     return { data: [{
       user_id: 'target', avatar_url: null, display_name: 'Ada', bricks: 10, nivel: 0, nombre_nivel: 'Duplo',
       imagen_nivel: '/level_images/9_forestman.png', total_coleccion: 0, top5_precio: [], top5_antiguedad: [],
       regalo_enviado: false, dna_principal: 'Explorer', dna_porcentajes: { explorer: 100 }, dna_ponderaciones: [{ private: true }],
+      dna_rasgos: [{ nombre: 'Explorer', porcentaje: 60, privado: true }, { nombre: 'Collector', porcentaje: 30 }, { nombre: 'Fan', porcentaje: 10 }],
     }], error: null };
   } } });
   assert.deepEqual(await repository.list(), [{
     userId: 'target', avatarUrl: null, displayName: 'Ada', bricks: 10, nivel: 0, nombreNivel: 'Duplo',
     imagenNivel: '/level_images/9_forestman.png', totalColeccion: 0, top5Precio: [], top5Antiguedad: [],
-    regaloEnviado: false, dnaPrincipal: 'Explorer',
+    regaloEnviado: false, dnaPrincipal: 'Explorer', dnaRasgos: [{ nombre: 'Explorer', porcentaje: 60 }, { nombre: 'Collector', porcentaje: 30 }],
   }]);
 });
 

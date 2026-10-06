@@ -12,6 +12,14 @@ El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL d
 
 `imagenNivel` SHALL apuntar a la imagen disponible del nivel en `public/level_images/`; cuando no exista un activo para ese nivel, SHALL usar `/level_images/9_forestman.png`.
 
+Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, con un maximo de dos objetos que contienen exclusivamente `nombre` y `porcentaje`: primero el principal calculado por Supabase y despues el rasgo restante de mayor proporcion, usando el orden estable Rarity Hunter, Explorer, Collector, Fan en caso de empate del segundo rasgo. Newbie SHALL devolver `dnaRasgos: []`. Las ponderaciones y la distribucion completa de cuatro rasgos SHALL permanecer privadas.
+
+#### Scenario: Mostrar los dos rasgos publicos
+- **WHEN** se abre el ranking global de un usuario con DNA calculado
+- **THEN** su fila muestra los dos rasgos con el porcentaje antes del nombre, igual que el panel propio y conservando el tamaño actual de 0.68rem
+- **AND** el numero y nombre de nivel aparecen en negro
+- **AND** los usuarios Newbie muestran solo ese texto, sin porcentajes inventados
+
 #### Scenario: Obtener el Top 10
 - **WHEN** un usuario autenticado consulta `GET /api/ranking` y existen más de 10 usuarios con gamificación
 - **THEN** recibe `200` con exactamente los 10 primeros según el orden definido

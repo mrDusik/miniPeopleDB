@@ -25,6 +25,7 @@ function entry(overrides = {}) {
     nivel: 4, nombreNivel: 'Citizen', imagenNivel: '/level_images/9_forestman.png', totalColeccion: 2,
     top5Precio: [{ id: 'HIGH', nombre: 'High', precio: 50 }],
     top5Antiguedad: [{ id: 'OLD', nombre: 'Old', anio: 1980, precio: 5 }], regaloEnviado: false, dnaPrincipal: 'Explorer',
+    dnaRasgos: [{ nombre: 'Explorer', porcentaje: 60.5 }, { nombre: 'Collector', porcentaje: 30 }],
     ...overrides,
   };
 }
@@ -81,7 +82,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
 
 test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
   const dom = createDom();
-  const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria Ana Pérez', bricks: 300 }), entry()];
+  const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria Ana Pérez', bricks: 300 }), entry({ dnaPrincipal: 'Newbie', dnaRasgos: [] })];
   installFetch(dom.window, ranking);
   dom.window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -120,13 +121,15 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   ]);
   assert.equal(firstEntry.querySelector('.ranking-level-info').parentElement, firstEntry.querySelector('.ranking-expand'));
   assert.match(styles, /\.ranking-level-info \{[^}]*flex-wrap: wrap;[^}]*overflow: visible/);
+  assert.match(styles, /\.ranking-level-info \{[^}]*color: var\(--ink\);/);
   assert.match(styles, /\.ranking-level-name \{[^}]*overflow-wrap: anywhere; white-space: normal;/);
   assert.match(styles, /\.ranking-dna-principal \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
   assert.match(styles, /\.ranking-dna-principal \{[^}]*color: var\(--ink\); font: italic 700 0\.68rem[^}]*text-transform: uppercase;/);
-  assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, 'Explorer');
+  assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, '60,5% Explorer / 30% Collector');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tagName, 'SPAN');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tabIndex, -1);
   const otherEntry = dom.window.document.querySelector('[data-user-id="user-b"]');
+  assert.equal(otherEntry.querySelector('.ranking-dna-principal').textContent, 'Newbie');
   assert.equal(otherEntry.querySelector('.ranking-gift').parentElement, otherEntry.querySelector('.global-ranking-row'));
   assert.equal(otherEntry.querySelector('.ranking-gift').previousElementSibling, otherEntry.querySelector('.ranking-summary'));
   assert.equal(firstEntry.querySelector('.ranking-achievements'), null);

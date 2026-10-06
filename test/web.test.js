@@ -169,10 +169,12 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
   assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 840px[^}]*margin-left:\s*auto/s);
   assert.match(css, /\.gamification-level-stack \{[^}]*display: grid;[^}]*grid-template-columns: var\(--level-image-size\) minmax\(0, 1fr\);[^}]*min-height: var\(--level-image-size\);/);
+  assert.match(css, /\.gamification-level-stack \{[^}]*row-gap: 4px;/);
   assert.match(css, /\.gamification-level-stack \.gamification-level \{[^}]*grid-row: 1 \/ 3; grid-template-rows: subgrid;/);
   assert.match(css, /\.gamification-level-title > \.gamification-level-image \{[^}]*grid-row: 1 \/ 3;[^}]*height: 100%;/);
   assert.match(css, /\.gamification-level-title > \.gamification-level-image \{[^}]*min-height: 0; aspect-ratio: 1;/);
   assert.match(css, /\.gamification-dna-row \{[^}]*grid-column: 2; grid-row: 2;/);
+  assert.match(css, /\.gamification-dna-row \{ position: relative; z-index: 1;/);
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
