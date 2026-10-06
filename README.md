@@ -167,6 +167,12 @@ Antes de desplegar, verificar en el entorno SQL real que public/anon no pueden e
 
 ### DNA de colección
 
+**Filosofía de los logros:** los logros de colección reflejan los requisitos cumplidos por el inventario y los totales conocidos actuales; no son premios permanentes ni un historial de adquisiciones. Se ganan, pierden y recuperan automáticamente al añadir, editar, eliminar o cambiar una figura entre `COLECCIÓN` y `BUSCADA`, al variar los totales de categorías/subcategorías o al desplegar nuevos objetivos que el inventario ya cumple. El recálculo ajusta sus cantidades, Bricks, nivel y progreso; las siguientes consultas de DNA y ranking reflejan el resultado. `repetible: false` significa como máximo una concesión vigente, no que se conserve para siempre. Los regalos recibidos permanecen independientes de estos requisitos y no se pierden por cambios de colección.
+
+Los nuevos logros de primera categoría son The Legend., Heh! There is another one for you!, Change will not come in a single sunrise. y Start Poetry. (10 Bricks por Zelda, Pokémon, Horizon y Minecraft). Los de figura son Mental Breakdown. (SH0129, 3000 Bricks), The Dark Plastic. (SH0002, 1000) y Concrete Savanna. (SH0604, 700). Estos siete no son repetibles. You're shooting for the stars. concede 500 Bricks por categoría con al menos el 50% de su total conocido y Strike!! concede 1200 por categoría completa. Ambos son acumulables y repetibles en categorías distintas; solo cuentan figuras en `COLECCIÓN` y totales conocidos positivos.
+
+**Actualización de usuarios existentes:** aplicar primero el esquema SQL actualizado para incorporar sus pesos DNA y después desplegar y reiniciar el backend con `SUPABASE_SERVICE_ROLE_KEY`. La huella del reconciliador incluye categorías y objetivos: el primer arranque recalcula Bricks, logros, nivel y progreso aunque las categorías no hayan cambiado, conserva regalos y persiste mediante la RPC administrativa existente. Una huella ya aplicada no vuelve a recalcular. DNA se actualiza al consultar los logros recalculados. No se ejecuta desde rutas de usuario y requiere las autorizaciones y verificaciones remotas indicadas abajo.
+
 `GET /gamificacion/dna` requiere `Authorization: Bearer <JWT>` y no acepta un ID de usuario. Calcula en cada lectura las proporciones agregadas de la sesión autenticada; no persiste porcentajes ni modifica logros, Bricks, nivel o minifiguras. Responde solo con el principal y las cuatro proporciones:
 
 ```json

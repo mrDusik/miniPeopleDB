@@ -52,6 +52,44 @@ test('las mutaciones del catalogo recalculan y persisten gamificacion', async ()
   });
 });
 
+test('cambiar COLECCIÓN a BUSCADA retira logros y actualiza Bricks, nivel y DNA; volver los recupera', async () => {
+  const figures = [figura({ id: 'SPACE-1', subcategoria: 'Classic' }), figura({ id: 'SPACE-2', subcategoria: 'Classic' })];
+  const server = await startTestServer({
+    catalog: figures,
+    themesRaw: JSON.stringify([{ categoria: 'Space', total: 2, subcategorias: [{ subcategoria: 'Classic', total: 2 }] }]),
+  });
+  try {
+    const initial = await (await fetch(`${server.baseUrl}/gamificacion`)).json();
+    const initialDna = await (await fetch(`${server.baseUrl}/gamificacion/dna`)).json();
+    assert.equal(initial.bricks, 1760);
+    for (const estadoColeccion of ['BUSCADA', 'COLECCIÓN']) {
+      const response = await fetch(`${server.baseUrl}/minifiguras/SPACE-2`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...figures[1], estadoColeccion }),
+      });
+      assert.equal(response.status, 200);
+      const state = await (await fetch(`${server.baseUrl}/gamificacion`)).json();
+      const dna = await (await fetch(`${server.baseUrl}/gamificacion/dna`)).json();
+      const [persisted] = server.supabase.rows('gamificacion', TEST_USER.id);
+      assert.equal(persisted.bricks, state.bricks);
+      assert.deepEqual(persisted.logros, state.logros);
+      if (estadoColeccion === 'BUSCADA') {
+        assert.equal(state.bricks, 509);
+        assert.equal(state.nivel.nombre, 'Captain');
+        assert.equal(state.progreso.actual, 509);
+        assert.equal(state.logros.some(({ id }) => id === 'strike' || id === 'collector'), false);
+        assert.equal(state.logros.find(({ id }) => id === 'youre-shooting-for-the-stars').cantidad, 1);
+        assert.notDeepEqual(dna, initialDna);
+      } else {
+        assert.deepEqual(state, initial);
+        assert.deepEqual(dna, initialDna);
+      }
+    }
+  } finally {
+    await server.close();
+  }
+});
+
 test('GET /gamificacion/dna exige sesion, proyecta datos propios y controla errores', async () => {
   await withServer([], async (baseUrl, supabase) => {
     const before = supabase.rows('gamificacion');

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { watch } from 'node:fs';
 import { basename, dirname } from 'node:path';
-import { calcularGamificacion } from './gamificacion.js';
+import { calcularGamificacion, OBJETIVOS } from './gamificacion.js';
 
 const PAGE_SIZE = 1000;
 const VERSION_TABLE = 'gamificacion_categoria_version';
@@ -20,7 +20,7 @@ async function readAll(client, table, columns) {
 }
 
 function fingerprint(categorias) {
-  return createHash('sha256').update(JSON.stringify(categorias)).digest('hex');
+  return createHash('sha256').update(JSON.stringify({ categorias, objetivos: OBJETIVOS })).digest('hex');
 }
 
 export class CategoryGamificationRecalculator {
