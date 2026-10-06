@@ -569,7 +569,8 @@ El sistema SHALL mostrar `Newbie` y cuatro proporciones cero cuando la suma de c
 - **WHEN** el DNA propio contiene Fan 40%, Collector 30%, Explorer 20% y Rarity Hunter 10%
 - **THEN** bajo el nivel aparece `40% Fan / 30% Collector` con el estilo visual original y acceso al modal DNA
 - **AND** los rasgos se alinean horizontalmente con el numero de nivel, con numero y nombre en la primera fila y rasgos en la segunda, compartiendo la altura reservada para la imagen que abarca ambas filas
-- **AND** el rasgo principal de las filas del ranking usa el mismo estilo tipografico y color, conservando su tamaño de 0.68rem y sin mostrar porcentajes ni rasgos secundarios ajenos
+- **AND** ambas filas tienen una separacion de 4px y la linea de rasgos conserva su propio destino de clic, se ilumina en rojo al pasar el raton y abre el modal DNA sin abrir el modal de nivel
+- **AND** las filas del ranking muestran los dos rasgos publicos con sus porcentajes y el mismo estilo tipografico y color, conservando su tamaño de 0.68rem, y el numero y nombre de nivel aparecen en negro
 
 #### Scenario: Usuario Newbie
 - **WHEN** el usuario no tiene logros de coleccion que contribuyan a DNA
@@ -589,7 +590,7 @@ El sistema SHALL mostrar `Newbie` y cuatro proporciones cero cuando la suma de c
 
 ### Requirement: Mantener privadas las ponderaciones individuales
 
-Las ponderaciones por logro SHALL NOT ser accesibles desde API de logros, respuestas de mutaciones, recursos estaticos, datos del DOM, tooltips, modales propios o ajenos ni consultas directas del cliente Supabase. El usuario autenticado SHALL poder consultar exclusivamente sus proporciones DNA agregadas y caracter principal; SHALL NOT elegir un usuario ajeno como objetivo de esa consulta. El ranking SHALL exponer exclusivamente el caracter principal de sus usuarios, sin proporciones DNA ni pesos. Las tablas privadas SHALL conservar RLS por usuario. Una peticion propia sin sesion SHALL recibir `401`; un fallo de consulta SHALL producir un estado de error, no fingir `Newbie`.
+Las ponderaciones por logro SHALL NOT ser accesibles desde API de logros, respuestas de mutaciones, recursos estaticos, datos del DOM, tooltips, modales propios o ajenos ni consultas directas del cliente Supabase. El usuario autenticado SHALL poder consultar exclusivamente sus cuatro proporciones DNA agregadas y caracter principal; SHALL NOT elegir un usuario ajeno como objetivo de esa consulta. La unica excepcion publica SHALL ser el ranking, que expone el caracter principal y exclusivamente los nombres y porcentajes de los dos rasgos principales, sin distribucion completa ni pesos. Las tablas privadas SHALL conservar RLS por usuario. Una peticion propia sin sesion SHALL recibir `401`; un fallo de consulta SHALL producir un estado de error, no fingir `Newbie`.
 
 #### Scenario: Pesos fuera del cliente
 - **WHEN** se consultan logros propios o publicos, ranking o resultados de operaciones de coleccion
@@ -627,7 +628,7 @@ El modal DNA SHALL conservar la linea grafica de los modales existentes y repres
 #### Scenario: DNA disponible
 - **WHEN** el usuario abre DNA con contribuciones positivas
 - **THEN** ve una tarta proporcional con los cuatro colores y una leyenda descriptiva accesible
-- **AND** los porcentajes agregados aparecen en el modal propio y los dos principales en el panel propio, nunca en el ranking
+- **AND** los cuatro porcentajes agregados aparecen solo en el modal propio; el panel propio y el ranking muestran exclusivamente los dos rasgos principales y sus porcentajes
 
 #### Scenario: Tarta sin contribuciones
 - **WHEN** se abre DNA para un Newbie

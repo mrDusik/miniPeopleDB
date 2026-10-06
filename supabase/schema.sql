@@ -377,7 +377,8 @@ returns table (
   top5_precio jsonb,
   top5_antiguedad jsonb,
   regalo_enviado boolean,
-  dna_principal text
+  dna_principal text,
+  dna_rasgos jsonb
 )
 language sql
 security definer
@@ -439,8 +440,25 @@ as $$
       select 1 from public.regalos_enviados r
       where r.donante_id = auth.uid() and r.receptor_id = top_users.user_id
     ) as regalo_enviado,
-    private.dna_calcular(top_users.user_id)->>'principal' as dna_principal
+    dna.data->>'principal' as dna_principal,
+    case when dna.data->>'principal' = 'Newbie' then '[]'::jsonb else (
+      select jsonb_agg(jsonb_build_object('nombre', ranked.nombre, 'porcentaje', ranked.porcentaje)
+        order by ranked.es_principal desc, ranked.porcentaje desc, ranked.ordinal)
+      from (
+        select trait.nombre, (dna.data->'porcentajes'->>trait.key)::numeric as porcentaje,
+          trait.nombre = dna.data->>'principal' as es_principal, trait.ordinal
+        from (values
+          ('rarityHunter', 'Rarity Hunter', 0),
+          ('explorer', 'Explorer', 1),
+          ('collector', 'Collector', 2),
+          ('fan', 'Fan', 3)
+        ) as trait(key, nombre, ordinal)
+        order by es_principal desc, porcentaje desc, trait.ordinal
+        limit 2
+      ) ranked
+    ) end as dna_rasgos
   from top_users
+  cross join lateral (select private.dna_calcular(top_users.user_id) as data) dna
   left join public.perfiles_publicos p on p.user_id = top_users.user_id
   where auth.uid() is not null
   order by top_users.bricks desc, top_users.user_id asc;

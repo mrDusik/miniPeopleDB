@@ -102,6 +102,7 @@ export class RankingRepository {
       top5Antiguedad: row.top5_antiguedad ?? [],
       regaloEnviado: row.regalo_enviado === true,
       dnaPrincipal: row.dna_principal,
+      dnaRasgos: (row.dna_rasgos ?? []).slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
     }));
   }
 

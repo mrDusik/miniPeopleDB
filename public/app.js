@@ -1223,7 +1223,11 @@ function renderGlobalRanking() {
     levelName.textContent = entry.nombreNivel;
     const dnaPrincipal = document.createElement('span');
     dnaPrincipal.className = 'ranking-dna-principal';
-    dnaPrincipal.textContent = entry.dnaPrincipal ?? 'Newbie';
+    dnaPrincipal.textContent = entry.dnaPrincipal === 'Newbie' || !entry.dnaRasgos?.length
+      ? entry.dnaPrincipal ?? 'Newbie'
+      : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
+        `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
+      )).join(' / ');
     levelInfo.append(levelImage, levelNumber, levelName, dnaPrincipal);
     const collection = document.createElement('span');
     collection.className = 'ranking-collection-count';

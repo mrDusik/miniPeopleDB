@@ -218,6 +218,12 @@ export function createSupabaseMock({ users = {} } = {}) {
             return Object.fromEntries(Object.entries({ ...item, categoria: row.categoria, subcategoria: row.subcategoria, anio: row.anio }).filter(([, value]) => value != null));
           });
           const levelId = gamification.nivel?.id ?? 0;
+          const dna = calculateDna(gamification.logros ?? []);
+          const dnaTraits = [
+            ['rarityHunter', 'Rarity Hunter'], ['explorer', 'Explorer'], ['collector', 'Collector'], ['fan', 'Fan'],
+          ].map(([key, nombre], ordinal) => ({ nombre, porcentaje: dna.porcentajes[key], ordinal }));
+          dnaTraits.sort((left, right) => Number(right.nombre === dna.principal) - Number(left.nombre === dna.principal)
+            || right.porcentaje - left.porcentaje || left.ordinal - right.ordinal);
           return {
             user_id: gamification.user_id,
             avatar_url: profile?.avatar_url ?? null,
@@ -246,7 +252,8 @@ export function createSupabaseMock({ users = {} } = {}) {
             top5_precio: withMetadata(highlights.top5Precio),
             top5_antiguedad: withMetadata(highlights.top5Antiguedad),
             regalo_enviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
-            dna_principal: calculateDna(gamification.logros ?? []).principal,
+            dna_principal: dna.principal,
+            dna_rasgos: dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
           };
         });
       return { data: clone(data), error: null };

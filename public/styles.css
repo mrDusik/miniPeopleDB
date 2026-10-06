@@ -91,18 +91,18 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-main { --summary-count-size: 1.25rem; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; min-height: 42px; }
 .gamification-main .gamification-bricks-value strong, .gamification-main .collection-counts-panel strong { color: var(--ink); font: 700 var(--summary-count-size) Arial, sans-serif; }
 .gamification-summary .count-icon { width: 2.15rem; height: 2.15rem; transform: none; }
-.gamification-level-stack { --level-image-size: 2.5rem; display: grid; grid-template-columns: var(--level-image-size) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; width: 100%; min-width: 0; min-height: var(--level-image-size); }
-.gamification-level-stack .gamification-level { display: grid; grid-column: 1 / -1; grid-row: 1 / 3; grid-template-rows: subgrid; gap: 0; width: 100%; }
+.gamification-level-stack { --level-image-size: 2.5rem; display: grid; grid-template-columns: var(--level-image-size) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; row-gap: 4px; width: 100%; min-width: 0; min-height: var(--level-image-size); }
+.gamification-level-stack .gamification-level { display: grid; grid-column: 1 / -1; grid-row: 1 / 3; grid-template-rows: subgrid; gap: 0; row-gap: inherit; width: 100%; }
 .gamification-toggle, .panel-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: 700 1.3rem/1 Arial, sans-serif; transition: transform 0.2s; }
 .gamification-toggle:hover, .panel-toggle:hover { background: #eeeeee; }
 .gamification-toggle[aria-expanded="true"], .panel-toggle[aria-expanded="true"] { transform: rotate(180deg); }
 .gamification-level { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 0; border: 0; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
 .gamification-level:hover .gamification-level-title { color: var(--accent-dark); }
-.gamification-level-title { position: relative; display: grid; grid-row: 1 / 3; grid-template-columns: var(--level-image-size) auto minmax(0, 1fr); grid-template-rows: subgrid; min-width: 0; align-items: center; column-gap: 7px; row-gap: 0; font: 700 1.35rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
+.gamification-level-title { position: relative; display: grid; grid-row: 1 / 3; grid-template-columns: var(--level-image-size) auto minmax(0, 1fr); grid-template-rows: subgrid; min-width: 0; align-items: center; column-gap: 7px; row-gap: inherit; font: 700 1.35rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
 .gamification-level-title > .gamification-level-image { grid-column: 1; grid-row: 1 / 3; width: var(--level-image-size); height: 100%; min-height: 0; aspect-ratio: 1; }
 .gamification-level-title > #gamification-level-number { grid-column: 2; grid-row: 1; }
 .gamification-level-title > #gamification-level-name { grid-column: 3; grid-row: 1; }
-.gamification-dna-row { display: flex; grid-column: 2; grid-row: 2; align-items: center; min-width: 0; }
+.gamification-dna-row { position: relative; z-index: 1; display: flex; grid-column: 2; grid-row: 2; align-items: center; min-width: 0; }
 .gamification-dna-name { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; column-gap: 4px; width: auto; max-width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: italic 700 0.75rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-align: left; text-transform: uppercase; white-space: normal; }
 .gamification-dna-name > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .gamification-dna-name > span[hidden] { display: none; }
@@ -320,7 +320,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-avatar-fallback { display: grid; place-items: center; background: white; }
 .ranking-avatar-fallback[hidden], .ranking-avatar[hidden] { display: none; }
 .ranking-name { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; color: var(--ink); font: 700 1rem Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
-.ranking-level-info { display: flex; grid-column: 3; grid-row: 2; flex-wrap: wrap; align-content: center; align-items: center; gap: 3px 5px; min-width: 0; max-width: 100%; overflow: visible; color: var(--muted); font: 700 0.8rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: normal; }
+.ranking-level-info { display: flex; grid-column: 3; grid-row: 2; flex-wrap: wrap; align-content: center; align-items: center; gap: 3px 5px; min-width: 0; max-width: 100%; overflow: visible; color: var(--ink); font: 700 0.8rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: normal; }
 .ranking-level-info .gamification-level-image { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
 .ranking-level-number { flex: 0 0 auto; color: var(--ink); font-size: 0.9rem; line-height: 1; }
 .ranking-level-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }

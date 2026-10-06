@@ -101,6 +101,8 @@ npm start
 
 Aplica `supabase/schema.sql` para instalar la RPC de recálculo y sus permisos antes de arrancar. La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales reales: las rutas de usuario usan `test-support/supabase-mock.js` y la RPC administrativa se valida con PGlite.
 
+Para mostrar los dos rasgos DNA con porcentajes en Ranking Global, vuelve a aplicar `supabase/schema.sql`: actualiza la respuesta de `ranking_global()` con el resumen publico `dna_rasgos`, sin exponer ponderaciones ni los cuatro porcentajes completos.
+
 ### Desarrollo local en cualquier rama
 
 No hace falta mergear a `main` ni desplegar en Render: el servidor sirve el código de la rama que tengas activa. `npm start` sigue funcionando; para reiniciar automáticamente el servidor cuando cambien sus módulos, usa Node.js 22 o posterior y:

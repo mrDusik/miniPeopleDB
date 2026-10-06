@@ -32,6 +32,8 @@ test('GET /api/ranking exige autenticación y devuelve solo el contrato público
     assert.equal(ranking[0].userId, OTHER_RANKING_USER.id);
     assert.equal(ranking[0].dnaPrincipal, 'Rarity Hunter');
     assert.equal(ranking[1].dnaPrincipal, 'Newbie');
+    assert.deepEqual(ranking[0].dnaRasgos, [{ nombre: 'Rarity Hunter', porcentaje: 50 }, { nombre: 'Collector', porcentaje: 30 }]);
+    assert.deepEqual(ranking[1].dnaRasgos, []);
     assert.equal('porcentajes' in ranking[0], false);
     assert.equal('dnaPonderaciones' in ranking[0], false);
     assert.equal(ranking[0].totalColeccion, 2);
