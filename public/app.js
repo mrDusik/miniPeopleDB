@@ -120,6 +120,7 @@ const rankingOpenButton = document.querySelector('#open-global-ranking');
 const dnaOpenButtons = [document.querySelector('#open-dna-inline'), document.querySelector('#open-dna')];
 const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
+const rankingOrder = document.querySelector('#ranking-order');
 const rankingMainGlobe = document.querySelector('#ranking-main-globe');
 
 const pageShell = document.querySelector('.page-shell');
@@ -176,6 +177,8 @@ let appStarted = false;
 let syncPollTimer = null;
 let syncPausedByModal = false;
 let rankingEntries = [];
+let defaultRankingEntries = [];
+let rankingRequestId = 0;
 let expandedRankingUserId = null;
 let ownGamification = null;
 let ownDnaState = null;
@@ -1175,7 +1178,7 @@ function renderGlobalRanking() {
   const focusSelector = focused?.matches('.ranking-gift') ? '.ranking-gift' : '.ranking-expand';
   const fragment = document.createDocumentFragment();
   const currentUserId = currentSession?.user?.id;
-  const currentUserIndex = rankingEntries.findIndex(({ userId }) => userId === currentUserId);
+  const currentUserIndex = defaultRankingEntries.findIndex(({ userId }) => userId === currentUserId);
   rankingMainGlobe.hidden = currentUserIndex === -1;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = currentUserIndex === -1
     ? '' : ['🥇', '🥈', '🥉'][currentUserIndex] ?? `#${currentUserIndex + 1}`;
@@ -1315,24 +1318,34 @@ function renderGlobalRanking() {
 
 async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   const sessionUserId = currentSession?.user?.id;
+  const requestId = ++rankingRequestId;
+  const criterio = rankingOrder.value;
   if (showState) {
     rankingStatus.textContent = 'Cargando ranking...';
     rankingStatus.className = 'status';
     globalRankingList.replaceChildren();
   }
   try {
-    const response = await apiFetch('/api/ranking');
-    if (!response.ok) throw new Error('RANKING_NO_DISPONIBLE');
-    const result = await response.json();
-    if (sessionUserId !== currentSession?.user?.id) return [];
-    if (!Array.isArray(result)) throw new Error('RANKING_INVALIDO');
+    const getRanking = async (url) => {
+      const response = await apiFetch(url);
+      if (!response.ok) throw new Error('RANKING_NO_DISPONIBLE');
+      const result = await response.json();
+      if (!Array.isArray(result)) throw new Error('RANKING_INVALIDO');
+      return result;
+    };
+    const [result, defaultResult] = await Promise.all([
+      getRanking(criterio === 'nivel' ? '/api/ranking' : `/api/ranking?criterio=${criterio}`),
+      criterio === 'nivel' ? Promise.resolve(null) : getRanking('/api/ranking'),
+    ]);
+    if (sessionUserId !== currentSession?.user?.id || requestId !== rankingRequestId) return [];
     rankingEntries = result;
+    defaultRankingEntries = defaultResult ?? result;
     renderGlobalRanking();
     rankingStatus.textContent = result.length ? '' : 'Todavía no hay usuarios en el ranking.';
     rankingStatus.className = 'status';
     return result;
   } catch {
-    if (sessionUserId !== currentSession?.user?.id) return [];
+    if (sessionUserId !== currentSession?.user?.id || requestId !== rankingRequestId) return [];
     if (!showState) return [];
     rankingEntries = [];
     renderGlobalRanking();
@@ -1782,6 +1795,7 @@ gamificationDialog.addEventListener('close', () => {
 });
 
 let rankingTrigger = rankingOpenButton;
+rankingOrder.addEventListener('change', () => { void loadGlobalRanking(); });
 for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
   trigger.addEventListener('click', () => {
     rankingTrigger = trigger;
@@ -2255,6 +2269,9 @@ function clearUserData() {
   renderWatchlist([]);
   renderGamification({});
   rankingEntries = [];
+  defaultRankingEntries = [];
+  rankingOrder.value = 'nivel';
+  rankingRequestId += 1;
   expandedRankingUserId = null;
   rankingMainGlobe.hidden = true;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = '';

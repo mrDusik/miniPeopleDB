@@ -30,7 +30,7 @@ function entry(overrides = {}) {
   };
 }
 
-function installFetch(window, ranking) {
+function installFetch(window, ranking, orderedRankings = {}) {
   const calls = [];
   window.fetch = async (url, options = {}) => {
     calls.push({ url, options });
@@ -43,10 +43,63 @@ function installFetch(window, ranking) {
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
     if (url === '/api/ranking') return { ok: true, status: 200, json: async () => structuredClone(ranking) };
+    if (url.startsWith('/api/ranking?')) return { ok: true, status: 200, json: async () => structuredClone(orderedRankings[new URL(url, 'http://localhost').searchParams.get('criterio')] ?? ranking) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
   return calls;
 }
+
+test('el selector encima de los regalos solicita cada criterio y conserva la posicion principal por nivel', async () => {
+  const dom = createDom();
+  const normal = [entry({ userId: 'user-a' }), entry()];
+  const alternative = [entry(), entry({ userId: 'user-a' })];
+  const criteria = ['coleccion', 'rarityHunter', 'collector', 'explorer', 'fan'];
+  const calls = installFetch(dom.window, normal, Object.fromEntries(criteria.map((criterio) => [criterio, alternative])));
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const select = dom.window.document.querySelector('#ranking-order');
+  assert.equal(select.value, 'nivel');
+  assert.deepEqual([...select.options].map(({ textContent }) => textContent), ['Nivel', 'Colección', 'Rarity Hunter', 'Collector', 'Explorer', 'Fan']);
+  assert.equal(select.parentElement.nextElementSibling.id, 'global-ranking-list');
+  assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-end;/);
+  for (const criterio of [...criteria, 'nivel']) {
+    select.value = criterio;
+    select.dispatchEvent(new dom.window.Event('change'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(calls.some(({ url }) => url === (criterio === 'nivel' ? '/api/ranking' : `/api/ranking?criterio=${criterio}`)));
+    assert.equal(dom.window.document.querySelector('.global-ranking-entry').dataset.userId, criterio === 'nivel' ? 'user-a' : 'user-b');
+    assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
+  }
+  dom.window.close();
+});
+
+test('cambios rapidos de criterio ignoran respuestas anteriores y el cierre de sesion restaura Nivel', async () => {
+  const dom = createDom();
+  installFetch(dom.window, [entry({ userId: 'user-a' })], { fan: [entry({ displayName: 'Fan winner' })] });
+  const fetch = dom.window.fetch;
+  let resolveOld;
+  dom.window.fetch = (url, options) => url === '/api/ranking?criterio=coleccion'
+    ? new Promise((resolve) => { resolveOld = resolve; }) : fetch(url, options);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const select = dom.window.document.querySelector('#ranking-order');
+  select.value = 'coleccion';
+  select.dispatchEvent(new dom.window.Event('change'));
+  select.value = 'fan';
+  select.dispatchEvent(new dom.window.Event('change'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  resolveOld({ ok: true, json: async () => [entry({ displayName: 'Old winner' })] });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(dom.window.document.querySelector('.ranking-name').textContent, 'Fan w.');
+  dom.window.document.querySelector('#logout').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(select.value, 'nivel');
+  dom.window.close();
+});
 
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);

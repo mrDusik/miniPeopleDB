@@ -308,7 +308,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
-.global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 190px); overflow-y: auto; padding: 4px 4px 4px 0; }
+.ranking-order-toolbar { display: flex; justify-content: flex-end; padding: 0 4px 8px 0; }
+.ranking-order-toolbar select { width: 160px; max-width: 100%; min-height: 36px; padding: 0 8px; font: inherit; }
+.global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
 .global-ranking-entry { min-width: 0; }
 .global-ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) 94px; align-items: center; gap: 10px; min-width: 0; }
 .ranking-expand { position: relative; display: grid; grid-template-columns: 34px 42px minmax(0, 1fr) 100px 85px 18px; grid-template-rows: 22px minmax(30px, auto); align-items: center; gap: 0 10px; width: 100%; min-width: 0; min-height: 68px; border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 4px; padding: 8px 12px; color: var(--ink); background: var(--surface); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06); cursor: pointer; text-align: left; font: inherit; }

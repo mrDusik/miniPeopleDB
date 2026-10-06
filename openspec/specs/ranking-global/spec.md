@@ -8,7 +8,18 @@ Permite comparar de forma segura el progreso público de los coleccionistas y re
 
 ### Requirement: Consultar el ranking global
 
-El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios con mayor número de Bricks, ordenados por `bricks` descendente y, en caso de empate, por `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
+El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios mejor clasificados por el criterio elegido, aplicado en Supabase antes del límite. El parámetro opcional `criterio` SHALL aceptar exclusivamente `nivel` (por defecto), `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; los valores inválidos, vacíos o repetidos SHALL devolver `400` con `{ "error": "PARAMETRO_INVALIDO", "parametro": "criterio" }`. Nivel SHALL ordenar por nivel descendente y Bricks descendente, Colección por número de figuras en estado `COLECCIÓN` descendente, y cada rasgo por su porcentaje DNA completo descendente, usando cero para Newbie. Todos los criterios SHALL desempatar por nivel descendente, Bricks descendente y finalmente `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
+
+El modal SHALL incluir un selector alineado a la derecha encima de los botones de regalar Bricks, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
+
+#### Scenario: Elegir un criterio alternativo
+- **WHEN** el usuario selecciona Colección o un rasgo DNA
+- **THEN** el modal muestra los diez primeros de todos los usuarios según ese criterio, no una reordenación del Top 10 por Nivel
+- **AND** la distribución completa de DNA permanece privada incluso si el rasgo elegido no está entre los dos rasgos públicos
+
+#### Scenario: Empatar en un criterio alternativo
+- **WHEN** dos usuarios tienen el mismo número de figuras o porcentaje del rasgo elegido
+- **THEN** se ordenan por nivel descendente, Bricks descendente y `user_id` ascendente
 
 `imagenNivel` SHALL apuntar a la imagen disponible del nivel en `public/level_images/`; cuando no exista un activo para ese nivel, SHALL usar `/level_images/9_forestman.png`.
 
@@ -25,8 +36,8 @@ Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, con un maximo de dos ob
 - **THEN** recibe `200` con exactamente los 10 primeros según el orden definido
 - **AND** cada entrada contiene únicamente los datos públicos del ranking y si el usuario autenticado ya regaló a ese destinatario
 
-#### Scenario: Empate de Bricks
-- **WHEN** dos usuarios tienen el mismo número de Bricks
+#### Scenario: Empate de nivel y Bricks
+- **WHEN** dos usuarios tienen el mismo nivel y número de Bricks
 - **THEN** aparecen ordenados por `user_id` ascendente de forma estable
 
 #### Scenario: Ranking con menos de 10 usuarios

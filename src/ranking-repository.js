@@ -86,8 +86,8 @@ export class RankingRepository {
     }, { onConflict: 'user_id' }));
   }
 
-  async list() {
-    const rows = await this.run(this.client.rpc('ranking_global'));
+  async list(criterio = 'nivel') {
+    const rows = await this.run(this.client.rpc('ranking_global', { p_criterio: criterio }));
     if (!Array.isArray(rows)) throw new RankingNoDisponibleError();
     return rows.map((row) => ({
       userId: row.user_id,
