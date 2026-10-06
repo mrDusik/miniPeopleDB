@@ -91,17 +91,21 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-main { --summary-count-size: 1.25rem; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; min-height: 42px; }
 .gamification-main .gamification-bricks-value strong, .gamification-main .collection-counts-panel strong { color: var(--ink); font: 700 var(--summary-count-size) Arial, sans-serif; }
 .gamification-summary .count-icon { width: 2.15rem; height: 2.15rem; transform: none; }
-.gamification-level-stack { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
-.gamification-level-stack .gamification-level { flex: 0 1 auto; width: auto; }
+.gamification-level-stack { --level-image-size: 2.5rem; display: grid; grid-template-columns: var(--level-image-size) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 7px; width: 100%; min-width: 0; min-height: var(--level-image-size); }
+.gamification-level-stack .gamification-level { display: grid; grid-column: 1 / -1; grid-row: 1 / 3; grid-template-rows: subgrid; gap: 0; width: 100%; }
 .gamification-toggle, .panel-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: 700 1.3rem/1 Arial, sans-serif; transition: transform 0.2s; }
 .gamification-toggle:hover, .panel-toggle:hover { background: #eeeeee; }
 .gamification-toggle[aria-expanded="true"], .panel-toggle[aria-expanded="true"] { transform: rotate(180deg); }
 .gamification-level { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 0; border: 0; color: var(--ink); background: transparent; cursor: pointer; text-align: left; font: inherit; }
 .gamification-level:hover .gamification-level-title { color: var(--accent-dark); }
-.gamification-level-title { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; font: 700 1.35rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
-.gamification-dna-row { display: flex; align-items: center; min-width: 0; }
-.gamification-dna-name { display: inline-flex; flex: 0 1 auto; align-items: center; width: auto; max-width: 100%; min-width: 0; min-height: 42px; overflow: hidden; padding: 0 4px; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: italic 700 0.75rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-align: left; text-transform: uppercase; white-space: nowrap; }
-.gamification-dna-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gamification-level-title { position: relative; display: grid; grid-row: 1 / 3; grid-template-columns: var(--level-image-size) auto minmax(0, 1fr); grid-template-rows: subgrid; min-width: 0; align-items: center; column-gap: 7px; row-gap: 0; font: 700 1.35rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
+.gamification-level-title > .gamification-level-image { grid-column: 1; grid-row: 1 / 3; width: var(--level-image-size); height: 100%; min-height: 0; aspect-ratio: 1; }
+.gamification-level-title > #gamification-level-number { grid-column: 2; grid-row: 1; }
+.gamification-level-title > #gamification-level-name { grid-column: 3; grid-row: 1; }
+.gamification-dna-row { display: flex; grid-column: 2; grid-row: 2; align-items: center; min-width: 0; }
+.gamification-dna-name { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; column-gap: 4px; width: auto; max-width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: italic 700 0.75rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-align: left; text-transform: uppercase; white-space: normal; }
+.gamification-dna-name > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.gamification-dna-name > span[hidden] { display: none; }
 .gamification-dna-name:hover { color: var(--accent); background: transparent; }
 .gamification-dna-name:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .gamification-level-image { display: block; flex: 0 0 2.5rem; width: 2.5rem; height: 2.5rem; object-fit: contain; }
@@ -320,7 +324,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-level-info .gamification-level-image { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
 .ranking-level-number { flex: 0 0 auto; color: var(--ink); font-size: 0.9rem; line-height: 1; }
 .ranking-level-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
-.ranking-dna-principal { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--blue); font-size: 0.68rem; text-transform: none; white-space: normal; }
+.ranking-dna-principal { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: italic 700 0.68rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: normal; }
 .ranking-bricks, .ranking-collection-count { display: grid; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; }
 .ranking-bricks { grid-column: 4; grid-row: 1 / 3; grid-template-columns: minmax(0, 1fr) 1.55rem; width: 100px; }
 .ranking-bricks .gamification-brick-icon { width: 1.55rem; height: 1.55rem; object-fit: contain; }
@@ -443,7 +447,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .user-avatar:not([hidden]), .user-avatar-fallback { width: 34px; height: 34px; }
   .user-menu-toggle { gap: 2px; }
   .user-menu-chevron { width: 14px; height: 14px; font-size: 0.9rem; }
-  .gamification-level-stack { grid-column: 2 / 4; grid-row: 2; }
+  .gamification-level-stack { --level-image-size: 2.15rem; grid-column: 2 / 4; grid-row: 2; }
   .gamification-level-title { font-size: 1.05rem; white-space: normal; }
   #gamification-level-name { overflow-wrap: anywhere; }
   .gamification-level-image { flex-basis: 2.15rem; width: 2.15rem; height: 2.15rem; }
@@ -458,7 +462,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; }
   .dna-chart { width: min(150px, 48vw); }
   .dna-legend { width: 100%; }
-  .gamification-dna-name { min-height: 36px; }
   .ranking-dialog-heading { align-items: flex-start; }
   .ranking-dialog-heading .button { flex: 0 0 auto; min-height: 36px; }
   .gamification-details { padding: 12px; }

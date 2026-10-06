@@ -183,21 +183,31 @@ let dnaDialogTrigger = null;
 let dnaRequestSequence = 0;
 let achievementsTrigger = null;
 
-anioInput.max = String(currentYear);
 formAnioInput.max = String(currentYear);
+
+function selectedStateFilters() {
+  return {
+    estadoColeccion: collectionFilterInput.checked === wantedFilterInput.checked
+      ? ''
+      : collectionFilterInput.checked ? 'COLECCIÓN' : 'BUSCADA',
+    observada: observedFilterInput.checked ? 'true' : '',
+  };
+}
+
+function catalogMatchingStateFilters() {
+  return catalogForOptions.filter((minifigura) => matchesClientFilters(minifigura, selectedStateFilters()));
+}
 
 function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   const previousValue = selectElement.value;
+  const matchingCatalog = catalogMatchingStateFilters().filter((minifigura) => !categoria || minifigura.categoria === categoria);
   const subcategorias = [...new Map(
-    (categoria ? catalogForOptions : [])
-      .filter((minifigura) => minifigura.categoria === categoria)
+    (categoria ? matchingCatalog : [])
       .filter((minifigura) => minifigura.subcategoria)
       .map((minifigura) => [minifigura.subcategoria, 0]),
   ).keys()];
-  const counts = new Map(subcategorias.map((subcategoria) => [subcategoria, catalogForOptions.filter((minifigura) => (
-    minifigura.subcategoria === subcategoria && (!categoria || minifigura.categoria === categoria)
-  )).length]));
-  selectElement.replaceChildren(new Option(`${placeholderText} (${catalogForOptions.filter((minifigura) => !categoria || minifigura.categoria === categoria).length})`, ''));
+  const counts = new Map(subcategorias.map((subcategoria) => [subcategoria, matchingCatalog.filter((minifigura) => minifigura.subcategoria === subcategoria).length]));
+  selectElement.replaceChildren(new Option(`${placeholderText} (${matchingCatalog.length})`, ''));
   for (const subcategoria of subcategorias.sort()) {
     selectElement.append(new Option(`${subcategoria} (${counts.get(subcategoria)})`, subcategoria));
   }
@@ -206,14 +216,15 @@ function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
 }
 
 function renderCategoryOptions(categorias) {
+  const matchingCatalog = catalogMatchingStateFilters();
   const categoryCounts = new Map();
-  for (const minifigura of catalogForOptions) {
+  for (const minifigura of matchingCatalog) {
     categoryCounts.set(minifigura.categoria, (categoryCounts.get(minifigura.categoria) ?? 0) + 1);
   }
   const categoryNames = [...categoryCounts.keys()].sort();
 
   const selectedCategoria = categoriaInput.value;
-  categoriaInput.replaceChildren(new Option(`Todas (${catalogForOptions.length})`, ''));
+  categoriaInput.replaceChildren(new Option(`Todas (${matchingCatalog.length})`, ''));
   for (const categoria of categoryNames) {
     categoriaInput.append(new Option(`${categoria} (${categoryCounts.get(categoria)})`, categoria));
   }
@@ -221,9 +232,27 @@ function renderCategoryOptions(categorias) {
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
 }
 
+function renderYearOptions() {
+  const previousValue = anioInput.value;
+  const matchingCatalog = catalogMatchingStateFilters().filter((minifigura) => matchesClientFilters(minifigura, {
+    categoria: categoriaInput.value,
+    subcategoria: subcategoriaInput.value,
+  }));
+  const yearCounts = new Map();
+  for (const { anio } of matchingCatalog) {
+    if (Number.isInteger(anio) && anio > 0) yearCounts.set(anio, (yearCounts.get(anio) ?? 0) + 1);
+  }
+  anioInput.replaceChildren(new Option(`Todos (${matchingCatalog.length})`, ''));
+  for (const anio of [...yearCounts.keys()].sort((left, right) => right - left)) {
+    anioInput.append(new Option(`${anio} (${yearCounts.get(anio)})`, String(anio)));
+  }
+  anioInput.value = yearCounts.has(Number(previousValue)) ? previousValue : '';
+}
+
 function renderDynamicFilterOptions(catalog) {
   catalogForOptions = catalog;
   renderCategoryOptions(officialCategorias);
+  renderYearOptions();
 }
 
 function setCategoriaControlsEnabled(enabled) {
@@ -235,6 +264,12 @@ function setCategoriaControlsEnabled(enabled) {
 
 categoriaInput.addEventListener('change', () => {
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+  renderYearOptions();
+});
+
+subcategoriaInput.addEventListener('change', renderYearOptions);
+[collectionFilterInput, wantedFilterInput, observedFilterInput].forEach((input) => {
+  input.addEventListener('change', () => renderDynamicFilterOptions(catalogCache));
 });
 
 async function loadCategorias() {
@@ -861,7 +896,26 @@ function renderGamificationDna(state) {
   ownDnaState = state;
   const principal = state?.principal ?? 'DNA no disponible';
   gamificationDnaPrincipal.textContent = principal;
-  dnaOpenButtons[0].setAttribute('aria-label', `Abrir DNA: ${principal}`);
+  const primaryPercentage = document.querySelector('#gamification-dna-percentage');
+  const secondarySummary = document.querySelector('#gamification-dna-secondary');
+  const primaryTrait = DNA_TRAITS.find(({ name }) => name === principal);
+  const hasPercentages = primaryTrait && state?.porcentajes;
+  primaryPercentage.hidden = !hasPercentages;
+  secondarySummary.hidden = !hasPercentages;
+  primaryPercentage.textContent = '';
+  secondarySummary.textContent = '';
+  let summary = principal;
+  if (hasPercentages) {
+    const formatPercentage = (key) => `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[key] ?? 0)}%`;
+    const secondaryTrait = DNA_TRAITS
+      .filter(({ key }) => key !== primaryTrait.key)
+      .sort((left, right) => (state.porcentajes[right.key] ?? 0) - (state.porcentajes[left.key] ?? 0))[0];
+    primaryPercentage.textContent = `${formatPercentage(primaryTrait.key)} `;
+    secondarySummary.textContent = ` / ${formatPercentage(secondaryTrait.key)} ${secondaryTrait.name}`;
+    summary = `${primaryPercentage.textContent}${principal}${secondarySummary.textContent}`;
+  }
+  dnaOpenButtons[0].setAttribute('aria-label', `Abrir DNA: ${summary}`);
+  dnaOpenButtons[0].title = summary;
 }
 
 const DNA_TRAITS = [
@@ -1444,7 +1498,7 @@ function updateFormMode() {
     field.disabled = isView || (isCreate && !formSynced);
     field.readOnly = true;
   });
-  formObservedButton.disabled = isView || isCreate && !formSynced;
+  formObservedButton.disabled = isCreate && !formSynced;
   updateFormToggleStates();
   formDialogTitle.hidden = isView;
   formSubmitButton.hidden = isView;
@@ -1602,21 +1656,16 @@ function closeDeleteDialog() {
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
+  renderDynamicFilterOptions(catalogCache);
   const formData = new FormData(form);
   const filterValue = (name) => String(formData.get(name) ?? '').trim();
-  const collectionState = collectionFilterInput.checked && !wantedFilterInput.checked
-    ? 'COLECCIÓN'
-    : wantedFilterInput.checked && !collectionFilterInput.checked
-      ? 'BUSCADA'
-      : '';
   activeFilters = {
     id: filterValue('id'),
     nombre: filterValue('nombre'),
     categoria: filterValue('categoria'),
     subcategoria: filterValue('subcategoria'),
     anio: filterValue('anio'),
-    estadoColeccion: collectionState,
-    observada: observedFilterInput.checked ? 'true' : '',
+    ...selectedStateFilters(),
   };
   applyFilters();
 });
@@ -1876,6 +1925,10 @@ async function toggleObserved(minifigura, trigger) {
       return;
     }
     upsertCached(result);
+    if (trigger === formObservedButton && currentFormMode === 'view' && formIdInput.value === minifigura.id) {
+      formObservedButton.setAttribute('aria-pressed', String(Boolean(result.observada)));
+      updateFormToggleStates();
+    }
     applyFilters({ preservePage: true });
     void revalidate();
   } catch {
@@ -1949,6 +2002,10 @@ formDialog.addEventListener('close', () => {
 
 formObservedButton.addEventListener('click', () => {
   const pressed = formObservedButton.getAttribute('aria-pressed') === 'true';
+  if (currentFormMode === 'view') {
+    void toggleObserved({ id: formIdInput.value, observada: pressed }, formObservedButton);
+    return;
+  }
   formObservedButton.setAttribute('aria-pressed', String(!pressed));
   updateFormToggleStates();
 });
