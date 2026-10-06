@@ -40,7 +40,7 @@ El sistema SHALL mantener el formato JSON de las respuestas existentes (`id`, `n
 
 ### Requirement: Limitar el acceso privilegiado al recálculo automático de categorías
 
-Las operaciones ordinarias de usuario SHALL seguir usando el JWT autenticado y RLS, y las consultas de ranking y mutaciones de regalos SHALL NOT usar `service_role`. Se permite una excepción exclusiva para el proceso backend que recalcula gamificación después de un cambio válido en `data/categorias-brickset.json`: SHALL llamar únicamente a la RPC administrativa definida para aplicar el lote de estados y su fingerprint, SHALL requerir `service_role`, y SHALL mantener la clave fuera de respuestas HTTP y código de navegador. La RPC SHALL rechazar roles distintos de `service_role` y SHALL persistir lote y fingerprint en una sola transacción.
+Las operaciones ordinarias de usuario SHALL seguir usando el JWT autenticado y RLS, y las consultas de ranking y mutaciones de regalos SHALL NOT usar `service_role`. Se permite una excepción exclusiva para el proceso backend que recalcula gamificación después de un cambio válido en `data/categorias-brickset.json` o al arrancar con definiciones de objetivos nuevas sobre categorías válidas: SHALL llamar únicamente a la RPC administrativa definida para aplicar el lote de estados y su fingerprint, SHALL requerir `service_role`, y SHALL mantener la clave fuera de respuestas HTTP y código de navegador. La RPC SHALL rechazar roles distintos de `service_role` y SHALL persistir lote y fingerprint en una sola transacción. La huella SHALL incluir categorías y definiciones de objetivos para actualizar usuarios existentes sin nuevas altas de figuras.
 
 #### Scenario: Intento de llamar al recálculo administrativo con sesión de usuario
 - **WHEN** un rol `anon` o `authenticated` invoca la RPC de recálculo global
@@ -50,6 +50,11 @@ Las operaciones ordinarias de usuario SHALL seguir usando el JWT autenticado y R
 - **WHEN** el proceso backend aplica la huella nueva del catálogo
 - **THEN** cada fila de gamificación se calcula desde las minifiguras actuales y los regalos recibidos
 - **AND** la siguiente lectura de DNA y Ranking Global refleja los valores persistidos
+
+#### Scenario: Recalcular usuarios actuales al desplegar nuevos logros
+- **WHEN** arranca el backend con nuevos objetivos y categorías válidas aunque su JSON no haya cambiado
+- **THEN** recalcula los logros, Bricks, nivel y progreso de todos los usuarios con gamificación, figuras o regalos existentes
+- **AND** conserva los regalos recibidos y una huella ya aplicada no vuelve a escribir los estados
 
 ### Requirement: Reportar errores de persistencia de forma controlada
 

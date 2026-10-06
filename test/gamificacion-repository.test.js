@@ -94,10 +94,10 @@ test('dna consulta una RPC fresca por JWT y valida solo su proyeccion agregada',
   const otherRepository = new GamificacionRepository({ client: createTestClient(supabase, 'token-usuario-b'), userId: OTHER_USER.id });
   const ownBefore = supabase.rows('gamificacion', TEST_USER.id);
   assert.deepEqual(await ownRepository.dna(), {
-    principal: 'Collector', porcentajes: { rarityHunter: 5, explorer: 15, collector: 60, fan: 20 },
+    principal: 'Collector', porcentajes: { rarityHunter: 0, explorer: 10, collector: 80, fan: 10 },
   });
   assert.deepEqual(await otherRepository.dna(), {
-    principal: 'Rarity Hunter', porcentajes: { rarityHunter: 50, explorer: 10, collector: 30, fan: 10 },
+    principal: 'Rarity Hunter', porcentajes: { rarityHunter: 50, explorer: 10, collector: 20, fan: 20 },
   });
   await createTestClient(supabase).from('gamificacion').update({ logros: [{ id: 'woah', cantidad: 2 }] }).eq('user_id', TEST_USER.id);
   assert.equal((await ownRepository.dna()).porcentajes.rarityHunter, 50);

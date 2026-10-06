@@ -515,37 +515,89 @@ La interfaz SHALL mostrar en rojo cada asterisco visible que identifica un campo
 - **WHEN** se abre un formulario en modo visualización o se muestra un campo opcional
 - **THEN** visualización no muestra asteriscos y los campos opcionales no reciben indicadores de obligatoriedad
 
+### Requirement: Derivar todos los logros de colección del estado vigente
+
+Todos los logros de colección SHALL representar requisitos cumplidos por las minifiguras actuales en `COLECCIÓN` y los totales conocidos actuales, no concesiones históricas permanentes. El recálculo SHALL reconstruir cantidades y Bricks de todos los objetivos y ajustar nivel y progreso tanto al alza como a la baja. SHALL ganar, perder o recuperar logros tras altas, ediciones, eliminaciones, cambios entre `COLECCIÓN` y `BUSCADA`, cambios válidos de totales de categorías/subcategorías y despliegues de nuevos objetivos. Las siguientes consultas de DNA y ranking SHALL reflejar el estado recalculado. `repetible: false` SHALL limitar a una concesión vigente, sin impedir su pérdida y recuperación. Los regalos persistidos SHALL conservarse independientemente del inventario y SHALL NOT contribuir al DNA.
+
+#### Scenario: Aumento del total conocido
+- **WHEN** el total de una categoría o subcategoría aumenta y la colección deja de alcanzar un umbral de completitud
+- **THEN** el recálculo automático retira o reduce el logro correspondiente y sus Bricks, ajusta nivel y progreso y conserva regalos
+
+#### Scenario: Pérdida y recuperación por estado de figura
+- **WHEN** una figura necesaria pasa de `COLECCIÓN` a `BUSCADA`
+- **THEN** pierde las contribuciones y logros cuyos requisitos ya no cumple, incluidos los no repetibles
+- **AND** al volver a `COLECCIÓN` recupera los que vuelve a cumplir
+
+#### Scenario: Concesión retroactiva sin nueva adquisición
+- **WHEN** baja un total conocido o se despliega un nuevo objetivo cuyos requisitos ya cumple el inventario
+- **THEN** el recálculo concede automáticamente los logros correspondientes sin exigir una nueva alta de figura
+
+### Requirement: Conceder nuevos logros de categorías, figuras y completitud
+
+El sistema SHALL conceder los siguientes logros desde las figuras actuales en `COLECCIÓN`, excluyendo `BUSCADA`. Las descripciones SHALL ser `Añadir la primera minifigura de la categoría <categoría>.` para los cuatro primeros y `Añadir la minifigura <ID>.` para los tres siguientes.
+
+| ID | Nombre | Condición | Bricks | Repetible |
+| --- | --- | --- | --- | --- |
+| the-legend | The Legend. | Primera figura de The Legend of Zelda | 10 | false |
+| heh-there-is-another-one-for-you | Heh! There is another one for you! | Primera figura de Pokémon | 10 | false |
+| change-will-not-come-in-a-single-sunrise | Change will not come in a single sunrise. | Primera figura de Horizon | 10 | false |
+| start-poetry | Start Poetry. | Primera figura de Minecraft | 10 | false |
+| mental-breakdown | Mental Breakdown. | SH0129 | 3000 | false |
+| the-dark-plastic | The Dark Plastic. | SH0002 | 1000 | false |
+| concrete-savanna | Concrete Savanna. | SH0604 | 700 | false |
+| youre-shooting-for-the-stars | You're shooting for the stars. | Al menos 50% del total conocido de una categoría | 500 | true |
+| strike | Strike!! | Al menos 100% del total conocido de una categoría | 1200 | true |
+
+Los dos hitos SHALL tener como descripción `Añadir una minifigura que suponga el 50% del total conocido de minifiguras de una categoría.` y `Añadir una minifigura que suponga el 100% del total conocido de minifiguras de una categoría.`, respectivamente. SHALL contar una concesión por categoría con total conocido positivo, acumular ambos al completar una categoría y no multiplicarse por figuras adicionales en esa misma categoría. Un recálculo SHALL retirar los hitos que ya no cumplan el umbral.
+
+#### Scenario: Superar la mitad de una categoría con total impar
+- **WHEN** la colección contiene dos figuras de una categoría con total conocido de tres
+- **THEN** obtiene una concesión de You're shooting for the stars. y ninguna de Strike!!
+
+#### Scenario: Completar varias categorías
+- **WHEN** la colección alcanza el total conocido positivo de dos categorías
+- **THEN** obtiene dos concesiones de cada hito, sin contar categorías con total cero o desconocido
+
 ### Requirement: Calcular DNA propio dinamico y retroactivo
 
 El sistema SHALL calcular DNA en Supabase mediante una consulta dinamica sobre los logros obtenidos y sus cantidades actuales, sin almacenar porcentajes derivados ni calcular pesos en el cliente. Cada contribucion SHALL ser cantidad por peso del caracter, sin multiplicar por Bricks o total de Bricks. Las proporciones SHALL ser 100 por la suma de contribuciones de un caracter dividida por la suma de contribuciones de los cuatro caracteres. Los logros de coleccion SHALL tener los siguientes pesos privados, con suma 100 por fila; `someone-liked-your-collection` SHALL ser la unica excepcion confirmada con pesos cero y SHALL NOT contribuir a sumas ni denominador. Un identificador desconocido SHALL NOT recibir pesos inventados ni diluir el denominador. Nuevos logros de coleccion SHALL requerir una ponderacion de suma 100 antes de habilitarse para DNA.
 
 | Logro | Rarity Hunter | Collector | Explorer | Fan |
 | --- | --- | --- | --- | --- |
-| new-mini-person | 5 | 60 | 15 | 20 |
-| woah | 50 | 30 | 10 | 10 |
-| deal-master | 75 | 15 | 5 | 5 |
+| new-mini-person | 0 | 80 | 10 | 10 |
+| woah | 50 | 20 | 10 | 20 |
+| deal-master | 80 | 10 | 0 | 10 |
 | masterpiece | 90 | 5 | 0 | 5 |
-| holy-grail | 95 | 5 | 0 | 0 |
-| omgold | 95 | 0 | 0 | 5 |
-| lets-go | 5 | 20 | 60 | 15 |
-| collector | 10 | 80 | 0 | 10 |
-| step-by-step | 5 | 15 | 70 | 10 |
+| holy-grail | 80 | 10 | 0 | 10 |
+| omgold | 95 | 5 | 0 | 0 |
+| lets-go | 0 | 5 | 90 | 5 |
+| collector | 5 | 90 | 0 | 5 |
+| step-by-step | 5 | 45 | 50 | 0 |
 | bricky-potter | 0 | 10 | 20 | 70 |
 | bricky-mouse | 0 | 10 | 20 | 70 |
 | its-a-me-mario | 0 | 10 | 20 | 70 |
 | green-hill-zone | 0 | 10 | 20 | 70 |
-| dimensional | 10 | 10 | 30 | 50 |
+| dimensional | 60 | 10 | 20 | 10 |
 | warsie | 0 | 10 | 20 | 70 |
-| in-ny-i-was | 60 | 5 | 5 | 30 |
-| welcome-to-the-upsidedown | 30 | 10 | 10 | 50 |
-| chill-nancy-im-fine | 40 | 10 | 10 | 40 |
+| in-ny-i-was | 80 | 10 | 0 | 10 |
+| welcome-to-the-upsidedown | 60 | 30 | 0 | 10 |
+| chill-nancy-im-fine | 80 | 10 | 0 | 10 |
+| the-legend | 0 | 10 | 20 | 70 |
+| heh-there-is-another-one-for-you | 0 | 10 | 20 | 70 |
+| change-will-not-come-in-a-single-sunrise | 0 | 10 | 20 | 70 |
+| start-poetry | 0 | 10 | 20 | 70 |
+| mental-breakdown | 90 | 5 | 0 | 5 |
+| the-dark-plastic | 90 | 5 | 0 | 5 |
+| concrete-savanna | 90 | 5 | 0 | 5 |
+| youre-shooting-for-the-stars | 20 | 40 | 0 | 40 |
+| strike | 20 | 40 | 0 | 40 |
 | someone-liked-your-collection | 0 | 0 | 0 | 0 |
 
 El resultado SHALL reflejar los registros historicos de pruebas y produccion desde la primera consulta tras aplicar el esquema, sin requerir nuevas altas ni reotorgar logros. Las consultas posteriores y los refrescos tras mutaciones confirmadas de la coleccion SHALL reflejar las cantidades vigentes. La lectura DNA SHALL NOT modificar logros, Bricks, nivel ni minifiguras.
 
 #### Scenario: Cantidades sin ponderacion por Bricks
 - **WHEN** hay dos `new-mini-person` y un `woah`
-- **THEN** DNA contiene Rarity Hunter 20%, Collector 50%, Explorer 40/3% y Fan 50/3%, con tolerancia de representacion numerica
+- **THEN** DNA contiene Rarity Hunter 50/3%, Collector 60%, Explorer 10% y Fan 40/3%, con tolerancia de representacion numerica
 - **AND** el caracter principal es Collector aunque `woah` conceda mas Bricks por unidad
 
 #### Scenario: Retroactividad
@@ -560,6 +612,10 @@ El resultado SHALL reflejar los registros historicos de pruebas y produccion des
 #### Scenario: Actualizar cantidades
 - **WHEN** una alta, edicion, eliminacion, cambio de estado o sincronizacion modifica logros de coleccion y se confirma el recalculo
 - **THEN** el siguiente refresco muestra el DNA correspondiente sin persistir porcentajes calculados previamente
+
+#### Scenario: Cambios en las ponderaciones
+- **WHEN** se inserta, modifica o elimina una fila de `dna_ponderaciones`
+- **THEN** la siguiente consulta DNA y Ranking Global de todos los usuarios refleja las ponderaciones vigentes sin backfill ni recalculo de logros
 
 ### Requirement: Seleccionar caracter principal sin ambiguedad
 

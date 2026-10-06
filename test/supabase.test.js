@@ -203,24 +203,33 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
     const expectedDnaWeights = {
-      'new-mini-person': [5, 60, 15, 20],
-      woah: [50, 30, 10, 10],
-      'deal-master': [75, 15, 5, 5],
+      'new-mini-person': [0, 80, 10, 10],
+      woah: [50, 20, 10, 20],
+      'deal-master': [80, 10, 0, 10],
       masterpiece: [90, 5, 0, 5],
-      'holy-grail': [95, 5, 0, 0],
-      omgold: [95, 0, 0, 5],
-      'lets-go': [5, 20, 60, 15],
-      collector: [10, 80, 0, 10],
-      'step-by-step': [5, 15, 70, 10],
+      'holy-grail': [80, 10, 0, 10],
+      omgold: [95, 5, 0, 0],
+      'lets-go': [0, 5, 90, 5],
+      collector: [5, 90, 0, 5],
+      'step-by-step': [5, 45, 50, 0],
       'bricky-potter': [0, 10, 20, 70],
       'bricky-mouse': [0, 10, 20, 70],
       'its-a-me-mario': [0, 10, 20, 70],
       'green-hill-zone': [0, 10, 20, 70],
-      dimensional: [10, 10, 30, 50],
+      dimensional: [60, 10, 20, 10],
       warsie: [0, 10, 20, 70],
-      'in-ny-i-was': [60, 5, 5, 30],
-      'welcome-to-the-upsidedown': [30, 10, 10, 50],
-      'chill-nancy-im-fine': [40, 10, 10, 40],
+      'in-ny-i-was': [80, 10, 0, 10],
+      'welcome-to-the-upsidedown': [60, 30, 0, 10],
+      'chill-nancy-im-fine': [80, 10, 0, 10],
+      'the-legend': [0, 10, 20, 70],
+      'heh-there-is-another-one-for-you': [0, 10, 20, 70],
+      'change-will-not-come-in-a-single-sunrise': [0, 10, 20, 70],
+      'start-poetry': [0, 10, 20, 70],
+      'mental-breakdown': [90, 5, 0, 5],
+      'the-dark-plastic': [90, 5, 0, 5],
+      'concrete-savanna': [90, 5, 0, 5],
+      'youre-shooting-for-the-stars': [20, 40, 0, 40],
+      strike: [20, 40, 0, 40],
       [LOGRO_REGALO.id]: [0, 0, 0, 0],
     };
     const dnaRows = (await db.query('select logro_id, rarity_hunter, collector, explorer, fan from public.dna_ponderaciones order by logro_id')).rows;
@@ -288,9 +297,18 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     await verifyDna([
       { id: 'new-mini-person', cantidad: 2 }, { id: 'woah', cantidad: 1 },
       { id: 'unknown-achievement', cantidad: 1000 }, { id: LOGRO_REGALO.id, cantidad: 1000 },
-    ], 'Collector', { rarityHunter: 20, explorer: 40 / 3, collector: 50, fan: 50 / 3 });
-    await verifyDna([{ id: 'collector', cantidad: 3 }], 'Collector', { rarityHunter: 10, explorer: 0, collector: 80, fan: 10 });
-    await verifyDna([{ id: 'omgold', cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 95, explorer: 0, collector: 0, fan: 5 });
+    ], 'Collector', { rarityHunter: 50 / 3, explorer: 10, collector: 60, fan: 40 / 3 });
+    await verifyDna([{ id: 'collector', cantidad: 3 }], 'Collector', { rarityHunter: 5, explorer: 0, collector: 90, fan: 5 });
+    await verifyDna([{ id: 'omgold', cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 95, explorer: 0, collector: 5, fan: 0 });
+    for (const id of ['the-legend', 'heh-there-is-another-one-for-you', 'change-will-not-come-in-a-single-sunrise', 'start-poetry']) {
+      await verifyDna([{ id, cantidad: 1 }], 'Fan', { rarityHunter: 0, collector: 10, explorer: 20, fan: 70 });
+    }
+    for (const id of ['mental-breakdown', 'the-dark-plastic', 'concrete-savanna']) {
+      await verifyDna([{ id, cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 90, collector: 5, explorer: 0, fan: 5 });
+    }
+    for (const id of ['youre-shooting-for-the-stars', 'strike']) {
+      await verifyDna([{ id, cantidad: 2 }], 'Collector', { rarityHunter: 20, collector: 40, explorer: 0, fan: 40 });
+    }
     await verifyDna([{ id: LOGRO_REGALO.id, cantidad: 99 }], 'Newbie', { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 });
     await db.query('update public.gamificacion set logros = $2 where user_id = $1', [dnaUser, JSON.stringify(originalDnaLogros)]);
     const noStateDna = (await db.query('select private.dna_calcular($1) as data', ['00000000-0000-4000-8000-0000000000ff'])).rows[0].data;
@@ -302,6 +320,20 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     const nearTie = [{ id: 'test-balanced', cantidad: 10000 }, { id: 'test-near', cantidad: 1 }];
     const nearTieResult = await verifyDna(nearTie, 'Rarity Hunter', { rarityHunter: (250000 + 26) / 1000100 * 100, explorer: 250025 / 1000100 * 100, collector: 250025 / 1000100 * 100, fan: 250024 / 1000100 * 100 }, equalWeights);
     assert.deepEqual(Object.values(nearTieResult.porcentajes).map((percentage) => Math.round(Number(percentage))), [25, 25, 25, 25]);
+    const otherDnaUser = '00000000-0000-4000-8000-0000000000de';
+    await db.query('insert into auth.users(id,email) values ($1,$2)', [otherDnaUser, 'dna-fixture-2@example.invalid']);
+    await db.query('update public.gamificacion set logros = $2 where user_id = $1', [dnaUser, JSON.stringify([{ id: 'test-mutable', cantidad: 1 }])]);
+    await db.query('insert into public.gamificacion(user_id, logros) values ($1, $2)', [otherDnaUser, JSON.stringify([{ id: 'test-mutable', cantidad: 2 }, { id: 'test-fan', cantidad: 1 }])]);
+    const principals = async () => (await db.query('select private.dna_calcular($1)->>$3 as a, private.dna_calcular($2)->>$3 as b', [dnaUser, otherDnaUser, 'principal'])).rows[0];
+    assert.deepEqual(await principals(), { a: 'Newbie', b: 'Fan' });
+    await db.query("insert into public.dna_ponderaciones values ('test-mutable', 0, 0, 100, 0)");
+    assert.deepEqual(await principals(), { a: 'Explorer', b: 'Explorer' });
+    await db.query("update public.dna_ponderaciones set collector = 100, explorer = 0 where logro_id = 'test-mutable'");
+    assert.deepEqual(await principals(), { a: 'Collector', b: 'Collector' });
+    await db.query("delete from public.dna_ponderaciones where logro_id = 'test-mutable'");
+    assert.deepEqual(await principals(), { a: 'Newbie', b: 'Fan' });
+    await db.query('delete from public.gamificacion where user_id = $1', [otherDnaUser]);
+    await db.query('delete from auth.users where id = $1', [otherDnaUser]);
     for (const role of ['anon', 'authenticated']) {
       await db.exec(`set role ${role}`);
       await assert.rejects(db.query('select * from public.dna_ponderaciones'), /permission denied/);

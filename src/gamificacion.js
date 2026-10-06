@@ -46,6 +46,15 @@ export const OBJETIVOS = [
   { id: 'in-ny-i-was', nombre: 'In NY, I was', descripcion: 'Añadir la minifigura SW0465A.', bricks: 3000, repetible: false },
   { id: 'welcome-to-the-upsidedown', nombre: 'Welcome to the Upsidedown!', descripcion: 'Añadir la minifigura ST008.', bricks: 100, repetible: false },
   { id: 'chill-nancy-im-fine', nombre: "Chill, Nancy. I'm fine", descripcion: 'Añadir la minifigura ST009.', bricks: 700, repetible: false },
+  { id: 'the-legend', nombre: 'The Legend.', descripcion: 'Añadir la primera minifigura de la categoría The Legend of Zelda.', bricks: 10, repetible: false },
+  { id: 'heh-there-is-another-one-for-you', nombre: 'Heh! There is another one for you!', descripcion: 'Añadir la primera minifigura de la categoría Pokémon.', bricks: 10, repetible: false },
+  { id: 'change-will-not-come-in-a-single-sunrise', nombre: 'Change will not come in a single sunrise.', descripcion: 'Añadir la primera minifigura de la categoría Horizon.', bricks: 10, repetible: false },
+  { id: 'start-poetry', nombre: 'Start Poetry.', descripcion: 'Añadir la primera minifigura de la categoría Minecraft.', bricks: 10, repetible: false },
+  { id: 'mental-breakdown', nombre: 'Mental Breakdown.', descripcion: 'Añadir la minifigura SH0129.', bricks: 3000, repetible: false },
+  { id: 'the-dark-plastic', nombre: 'The Dark Plastic.', descripcion: 'Añadir la minifigura SH0002.', bricks: 1000, repetible: false },
+  { id: 'concrete-savanna', nombre: 'Concrete Savanna.', descripcion: 'Añadir la minifigura SH0604.', bricks: 700, repetible: false },
+  { id: 'youre-shooting-for-the-stars', nombre: "You're shooting for the stars.", descripcion: 'Añadir una minifigura que suponga el 50% del total conocido de minifiguras de una categoría.', bricks: 500, repetible: true },
+  { id: 'strike', nombre: 'Strike!!', descripcion: 'Añadir una minifigura que suponga el 100% del total conocido de minifiguras de una categoría.', bricks: 1200, repetible: true },
 ];
 
 export const LOGRO_REGALO = {
@@ -64,6 +73,10 @@ const CATEGORY_OBJECTIVES = new Map([
   ['green-hill-zone', 'Sonic the Hedgehog'],
   ['dimensional', 'Dimensions'],
   ['warsie', 'Star Wars'],
+  ['the-legend', 'The Legend of Zelda'],
+  ['heh-there-is-another-one-for-you', 'Pokémon'],
+  ['change-will-not-come-in-a-single-sunrise', 'Horizon'],
+  ['start-poetry', 'Minecraft'],
 ]);
 
 const ID_OBJECTIVES = new Map([
@@ -71,6 +84,9 @@ const ID_OBJECTIVES = new Map([
   ['in-ny-i-was', 'SW0465A'],
   ['welcome-to-the-upsidedown', 'ST008'],
   ['chill-nancy-im-fine', 'ST009'],
+  ['mental-breakdown', 'SH0129'],
+  ['the-dark-plastic', 'SH0002'],
+  ['concrete-savanna', 'SH0604'],
 ]);
 
 function valueOf(minifigura) {
@@ -109,6 +125,22 @@ function achievementCount(objective, catalogo, categorias) {
     case 'welcome-to-the-upsidedown':
     case 'chill-nancy-im-fine':
       return countBy(catalogo, (item) => item.id === ID_OBJECTIVES.get(objective.id));
+    case 'mental-breakdown':
+    case 'the-dark-plastic':
+    case 'concrete-savanna':
+      return catalogo.some((item) => item.id === ID_OBJECTIVES.get(objective.id)) ? 1 : 0;
+    case 'youre-shooting-for-the-stars':
+    case 'strike': {
+      const groups = new Map();
+      for (const item of catalogo) {
+        groups.set(item.categoria, (groups.get(item.categoria) || 0) + 1);
+      }
+      const fraction = objective.id === 'strike' ? 1 : 0.5;
+      return [...groups.entries()].filter(([categoria, count]) => {
+        const total = categoryTotal(categorias, categoria);
+        return total > 0 && count >= total * fraction;
+      }).length;
+    }
     case 'lets-go':
       return new Set(catalogo.filter((item) => item.subcategoria !== undefined).map((item) => `${item.categoria}\u0000${item.subcategoria}`)).size;
     case 'collector': {
