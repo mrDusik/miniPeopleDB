@@ -635,3 +635,54 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .achievement-item .achievement-bricks { grid-column: 2 / -1; justify-self: end; }
   .ranking-summary .ranking-expand .ranking-bricks { grid-column: 3 / 5; justify-self: end; }
 }
+
+@media (max-width: 600px) {
+  :root { font-size: 14px; }
+  .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
+  .watchlist-row { padding: 4px 13px 8px; }
+  .watchlist-card, .top-five .ranking-card { width: 100%; min-width: 0; height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
+  .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
+  .watchlist-card > span, .top-five .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
+  .watchlist-state-icon .status-icon-image { width: 12px; height: 12px; }
+  .dna-dialog-body { grid-template-columns: 80px minmax(0, 1fr); align-items: center; gap: 12px; }
+  .dna-chart { width: 80px; }
+  .dna-legend { gap: 10px; }
+  .dna-legend-item { gap: 3px 5px; }
+  .dna-legend-item > strong { font-size: 0.8rem; }
+  .dna-description { font-size: 0.72rem; }
+  .global-ranking-list { gap: 6px; }
+  .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
+  .ranking-summary { grid-column: 1; grid-row: 1; }
+  .ranking-summary .ranking-expand { grid-template-columns: 24px 28px minmax(0, 1fr) 12px; grid-template-rows: auto auto auto; min-height: 0; gap: 4px 6px; padding: 6px; }
+  .ranking-summary .ranking-position { grid-column: 1; grid-row: 1; align-self: center; font-size: 0.8rem; }
+  .ranking-summary .ranking-avatar-wrap { grid-column: 2; grid-row: 1; align-self: center; }
+  .ranking-avatar-wrap, .ranking-avatar, .ranking-avatar-fallback { width: 28px; height: 28px; }
+  .ranking-summary .ranking-name { grid-column: 3; grid-row: 1; font-size: 0.85rem; }
+  .ranking-summary .ranking-level-info { display: grid; grid-column: 1 / 4; grid-row: 2; grid-template-columns: 28px auto minmax(0, 1fr); grid-template-rows: auto auto; gap: 2px 6px; }
+  .ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 3; width: 28px; height: 28px; }
+  .ranking-level-number { grid-column: 2; grid-row: 1; font-size: 1.1rem; }
+  .ranking-level-name { grid-column: 3; grid-row: 1; font-size: 0.9rem; line-height: 1.2; }
+  .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; font-size: 0.68rem; line-height: 1.35; }
+  .ranking-summary .ranking-expand .ranking-bricks { grid-column: 1 / 3; grid-row: 3; justify-self: start; width: auto; grid-template-columns: auto 1.2rem; }
+  .ranking-summary .ranking-expand .ranking-collection-count { grid-column: 3; grid-row: 3; justify-self: end; width: auto; grid-template-columns: 1.2rem auto; }
+  .ranking-bricks strong, .ranking-collection-count strong { font-size: 0.95rem; }
+  .ranking-bricks .gamification-brick-icon, .ranking-collection-count .ranking-collection-icon { width: 1.2rem; height: 1.2rem; }
+  .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 4; }
+  .ranking-gift { grid-column: 2; grid-row: 1; min-height: 44px; gap: 3px; padding: 0 3px; font-size: 0.7rem; }
+  .ranking-gift-icon { height: 1rem; }
+  .results-panel table { min-width: 0; table-layout: fixed; }
+  .results-panel th:nth-child(1), .results-panel td:nth-child(1), .results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10) { display: none; }
+  .results-panel th, .results-panel td { padding: 10px 3px; overflow-wrap: anywhere; }
+  .results-panel th:nth-child(3) { width: 25%; }
+  .results-panel th:nth-child(8) { width: 18%; }
+  .results-panel th:nth-child(9) { width: 25%; }
+  .results-panel th:nth-child(11) { width: 32%; }
+  .results-panel .actions-buttons { gap: 4px; }
+  .results-panel .button-icon.button-small { flex: 0 0 32px; width: 32px; }
+  #form-dialog #minifigura-form { grid-template-rows: auto auto auto auto; }
+  #form-dialog .modal-preview { display: contents; }
+  #form-dialog .modal-preview-heading { grid-column: 1; grid-row: 1; }
+  #form-dialog .modal-form-column { grid-column: 1; grid-row: 2; }
+  #form-dialog .modal-preview img { grid-column: 1; grid-row: 3; justify-self: center; }
+  #form-dialog .form-actions { grid-column: 1; grid-row: 4; }
+}

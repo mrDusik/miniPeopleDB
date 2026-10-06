@@ -167,6 +167,25 @@ test('los ajustes responsive quedan aislados de escritorio y ordenan los control
   dom.window.close();
 });
 
+test('smartphone limita las tarjetas a cinco columnas y compacta modales e inventario sin cambiar tablet', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style>');
+  dom.window.document.querySelector('style').textContent = css;
+  const rules = [...dom.window.document.styleSheets[0].cssRules];
+  const smartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').at(-1);
+  const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(declarations.get(':root')?.getPropertyValue('font-size'), '14px');
+  assert.equal(declarations.get('.watchlist-row, .top-five .ranking-row')?.getPropertyValue('grid-template-columns'), 'repeat(5, minmax(0, 1fr))');
+  assert.equal(declarations.get('.watchlist-card, .top-five .ranking-card')?.getPropertyValue('height'), '90px');
+  assert.equal(declarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), '80px minmax(0, 1fr)');
+  assert.equal(declarations.get('.ranking-summary .ranking-expand')?.getPropertyValue('grid-template-rows'), 'auto auto auto');
+  assert.equal(declarations.get('#form-dialog .modal-preview')?.getPropertyValue('display'), 'contents');
+  assert.equal(declarations.get('#form-dialog .modal-preview-heading')?.getPropertyValue('grid-row'), '1');
+  const hiddenColumns = declarations.get('.results-panel th:nth-child(1), .results-panel td:nth-child(1), .results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10)');
+  assert.equal(hiddenColumns?.getPropertyValue('display'), 'none');
+  dom.window.close();
+});
+
 test('la interfaz centra el contenido, iguala la tipografia del resumen y elimina la linea de rankings', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /body\s*\{[^}]*text-align:\s*center/s);
