@@ -194,6 +194,10 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('#filters-form > label:nth-of-type(1)')?.getPropertyValue('grid-column'), '1 / 4');
   assert.equal(declarations.get('#filters-form > label:nth-of-type(2)')?.getPropertyValue('grid-column'), '4 / -1');
   assert.equal(declarations.get('#filters-form > label:nth-of-type(5)')?.getPropertyValue('grid-row'), '3');
+  assert.equal(declarations.get('#filters-form')?.getPropertyValue('grid-template-columns'), 'minmax(64px, 1fr) 48.4px 48.4px minmax(0, 1fr) 48.4px');
+  assert.equal(declarations.get('#filters-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), #filters-form select')?.getPropertyValue('height'), '34px');
+  assert.equal(declarations.get('#filters-form .filter-toggle')?.getPropertyValue('width'), '48.4px');
+  assert.equal(declarations.get('#filters-form .filter-toggle')?.getPropertyValue('justify-self'), 'center');
   assert.equal(declarations.get('#filters-form .filter-toggle .filter-symbol, #filters-form .filter-toggle .eye-symbol')?.getPropertyValue('width'), '1.44rem');
   assert.equal(declarations.get('.brand-heading')?.getPropertyValue('width'), 'min(204px, 68%)');
   assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
