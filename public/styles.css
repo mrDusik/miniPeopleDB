@@ -538,3 +538,100 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-preview img { width: 70px; height: 70px; }
   #minifigura-form .form-error { min-height: 12px; }
 }
+
+@media (max-width: 1024px), (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+  body { min-width: 0; }
+  .page-shell { width: calc(100% - 32px); padding: 20px 0 40px; }
+  .page-header { margin-bottom: 20px; padding-bottom: 0; }
+  .header-top { flex-direction: column; gap: 16px; }
+  .brand-heading { flex: 0 0 auto; width: min(280px, 80%); margin: 0 auto; }
+  .gamification-summary { flex: 0 0 auto; width: 100%; min-width: 0; margin: 0; padding: 16px; }
+  .gamification-main { --summary-count-size: 1.1rem; grid-template-columns: auto minmax(0, 1fr) 44px; grid-template-rows: auto auto; gap: 14px 12px; }
+  .user-session { grid-column: 1; grid-row: 1; }
+  .user-menu-toggle { min-height: 44px; }
+  .user-menu-chevron { width: 18px; height: 24px; }
+  .user-profile { left: 0; transform: none; }
+  .gamification-level-stack { --level-image-size: 2.5rem; grid-column: 2; grid-row: 1; }
+  .gamification-level-stack .gamification-level { grid-column: 1 / -1; grid-row: 1 / 3; }
+  .gamification-level-title { font-size: 1.1rem; line-height: 1.2; white-space: normal; }
+  #gamification-level-name { overflow-wrap: anywhere; }
+  #gamification-level-number { font-size: 1.4rem; }
+  .gamification-dna-name { font-size: 0.75rem; line-height: 1.35; }
+  #gamification-toggle { grid-column: 3; grid-row: 1; width: 44px; height: 44px; }
+  .gamification-main .gamification-bricks-value { grid-column: 1; grid-row: 2; gap: 6px; }
+  .gamification-main .collection-counts-panel { grid-column: 2 / 4; grid-row: 2; justify-self: end; flex-wrap: wrap; gap: 12px; }
+  .gamification-summary .count-icon { width: 1.75rem; height: 1.75rem; }
+  .gamification-brick-icon { height: 1.75rem; }
+  .gamification-details { position: static; width: 100%; max-width: none; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); box-shadow: none; }
+  .gamification-meter { min-width: 0; }
+  .summary-sync-row { flex-wrap: wrap; }
+  .gamification-details .button { min-height: 44px; padding: 8px 12px; font-size: 0.82rem; white-space: normal; }
+  .collection-value strong { font-size: 1rem; }
+  .search-panel, .results-panel, .rankings-panel, .watchlist-panel { min-width: 0; margin-bottom: 20px; padding: 18px; }
+  .section-heading { gap: 12px; margin-bottom: 16px; }
+  .section-heading .panel-toggle { flex: 0 0 44px; width: 44px; height: 44px; margin-right: 0; }
+  .rankings { grid-template-columns: 1fr; gap: 16px; }
+  .top-five { min-width: 0; padding: 12px; box-shadow: none; }
+  .top-five h2 { font-size: 1.1rem; }
+  .ranking-row { overflow-x: auto; padding-bottom: 8px; }
+  .ranking-card { flex: 1 0 64px; }
+  .ranking-caption { overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; line-height: 1.35; letter-spacing: 0; }
+  .filters-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; grid-auto-flow: row; }
+  .filters-form > label:not(.filter-toggle) { min-width: 0; justify-items: stretch; gap: 6px; text-align: left; }
+  .filters-form > label:nth-of-type(5) { grid-column: 1 / -1; }
+  .filter-state-toggles { grid-column: 1; justify-content: flex-start; gap: 8px; }
+  .filters-form > .filter-toggle { grid-column: 2; justify-self: end; }
+  .filter-toggle { width: 44px; min-width: 44px; min-height: 44px; }
+  .filters-form > #show-all { grid-column: 2; grid-row: auto; order: 2; width: 100%; }
+  .filters-form .form-actions { grid-column: 1; grid-row: auto; order: 1; width: 100%; }
+  .filters-form .form-actions .button { width: 100%; }
+  .button { min-height: 44px; white-space: normal; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select { min-height: 44px; min-width: 0; }
+  .results-heading { align-items: center; gap: 12px; margin-bottom: 16px; }
+  .results-heading > div { min-width: 0; }
+  .results-heading-actions { flex-direction: row; align-items: center; gap: 12px; }
+  .result-count { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+  #new-minifigura { flex: 0 0 44px; width: 44px; }
+  .table-wrap { max-width: 100%; overscroll-behavior-x: contain; }
+  .catalog-pagination { gap: 8px; }
+  .catalog-pagination .button { flex: 0 0 auto; min-width: 0; padding: 0 8px; }
+  #page-status { min-width: 0; text-align: center; line-height: 1.4; }
+  .modal { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #form-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .modal label { font-size: 0.75rem; line-height: 1.4; white-space: normal; }
+  .description-field > span { white-space: normal; }
+  .modal .form-actions { flex-wrap: wrap; gap: 12px; }
+  .achievement-item { gap: 10px; padding: 10px; }
+  .achievement-name { font-size: 0.9rem; overflow-wrap: anywhere; }
+  .toast-region { right: 12px; bottom: 12px; max-width: calc(100% - 24px); }
+  .toast { min-width: 0; max-width: 100%; padding: 12px; overflow-wrap: anywhere; }
+}
+
+@media (max-width: 600px) {
+  .page-shell { width: calc(100% - 24px); padding-top: 12px; }
+  .brand-heading { width: min(240px, 80%); }
+  .gamification-summary { padding: 12px; }
+  .gamification-main { gap: 12px 8px; }
+  .user-avatar:not([hidden]), .user-avatar-fallback { width: 32px; height: 32px; }
+  .ranking-main-globe { width: 24px; margin-right: 0; }
+  .gamification-level-stack { --level-image-size: 2rem; }
+  .gamification-level-title { column-gap: 5px; font-size: 0.9rem; }
+  .gamification-dna-name { font-size: 0.68rem; }
+  .search-panel, .results-panel, .rankings-panel, .watchlist-panel { padding: 12px; }
+  .filters-form > label:first-child { grid-column: 1 / -1; }
+  .modal { width: calc(100% - 24px); padding: 14px; }
+  #form-dialog .modal-form-column, #form-dialog .modal-fields { gap: 12px; }
+  #form-dialog .modal-row { gap: 10px; }
+  #form-dialog .modal-row-identity { grid-template-columns: minmax(0, 1fr); }
+  .modal-identity-fields { gap: 10px; }
+  #form-dialog .description-field textarea { min-height: 64px; }
+  #form-dialog #minifigura-form { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  #form-dialog .modal-form-column { grid-column: 1; grid-row: 1; }
+  #form-dialog .modal-preview { grid-column: 1; grid-row: 2; }
+  #form-dialog .modal-preview img { width: 120px; height: 120px; }
+  #minifigura-form .modal-fields input, #minifigura-form .modal-fields select, .modal textarea { padding: 8px; font-size: 1rem; }
+  .modal-fields > label:not(.description-field) { white-space: normal; }
+  .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .achievement-item .achievement-bricks { grid-column: 2 / -1; justify-self: end; }
+  .ranking-summary .ranking-expand .ranking-bricks { grid-column: 3 / 5; justify-self: end; }
+}
