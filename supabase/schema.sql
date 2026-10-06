@@ -475,7 +475,17 @@ as $$
       where r.donante_id = auth.uid() and r.receptor_id = top_users.user_id
     ) as regalo_enviado,
     dna.data->>'principal' as dna_principal,
-    case when dna.data->>'principal' = 'Newbie' then '[]'::jsonb else (
+    case when p_criterio in ('rarityHunter', 'collector', 'explorer', 'fan') then
+      jsonb_build_array(jsonb_build_object(
+        'nombre', case p_criterio
+          when 'rarityHunter' then 'Rarity Hunter'
+          when 'collector' then 'Collector'
+          when 'explorer' then 'Explorer'
+          when 'fan' then 'Fan'
+        end,
+        'porcentaje', coalesce((dna.data->'porcentajes'->>p_criterio)::numeric, 0)
+      ))
+    when dna.data->>'principal' = 'Newbie' then '[]'::jsonb else (
       select jsonb_agg(jsonb_build_object('nombre', ranked.nombre, 'porcentaje', ranked.porcentaje)
         order by ranked.es_principal desc, ranked.porcentaje desc, ranked.ordinal)
       from (

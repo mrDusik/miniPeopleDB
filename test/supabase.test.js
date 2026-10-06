@@ -429,6 +429,11 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       assert.deepEqual(ordered.map(({ user_id }) => user_id), criterio === 'nivel'
         ? orderIds.slice(0, 10) : [...orderIds.slice(10), ...orderIds.slice(0, 8)]);
       assert.ok(ordered.every((row) => !('dna_porcentajes' in row) && row.dna_rasgos.length <= 2));
+      if (!['nivel', 'coleccion'].includes(criterio)) {
+        const nombre = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
+        assert.deepEqual(ordered[0].dna_rasgos, [{ nombre, porcentaje: 25 }]);
+        assert.deepEqual(ordered[2].dna_rasgos, [{ nombre, porcentaje: 0 }]);
+      }
       assert.equal((await db.query("select has_function_privilege('anon', 'public.ranking_global(text)', 'EXECUTE') as allowed")).rows[0].allowed, false);
     }
     assert.deepEqual((await db.query("select * from public.ranking_global('invalid')")).rows, []);
@@ -436,6 +441,8 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       await db.query('update public.gamificacion set logros = $1 where user_id = $2', [JSON.stringify([{ id: logroId, cantidad: 1 }]), orderIds[10]]);
       const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
       assert.deepEqual(ordered.slice(0, 2).map(({ user_id }) => user_id), orderIds.slice(10));
+      assert.equal(ordered[0].dna_rasgos[0].porcentaje, 100);
+      assert.equal(ordered[0].dna_rasgos.length, 1);
     }
     await db.query("select set_config('request.jwt.claim.sub', '', false)");
     assert.deepEqual((await db.query("select * from public.ranking_global('fan')")).rows, []);

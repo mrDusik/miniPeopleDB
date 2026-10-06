@@ -49,6 +49,9 @@ test('el ranking valida los seis criterios y selecciona el Top 10 antes de proye
       else {
         const traitEntries = ranking.filter(({ userId }) => ids.slice(10).includes(userId));
         assert.deepEqual(traitEntries.map(({ userId }) => userId), ids.slice(10));
+        const nombre = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
+        assert.deepEqual(traitEntries[0].dnaRasgos, [{ nombre, porcentaje: 25 }]);
+        assert.deepEqual(ranking.find(({ dnaPrincipal }) => dnaPrincipal === 'Newbie').dnaRasgos, [{ nombre, porcentaje: 0 }]);
       }
       assert.ok(ranking.every((row) => !('porcentajes' in row) && row.dnaRasgos.length <= 2));
     }

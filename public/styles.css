@@ -308,7 +308,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
-.ranking-order-toolbar { display: flex; justify-content: flex-end; padding: 0 4px 8px 0; }
+.ranking-order-toolbar { display: flex; justify-content: flex-start; padding: 0 4px 8px 0; }
 .ranking-order-toolbar select { width: 160px; max-width: 100%; min-height: 36px; padding: 0 8px; font: inherit; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
 .global-ranking-entry { min-width: 0; }

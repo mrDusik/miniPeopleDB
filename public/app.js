@@ -1241,7 +1241,7 @@ function renderGlobalRanking() {
     levelName.textContent = entry.nombreNivel;
     const dnaPrincipal = document.createElement('span');
     dnaPrincipal.className = 'ranking-dna-principal';
-    dnaPrincipal.textContent = entry.dnaPrincipal === 'Newbie' || !entry.dnaRasgos?.length
+    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(rankingOrder.value)) || !entry.dnaRasgos?.length
       ? entry.dnaPrincipal ?? 'Newbie'
       : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
         `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
