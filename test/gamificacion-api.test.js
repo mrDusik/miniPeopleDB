@@ -61,7 +61,8 @@ test('cambiar COLECCIÓN a BUSCADA retira logros y actualiza Bricks, nivel y DNA
   try {
     const initial = await (await fetch(`${server.baseUrl}/gamificacion`)).json();
     const initialDna = await (await fetch(`${server.baseUrl}/gamificacion/dna`)).json();
-    assert.equal(initial.bricks, 1760);
+    assert.equal(initial.bricks, 1810);
+    assert.equal(initial.logros.find(({ id }) => id === 'hooked')?.cantidad, 1);
     for (const estadoColeccion of ['BUSCADA', 'COLECCIÓN']) {
       const response = await fetch(`${server.baseUrl}/minifiguras/SPACE-2`, {
         method: 'PUT', headers: { 'content-type': 'application/json' },

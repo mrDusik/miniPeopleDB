@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
-import { calcularGamificacion, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
+import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
@@ -230,8 +230,22 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       'concrete-savanna': [90, 5, 0, 5],
       'youre-shooting-for-the-stars': [20, 40, 0, 40],
       strike: [20, 40, 0, 40],
+      'retired-police': [90, 5, 5, 0],
+      'retired-firefighter': [90, 5, 5, 0],
+      'retired-doctor': [90, 5, 5, 0],
+      'trio-of-senior-citizens': [90, 5, 0, 5],
+      antiquarian: [80, 10, 0, 10],
+      'to-lay-the-groundwork': [50, 50, 0, 0],
+      investor: [50, 50, 0, 0],
+      'investment-fund': [50, 50, 0, 0],
+      'almost-millionaire': [50, 50, 0, 0],
+      weirdo: [100, 0, 0, 0],
+      hooked: [0, 100, 0, 0],
+      'land-ho': [0, 0, 100, 0],
+      nerd: [0, 0, 0, 100],
       [LOGRO_REGALO.id]: [0, 0, 0, 0],
     };
+    assert.deepEqual(Object.fromEntries(DNA_PONDERACIONES), expectedDnaWeights);
     const dnaRows = (await db.query('select logro_id, rarity_hunter, collector, explorer, fan from public.dna_ponderaciones order by logro_id')).rows;
     assert.deepEqual(Object.fromEntries(dnaRows.map(({ logro_id, rarity_hunter, collector, explorer, fan }) => [logro_id, [rarity_hunter, collector, explorer, fan]])), expectedDnaWeights);
     assert.deepEqual(Object.keys(expectedDnaWeights).sort(), [...OBJETIVOS.map(({ id }) => id), LOGRO_REGALO.id].sort());

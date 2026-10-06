@@ -53,7 +53,7 @@ export class CategoryGamificationRecalculator {
 
     const [gamificationRows, figureRows, gifts] = await Promise.all([
       readAll(this.client, 'gamificacion', 'user_id'),
-      readAll(this.client, 'minifiguras', 'user_id,id,categoria,subcategoria,estado_coleccion,precio,precio_compra'),
+      readAll(this.client, 'minifiguras', 'user_id,id,categoria,subcategoria,anio,estado_coleccion,precio,precio_compra'),
       readAll(this.client, 'regalos_enviados', 'receptor_id'),
     ]);
 
@@ -69,6 +69,7 @@ export class CategoryGamificationRecalculator {
         id: figure.id,
         categoria: figure.categoria,
         subcategoria: figure.subcategoria ?? undefined,
+        anio: figure.anio ?? undefined,
         estadoColeccion: figure.estado_coleccion,
         precio: figure.precio ?? undefined,
         precioCompra: figure.precio_compra ?? undefined,

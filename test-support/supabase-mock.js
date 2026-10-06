@@ -1,4 +1,4 @@
-import { selectLevel } from '../src/gamificacion.js';
+import { DNA_PONDERACIONES, selectLevel } from '../src/gamificacion.js';
 import { collectionHighlights } from '../src/collection-highlights.js';
 
 const PRIMARY_KEYS = {
@@ -15,35 +15,7 @@ const COLUMN_DEFAULTS = {
   regalos_enviados: () => ({ fecha: new Date().toISOString() }),
 };
 
-const DNA_WEIGHTS = {
-  'new-mini-person': [0, 80, 10, 10],
-  woah: [50, 20, 10, 20],
-  'deal-master': [80, 10, 0, 10],
-  masterpiece: [90, 5, 0, 5],
-  'holy-grail': [80, 10, 0, 10],
-  omgold: [95, 5, 0, 0],
-  'lets-go': [0, 5, 90, 5],
-  collector: [5, 90, 0, 5],
-  'step-by-step': [5, 45, 50, 0],
-  'bricky-potter': [0, 10, 20, 70],
-  'bricky-mouse': [0, 10, 20, 70],
-  'its-a-me-mario': [0, 10, 20, 70],
-  'green-hill-zone': [0, 10, 20, 70],
-  dimensional: [60, 10, 20, 10],
-  warsie: [0, 10, 20, 70],
-  'in-ny-i-was': [80, 10, 0, 10],
-  'welcome-to-the-upsidedown': [60, 30, 0, 10],
-  'chill-nancy-im-fine': [80, 10, 0, 10],
-  'the-legend': [0, 10, 20, 70],
-  'heh-there-is-another-one-for-you': [0, 10, 20, 70],
-  'change-will-not-come-in-a-single-sunrise': [0, 10, 20, 70],
-  'start-poetry': [0, 10, 20, 70],
-  'mental-breakdown': [90, 5, 0, 5],
-  'the-dark-plastic': [90, 5, 0, 5],
-  'concrete-savanna': [90, 5, 0, 5],
-  'youre-shooting-for-the-stars': [20, 40, 0, 40],
-  strike: [20, 40, 0, 40],
-};
+const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
 
 const MINIFIGURA_COLUMNS = [
   ['id', 'id'],

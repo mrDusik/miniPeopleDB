@@ -1015,7 +1015,13 @@ function renderAchievements(state, title = 'Logros') {
   gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
   achievementsStatus.textContent = state.logros?.length ? '' : 'No hay logros.';
   gamificationAchievements.replaceChildren();
-  for (const logro of state.logros ?? []) {
+  const achievements = [...(state.logros ?? [])].sort((left, right) => {
+    const leftIsGift = left.type === 'regalo';
+    const rightIsGift = right.type === 'regalo';
+    if (leftIsGift !== rightIsGift) return leftIsGift ? 1 : -1;
+    return (right.total ?? 0) - (left.total ?? 0);
+  });
+  for (const logro of achievements) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
