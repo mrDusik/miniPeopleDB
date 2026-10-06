@@ -1409,7 +1409,7 @@ function messageForErrorCode(code) {
 }
 
 function closeImageModal() {
-  imageModal.hidden = true;
+  if (imageModal.open) imageModal.close();
   imageModalImage.removeAttribute('src');
   imageModalImage.alt = '';
   imageModalName.textContent = '';
@@ -1424,7 +1424,7 @@ function mostrarImagenMinifigura(id, nombre) {
     imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
     imageModalTitle.textContent = upperId;
     imageModalName.textContent = nombre ?? '';
-    imageModal.hidden = false;
+    imageModal.showModal();
     imageModalCloseButton.focus();
   };
   preloader.onerror = () => {
@@ -1989,7 +1989,7 @@ imageModal.addEventListener('click', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  if (!imageModal.hidden) {
+  if (imageModal.open) {
     event.preventDefault();
     closeImageModal();
   } else if (dnaDialog.open) {

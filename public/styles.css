@@ -390,8 +390,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-summary .ranking-expand .ranking-collection-count { grid-column: 1 / 3; grid-row: 3; justify-self: start; width: 70px; }
 }
 
-.modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(24, 34, 45, 0.45); }
-.modal-overlay[hidden] { display: none; }
+.modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; padding: 20px; overflow: auto; background: transparent; }
+.modal-overlay:not([open]) { display: none; }
+.modal-overlay::backdrop { background: rgba(24, 34, 45, 0.45); }
 .modal-content { display: grid; gap: 16px; justify-items: center; width: min(400px, 100%); border: 1px solid var(--line); border-radius: 4px; padding: 22px; box-shadow: var(--shadow); background: var(--surface); }
 .modal-content h2 { margin: 0; }
 .modal-content img { max-width: 100%; max-height: 60vh; border-radius: 12px; }
@@ -641,6 +642,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   :root { font-size: 14px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
   .watchlist-row { padding: 4px 13px 8px; }
+  .watchlist-row:has(> .watchlist-card:nth-child(6)) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
+  .watchlist-row:has(> .watchlist-card:nth-child(6)) > .watchlist-card { flex: 0 0 calc((100% - 16px) / 5); scroll-snap-align: start; }
   .watchlist-card, .top-five .ranking-card { width: 100%; min-width: 0; height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
   .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
   .watchlist-card > span, .top-five .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
@@ -671,6 +674,21 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 4; }
   .ranking-gift { grid-column: 2; grid-row: 1; min-height: 44px; gap: 3px; padding: 0 3px; font-size: 0.7rem; }
   .ranking-gift-icon { height: 1rem; }
+  .brand-heading { width: min(204px, 68%); }
+  #filters-form { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px 6px; }
+  #filters-form > label:nth-of-type(1) { grid-column: 1 / 4; }
+  #filters-form > label:nth-of-type(2) { grid-column: 4 / -1; }
+  #filters-form > label:nth-of-type(3) { grid-column: 1 / 4; }
+  #filters-form > label:nth-of-type(4) { grid-column: 4 / -1; }
+  #filters-form > label:nth-of-type(5) { grid-column: 1; grid-row: 3; }
+  #filters-form .filter-state-toggles { display: contents; }
+  #filters-form .filter-state-toggles > .filter-toggle:first-of-type { grid-column: 2; grid-row: 3; }
+  #filters-form .filter-state-toggles > .filter-toggle:nth-of-type(2) { grid-column: 3; grid-row: 3; }
+  #filters-form > label.filter-toggle { grid-column: 5; grid-row: 3; justify-self: stretch; }
+  #filters-form .filter-toggle { width: auto; min-width: 0; }
+  #filters-form .filter-toggle .filter-symbol, #filters-form .filter-toggle .eye-symbol { width: 1.44rem; height: 1.44rem; font-size: 1.44rem; }
+  #filters-form > #show-all { grid-column: 1 / 3; grid-row: 4; order: 0; }
+  #filters-form .form-actions { grid-column: 3 / -1; grid-row: 4; order: 0; }
   .table-wrap { overflow: hidden; }
   .results-panel table { min-width: 0; table-layout: fixed; }
   .results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10) { display: none; }
