@@ -197,7 +197,14 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('#filters-form > label:nth-of-type(2)')?.getPropertyValue('grid-column'), '2');
   assert.equal(declarations.get('#filters-form > label:nth-of-type(5)')?.getPropertyValue('grid-row'), '3');
   assert.equal(declarations.get('#filters-form > .filter-state-row')?.getPropertyValue('grid-column'), '2');
+  assert.equal(declarations.get('#filters-form > #show-all')?.getPropertyValue('grid-column'), '1');
+  assert.equal(declarations.get('#filters-form .form-actions')?.getPropertyValue('grid-column'), '2');
+  assert.equal(declarations.get('#filters-form > #show-all')?.getPropertyValue('margin-top'), '8px');
+  assert.equal(declarations.get('#filters-form .form-actions')?.getPropertyValue('margin-top'), '8px');
+  assert.equal(declarations.get('#filters-form > label:not(.filter-toggle)')?.getPropertyValue('width'), '100%');
+  assert.equal(declarations.get('#filters-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), #filters-form select')?.getPropertyValue('width'), '100%');
   assert.equal(declarations.get('#filters-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), #filters-form select')?.getPropertyValue('height'), '34px');
+  assert.equal(declarations.get('#filters-form > .filter-state-row')?.getPropertyValue('transform'), 'translateY(10px)');
   assert.equal(declarations.get('#filters-form .filter-toggle')?.getPropertyValue('width'), '38.4px');
   assert.equal(declarations.get('#filters-form .filter-toggle')?.getPropertyValue('min-height'), '48.4px');
   assert.equal(declarations.get('#filters-form .filter-toggle')?.getPropertyValue('align-self'), 'center');
