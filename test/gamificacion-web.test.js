@@ -198,10 +198,33 @@ test('el panel mantiene los recuentos visibles y despliega acciones y valor con 
   assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Newbie');
   window.eval("renderGamificationDna({ principal: 'Explorer', porcentajes: { explorer: 100 } })");
   assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Explorer');
-  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: Explorer');
+  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 100% Explorer / 0% Rarity Hunter');
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();
+});
+
+test('el resumen DNA conserva el principal y muestra el segundo por porcentaje, limpiando estados vacios', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state(), undefined, { principal: 'Explorer', porcentajes: { rarityHunter: 25, explorer: 25, collector: 25, fan: 25 } });
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const button = window.document.querySelector('#open-dna-inline');
+    assert.equal(button.textContent, '25% Explorer / 25% Rarity Hunter');
+    window.eval("renderGamificationDna({ principal: 'Rarity Hunter', porcentajes: { rarityHunter: 40.5, explorer: 30.5, collector: 20, fan: 9 } })");
+    assert.equal(button.textContent, '40,5% Rarity Hunter / 30,5% Explorer');
+    assert.equal(button.title, button.textContent);
+    for (const dna of [{ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }, null]) {
+      window.eval(`renderGamificationDna(${JSON.stringify(dna)})`);
+      assert.equal(button.textContent, dna ? 'Newbie' : 'DNA no disponible');
+      assert.equal(window.document.querySelector('#gamification-dna-percentage').hidden, true);
+      assert.equal(window.document.querySelector('#gamification-dna-secondary').hidden, true);
+    }
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco de retorno', async () => {
@@ -220,6 +243,8 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   assert.equal(dialog.open, true);
   assert.equal(document.activeElement.id, 'dna-close');
   assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Fan');
+  assert.equal(document.querySelector('#open-dna-inline').textContent, '40% Fan / 30% Collector');
+  assert.equal(document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 40% Fan / 30% Collector');
   assert.match(chart.style.getPropertyValue('--dna-gradient'), /conic-gradient/);
   assert.match(chart.style.getPropertyValue('--dna-gradient'), /0% 10%/);
   assert.match(chart.style.getPropertyValue('--dna-gradient'), /10% 30%/);

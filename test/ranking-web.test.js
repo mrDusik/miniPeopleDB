@@ -122,6 +122,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.match(styles, /\.ranking-level-info \{[^}]*flex-wrap: wrap;[^}]*overflow: visible/);
   assert.match(styles, /\.ranking-level-name \{[^}]*overflow-wrap: anywhere; white-space: normal;/);
   assert.match(styles, /\.ranking-dna-principal \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
+  assert.match(styles, /\.ranking-dna-principal \{[^}]*color: var\(--ink\); font: italic 700 0\.68rem[^}]*text-transform: uppercase;/);
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, 'Explorer');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tagName, 'SPAN');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tabIndex, -1);

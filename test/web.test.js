@@ -97,7 +97,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
 
-    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'min="1978"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
+    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       assert.match(html, /id="filter-coleccion"/);
       assert.match(html, /id="filter-buscada"/);
@@ -168,8 +168,11 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) Arial, sans-serif/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
   assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 840px[^}]*margin-left:\s*auto/s);
-  assert.match(css, /\.gamification-level-stack \{ display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; \}/);
-  assert.match(css, /\.gamification-level-stack \.gamification-level \{ flex: 0 1 auto; width: auto; \}/);
+  assert.match(css, /\.gamification-level-stack \{[^}]*display: grid;[^}]*grid-template-columns: var\(--level-image-size\) minmax\(0, 1fr\);[^}]*min-height: var\(--level-image-size\);/);
+  assert.match(css, /\.gamification-level-stack \.gamification-level \{[^}]*grid-row: 1 \/ 3; grid-template-rows: subgrid;/);
+  assert.match(css, /\.gamification-level-title > \.gamification-level-image \{[^}]*grid-row: 1 \/ 3;[^}]*height: 100%;/);
+  assert.match(css, /\.gamification-level-title > \.gamification-level-image \{[^}]*min-height: 0; aspect-ratio: 1;/);
+  assert.match(css, /\.gamification-dna-row \{[^}]*grid-column: 2; grid-row: 2;/);
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
@@ -190,7 +193,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.modal-preview img\s*\{[^}]*object-fit:\s*contain;\s*\}/);
   assert.match(css, /\.collection-value strong\s*\{[^}]*font:\s*700 1\.2rem Arial, sans-serif/s);
   assert.match(css, /\.gamification-bricks-value strong\s*\{[^}]*line-height:\s*1/s);
-  assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif/s);
+  assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem\/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif/s);
   assert.match(css, /\.gamification-level-title\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /#gamification-level-number\s*\{[^}]*font-size:\s*1\.75rem/s);
   assert.match(css, /\.gamification-meter > span\s*\{[^}]*position:\s*absolute/s);
@@ -262,6 +265,8 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(main.querySelector('#open-dna-inline').tagName, 'BUTTON');
     assert.equal(main.querySelector('#gamification-dna-principal').textContent, 'Newbie');
     assert.equal(main.querySelector('#open-dna-inline img, #open-dna-inline svg'), null);
+    assert.match(css, /\.gamification-level-title > #gamification-level-number \{ grid-column: 2; grid-row: 1; \}/);
+    assert.match(css, /\.gamification-dna-name \{[^}]*min-height: 0; padding: 0;/);
     assert.match(css, /\.gamification-dna-name \{[^}]*color: var\(--ink\)[^}]*font: italic 700 0\.75rem/);
     assert.match(css, /\.gamification-dna-name:hover \{ color: var\(--accent\); background: transparent; \}/);
     assert.doesNotMatch(css, /\.modal-dna \{[^}]*border-top:/);
@@ -600,7 +605,7 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   dom.window.close();
 });
 
-test('los filtros muestran los toggles de estado, limitan el año y listan los temas', async () => {
+test('los filtros muestran los toggles de estado y listan los temas y años registrados', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -626,9 +631,128 @@ test('los filtros muestran los toggles de estado, limitan el año y listan los t
     [...window.document.querySelectorAll('#categoria option')].map((option) => option.textContent),
     ['Todas (2)', 'Castle (1)', 'Space (1)'],
   );
-  assert.equal(window.document.querySelector('#anio').min, '1978');
-  assert.equal(window.document.querySelector('#anio').max, String(new Date().getFullYear()));
+  assert.equal(window.document.querySelector('#anio').tagName, 'SELECT');
+  assert.deepEqual(
+    [...window.document.querySelectorAll('#anio option')].map((option) => option.textContent),
+    ['Todos (2)', '2024 (1)', '1980 (1)'],
+  );
   dom.window.close();
+});
+
+test('los iconos recalculan categorias, subcategorias y años sin opciones de total cero', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const catalog = [
+    { id: 'OWNED-A', categoria: 'Space', subcategoria: 'A', anio: 2024, estadoColeccion: 'COLECCIÓN', observada: true },
+    { id: 'OWNED-B', categoria: 'Space', subcategoria: 'B', anio: 2020, estadoColeccion: 'COLECCIÓN', observada: false },
+    { id: 'WANTED-B', categoria: 'Space', subcategoria: 'B', anio: 2024, estadoColeccion: 'BUSCADA', observada: true },
+    { id: 'WANTED-C', categoria: 'Castle', subcategoria: 'C', anio: 1980, estadoColeccion: 'BUSCADA', observada: false },
+  ];
+  const catalogRequests = [];
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 2, buscadas: 2 }) };
+    if (url.startsWith('/minifiguras')) catalogRequests.push(url);
+    return { ok: true, json: async () => catalog };
+  };
+  const options = (id) => [...window.document.querySelector(`#${id}`).options].map((option) => option.textContent);
+  const countedOptions = (figures, field, placeholder) => {
+    const values = [...new Set(figures.map((figure) => figure[field]))];
+    values.sort(field === 'anio' ? (left, right) => right - left : undefined);
+    return [`${placeholder} (${figures.length})`, ...values.map((value) => `${value} (${figures.filter((figure) => figure[field] === value).length})`)];
+  };
+
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const collection of [false, true]) {
+      for (const wanted of [false, true]) {
+        for (const observed of [false, true]) {
+          window.document.querySelector('#categoria').value = '';
+          for (const [id, checked] of [['filter-coleccion', collection], ['filter-buscada', wanted], ['observada', observed]]) {
+            const input = window.document.querySelector(`#${id}`);
+            input.checked = checked;
+            input.dispatchEvent(new window.Event('change', { bubbles: true }));
+          }
+          const matching = catalog.filter((figure) => (collection === wanted || figure.estadoColeccion === (collection ? 'COLECCIÓN' : 'BUSCADA')) && (!observed || figure.observada));
+          assert.deepEqual(options('categoria'), countedOptions(matching, 'categoria', 'Todas'));
+          assert.deepEqual(options('anio'), countedOptions(matching, 'anio', 'Todos'));
+          const category = window.document.querySelector('#categoria');
+          category.value = 'Space';
+          category.dispatchEvent(new window.Event('change', { bubbles: true }));
+          const space = matching.filter((figure) => figure.categoria === 'Space');
+          assert.deepEqual(options('subcategoria'), countedOptions(space, 'subcategoria', 'Todas'));
+          assert.deepEqual(options('anio'), countedOptions(space, 'anio', 'Todos'));
+        }
+      }
+    }
+
+    window.document.querySelector('#show-all').click();
+    const category = window.document.querySelector('#categoria');
+    const subcategory = window.document.querySelector('#subcategoria');
+    const year = window.document.querySelector('#anio');
+    category.value = 'Space';
+    category.dispatchEvent(new window.Event('change'));
+    subcategory.value = 'B';
+    subcategory.dispatchEvent(new window.Event('change'));
+    assert.deepEqual(options('anio'), ['Todos (2)', '2024 (1)', '2020 (1)']);
+    year.value = '2020';
+    window.document.querySelector('#observada').click();
+    assert.equal(subcategory.value, 'B');
+    assert.equal(year.value, '');
+    assert.deepEqual(options('anio'), ['Todos (1)', '2024 (1)']);
+    window.document.querySelector('#filter-coleccion').click();
+    assert.equal(subcategory.value, '');
+    assert.deepEqual(options('subcategoria'), ['Todas (1)', 'A (1)']);
+
+    window.document.querySelector('#show-all').click();
+    category.value = 'Castle';
+    category.dispatchEvent(new window.Event('change'));
+    year.value = '1980';
+    window.document.querySelector('#filter-coleccion').click();
+    assert.equal(category.value, '');
+    assert.equal(year.value, '');
+    window.document.querySelector('#show-all').click();
+    assert.deepEqual(options('categoria'), ['Todas (4)', 'Castle (1)', 'Space (3)']);
+    assert.deepEqual(options('anio'), ['Todos (4)', '2024 (2)', '2020 (1)', '1980 (1)']);
+    year.value = '2024';
+    window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+    assert.equal(window.document.querySelector('#result-count').textContent, '2 figuras');
+    assert.deepEqual(catalogRequests, ['/minifiguras']);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('los desplegables no ofrecen elementos cuando los iconos no coinciden con ninguna figura', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0 }) };
+    return { ok: true, json: async () => [{ id: 'ONLY-OWNED', categoria: 'Space', subcategoria: 'Classic', anio: 1980, estadoColeccion: 'COLECCIÓN', observada: false }] };
+  };
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const id of ['filter-buscada', 'observada']) {
+      window.document.querySelector('#show-all').click();
+      window.document.querySelector(`#${id}`).click();
+      for (const selectId of ['categoria', 'subcategoria', 'anio']) {
+        const select = window.document.querySelector(`#${selectId}`);
+        assert.equal(select.options.length, 1);
+        assert.equal(select.value, '');
+        assert.match(select.options[0].textContent, /\(0\)$/);
+      }
+      assert.equal(window.document.querySelector('#subcategoria').disabled, true);
+    }
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambos', async () => {
@@ -1032,6 +1156,66 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
   dom.window.close();
 });
 
+test('el modal de seguimiento permite alternar el ojo y conserva el estado ante errores', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  let minifigura = { id: 'WATCH-1', nombre: 'Seguida', categoria: 'Space', anio: 2024, estadoColeccion: 'BUSCADA', precio: 20, observada: true };
+  let resolveUpdate;
+  const updates = [];
+  window.fetch = async (url, options = {}) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 1, top5: [], top5Antiguas: [], observadas: minifigura.observada ? [{ ...minifigura, precioBrickset: 20 }] : [] }) };
+    if (url === '/minifiguras/WATCH-1/observada' && options.method === 'PUT') {
+      updates.push(JSON.parse(options.body));
+      return new Promise((resolve) => { resolveUpdate = resolve; });
+    }
+    return { ok: true, json: async () => [minifigura] };
+  };
+
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    window.document.querySelector('.watchlist-card').click();
+    const eye = window.document.querySelector('#form-observada');
+    assert.equal(eye.disabled, false);
+    assert.equal(eye.getAttribute('aria-pressed'), 'true');
+    assert.equal(window.document.querySelector('#form-nombre').disabled, true);
+    assert.equal(window.document.querySelector('#form-submit').hidden, true);
+
+    for (const observada of [false, true]) {
+      eye.click();
+      assert.equal(eye.disabled, true);
+      eye.click();
+      assert.deepEqual(updates.at(-1), { observada });
+      assert.equal(updates.length, observada ? 2 : 1);
+      minifigura = { ...minifigura, observada };
+      resolveUpdate({ ok: true, json: async () => minifigura });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(eye.disabled, false);
+      assert.equal(eye.getAttribute('aria-pressed'), String(observada));
+      assert.equal(eye.classList.contains('active'), observada);
+      assert.equal(eye.getAttribute('aria-label'), observada ? 'Dejar de seguir' : 'Seguir');
+      assert.equal(window.document.querySelector('.eye-icon').getAttribute('aria-pressed'), String(observada));
+      assert.equal(window.document.querySelectorAll('.watchlist-card').length, Number(observada));
+      assert.equal(window.document.querySelector('#watchlist-title').textContent, `Seguimiento (${Number(observada)} / 10)`);
+      assert.equal(window.document.querySelector('#form-dialog').open, true);
+    }
+
+    eye.click();
+    resolveUpdate({ ok: false, json: async () => ({ error: 'ERROR_INTERNO' }) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(eye.disabled, false);
+    assert.equal(eye.getAttribute('aria-pressed'), 'true');
+    assert.equal(window.document.querySelectorAll('.watchlist-card').length, 1);
+    assert.notEqual(window.document.querySelector('#toast-region').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el modal aplica los modos de alta y visualizacion', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
@@ -1080,16 +1264,15 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.ok(collectionToggle.classList.contains('inactive'));
   assert.equal(collectionToggle.disabled, true);
   assert.equal(wantedToggle.disabled, true);
-  assert.equal(followToggle.disabled, true);
+  assert.equal(followToggle.disabled, false);
   assert.equal(followToggle.getAttribute('aria-pressed'), 'true');
   assert.ok(followToggle.classList.contains('active'));
   collectionToggle.click();
-  followToggle.click();
   assert.equal(wantedToggle.getAttribute('aria-pressed'), 'true');
   assert.equal(followToggle.getAttribute('aria-pressed'), 'true');
   assert.deepEqual(
     [...window.document.querySelectorAll('#minifigura-form input, #minifigura-form select, #minifigura-form textarea, #minifigura-form button')]
-      .filter((control) => control.id !== 'form-cancel' && !control.disabled),
+      .filter((control) => !['form-cancel', 'form-observada'].includes(control.id) && !control.disabled),
     [],
   );
   window.document.querySelector('#form-cancel').click();

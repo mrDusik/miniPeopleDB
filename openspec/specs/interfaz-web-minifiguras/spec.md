@@ -53,6 +53,20 @@ La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcatego
 - **THEN** el control `subcategoria` se actualiza para mostrar solo las subcategorías de esa categoría
 - **AND** cualquier subcategoría seleccionada previamente que no pertenezca a la nueva categoría se limpia
 
+#### Scenario: Actualizar los contadores con los iconos del filtro
+- **WHEN** el usuario marca o desmarca colección, buscada o seguimiento
+- **THEN** los desplegables de categoría, subcategoría y año recalculan inmediatamente sus totales sobre la caché local, sin peticiones al servidor
+- **AND** colección y buscada conservan su lógica de ambos o ninguno sin restricción de estado, y seguimiento restringe a las figuras observadas
+- **AND** las opciones con total cero se ocultan y cualquier selección que desaparezca se limpia
+- **AND** la opción de todas las figuras permanece disponible incluso si su total es cero
+
+#### Scenario: Elegir un año registrado
+- **WHEN** el usuario abre el filtro Año
+- **THEN** se muestra un desplegable con los años de las minifiguras registradas, en orden descendente y con formato `Año (X)`
+- **AND** los años y sus totales reflejan los iconos y la categoría y subcategoría seleccionadas
+- **AND** la opción `Todos (Total)` elimina la restricción de año
+- **AND** restablecer los filtros restaura los años y totales del catálogo completo
+
 ### Requirement: Mostrar resultados en una tabla dinámica
 
 La interfaz SHALL representar cada minifigura en una fila y SHALL mostrar una acción de observación, `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion`, `Precio` y `Diferencia`. La columna ID SHALL ser un control `.id-link` que abra el modal unificado en modo visualización. La URL de imagen SHALL usar siempre el ID en minúsculas, aunque el ID persistido se muestre en mayúsculas.
@@ -324,7 +338,13 @@ La interfaz SHALL mostrar un toggle con icono de ojo por fila, distinguir estado
 #### Scenario: Abrir una tarjeta observada
 - **WHEN** el usuario hace clic en una tarjeta o imagen de la galería
 - **THEN** se abre el modal unificado en modo visualización con todos los datos de la minifigura
-- **AND** sus campos y acciones de modificación permanecen deshabilitados
+- **AND** sus campos y acciones de modificación permanecen deshabilitados, salvo el botón Seguimiento (ojo)
+
+#### Scenario: Alternar seguimiento desde el modal de visualización
+- **WHEN** el usuario pulsa el botón Seguimiento (ojo) del modal de visualización
+- **THEN** la interfaz persiste el cambio y actualiza el ojo, la tabla y la galería sin cerrar el modal
+- **AND** el botón permanece deshabilitado mientras se guarda el cambio
+- **AND** si el guardado falla, conserva el estado anterior y muestra el Toast de error o de límite de observación
 
 #### Scenario: Mostrar el cupo de seguimiento
 - **WHEN** se carga o actualiza la lista de observadas
@@ -543,7 +563,13 @@ El resultado SHALL reflejar los registros historicos de pruebas y produccion des
 
 ### Requirement: Seleccionar caracter principal sin ambiguedad
 
-El sistema SHALL mostrar `Newbie` y cuatro proporciones cero cuando la suma de contribuciones es cero, incluidos usuarios sin logros o con solo regalos. En otro caso SHALL elegir el caracter de mayor contribucion exacta, aplicando en empate Explorer > Collector > Fan > Rarity Hunter. El redondeo de presentacion SHALL NOT intervenir en la seleccion. El panel propio SHALL mostrar solo el nombre del caracter, sin porcentajes DNA; el porcentaje de progreso hacia el siguiente nivel SHALL conservarse.
+El sistema SHALL mostrar `Newbie` y cuatro proporciones cero cuando la suma de contribuciones es cero, incluidos usuarios sin logros o con solo regalos. En otro caso SHALL elegir el caracter de mayor contribucion exacta, aplicando en empate Explorer > Collector > Fan > Rarity Hunter. El redondeo de presentacion SHALL NOT intervenir en la seleccion. El panel propio SHALL mostrar debajo del conjunto numero y nombre de nivel el porcentaje seguido del nombre del caracter principal y el porcentaje seguido del nombre del segundo rasgo de mayor proporcion. El segundo rasgo SHALL usar el orden estable de la leyenda del modal en caso de empate. El resumen SHALL conservar la tipografia en cursiva, negrita, mayusculas y color originales; el porcentaje de progreso hacia el siguiente nivel SHALL conservarse. Newbie y DNA no disponible SHALL mostrarse sin porcentajes ni segundo rasgo.
+
+#### Scenario: Resumen de los dos rasgos principales
+- **WHEN** el DNA propio contiene Fan 40%, Collector 30%, Explorer 20% y Rarity Hunter 10%
+- **THEN** bajo el nivel aparece `40% Fan / 30% Collector` con el estilo visual original y acceso al modal DNA
+- **AND** los rasgos se alinean horizontalmente con el numero de nivel, con numero y nombre en la primera fila y rasgos en la segunda, compartiendo la altura reservada para la imagen que abarca ambas filas
+- **AND** el rasgo principal de las filas del ranking usa el mismo estilo tipografico y color, conservando su tamaño de 0.68rem y sin mostrar porcentajes ni rasgos secundarios ajenos
 
 #### Scenario: Usuario Newbie
 - **WHEN** el usuario no tiene logros de coleccion que contribuyan a DNA
@@ -601,7 +627,7 @@ El modal DNA SHALL conservar la linea grafica de los modales existentes y repres
 #### Scenario: DNA disponible
 - **WHEN** el usuario abre DNA con contribuciones positivas
 - **THEN** ve una tarta proporcional con los cuatro colores y una leyenda descriptiva accesible
-- **AND** los porcentajes agregados solo aparecen en este modal propio, no en el panel ni el ranking
+- **AND** los porcentajes agregados aparecen en el modal propio y los dos principales en el panel propio, nunca en el ranking
 
 #### Scenario: Tarta sin contribuciones
 - **WHEN** se abre DNA para un Newbie
