@@ -163,7 +163,7 @@ test('los ajustes responsive quedan aislados de escritorio y ordenan los control
   assert.equal(declarations.get('.filters-form > #show-all').getPropertyValue('grid-column'), '2');
   assert.equal(declarations.get('.gamification-level-stack .gamification-level').getPropertyValue('grid-row'), '1 / 3');
   assert.equal(declarations.get('.gamification-meter').getPropertyValue('min-width'), '0');
-  assert.equal(declarations.get('#form-dialog').getPropertyValue('overflow-y'), 'auto');
+  assert.equal(declarations.get('#form-dialog').getPropertyValue('overflow'), 'hidden');
   dom.window.close();
 });
 
@@ -181,8 +181,15 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('.ranking-summary .ranking-expand')?.getPropertyValue('grid-template-rows'), 'auto auto auto');
   assert.equal(declarations.get('#form-dialog .modal-preview')?.getPropertyValue('display'), 'contents');
   assert.equal(declarations.get('#form-dialog .modal-preview-heading')?.getPropertyValue('grid-row'), '1');
-  const hiddenColumns = declarations.get('.results-panel th:nth-child(1), .results-panel td:nth-child(1), .results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10)');
+  const hiddenColumns = declarations.get('.results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10)');
   assert.equal(hiddenColumns?.getPropertyValue('display'), 'none');
+  assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
+  assert.equal(declarations.get('.results-panel th:nth-child(1), .results-panel td:nth-child(1)'), undefined);
+  assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
+  assert.deepEqual([1, 3, 8, 9, 11].map((column) => Number.parseInt(declarations.get(`.results-panel th:nth-child(${column})`)?.getPropertyValue('width'), 10)).reduce((total, width) => total + width, 0), 100);
+  assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
+  assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
+  assert.doesNotMatch(smartphone.cssRules.map((rule) => rule.cssText).join('\n'), /\.results-panel th:nth-child\(1\), \.results-panel td:nth-child\(1\)[^{]*\{ display: none; \}/);
   dom.window.close();
 });
 
@@ -406,7 +413,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.match(css, /#form-dialog\s*\{[^}]*height:\s*fit-content/s);
   assert.doesNotMatch(css, /#form-dialog #minifigura-form\s*\{[^}]*height:/s);
   assert.match(css, /\.modal label\s*\{\s*gap:\s*4px;\s*font-size:\s*0\.68rem/);
-  assert.match(css, /\.modal-preview img\s*\{\s*width:\s*100px;\s*height:\s*100px/);
+  assert.match(css, /\.modal-preview img\s*\{\s*width:\s*56px;\s*height:\s*56px/);
   assert.match(css, /\.modal form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*10px/s);
   assert.match(css, /@media \(max-width:\s*360px\)\s*\{[^}]*#form-dialog #minifigura-form\s*\{[^}]*gap:\s*10px/s);
   assert.match(css, /\.modal label\s*\{\s*font-size:\s*0\.6rem;\s*line-height:\s*1;\s*\}/);
