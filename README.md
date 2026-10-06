@@ -103,6 +103,8 @@ Aplica `supabase/schema.sql` para instalar la RPC de recálculo y sus permisos a
 
 Para mostrar los dos rasgos DNA con porcentajes en Ranking Global, vuelve a aplicar `supabase/schema.sql`: actualiza la respuesta de `ranking_global()` con el resumen publico `dna_rasgos`, sin exponer ponderaciones ni los cuatro porcentajes completos.
 
+El selector del Ranking Global, situado encima de los regalos de Bricks, permite ordenar por Nivel (predeterminado), Colección, Rarity Hunter, Collector, Explorer o Fan. Cada criterio selecciona el Top 10 de todos los usuarios; los empates se resuelven por nivel, Bricks y finalmente ID de usuario. `GET /api/ranking?criterio=coleccion` acepta `nivel`, `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; omitir el parámetro conserva Nivel. La posición del panel principal sigue usando Nivel. Antes de desplegar esta versión, reaplica el esquema completo en Supabase para sustituir la RPC sin argumentos por `ranking_global(p_criterio text default 'nivel')` y actualizar sus permisos. Las llamadas SQL sin argumentos siguen siendo válidas y los porcentajes DNA completos permanecen privados. Las pruebas automatizadas cubren la API con el mock y la selección y permisos SQL con PGlite; no sustituyen la verificación del entorno remoto autorizado.
+
 ### Desarrollo local en cualquier rama
 
 No hace falta mergear a `main` ni desplegar en Render: el servidor sirve el código de la rama que tengas activa. `npm start` sigue funcionando; para reiniciar automáticamente el servidor cuando cambien sus módulos, usa Node.js 22 o posterior y:

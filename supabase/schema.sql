@@ -325,6 +325,7 @@ create policy "Users can update their public profile"
 
 begin;
 drop function if exists public.ranking_global();
+drop function if exists public.ranking_global(text);
 
 create or replace function public.aplicar_recalculo_gamificacion_categorias(
   p_fingerprint text,
@@ -386,7 +387,7 @@ $$;
 revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) from public, anon, authenticated;
 grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) to service_role;
 
-create function public.ranking_global()
+create function public.ranking_global(p_criterio text default 'nivel')
 returns table (
   user_id uuid,
   avatar_url text,
@@ -406,10 +407,21 @@ language sql
 security definer
 set search_path = public, pg_temp
 as $$
-  with top_users as (
-    select g.user_id, g.bricks, g.nivel, g.logros
+  with candidates as (
+    select g.user_id, g.bricks, g.nivel, g.logros,
+      (select count(*) from public.minifiguras m where m.user_id = g.user_id and m.estado_coleccion = 'COLECCIÓN') as total_coleccion,
+      private.dna_calcular(g.user_id) as dna
     from public.gamificacion g
-    order by g.bricks desc, g.user_id asc
+    where auth.uid() is not null
+      and p_criterio in ('nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan')
+  ), top_users as (
+    select *, case p_criterio
+      when 'coleccion' then total_coleccion::numeric
+      when 'nivel' then coalesce((nivel->>'id')::numeric, 0)
+      else coalesce((dna->'porcentajes'->>p_criterio)::numeric, 0)
+    end as criterio_valor
+    from candidates
+    order by criterio_valor desc, coalesce((nivel->>'id')::integer, 0) desc, bricks desc, user_id asc
     limit 10
   )
   select
@@ -437,7 +449,7 @@ as $$
       when 17 then '/level_images/17_blacktron.png'
       else '/level_images/9_forestman.png'
     end as imagen_nivel,
-    (select count(*) from public.minifiguras m where m.user_id = top_users.user_id and m.estado_coleccion = 'COLECCIÓN') as total_coleccion,
+    top_users.total_coleccion,
     coalesce((
       select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', ranked.id, 'nombre', ranked.nombre, 'precio', ranked.precio, 'categoria', ranked.categoria, 'subcategoria', ranked.subcategoria, 'anio', ranked.anio)) order by ranked.position)
       from (
@@ -480,10 +492,10 @@ as $$
       ) ranked
     ) end as dna_rasgos
   from top_users
-  cross join lateral (select private.dna_calcular(top_users.user_id) as data) dna
+  cross join lateral (select top_users.dna as data) dna
   left join public.perfiles_publicos p on p.user_id = top_users.user_id
   where auth.uid() is not null
-  order by top_users.bricks desc, top_users.user_id asc;
+  order by top_users.criterio_valor desc, coalesce((top_users.nivel->>'id')::integer, 0) desc, top_users.bricks desc, top_users.user_id asc;
 $$;
 
 create or replace function public.ranking_logros(p_usuario_id uuid)
@@ -626,14 +638,14 @@ as $$
   where receptor_id = auth.uid() and auth.uid() is not null;
 $$;
 
-revoke all on function public.ranking_global() from public, anon;
+revoke all on function public.ranking_global(text) from public, anon;
 revoke all on function public.ranking_logros(uuid) from public, anon;
 revoke all on function public.regalar_bricks(uuid) from public, anon;
 revoke all on function public.regalos_recibidos_count() from public, anon;
 revoke all on function private.dna_calcular(uuid) from public, anon, authenticated;
 revoke all on function public.gamificacion_dna() from public, anon;
 revoke all on table public.dna_ponderaciones from public, anon, authenticated;
-grant execute on function public.ranking_global() to authenticated;
+grant execute on function public.ranking_global(text) to authenticated;
 grant execute on function public.ranking_logros(uuid) to authenticated;
 grant execute on function public.regalar_bricks(uuid) to authenticated;
 grant execute on function public.regalos_recibidos_count() to authenticated;

@@ -218,8 +218,14 @@ export function createServer({
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
         return;
       }
+      const criterio = requestUrl.searchParams.get('criterio') ?? 'nivel';
+      if (!['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan'].includes(criterio)
+        || requestUrl.searchParams.getAll('criterio').length > 1) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO', parametro: 'criterio' });
+        return;
+      }
       try {
-        sendJson(response, 200, await rankingRepository.list());
+        sendJson(response, 200, await rankingRepository.list(criterio));
       } catch (error) {
         sendJson(response, 500, { error: error instanceof RankingNoDisponibleError ? error.code : 'ERROR_INTERNO' });
       }

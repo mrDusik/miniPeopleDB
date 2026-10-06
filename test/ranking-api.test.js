@@ -22,6 +22,46 @@ function rankingSupabase() {
   return supabase;
 }
 
+test('el ranking valida los seis criterios y selecciona el Top 10 antes de proyectar datos publicos', async () => {
+  const supabase = rankingSupabase();
+  const ids = Array.from({ length: 12 }, (_, index) => `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`);
+  for (const [index, userId] of ids.entries()) {
+    supabase.seed('gamificacion', userId, [{ bricks: index < 10 ? 1000 - index : 10,
+      nivel: { id: index < 10 ? 5 : index === 10 ? 2 : 1 },
+      logros: index < 10 ? [] : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 })),
+    }]);
+    if (index >= 10) supabase.seed('minifiguras', userId, [
+      { id: 'ONE', nombre: 'One', estado_coleccion: 'COLECCIÓN' },
+      { id: 'TWO', nombre: 'Two', estado_coleccion: 'COLECCIÓN' },
+      { id: 'THREE', nombre: 'Three', estado_coleccion: 'COLECCIÓN' },
+    ]);
+  }
+  const context = await startTestServer({ supabase });
+  const get = authFetch(TEST_TOKEN);
+  try {
+    for (const criterio of ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']) {
+      const response = await get(`${context.baseUrl}/api/ranking?criterio=${criterio}`);
+      assert.equal(response.status, 200);
+      const ranking = await response.json();
+      assert.equal(ranking.length, 10);
+      if (criterio === 'nivel') assert.deepEqual(ranking.map(({ userId }) => userId), ids.slice(0, 10));
+      else if (criterio === 'coleccion') assert.deepEqual(ranking.slice(0, 2).map(({ userId }) => userId), ids.slice(10));
+      else {
+        const traitEntries = ranking.filter(({ userId }) => ids.slice(10).includes(userId));
+        assert.deepEqual(traitEntries.map(({ userId }) => userId), ids.slice(10));
+      }
+      assert.ok(ranking.every((row) => !('porcentajes' in row) && row.dnaRasgos.length <= 2));
+    }
+    for (const query of ['criterio=invalid', 'criterio=', 'criterio=nivel&criterio=fan']) {
+      const response = await get(`${context.baseUrl}/api/ranking?${query}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), { error: 'PARAMETRO_INVALIDO', parametro: 'criterio' });
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test('GET /api/ranking exige autenticación y devuelve solo el contrato público', async () => {
   const context = await startTestServer({ supabase: rankingSupabase() });
   try {

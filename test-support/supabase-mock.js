@@ -183,8 +183,14 @@ export function createSupabaseMock({ users = {} } = {}) {
     }
 
     if (name === 'ranking_global') {
+      const criterio = parameters?.p_criterio ?? 'nivel';
+      const value = (row) => criterio === 'nivel' ? row.nivel?.id ?? 0
+        : criterio === 'coleccion'
+          ? tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === row.user_id && estado_coleccion === 'COLECCIÓN').length
+          : calculateDna(row.logros ?? []).porcentajes[criterio] ?? 0;
       const data = [...tables.gamificacion]
-        .sort((left, right) => right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
+        .sort((left, right) => value(right) - value(left) || (right.nivel?.id ?? 0) - (left.nivel?.id ?? 0)
+          || right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
         .slice(0, 10)
         .map((gamification) => {
           const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === gamification.user_id);

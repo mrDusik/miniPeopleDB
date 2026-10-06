@@ -405,6 +405,41 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     assert.equal(ranking.length, 10);
     assert.ok(ranking.every((entry) => entry.top5_precio.length >= 3 && entry.top5_antiguedad.length >= 3));
     assert.ok(ranking.every((entry) => typeof entry.dna_principal === 'string'));
+    await db.exec('begin');
+    await db.exec('delete from public.gamificacion');
+    const orderIds = Array.from({ length: 12 }, (_, index) => `23000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
+    for (const [index, userId] of orderIds.entries()) {
+      await db.query('insert into auth.users(id) values ($1)', [userId]);
+      await db.query('insert into public.gamificacion(user_id, bricks, nivel, logros) values ($1, $2, $3, $4)', [
+        userId, index < 10 ? (index < 2 ? 1000 : 1000 - index) : index === 10 ? 5 : 10,
+        JSON.stringify({ id: index < 10 ? 3 : index === 10 ? 2 : 1 }),
+        JSON.stringify(index < 10 ? [] : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 }))),
+      ]);
+      if (index >= 10) {
+        await db.query("insert into public.minifiguras(user_id,id,nombre,categoria) values ($1,'ONE','One','Space')", [userId]);
+      } else {
+        await db.query("insert into public.minifiguras(user_id,id,nombre,categoria,estado_coleccion) values ($1,'WANTED','Wanted','Space','BUSCADA')", [userId]);
+      }
+    }
+    const defaultOrder = (await db.query('select * from public.ranking_global()')).rows;
+    assert.deepEqual(defaultOrder.map(({ user_id }) => user_id), orderIds.slice(0, 10));
+    for (const criterio of ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']) {
+      const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
+      assert.equal(ordered.length, 10);
+      assert.deepEqual(ordered.map(({ user_id }) => user_id), criterio === 'nivel'
+        ? orderIds.slice(0, 10) : [...orderIds.slice(10), ...orderIds.slice(0, 8)]);
+      assert.ok(ordered.every((row) => !('dna_porcentajes' in row) && row.dna_rasgos.length <= 2));
+      assert.equal((await db.query("select has_function_privilege('anon', 'public.ranking_global(text)', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    }
+    assert.deepEqual((await db.query("select * from public.ranking_global('invalid')")).rows, []);
+    for (const [criterio, logroId] of [['rarityHunter', 'weirdo'], ['collector', 'hooked'], ['explorer', 'land-ho'], ['fan', 'nerd']]) {
+      await db.query('update public.gamificacion set logros = $1 where user_id = $2', [JSON.stringify([{ id: logroId, cantidad: 1 }]), orderIds[10]]);
+      const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
+      assert.deepEqual(ordered.slice(0, 2).map(({ user_id }) => user_id), orderIds.slice(10));
+    }
+    await db.query("select set_config('request.jwt.claim.sub', '', false)");
+    assert.deepEqual((await db.query("select * from public.ranking_global('fan')")).rows, []);
+    await db.exec('rollback');
     const ownDnaBefore = (await db.query('select to_jsonb(g) as row from public.gamificacion g where user_id = $1', [originalA])).rows[0].row;
     const ownDna = (await db.query('select public.gamificacion_dna() as data')).rows[0].data;
     const directDna = (await db.query('select private.dna_calcular($1) as data', [originalA])).rows[0].data;
@@ -417,7 +452,7 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     await db.exec('reset role');
     await db.exec('set role authenticated');
     assert.deepEqual((await db.query('select public.gamificacion_dna() as data')).rows[0].data, ownDna);
-    assert.equal((await db.query("select has_function_privilege('authenticated', 'public.ranking_global()', 'EXECUTE') as allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select has_function_privilege('authenticated', 'public.ranking_global(text)', 'EXECUTE') as allowed")).rows[0].allowed, true);
     await db.exec('reset role');
     assert.equal((await db.query('select public.ranking_logros($1) as data', [originalA])).rows[0].data, null);
     assert.ok((await db.query('select public.ranking_logros($1) as data', [ranking[0].user_id])).rows[0].data.logros.length > 0);
