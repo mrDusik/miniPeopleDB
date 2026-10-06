@@ -55,6 +55,19 @@ export const OBJETIVOS = [
   { id: 'concrete-savanna', nombre: 'Concrete Savanna.', descripcion: 'Añadir la minifigura SH0604.', bricks: 700, repetible: false },
   { id: 'youre-shooting-for-the-stars', nombre: "You're shooting for the stars.", descripcion: 'Añadir una minifigura que suponga el 50% del total conocido de minifiguras de una categoría.', bricks: 500, repetible: true },
   { id: 'strike', nombre: 'Strike!!', descripcion: 'Añadir una minifigura que suponga el 100% del total conocido de minifiguras de una categoría.', bricks: 1200, repetible: true },
+  { id: 'retired-police', nombre: 'Retired Police', descripcion: 'Añadir la minifigura COP014S.', bricks: 50, repetible: false },
+  { id: 'retired-firefighter', nombre: 'Retired Firefighter', descripcion: 'Añadir la minifigura FIREC019.', bricks: 50, repetible: false },
+  { id: 'retired-doctor', nombre: 'Retired Doctor', descripcion: 'Añadir la minifigura PLN018.', bricks: 50, repetible: false },
+  { id: 'trio-of-senior-citizens', nombre: 'Trio of senior citizens', descripcion: 'Tienes las minifiguras COP014S, FIREC019 y PLN018.', bricks: 300, repetible: false },
+  { id: 'antiquarian', nombre: 'Antiquarian.', descripcion: 'Añadir una minifigura anterior al año 2000.', bricks: 60, repetible: true },
+  { id: 'to-lay-the-groundwork', nombre: 'To lay the groundwork.', descripcion: 'Alcanzar un valor total de colección de 500€.', bricks: 500, repetible: false },
+  { id: 'investor', nombre: 'Investor.', descripcion: 'Alcanzar un valor total de colección de 1000€.', bricks: 1000, repetible: false },
+  { id: 'investment-fund', nombre: 'Investment fund.', descripcion: 'Alcanzar un valor total de colección de 5000€.', bricks: 5000, repetible: false },
+  { id: 'almost-millionaire', nombre: 'Almost millionaire.', descripcion: 'Alcanzar un valor total de colección de 10000€.', bricks: 10000, repetible: false },
+  { id: 'weirdo', nombre: 'Weirdo.', descripcion: 'Alcanza un porcentaje de Rarity Hunter superior al 50%.', bricks: 500, repetible: false },
+  { id: 'hooked', nombre: 'Hooked.', descripcion: 'Alcanza un porcentaje de Collector superior al 50%.', bricks: 50, repetible: false },
+  { id: 'land-ho', nombre: 'Land ho!', descripcion: 'Alcanza un porcentaje de Explorer superior al 50%.', bricks: 100, repetible: false },
+  { id: 'nerd', nombre: 'Nerd.', descripcion: 'Alcanza un porcentaje de Fan superior al 50%.', bricks: 300, repetible: false },
 ];
 
 export const LOGRO_REGALO = {
@@ -87,6 +100,60 @@ const ID_OBJECTIVES = new Map([
   ['mental-breakdown', 'SH0129'],
   ['the-dark-plastic', 'SH0002'],
   ['concrete-savanna', 'SH0604'],
+  ['retired-police', 'COP014S'],
+  ['retired-firefighter', 'FIREC019'],
+  ['retired-doctor', 'PLN018'],
+]);
+
+export const DNA_PONDERACIONES = new Map(Object.entries({
+  'new-mini-person': [0, 80, 10, 10],
+  woah: [50, 20, 10, 20],
+  'deal-master': [80, 10, 0, 10],
+  masterpiece: [90, 5, 0, 5],
+  'holy-grail': [80, 10, 0, 10],
+  omgold: [95, 5, 0, 0],
+  'lets-go': [0, 5, 90, 5],
+  collector: [5, 90, 0, 5],
+  'step-by-step': [5, 45, 50, 0],
+  'bricky-potter': [0, 10, 20, 70],
+  'bricky-mouse': [0, 10, 20, 70],
+  'its-a-me-mario': [0, 10, 20, 70],
+  'green-hill-zone': [0, 10, 20, 70],
+  dimensional: [60, 10, 20, 10],
+  warsie: [0, 10, 20, 70],
+  'in-ny-i-was': [80, 10, 0, 10],
+  'welcome-to-the-upsidedown': [60, 30, 0, 10],
+  'chill-nancy-im-fine': [80, 10, 0, 10],
+  'the-legend': [0, 10, 20, 70],
+  'heh-there-is-another-one-for-you': [0, 10, 20, 70],
+  'change-will-not-come-in-a-single-sunrise': [0, 10, 20, 70],
+  'start-poetry': [0, 10, 20, 70],
+  'mental-breakdown': [90, 5, 0, 5],
+  'the-dark-plastic': [90, 5, 0, 5],
+  'concrete-savanna': [90, 5, 0, 5],
+  'youre-shooting-for-the-stars': [20, 40, 0, 40],
+  strike: [20, 40, 0, 40],
+  'retired-police': [90, 5, 5, 0],
+  'retired-firefighter': [90, 5, 5, 0],
+  'retired-doctor': [90, 5, 5, 0],
+  'trio-of-senior-citizens': [90, 5, 0, 5],
+  antiquarian: [80, 10, 0, 10],
+  'to-lay-the-groundwork': [50, 50, 0, 0],
+  investor: [50, 50, 0, 0],
+  'investment-fund': [50, 50, 0, 0],
+  'almost-millionaire': [50, 50, 0, 0],
+  weirdo: [100, 0, 0, 0],
+  hooked: [0, 100, 0, 0],
+  'land-ho': [0, 0, 100, 0],
+  nerd: [0, 0, 0, 100],
+  'someone-liked-your-collection': [0, 0, 0, 0],
+}));
+
+const DNA_THRESHOLD_OBJECTIVES = new Map([
+  ['weirdo', 'rarityHunter'],
+  ['hooked', 'collector'],
+  ['land-ho', 'explorer'],
+  ['nerd', 'fan'],
 ]);
 
 function valueOf(minifigura) {
@@ -106,6 +173,22 @@ function categoryTotal(categorias, categoria, subcategoria) {
     return category.subcategorias.find((item) => item.subcategoria === subcategoria)?.total || 0;
   }
   return category.total || 0;
+}
+
+function dnaPercentages(catalogo, categorias) {
+  const scores = { rarityHunter: 0, collector: 0, explorer: 0, fan: 0 };
+  let total = 0;
+  for (const objective of OBJETIVOS) {
+    if (DNA_THRESHOLD_OBJECTIVES.has(objective.id)) continue;
+    const count = achievementCount(objective, catalogo, categorias);
+    const [rarityHunter, collector, explorer, fan] = DNA_PONDERACIONES.get(objective.id);
+    scores.rarityHunter += count * rarityHunter;
+    scores.collector += count * collector;
+    scores.explorer += count * explorer;
+    scores.fan += count * fan;
+    total += count * (rarityHunter + collector + explorer + fan);
+  }
+  return Object.fromEntries(Object.entries(scores).map(([trait, score]) => [trait, total === 0 ? 0 : score * 100 / total]));
 }
 
 function achievementCount(objective, catalogo, categorias) {
@@ -129,6 +212,33 @@ function achievementCount(objective, catalogo, categorias) {
     case 'the-dark-plastic':
     case 'concrete-savanna':
       return catalogo.some((item) => item.id === ID_OBJECTIVES.get(objective.id)) ? 1 : 0;
+    case 'retired-police':
+    case 'retired-firefighter':
+    case 'retired-doctor':
+      return catalogo.some((item) => item.id.toUpperCase() === ID_OBJECTIVES.get(objective.id)) ? 1 : 0;
+    case 'trio-of-senior-citizens': {
+      const seniorCitizens = new Set(['COP014S', 'FIREC019', 'PLN018']);
+      return seniorCitizens.size === new Set(catalogo.map((item) => item.id.toUpperCase()).filter((id) => seniorCitizens.has(id))).size ? 1 : 0;
+    }
+    case 'antiquarian':
+      return countBy(catalogo, (item) => Number.isInteger(item.anio) && item.anio < 2000);
+    case 'to-lay-the-groundwork':
+    case 'investor':
+    case 'investment-fund':
+    case 'almost-millionaire': {
+      const threshold = {
+        'to-lay-the-groundwork': 500,
+        investor: 1000,
+        'investment-fund': 5000,
+        'almost-millionaire': 10000,
+      }[objective.id];
+      return catalogo.reduce((total, item) => total + valueOf(item), 0) >= threshold ? 1 : 0;
+    }
+    case 'weirdo':
+    case 'hooked':
+    case 'land-ho':
+    case 'nerd':
+      return dnaPercentages(catalogo, categorias)[DNA_THRESHOLD_OBJECTIVES.get(objective.id)] > 50 ? 1 : 0;
     case 'youre-shooting-for-the-stars':
     case 'strike': {
       const groups = new Map();

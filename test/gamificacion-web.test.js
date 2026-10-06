@@ -142,12 +142,16 @@ test('usa regalo.jpg en logros de tipo regalo y conserva la copa en los demás',
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state({ logros: [
-    { id: 'gift', type: 'regalo', nombre: 'Someone liked your collection', descripcion: 'Regalo', bricks: 50, cantidad: 1, total: 50 },
+    { id: 'gift', type: 'regalo', nombre: 'Someone liked your collection', descripcion: 'Regalo', bricks: 50, cantidad: 20, total: 1000 },
     { id: 'normal', nombre: 'Normal', descripcion: 'Normal', bricks: 1, cantidad: 1, total: 1 },
+    { id: 'high', nombre: 'High', descripcion: 'High', bricks: 10, cantidad: 10, total: 100 },
   ] }));
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  const [gift, normal] = window.document.querySelectorAll('.achievement-item');
+  const items = [...window.document.querySelectorAll('.achievement-item')];
+  assert.deepEqual(items.map((item) => item.querySelector('.achievement-name').textContent), ['High', 'Normal', 'Someone liked your collection']);
+  const gift = items[2];
+  const normal = items[1];
   assert.equal(gift.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/regalo.jpg');
   assert.equal(gift.querySelector('.achievement-icon').alt, 'Regalo');
   assert.equal(normal.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');

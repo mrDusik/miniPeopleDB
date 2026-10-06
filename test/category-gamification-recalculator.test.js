@@ -43,8 +43,8 @@ test('recalcula todos los usuarios existentes, conservando regalos y usando el t
   const { client, applications } = createAdminClient({
     gamificacion: [{ user_id: 'user-a' }, { user_id: 'user-b' }],
     minifiguras: [
-      { user_id: 'user-a', id: 'COL1', categoria: 'Collectible Minifigures', subcategoria: 'Series 26', estado_coleccion: 'COLECCIÓN' },
-      { user_id: 'user-b', id: 'COL2', categoria: 'Collectible Minifigures', subcategoria: 'Series 26', estado_coleccion: 'COLECCIÓN' },
+      { user_id: 'user-a', id: 'COL1', categoria: 'Collectible Minifigures', subcategoria: 'Series 26', anio: 1999, estado_coleccion: 'COLECCIÓN' },
+      { user_id: 'user-b', id: 'COL2', categoria: 'Collectible Minifigures', subcategoria: 'Series 26', anio: 2024, estado_coleccion: 'COLECCIÓN' },
     ],
     regalos: [{ receptor_id: 'user-b' }, { receptor_id: 'user-b' }],
   });
@@ -70,6 +70,8 @@ test('recalcula todos los usuarios existentes, conservando regalos y usando el t
   const userA = states.find(({ user_id }) => user_id === 'user-a');
   const userB = states.find(({ user_id }) => user_id === 'user-b');
   assert.equal(userA.logros.find(({ id }) => id === 'collector')?.cantidad, 1);
+  assert.equal(userA.logros.find(({ id }) => id === 'antiquarian')?.cantidad, 1);
+  assert.equal(userB.logros.some(({ id }) => id === 'antiquarian'), false);
   assert.equal(userB.logros.find(({ id }) => id === 'someone-liked-your-collection')?.cantidad, 2);
   assert.equal(userB.logros.find(({ id }) => id === 'someone-liked-your-collection')?.total, 100);
 });
@@ -127,13 +129,15 @@ test('subir los totales retira hitos y bajarlos los recupera automáticamente co
   });
   await recalculator.reconcile();
   const initial = applications[0].parameters.p_estados[0];
-  assert.equal(initial.bricks, 1810);
+  assert.equal(initial.bricks, 1860);
+  assert.equal(initial.logros.find(({ id }) => id === 'hooked')?.cantidad, 1);
   categories = [{ categoria: 'Space', total: 5, subcategorias: [{ subcategoria: 'Classic', total: 3 }] }];
   await recalculator.reconcile();
   const lost = applications[1].parameters.p_estados[0];
-  assert.equal(lost.bricks, 60);
-  assert.equal(lost.nivel.nombre, 'Plate');
-  assert.equal(lost.progreso.actual, 60);
+  assert.equal(lost.bricks, 110);
+  assert.equal(lost.nivel.nombre, 'Three-Seven-Five');
+  assert.equal(lost.progreso.actual, 110);
+  assert.equal(lost.logros.find(({ id }) => id === 'hooked')?.cantidad, 1);
   assert.equal(lost.logros.some(({ id }) => ['collector', 'strike', 'youre-shooting-for-the-stars'].includes(id)), false);
   assert.equal(lost.logros.find(({ id }) => id === 'someone-liked-your-collection').total, 50);
   categories = [{ categoria: 'Space', total: 2, subcategorias: [{ subcategoria: 'Classic', total: 2 }] }];

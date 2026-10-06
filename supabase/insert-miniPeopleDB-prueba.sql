@@ -119,9 +119,11 @@ with collection as (
     least(1, count(*) filter (where categoria = 'Star Wars'))::integer as warsie,
     count(*) filter (where id = 'SW0465A')::integer as ny,
     count(*) filter (where id = 'ST008')::integer as upside,
-    count(*) filter (where id = 'ST009')::integer as nancy
+    count(*) filter (where id = 'ST009')::integer as nancy,
+    count(*) filter (where anio < 2000)::integer as antiquarian,
+    coalesce(sum(coalesce(precio, precio_compra, 0)), 0)::numeric as collection_value
   from collection group by user_id
-), achievements as (
+), base_achievements as (
   select counts.user_id, jsonb_agg(jsonb_build_object(
     'id', objective.id, 'nombre', objective.nombre, 'descripcion', objective.descripcion,
     'bricks', objective.bricks, 'repetible', objective.repetible,
@@ -141,10 +143,41 @@ with collection as (
     (15, 'warsie', 'Warsie', 'Anadir la primera minifigura de la categoria Star Wars.', 10, false, warsie),
     (16, 'in-ny-i-was', 'In NY, I was', 'Anadir la minifigura SW0465A.', 3000, false, ny),
     (17, 'welcome-to-the-upsidedown', 'Welcome to the Upsidedown!', 'Anadir la minifigura ST008.', 100, false, upside),
-    (18, 'chill-nancy-im-fine', 'Chill, Nancy. I''m fine', 'Anadir la minifigura ST009.', 700, false, nancy)
+    (18, 'chill-nancy-im-fine', 'Chill, Nancy. I''m fine', 'Anadir la minifigura ST009.', 700, false, nancy),
+    (19, 'antiquarian', 'Antiquarian.', 'Anadir una minifigura anterior al ano 2000.', 60, true, antiquarian),
+    (20, 'to-lay-the-groundwork', 'To lay the groundwork.', 'Alcanzar un valor total de coleccion de 500 euros.', 500, false, (collection_value >= 500)::integer),
+    (21, 'investor', 'Investor.', 'Alcanzar un valor total de coleccion de 1000 euros.', 1000, false, (collection_value >= 1000)::integer),
+    (22, 'investment-fund', 'Investment fund.', 'Alcanzar un valor total de coleccion de 5000 euros.', 5000, false, (collection_value >= 5000)::integer),
+    (23, 'almost-millionaire', 'Almost millionaire.', 'Alcanzar un valor total de coleccion de 10000 euros.', 10000, false, (collection_value >= 10000)::integer)
   ) as objective(orden, id, nombre, descripcion, bricks, repetible, cantidad)
   where objective.cantidad > 0
   group by counts.user_id
+), dna_scores as (
+  select base.user_id,
+    sum((achievement.item->>'cantidad')::numeric * weights.rarity_hunter) as rarity_hunter,
+    sum((achievement.item->>'cantidad')::numeric * weights.collector) as collector,
+    sum((achievement.item->>'cantidad')::numeric * weights.explorer) as explorer,
+    sum((achievement.item->>'cantidad')::numeric * weights.fan) as fan
+  from base_achievements base
+  cross join lateral jsonb_array_elements(base.logros) as achievement(item)
+  join public.dna_ponderaciones weights on weights.logro_id = achievement.item->>'id'
+  group by base.user_id
+), dna_totals as (
+  select *, rarity_hunter + collector + explorer + fan as total from dna_scores
+), achievements as (
+  select base.user_id, base.logros || coalesce(jsonb_agg(jsonb_build_object(
+    'id', objective.id, 'nombre', objective.nombre, 'descripcion', objective.descripcion,
+    'bricks', objective.bricks, 'repetible', false, 'cantidad', 1, 'total', objective.bricks
+  ) order by objective.orden) filter (where objective.cumple), '[]'::jsonb) as logros
+  from base_achievements base
+  join dna_totals dna on dna.user_id = base.user_id
+  cross join lateral (values
+    (1, 'weirdo', 'Weirdo.', 'Alcanza un porcentaje de Rarity Hunter superior al 50%.', 500, dna.total > 0 and dna.rarity_hunter * 100 / dna.total > 50),
+    (2, 'hooked', 'Hooked.', 'Alcanza un porcentaje de Collector superior al 50%.', 50, dna.total > 0 and dna.collector * 100 / dna.total > 50),
+    (3, 'land-ho', 'Land ho!', 'Alcanza un porcentaje de Explorer superior al 50%.', 100, dna.total > 0 and dna.explorer * 100 / dna.total > 50),
+    (4, 'nerd', 'Nerd.', 'Alcanza un porcentaje de Fan superior al 50%.', 300, dna.total > 0 and dna.fan * 100 / dna.total > 50)
+  ) as objective(orden, id, nombre, descripcion, bricks, cumple)
+  group by base.user_id, base.logros
 ), with_gifts as (
   select achievements.user_id, achievements.logros || jsonb_build_array(jsonb_build_object(
     'id', 'someone-liked-your-collection', 'type', 'regalo',

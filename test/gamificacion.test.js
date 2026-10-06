@@ -62,7 +62,7 @@ test('los hitos de categoría se acumulan por categoría con total conocido y se
   }
 });
 
-test('todos los objetivos se pierden al salir de COLECCIÓN y se recuperan al volver, sin perder regalos', () => {
+test('los objetivos previos se pierden al salir de COLECCIÓN y se recuperan al volver, sin perder regalos', () => {
   const categoryNames = ['Harry Potter', 'Disney', 'Super Mario', 'Sonic the Hedgehog', 'Dimensions', 'Star Wars', 'The Legend of Zelda', 'Pokémon', 'Horizon', 'Minecraft'];
   const figures = [
     ...categoryNames.map((categoria, index) => minifigura({ id: `category-${index}`, categoria, subcategoria: 'A', precio: 400 })),
@@ -73,14 +73,65 @@ test('todos los objetivos se pierden al salir de COLECCIÓN y se recuperan al vo
     return { categoria, total, subcategorias: [{ subcategoria: 'A', total }] };
   });
   const achieved = calcularGamificacion(figures, categorias, 2);
-  assert.deepEqual(achieved.logros.filter(({ type }) => type !== 'regalo').map(({ id }) => id).sort(), OBJETIVOS.map(({ id }) => id).sort());
+  assert.deepEqual(
+    achieved.logros.filter(({ type }) => type !== 'regalo').map(({ id }) => id).sort(),
+    OBJETIVOS.filter(({ id }) => !['retired-police', 'retired-firefighter', 'retired-doctor', 'trio-of-senior-citizens', 'antiquarian', 'almost-millionaire', 'weirdo', 'hooked', 'land-ho', 'nerd'].includes(id)).map(({ id }) => id).sort(),
+  );
   const lost = calcularGamificacion(figures.map((figure) => ({ ...figure, estadoColeccion: 'BUSCADA' })), categorias, 2);
   assert.deepEqual(lost, calcularGamificacion([], categorias, 2));
   assert.equal(lost.bricks, 100);
   assert.deepEqual(nuevosLogros(achieved, lost), []);
   const restored = calcularGamificacion(figures, categorias, 2);
   assert.deepEqual(restored, achieved);
-  assert.equal(nuevosLogros(lost, restored).length, OBJETIVOS.length);
+  assert.equal(nuevosLogros(lost, restored).length, achieved.logros.filter(({ type }) => type !== 'regalo').length);
+});
+
+test('añade logros de jubilados, el trío y figuras anteriores al año 2000', () => {
+  const catalogo = [
+    minifigura({ id: 'cop014s', anio: 1999 }),
+    minifigura({ id: 'FIREC019', anio: 2000 }),
+    minifigura({ id: 'pln018', anio: 1998 }),
+    minifigura({ id: 'old-wanted', anio: 1978, estadoColeccion: 'BUSCADA' }),
+  ];
+  const logros = Object.fromEntries(calcularGamificacion(catalogo).logros.map((logro) => [logro.id, logro]));
+  assert.deepEqual(['retired-police', 'retired-firefighter', 'retired-doctor', 'trio-of-senior-citizens', 'antiquarian'].map((id) => logros[id]?.cantidad), [1, 1, 1, 1, 2]);
+  assert.equal(logros.antiquarian.total, 120);
+  assert.deepEqual(
+    ['retired-police', 'retired-firefighter', 'retired-doctor', 'trio-of-senior-citizens', 'antiquarian'].map((id) => OBJETIVOS.find((objective) => objective.id === id).repetible),
+    [false, false, false, false, true],
+  );
+});
+
+test('desbloquea los hitos de valor usando el valor de mercado y el precio de compra como respaldo', () => {
+  const exactValue = calcularGamificacion([
+    minifigura({ id: 'market-price', precio: 400 }),
+    minifigura({ id: 'purchase-price', precioCompra: 100 }),
+  ]);
+  assert.equal(exactValue.logros.find(({ id }) => id === 'to-lay-the-groundwork')?.cantidad, 1);
+  assert.equal(exactValue.logros.some(({ id }) => id === 'investor'), false);
+
+  const allMilestones = calcularGamificacion([minifigura({ precio: 10000 })]);
+  assert.deepEqual(
+    allMilestones.logros.filter(({ id }) => ['to-lay-the-groundwork', 'investor', 'investment-fund', 'almost-millionaire'].includes(id)).map(({ id, cantidad }) => [id, cantidad]),
+    [['to-lay-the-groundwork', 1], ['investor', 1], ['investment-fund', 1], ['almost-millionaire', 1]],
+  );
+});
+
+test('evalúa los logros DNA con las ponderaciones existentes y sin auto-desbloqueo', () => {
+  const rarityHunter = calcularGamificacion([minifigura({ id: 'expensive', precio: 301 })]);
+  assert.equal(rarityHunter.logros.find(({ id }) => id === 'weirdo')?.cantidad, 1);
+
+  const collectorCatalog = Array.from({ length: 10 }, (_, index) => minifigura({
+    id: `collector-${index}`,
+    subcategoria: `Subcategory ${index}`,
+  }));
+  const categories = [{
+    categoria: 'Space', total: 100,
+    subcategorias: collectorCatalog.map(({ subcategoria }) => ({ subcategoria, total: 1 })),
+  }];
+  const collector = calcularGamificacion(collectorCatalog, categories);
+  assert.equal(collector.logros.find(({ id }) => id === 'hooked')?.cantidad, 1);
+  assert.equal(collector.logros.some(({ id }) => id === 'nerd' || id === 'land-ho'), false);
 });
 
 test('acumula todos los logros de precio que cumple una minifigura', () => {
