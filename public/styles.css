@@ -226,9 +226,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .modal h2 { margin-bottom: 10px; }
 #delete-dialog h2 { margin-bottom: 2rem; }
 .modal form { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-rows: auto minmax(0, 1fr) auto; align-items: stretch; gap: 10px 20px; }
-.modal-preview-heading { display: grid; align-self: start; justify-items: center; gap: 4px; width: 100%; text-align: center; }
-#form-dialog-title { width: 100%; margin: 0; text-align: center; }
-#form-dialog.view-mode #form-dialog-title { display: none; }
+.form-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
+#form-dialog-title { margin: 0; }
+.form-dialog-heading .button, .dna-dialog-heading .button { flex: 0 0 auto; }
 .modal-row.modal-row-identity { grid-column: 1; grid-row: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 12px; }
 .modal-identity-fields { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
 .modal-row-identity label { align-self: stretch; min-width: 0; }
@@ -252,7 +252,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .filters-form .form-actions #filter-submit { margin-left: 0; }
 .form-state-toggles { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .modal-state-control { display: grid; justify-items: start; }
-.modal-preview { display: grid; grid-column: 2; grid-row: 2; grid-template-rows: auto minmax(0, 1fr); align-content: stretch; justify-items: center; align-self: stretch; gap: 12px; color: var(--muted); font: 700 0.75rem Arial, sans-serif; text-transform: uppercase; }
+.modal-preview { display: grid; grid-column: 2; grid-row: 2; grid-template-rows: minmax(0, 1fr); align-content: stretch; justify-items: center; align-self: stretch; gap: 12px; color: var(--muted); font: 700 0.75rem Arial, sans-serif; text-transform: uppercase; }
 .modal-preview img { width: 250px; height: 250px; max-width: 100%; align-self: center; object-fit: contain; }
 .input-readonly { background: #ecebe6; color: var(--ink); }
 #form-dialog.view-mode input:disabled, #form-dialog.view-mode select:disabled, #form-dialog.view-mode textarea:disabled { border-color: #c6c6c6; color: var(--muted); background: #ecebe6; opacity: 1; cursor: default; }
@@ -428,11 +428,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 }
 
 @media (max-width: 560px) {
-  .achievements-heading { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; }
-  .achievements-heading-icon { grid-column: 1; grid-row: 1; }
-  .achievements-heading-text { grid-column: 2 / -1; grid-row: 1; }
-  .achievements-heading-bricks { grid-column: 1 / 3; grid-row: 2; margin-left: 0; justify-self: start; }
-  .achievements-heading .button { grid-column: 3; grid-row: 2; }
   .header-top { flex-wrap: wrap; }
   .page-shell { width: min(100% - 22px, 1180px); padding-top: 32px; }
   .brand-heading { flex-basis: 250px; }
@@ -467,7 +462,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; }
   .dna-chart { width: min(150px, 48vw); }
   .dna-legend { width: 100%; }
-  .ranking-dialog-heading { align-items: flex-start; }
+  .ranking-dialog-heading { align-items: center; }
   .ranking-dialog-heading .button { flex: 0 0 auto; min-height: 36px; }
   .gamification-details { padding: 12px; }
   .summary-sync-row, .summary-achievements-row, .summary-ranking-row { gap: 8px; }
@@ -634,8 +629,13 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   #form-dialog .modal-preview img { width: 56px; height: 56px; }
   #minifigura-form .modal-fields input, #minifigura-form .modal-fields select, .modal textarea { padding: 8px; font-size: 1rem; }
   .modal-fields > label:not(.description-field) { white-space: normal; }
-  .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto; }
-  .achievement-item .achievement-bricks { grid-column: 2 / -1; justify-self: end; }
+  .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 6px; }
+  .achievement-item .achievement-bricks { white-space: nowrap; }
+  .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading { height: 66px; align-items: center; gap: 8px; }
+  .ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button { flex: 0 0 auto; height: 36px; min-height: 36px; padding: 0 10px; }
+  .achievements-heading-icon { width: 32px; height: 32px; }
+  .achievements-heading-text { min-width: 0; }
+  .achievements-heading-bricks { gap: 4px; white-space: nowrap; }
   .ranking-summary .ranking-expand .ranking-bricks { grid-column: 3 / 5; justify-self: end; }
 }
 
@@ -643,7 +643,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   :root { font-size: 14px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
   .watchlist-row { padding: 4px 13px 8px; }
-  .watchlist-row:has(> .watchlist-card:nth-child(6)) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
+  .watchlist-row:has(> .watchlist-card:nth-child(6)):not([hidden]) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
   .watchlist-row:has(> .watchlist-card:nth-child(6)) > .watchlist-card { flex: 0 0 calc((100% - 16px) / 5); scroll-snap-align: start; }
   .watchlist-card, .top-five .ranking-card { width: 100%; min-width: 0; height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
   .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
@@ -705,10 +705,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .results-panel th:nth-child(11) { width: 29%; }
   .results-panel .actions-buttons { width: 100%; gap: 4px; }
   .results-panel .button-icon.button-small { flex: 1 1 0; width: auto; }
-  #form-dialog #minifigura-form { grid-template-rows: auto auto auto auto; }
+  #form-dialog #minifigura-form { grid-template-rows: auto auto auto; }
   #form-dialog .modal-preview { display: contents; }
-  #form-dialog .modal-preview-heading { grid-column: 1; grid-row: 1; }
-  #form-dialog .modal-form-column { grid-column: 1; grid-row: 2; }
-  #form-dialog .modal-preview img { grid-column: 1; grid-row: 3; justify-self: center; cursor: pointer; }
-  #form-dialog .form-actions { grid-column: 1; grid-row: 4; }
+  #form-dialog .modal-form-column { grid-column: 1; grid-row: 1; }
+  #form-dialog .modal-preview img { grid-column: 1; grid-row: 2; justify-self: center; cursor: pointer; }
+  #form-dialog .form-actions { grid-column: 1; grid-row: 3; }
 }

@@ -8,13 +8,13 @@ function minifigura(overrides = {}) {
 
 test('los nuevos logros de categoría e ID conservan nombre, descripción, Bricks y no se repiten', () => {
   const cases = [
-    ['the-legend', 'The Legend.', 'The Legend of Zelda', null, 10],
+    ['the-legend', 'The Legend', 'The Legend of Zelda', null, 10],
     ['heh-there-is-another-one-for-you', 'Heh! There is another one for you!', 'Pokémon', null, 10],
-    ['change-will-not-come-in-a-single-sunrise', 'Change will not come in a single sunrise.', 'Horizon', null, 10],
-    ['start-poetry', 'Start Poetry.', 'Minecraft', null, 10],
-    ['mental-breakdown', 'Mental Breakdown.', 'Super Heroes', 'SH0129', 3000],
-    ['the-dark-plastic', 'The Dark Plastic.', 'Super Heroes', 'SH0002', 1000],
-    ['concrete-savanna', 'Concrete Savanna.', 'Super Heroes', 'SH0604', 700],
+    ['change-will-not-come-in-a-single-sunrise', 'Change will not come in a single sunrise', 'Horizon', null, 10],
+    ['start-poetry', 'Start Poetry', 'Minecraft', null, 10],
+    ['mental-breakdown', 'Mental Breakdown', 'Super Heroes', 'SH0129', 3000],
+    ['the-dark-plastic', 'The Dark Plastic', 'Super Heroes', 'SH0002', 1000],
+    ['concrete-savanna', 'Concrete Savanna', 'Super Heroes', 'SH0604', 700],
   ];
   for (const [objectiveId, nombre, categoria, figureId, bricks] of cases) {
     const figure = minifigura({ categoria, id: figureId || 'first' });
@@ -55,7 +55,7 @@ test('los hitos de categoría se acumulan por categoría con total conocido y se
   assert.equal(calcularGamificacion([...figures, minifigura({ id: 'extra' })], categorias).logros.find(({ id }) => id === 'strike').cantidad, 1);
   const reduced = calcularGamificacion(figures.filter(({ id }) => id !== 'three'), categorias);
   assert.equal(reduced.logros.some(({ id }) => id === 'strike'), false);
-  for (const [id, nombre, percentage, bricks] of [[halfId, "You're shooting for the stars.", 50, 500], ['strike', 'Strike!!', 100, 1200]]) {
+  for (const [id, nombre, percentage, bricks] of [[halfId, "You're shooting for the stars", 50, 500], ['strike', 'Strike!!', 100, 1200]]) {
     assert.deepEqual(OBJETIVOS.find((objective) => objective.id === id), {
       id, nombre, descripcion: `Añadir una minifigura que suponga el ${percentage}% del total conocido de minifiguras de una categoría.`, bricks, repetible: true,
     });

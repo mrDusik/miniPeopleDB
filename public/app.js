@@ -1532,10 +1532,10 @@ function updateFormMode() {
   });
   formObservedButton.disabled = isCreate && !formSynced;
   updateFormToggleStates();
-  formDialogTitle.hidden = isView;
+  formDialogTitle.hidden = false;
   formSubmitButton.hidden = isView;
   formSubmitButton.disabled = isView || formSending || (isRankingCreate && !formSynced) || !isFormValid();
-  formCancelButton.textContent = isView ? 'Cerrar' : 'Cancelar';
+  formCancelButton.textContent = 'Cerrar';
   formPreviewImage.hidden = !formIdInput.value.trim();
 }
 
