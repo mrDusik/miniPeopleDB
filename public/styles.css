@@ -247,6 +247,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #form-dialog.view-mode .required-label > span::after, #form-dialog.view-mode span.required-label::after { content: ''; }
 .modal-row .button { min-height: 36px; }
 .modal .form-actions { grid-column: 1 / -1; grid-row: 3; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--line); }
+#form-dialog.view-mode .form-actions { display: none; }
 .form-actions #form-submit { margin-left: auto; }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
 .filters-form .form-actions #filter-submit { margin-left: 0; }
@@ -631,7 +632,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-fields > label:not(.description-field) { white-space: normal; }
   .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 6px; }
   .achievement-item .achievement-bricks { white-space: nowrap; }
-  .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading { height: 66px; align-items: center; gap: 8px; }
+  .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading { height: 66px; align-items: center; gap: 8px; margin-bottom: 20px; }
+  #ranking-status:empty, #achievements-status:empty { display: none; }
   .ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button { flex: 0 0 auto; height: 36px; min-height: 36px; padding: 0 10px; }
   .achievements-heading-icon { width: 32px; height: 32px; }
   .achievements-heading-text { min-width: 0; }

@@ -226,6 +226,9 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading');
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
+  assert.equal(headings.style.getPropertyValue('margin-bottom'), '20px');
+  const emptyStatuses = smartphoneRules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty');
+  assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
   const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button');
   assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');
   assert.equal(buttons.style.getPropertyValue('height'), '36px');
@@ -477,6 +480,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.match(css, /#form-dialog-title\s*\{[^}]*margin:\s*0/s);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
   assert.doesNotMatch(css, /#form-dialog\.view-mode #form-dialog-title\s*\{\s*display:\s*none/);
+  assert.match(css, /#form-dialog\.view-mode \.form-actions\s*\{\s*display:\s*none;/);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
   assert.match(css, /#form-dialog\.view-mode \.required-label > span::after[^}]*content:\s*''/s);
   assert.match(css, /#form-dialog\s*\{[^}]*height:\s*fit-content/);
