@@ -113,7 +113,9 @@ test('respuesta completada inicial no muestra barra y un error rehabilita el bot
   failed.$('#sync-prices').click();
   await tick();
   assert.equal(failed.$('#sync-prices').disabled, false);
-  assert.equal(failed.$('#toast-region .toast-error').textContent, 'No se pudieron actualizar los precios desde Brickset.');
+  const errorToast = failed.$('#toast-region .toast-error');
+  assert.equal(errorToast.textContent, 'No se pudieron actualizar los precios.');
+  assert.doesNotMatch(errorToast.textContent, /Brickset/i);
   failed.dom.window.close();
 });
 

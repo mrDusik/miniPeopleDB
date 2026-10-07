@@ -799,7 +799,7 @@ async function startSync() {
     isSyncingPrices = false;
     syncProgress.hidden = true;
     syncPricesButton.disabled = !categoriasReady;
-    showToast('No se pudieron actualizar los precios desde Brickset.', 'error');
+    showToast('No se pudieron actualizar los precios.', 'error');
   }
 }
 
@@ -2139,7 +2139,7 @@ async function loadFormBricksetData() {
   if (!id || formPreviewImage.src !== imagenUrlPara(id)) return;
   const lookupSequence = imageLookupSequence;
 
-  showToast('Consultando datos en Brickset...', 'success');
+  showToast('Consultando datos...', 'success');
   try {
     const response = await apiFetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
@@ -2154,10 +2154,10 @@ async function loadFormBricksetData() {
     formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
-    showToast('Datos de Brickset actualizados.', 'success');
+    showToast('Datos actualizados.', 'success');
   } catch {
     if (formDialog.open && currentFormMode !== 'view' && imageLookupSequence === lookupSequence && formIdInput.value.trim() === id) {
-      showToast('No se encontraron datos en Brickset para el ID especificado', 'error');
+      showToast('No se encontraron datos para el ID especificado.', 'error');
     }
   }
 }

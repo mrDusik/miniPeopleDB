@@ -401,7 +401,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .table-thumb { display: block; width: 40px; height: 40px; margin: 0 auto; object-fit: contain; vertical-align: middle; cursor: pointer; }
 
 .toast-region { position: fixed; right: 20px; bottom: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-.toast { display: flex; align-items: center; gap: 6px; min-width: 240px; max-width: 360px; padding: 14px 18px; border: 1px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); font: 0.9rem Arial, sans-serif; }
+.toast { display: flex; align-items: center; flex: 0 0 auto; gap: 6px; width: min(360px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 18px; border: 1px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); font: 0.9rem Arial, sans-serif; }
 .toast-success { color: var(--ink); background: var(--surface); border-color: var(--line); }
 .toast-task { color: white; background: #00449e; border-color: #00449e; }
 .toast-level { color: white; background: var(--accent-dark); border-color: var(--accent-dark); font-weight: 700; }

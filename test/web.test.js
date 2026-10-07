@@ -324,6 +324,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.toast-task\s*\{[^}]*color:\s*white;\s*background:\s*#00449e;\s*border-color:\s*#00449e/s);
   assert.match(css, /\.toast-level\s*\{[^}]*color:\s*white;\s*background:\s*var\(--accent-dark\);\s*border-color:\s*var\(--accent-dark\)/s);
   assert.match(css, /\.toast-success\s*\{[^}]*background:\s*var\(--surface\)/s);
+  assert.match(css, /\.toast\s*\{[^}]*width:\s*min\(360px, calc\(100vw - 24px\)\)/s);
   assert.match(css, /#form-dialog\.view-mode \.state-toggle\.active:disabled[^}]*opacity:\s*1/s);
   assert.match(css, /#form-dialog\.view-mode \.state-toggle:disabled, #form-dialog\.view-mode \.eye-icon:disabled\s*\{[^}]*color:\s*inherit/s);
   assert.match(css, /\.button-danger\s*\{[^}]*background:\s*var\(--accent\)/s);
@@ -1286,7 +1287,9 @@ test('el alta ignora consultas de imágenes anteriores y bloquea los campos si f
   preview.dispatchEvent(new window.Event('load'));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(window.document.querySelector('#form-submit').disabled, true);
-  assert.match(window.document.querySelector('#toast-region').textContent, /No se encontraron datos en Brickset para el ID especificado/);
+  const errorToast = window.document.querySelector('#toast-region .toast-error');
+  assert.equal(errorToast.textContent, 'No se encontraron datos para el ID especificado.');
+  assert.doesNotMatch(errorToast.textContent, /Brickset/i);
   dom.window.close();
 });
 
