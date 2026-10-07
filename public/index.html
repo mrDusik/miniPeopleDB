@@ -221,7 +221,11 @@
       <button type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
     </dialog>
 
-    <dialog id="form-dialog" class="modal">
+    <dialog id="form-dialog" class="modal" aria-labelledby="form-dialog-title">
+      <div class="form-dialog-heading">
+        <h2 id="form-dialog-title">Nueva minifigura</h2>
+        <button type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
+      </div>
       <form id="minifigura-form" novalidate>
         <div class="modal-form-column">
           <div class="modal-row modal-row-identity">
@@ -283,13 +287,9 @@
           <p id="form-error" class="form-error" role="alert"></p>
         </div>
         <aside class="modal-preview" aria-label="Previsualización Brickset">
-          <div class="modal-preview-heading">
-            <h2 id="form-dialog-title">Nueva minifigura</h2>
-          </div>
           <img id="form-preview-image" alt="">
         </aside>
         <div class="form-actions">
-          <button type="button" id="form-cancel" class="button button-secondary">Cancelar</button>
           <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
         </div>
       </form>

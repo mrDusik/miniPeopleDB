@@ -181,7 +181,8 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), '80px minmax(0, 1fr)');
   assert.equal(declarations.get('.ranking-summary .ranking-expand')?.getPropertyValue('grid-template-rows'), 'auto auto auto');
   assert.equal(declarations.get('#form-dialog .modal-preview')?.getPropertyValue('display'), 'contents');
-  assert.equal(declarations.get('#form-dialog .modal-preview-heading')?.getPropertyValue('grid-row'), '1');
+  assert.equal(declarations.get('#form-dialog .modal-form-column')?.getPropertyValue('grid-row'), '1');
+  assert.equal(declarations.get('#form-dialog .modal-preview img')?.getPropertyValue('grid-row'), '2');
   const hiddenColumns = declarations.get('.results-panel th:nth-child(2), .results-panel td:nth-child(2), .results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6), .results-panel th:nth-child(7), .results-panel td:nth-child(7), .results-panel th:nth-child(10), .results-panel td:nth-child(10)');
   assert.equal(hiddenColumns?.getPropertyValue('display'), 'none');
   assert.equal(declarations.get('.table-wrap')?.getPropertyValue('overflow'), 'hidden');
@@ -214,6 +215,56 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
   assert.doesNotMatch(smartphone.cssRules.map((rule) => rule.cssText).join('\n'), /\.results-panel th:nth-child\(1\), \.results-panel td:nth-child\(1\)[^{]*\{ display: none; \}/);
   dom.window.close();
+});
+
+test('las cabeceras de modales en smartphone comparten altura y cierre sin separar los bricks', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style>');
+  dom.window.document.querySelector('style').textContent = css;
+  const rules = [...dom.window.document.styleSheets[0].cssRules];
+  const smartphoneRules = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').flatMap((rule) => [...rule.cssRules]);
+  const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading');
+  assert.equal(headings.style.getPropertyValue('height'), '66px');
+  assert.equal(headings.style.getPropertyValue('align-items'), 'center');
+  const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button');
+  assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');
+  assert.equal(buttons.style.getPropertyValue('height'), '36px');
+  assert.equal(buttons.style.getPropertyValue('min-height'), '36px');
+  const achievements = smartphoneRules.find((rule) => rule.selectorText === '.achievement-item');
+  assert.equal(achievements.style.getPropertyValue('grid-template-columns'), '32px minmax(0, 1fr) auto auto');
+  assert.doesNotMatch(css, /\.achievements-heading-bricks\s*\{[^}]*grid-row:\s*2/s);
+  assert.doesNotMatch(css, /\.achievement-item \.achievement-bricks\s*\{[^}]*grid-column:\s*2 \/ -1/s);
+  dom.window.close();
+});
+
+test('seguimiento en smartphone se oculta tambien cuando supera cinco figuras', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style><div class="watchlist-row"></div>');
+  const { document } = dom.window;
+  const style = document.querySelector('style');
+  style.textContent = css;
+  const rules = [...document.styleSheets[0].cssRules];
+  const smartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').at(-1);
+  const scroller = [...smartphone.cssRules].find((rule) => rule.style?.getPropertyValue('display') === 'flex' && rule.selectorText?.includes('.watchlist-row:has('));
+  const hiddenRule = rules.find((rule) => rule.selectorText === '.rankings[hidden], .watchlist-row[hidden]');
+  const watchlist = document.querySelector('.watchlist-row');
+  try {
+    assert.equal(hiddenRule.style.getPropertyValue('display'), 'none');
+    for (const count of [5, 6, 15]) {
+      watchlist.replaceChildren(...Array.from({ length: count }, () => {
+        const card = document.createElement('button');
+        card.className = 'watchlist-card';
+        return card;
+      }));
+      watchlist.hidden = true;
+      assert.equal(watchlist.matches(hiddenRule.selectorText), true);
+      assert.equal(watchlist.matches(scroller.selectorText), false, `${count} figuras ocultas no deben activar el carrusel`);
+      watchlist.hidden = false;
+      assert.equal(watchlist.matches(scroller.selectorText), count > 5);
+    }
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('la interfaz centra el contenido, iguala la tipografia del resumen y elimina la linea de rankings', async () => {
@@ -405,8 +456,14 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(identityRow.querySelector('.description-field #form-descripcion').tagName, 'TEXTAREA');
   assert.equal(identityRow.parentElement.className, 'modal-form-column');
   assert.equal(identityRow.getAttribute('style'), null);
-  assert.equal(form.querySelector('#form-dialog-title').parentElement, form.querySelector('.modal-preview-heading'));
-  assert.equal(form.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
+  const heading = dom.window.document.querySelector('.form-dialog-heading');
+  assert.equal(heading.parentElement, form.parentElement);
+  assert.equal(heading.nextElementSibling, form);
+  assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
+  assert.equal(heading.querySelector('#form-cancel').textContent, 'Cerrar');
+  assert.equal(heading.querySelector('#form-cancel').type, 'button');
+  assert.equal(form.querySelector('#form-cancel'), null);
+  assert.equal(form.parentElement.getAttribute('aria-labelledby'), 'form-dialog-title');
   assert.equal(form.querySelector('.modal-preview img').id, 'form-preview-image');
   assert.equal(form.querySelector('.form-actions').parentElement, form);
   assert.match(css, /#delete-dialog\s*\{\s*width:\s*min\(400px, calc\(100% - 32px\)\)/);
@@ -416,17 +473,16 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.match(css, /\.modal-row\.modal-row-identity\s*\{[^}]*grid-column:\s*1;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /\.modal-identity-fields\s*\{[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /#form-dialog \.modal-row-identity input:disabled, #form-dialog \.modal-row-identity textarea:disabled, #form-dialog \.modal-row-purchase input:disabled\s*\{[^}]*background:\s*#ecebe6/s);
-  assert.match(css, /\.modal-preview-heading\s*\{[^}]*justify-items:\s*center[^}]*text-align:\s*center/s);
-  assert.match(css, /\.modal-preview-heading\s*\{[^}]*align-self:\s*start/s);
-  assert.match(css, /#form-dialog-title\s*\{[^}]*text-align:\s*center/s);
+  assert.match(css, /\.form-dialog-heading\s*\{[^}]*align-items:\s*center[^}]*justify-content:\s*space-between[^}]*border-bottom:\s*4px solid var\(--blue\)/s);
+  assert.match(css, /#form-dialog-title\s*\{[^}]*margin:\s*0/s);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
-  assert.match(css, /#form-dialog\.view-mode #form-dialog-title\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(css, /#form-dialog\.view-mode #form-dialog-title\s*\{\s*display:\s*none/);
   assert.match(css, /#form-dialog\.view-mode input:disabled[^}]*background:\s*#ecebe6/s);
   assert.match(css, /#form-dialog\.view-mode \.required-label > span::after[^}]*content:\s*''/s);
   assert.match(css, /#form-dialog\s*\{[^}]*height:\s*fit-content/);
   assert.doesNotMatch(css, /#form-dialog #minifigura-form\s*\{[^}]*height:/);
   assert.match(css, /\.modal-form-column\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1 \/ 3;[^}]*grid-template-rows:\s*auto auto auto/s);
-  assert.match(css, /\.modal-preview\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*2;[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*align-content:\s*stretch/s);
+  assert.match(css, /\.modal-preview\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*2;[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*align-content:\s*stretch/s);
   assert.match(css, /\.modal \.form-actions\s*\{[^}]*grid-column:\s*1 \/ -1;[^}]*padding-top:\s*17px;[^}]*border-top:\s*1px solid var\(--line\)/s);
   assert.doesNotMatch(css, /\.modal \.form-actions\s*\{[^}]*margin(?:-inline)?:\s*-/s);
   assert.match(css, /#form-dialog\s*\{[^}]*padding-bottom:\s*16px/);
@@ -1377,7 +1433,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(lookups, 0);
   assert.ok(window.document.querySelector('#form-dialog').classList.contains('view-mode'));
   assert.ok(window.document.querySelector('.modal-row-identity').classList.contains('view-mode'));
-  assert.equal(window.document.querySelector('#form-dialog-title').hidden, true);
+  assert.equal(window.document.querySelector('#form-dialog-title').hidden, false);
   assert.equal(window.document.querySelector('#form-submit').hidden, true);
   assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(window.document.querySelector('#form-id').disabled, true);
@@ -1410,6 +1466,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(lookups, 1);
   assert.equal(window.document.querySelector('#form-precio').value, '18');
   assert.equal(window.document.querySelector('#form-dialog').classList.contains('view-mode'), false);
+  assert.equal(window.document.querySelector('#form-cancel').textContent, 'Cerrar');
   assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(collectionToggle.disabled, false);
   wantedToggle.click();

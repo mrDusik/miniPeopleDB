@@ -116,8 +116,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
   assert.match(styles, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
-  assert.match(styles, /\.achievements-heading \{ display: grid; grid-template-columns: 48px minmax\(0, 1fr\) auto; \}/);
-  assert.match(styles, /\.achievements-heading-text \{ grid-column: 2 \/ -1; grid-row: 1; \}/);
+  assert.match(styles, /\.achievements-heading \{ display: flex; align-items: center;/);
+  assert.match(styles, /\.achievements-heading-text \{ min-width: 0; \}/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
   assert.doesNotMatch(styles, /\.modal-ranking \{[^}]*border-top:/);
