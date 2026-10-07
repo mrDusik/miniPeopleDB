@@ -1,33 +1,21 @@
-# 🧩 LEGO Minifigures Management API & Dashboard (`lego-mini-api`)
+# MiniPeopleDB
 
-Una solución web completa para la gestión, catalogación y valoración de colecciones de minifiguras LEGO. Combina un servidor **API REST** desarrollado en Node.js/Express con una **interfaz gráfica interactiva (Dashboard)** servida en la raíz.
+MiniPeopleDB es una aplicación web multiusuario para catalogar, valorar y compartir colecciones de minifiguras LEGO. Incluye un dashboard servido por Express, una API REST y gamificación social. La interfaz está en español; los datos de colección y progreso se aíslan por usuario.
 
-Desarrollado siguiendo la metodología **Spec-Driven Development (SDD)** asistida por IA.
+El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se mantienen en OpenSpec y las funcionalidades cuentan con pruebas automatizadas.
 
 ---
 
 ## 🚀 Características Principales
 
-* **Dashboard Interactivo Web (UI):**
-  * **Visualización Dinámica:** Tabla interactiva con información de ID, Nombre, Descripción, Temática, Año, Estado, Precio y Diferencia entre precio y precio de compra.
-  * **Filtros Avanzados:** Búsqueda en tiempo real por `tema`, `año` y `estado de colección`.
-  * **Ordenación:** Las columnas `Año` y `Precio` se pueden ordenar ascendente y descendentemente.
-  * **Modales CRUD:** Interfaz mediante diálogos reutilizables para el alta (`POST`) y edición (`PUT`) de registros.
-  * **Acciones por Fila:** Botones de edición rápida y borrado seguro con confirmación previa (`DELETE`).
-  * **Valoración en Euros:** Formulario con `precioCompra`, `fechaCompra` y `precio` de Brickset, incluyendo consulta individual.
-  * **Resumen de colección:** Valor total, contadores de figuras en `COLECCIÓN` y `BUSCADA`, y rankings dinámicos.
-  * **Top 5:** Ranking de figuras en colección por precio y ranking de las más antiguas.
-  * **Sincronización resiliente:** Actualización masiva desde Brickset con estados de carga, resultados parciales y errores mediante *Toasts*.
-  * **Estados controlados:** Solo se permiten `COLECCIÓN` y `BUSCADA`; las nuevas figuras usan `COLECCIÓN` por defecto.
-* **API REST Backend:**
-  * Endpoints HTTP estructurados con respuestas JSON.
-  * Consulta individual de precios mediante scraping de la URL pública de Brickset, sin credenciales ni API Key.
-  * Actualización masiva aislada por minifigura, con timeout, reintentos y concurrencia limitada.
-  * Manejo estandarizado de errores HTTP y códigos de negocio (`ID_DUPLICADO`, `ID_INVALIDO`, `MINIFIGURA_NO_ENCONTRADA`, `MINIFIGURA_INVALIDA`).
-* **Autenticación y persistencia multiusuario (Supabase):**
-  * Inicio de sesión con Google (Supabase Auth, flujo PKCE). La interfaz envía el token en `Authorization: Bearer` y la API responde `401 NO_AUTENTICADO` sin sesión válida.
-  * Minifiguras y gamificación se guardan por usuario en las tablas `minifiguras` y `gamificacion` (`supabase/schema.sql`), protegidas por RLS. Las operaciones ordinarias usan la clave `anon` con el JWT del usuario. Un reconciliador backend aislado usa `service_role` únicamente para la RPC transaccional de recálculo global tras cambios del JSON de categorías; nunca expone esa clave al navegador ni a rutas de usuario.
-  * Las categorías oficiales de Brickset siguen en `data/categorias-brickset.json`.
+* **Colección e inventario:** alta, consulta, edición y borrado de minifiguras; categorías y subcategorías Brickset; estados `COLECCIÓN` y `BUSCADA`; fecha de alta, datos de compra e imagen de cada figura. Las altas y ediciones validan IDs, importes, fechas y la relación categoría-subcategoría.
+* **Búsqueda y seguimiento:** filtros por ID, nombre, categoría, subcategoría, año, estado y observación. La búsqueda de la tabla se aplica sobre la colección cargada en el navegador; incluye ordenación, paginación y un límite de diez figuras observadas.
+* **Resumen y valoración:** valor total en euros, contadores de colección y buscadas, galería de observación y destacados Top 5 por precio y antigüedad. El valor de mercado Brickset tiene prioridad sobre el precio de compra; las buscadas no aportan al total.
+* **Sincronización Brickset:** consulta individual de categoría, subcategoría, año y precio; actualización masiva del precio en segundo plano, con progreso, pausa/reanudación, resultados parciales, límite global de peticiones y tratamiento de `429 Retry-After`.
+* **Gamificación:** Bricks, niveles, progreso y logros calculados a partir del inventario y el catálogo de categorías. Los regalos recibidos se conservan al recalcular la parte derivada de la colección.
+* **DNA de colección:** cuatro rasgos (Rarity Hunter, Collector, Explorer y Fan), porcentajes privados para el usuario y un resumen público limitado al rasgo principal.
+* **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
+* **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
 
 ### Valoración y moneda
 
@@ -43,12 +31,43 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Arquitectura e integraciones
 
-* **Backend:** Node.js, Express.
-* **Frontend:** HTML5 (semántico y `<dialog>`), CSS3 (Flexbox/Grid y variables CSS), JavaScript ES6+ (`fetch`, manipulación reactiva del DOM).
-* **Testing:** Módulo nativo `node:test`/`node:assert` y `jsdom` para pruebas reales del DOM.
-* **Metodología:** Spec-Driven Development (OpenSpec / SDD).
+* **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. El cliente Supabase JS se sirve desde `/vendor/supabase.js`.
+* **Identidad:** Supabase Auth delega el inicio de sesión en Google OAuth con flujo PKCE. La API valida el bearer token con Supabase Auth.
+* **Persistencia:** Supabase Postgres almacena minifiguras, gamificación, perfiles públicos, ponderaciones DNA y regalos. RLS limita las operaciones ordinarias a la identidad autenticada.
+* **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa exclusivamente desde el proceso backend para invocar la RPC allowlisted que aplica recálculos globales transaccionales cuando cambia la definición local de categorías/logros. No se entrega al navegador ni se usa en rutas ordinarias.
+* **Brickset:** el backend lee páginas públicas de `brickset.com` mediante `fetch` y extrae campos de minifigura; no utiliza una API key. Las peticiones se serializan globalmente y, por defecto, esperan al menos 9 segundos entre inicios.
+* **Catálogo de categorías:** `data/categorias-brickset.json` es la fuente local validada. Se puede actualizar manualmente desde la página pública de categorías de Brickset con `node scripts/sync-brickset-categorias.js`.
+* **Imágenes:** las imágenes de minifiguras se cargan desde el CDN de BrickLink (`img.bricklink.com`); logos, iconos, niveles y otros recursos de la interfaz son locales en `public/`.
+* **Despliegue y monitorización:** el servidor escucha en `PORT` (3000 por defecto) y ofrece `GET /health` para comprobaciones de salud, por ejemplo desde Render o UptimeRobot. No hay manifiesto de despliegue ni pipeline CI de tests en este repositorio.
+* **Calidad:** `node:test` y `node:assert` para pruebas, JSDOM para flujos DOM y PGlite para validar SQL/RPC localmente. Los tests de API usan `test-support/supabase-mock.js`; no requieren credenciales ni red real.
+* **Especificación:** OpenSpec mantiene las capacidades en `openspec/specs/`, junto con propuestas activas/archivadas en `openspec/changes/`. GitHub Actions contiene los pasos de preparación de OpenSpec para Copilot, no un workflow de CI de la aplicación.
+
+### Seguridad y privacidad
+
+Las rutas de colección y gamificación requieren `Authorization: Bearer <token>` y operan con el cliente `anon` más el JWT del usuario. Las tablas privadas tienen RLS por usuario. El ranking y los logros públicos usan proyecciones limitadas; no publican correos, compras ni la distribución DNA completa. La única excepción privilegiada es el reconciliador backend de categorías, restringido a su RPC administrativa.
+
+## API principal
+
+| Ruta | Métodos | Acceso | Uso |
+| --- | --- | --- | --- |
+| `/` y recursos de `public/` | `GET` | Público | Dashboard y activos estáticos |
+| `/health` | `GET` | Público | Health check para hosting/monitorización |
+| `/config/supabase` | `GET` | Público | URL y clave pública `anon` del proyecto |
+| `/categorias` | `GET` | Público | Catálogo local validado de categorías |
+| `/minifiguras` | `GET`, `POST` | Autenticado | Listar/filtrar la colección propia y crear registros |
+| `/minifiguras/:id` | `PUT`, `DELETE` | Autenticado | Editar o borrar una figura propia |
+| `/minifiguras/:id/observada` | `PUT` | Autenticado | Activar/desactivar seguimiento |
+| `/minifiguras/:id/brickset` | `GET` | Autenticado | Consultar metadatos y precio Brickset |
+| `/valoracion` y `/valor-total` | `GET` | Autenticado | Resumen, destacados y observadas |
+| `/sincronizacion/brickset` | `GET`, `POST`, `PATCH` | Autenticado | Consultar/iniciar tarea y pausar/reanudarla |
+| `/gamificacion` y `/gamificacion/dna` | `GET` | Autenticado | Estado propio de gamificación y DNA |
+| `/api/ranking` | `GET` | Autenticado | Top 10 global con criterio opcional |
+| `/api/ranking/:userId/logros` | `GET` | Autenticado | Logros públicos del Top 10 |
+| `/api/ranking/regalar` | `POST` | Autenticado | Enviar regalo único de Bricks |
+
+Los estados de colección aceptados son `COLECCIÓN` y `BUSCADA`. Los filtros de nombre e ID se aplican en el cliente sobre el catálogo cargado; los parámetros de `GET /minifiguras` también están disponibles para consumidores de la API.
 
 ---
 
@@ -56,34 +75,32 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 ```text
 mi-proyecto/
-├── .github/                  # Configuración y prompts del flujo OpenSpec/IA
-│   ├── prompts/
-│   └── skills/
-├── data/                     # Datos persistentes del proyecto
-│   └── minifiguras.json      # Base local de minifiguras
+├── .github/                  # Prompts, configuración de Copilot y workflow de OpenSpec
+├── data/                     # Catálogos locales Brickset y gamificación
+│   ├── categorias-brickset.json
+│   ├── gamificacion.json
+│   └── minifiguras.json      # Fixture/datos locales heredados; colección activa en Supabase
 ├── openspec/                 # Especificaciones OpenSpec y cambios activos/archivados
 │   ├── changes/
-│   ├── config.yaml
 │   └── specs/
 ├── public/                   # Aplicación web frontend estática
-│   ├── app.js                # Filtros, CRUD, valoración, rankings y toasts
-│   ├── index.html            # Estructura del dashboard y formularios
-│   └── styles.css            # Estilos visuales, estados y diferencias
-├── reviews/                  # Informes de revisión de cada iteración del proyecto
-├── src/                      # Código fuente del backend
-│   ├── brickset-scraper.js    # Scraping público y parseo de precios Brickset
-│   ├── minifiguras-repository.js
-│   └── server.js
-├── test/                     # Pruebas automatizadas
-│   ├── brickset-scraper.test.js
-│   ├── minifiguras.test.js
-│   └── web.test.js
-├── AGENTS.md                 # Guía del flujo del proyecto
-├── EFICIENCIA.md             # Informe de productividad y metodología SDD + IA
-├── package.json              # Configuración del proyecto y scripts
-├── package-lock.json         # Versiones bloqueadas de dependencias
-├── README.md                 # Documentación general
-└── .gitignore                # Archivos ignorados por Git
+│   ├── app.js, index.html, styles.css
+│   └── *_images/, fonts/      # Recursos visuales locales
+├── scripts/                  # Sincronización manual de categorías
+├── src/                      # Servidor, repositorios y lógica de dominio
+│   ├── services/             # Configuración de Supabase
+│   ├── brickset-*.js         # Scrapers y trabajos de sincronización
+│   ├── *-repository.js       # Persistencia y consultas
+│   ├── gamificacion.js       # Logros, niveles y DNA
+│   └── server.js             # API, autenticación y arranque
+├── supabase/                 # Esquema SQL y scripts de prueba de datos
+├── test/                     # Pruebas automatizadas (node:test)
+├── test-support/             # Mock de Supabase y utilidades de pruebas
+├── reviews/                  # Revisiones documentadas
+├── AGENTS.md                 # Convenciones del proyecto
+├── EFICIENCIA.md             # Notas de metodología SDD
+├── package.json              # Scripts y dependencias
+└── README.md
 ```
 
 ## ▶️ Ejecución
@@ -91,7 +108,7 @@ mi-proyecto/
 1. Aplica `supabase/schema.sql` en el SQL Editor de Supabase.
 2. En Supabase › Authentication › Providers habilita **Google** (Client ID y Secret de Google Cloud).
 3. En Supabase › Authentication › URL Configuration configura las URLs de retorno como se explica abajo.
-4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). La clave de servicio es obligatoria para el reconciliador, solo se lee en backend y nunca debe copiarse al navegador, logs o repositorio. El resto de las rutas sigue usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la de Render.
+4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). El arranque normal requiere las tres: la clave de servicio inicializa el reconciliador backend. Nunca la copies al navegador, logs o repositorio. Las rutas de usuario siguen usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la del hosting.
 
 ```bash
 npm install
@@ -99,7 +116,7 @@ npm test
 npm start
 ```
 
-Aplica `supabase/schema.sql` para instalar la RPC de recálculo y sus permisos antes de arrancar. La aplicación queda disponible en `http://localhost:3000`. Los tests no necesitan credenciales reales: las rutas de usuario usan `test-support/supabase-mock.js` y la RPC administrativa se valida con PGlite.
+El servidor queda disponible en `http://localhost:3000` (o en el puerto de `PORT`). Aplica `supabase/schema.sql` antes del primer arranque para instalar tablas, políticas RLS, funciones y permisos. Los tests no necesitan credenciales reales: las rutas de usuario usan `test-support/supabase-mock.js` y las RPC se validan con PGlite.
 
 Para mostrar los dos rasgos DNA con porcentajes en Ranking Global, vuelve a aplicar `supabase/schema.sql`: actualiza la respuesta de `ranking_global()` con el resumen publico `dna_rasgos`, sin exponer ponderaciones ni los cuatro porcentajes completos.
 
