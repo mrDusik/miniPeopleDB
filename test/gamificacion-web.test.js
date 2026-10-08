@@ -90,7 +90,7 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   achievementsButton.click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
   assert.equal(window.document.activeElement.id, 'gamification-close');
-  assert.equal(window.document.querySelector('#gamification-close').parentElement.className, 'achievements-heading');
+  assert.equal(window.document.querySelector('#gamification-close').parentElement.classList.contains('achievements-heading'), true);
   assert.equal(window.document.querySelector('.achievements-actions'), null);
   window.document.querySelector('#gamification-close').click();
   window.document.querySelector('#gamification-level').click();

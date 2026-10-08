@@ -100,6 +100,9 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
   await withServer(async (baseUrl) => {
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
+    const modalDocument = new JSDOM(html);
+    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 5);
+    modalDocument.window.close();
 
     for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -242,8 +245,8 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading');
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
-  assert.equal(headings.style.getPropertyValue('margin-bottom'), '20px');
-  const emptyStatuses = smartphoneRules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty');
+  assert.equal(headings.style.getPropertyValue('margin-bottom'), '12px');
+  const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty');
   assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
   const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button');
   assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');
