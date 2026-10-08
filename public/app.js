@@ -926,22 +926,15 @@ function renderGamificationDna(state) {
   const principal = state?.principal ?? 'DNA no disponible';
   gamificationDnaPrincipal.textContent = principal;
   const primaryPercentage = document.querySelector('#gamification-dna-percentage');
-  const secondarySummary = document.querySelector('#gamification-dna-secondary');
   const primaryTrait = DNA_TRAITS.find(({ name }) => name === principal);
   const hasPercentages = primaryTrait && state?.porcentajes;
   primaryPercentage.hidden = !hasPercentages;
-  secondarySummary.hidden = !hasPercentages;
   primaryPercentage.textContent = '';
-  secondarySummary.textContent = '';
   let summary = principal;
   if (hasPercentages) {
     const formatPercentage = (key) => `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[key] ?? 0)}%`;
-    const secondaryTrait = DNA_TRAITS
-      .filter(({ key }) => key !== primaryTrait.key)
-      .sort((left, right) => (state.porcentajes[right.key] ?? 0) - (state.porcentajes[left.key] ?? 0))[0];
     primaryPercentage.textContent = `${formatPercentage(primaryTrait.key)} `;
-    secondarySummary.textContent = ` / ${formatPercentage(secondaryTrait.key)} ${secondaryTrait.name}`;
-    summary = `${primaryPercentage.textContent}${principal}${secondarySummary.textContent}`;
+    summary = `${primaryPercentage.textContent}${principal}`;
   }
   dnaOpenButtons[0].setAttribute('aria-label', `Abrir DNA: ${summary}`);
   dnaOpenButtons[0].title = summary;
@@ -990,7 +983,9 @@ function renderDnaDialog(state) {
   const centerLabel = document.querySelector('.dna-chart-label');
   centerLabel.hidden = false;
   const principal = DNA_TRAITS.find(({ name }) => name === state.principal);
-  document.querySelector('#dna-chart-percentage').textContent = isNewbie ? '0%' : formatAnalyticsHistoryPercent(state.porcentajes[principal?.key] ?? 0);
+  document.querySelector('#dna-chart-percentage').textContent = isNewbie
+    ? '0%'
+    : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[principal?.key] ?? 0)}%`;
   document.querySelector('#dna-chart-trait').textContent = state.principal;
   if (!isNewbie && typeof Chart === 'function') {
     const styles = getComputedStyle(document.documentElement);
