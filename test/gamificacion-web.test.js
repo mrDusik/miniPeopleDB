@@ -305,10 +305,11 @@ test('DNA muestra estado de error con reintento y Newbie sin segmentos inventado
   const document = dom.window.document;
   const success = baseFetch([], state(), undefined, { principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } });
   let attempts = 0;
+  let resolveDnaFailure;
   dom.window.fetch = async (url, options) => {
     if (url === '/gamificacion/dna') {
       attempts += 1;
-      if (attempts === 2) return { ok: false, status: 500, json: async () => ({ error: 'DNA_NO_DISPONIBLE' }) };
+      if (attempts === 2) return new Promise((resolve) => { resolveDnaFailure = resolve; });
     }
     return success(url, options);
   };
@@ -317,7 +318,12 @@ test('DNA muestra estado de error con reintento y Newbie sin segmentos inventado
   assert.equal(attempts, 1);
   document.querySelector('#open-dna').click();
   await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#dna-status').textContent, 'Cargando DNA...');
+  assert.equal(document.querySelector('#dna-status').classList.contains('loading-message'), true);
+  resolveDnaFailure({ ok: false, status: 500, json: async () => ({ error: 'DNA_NO_DISPONIBLE' }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(document.querySelector('#dna-status').textContent, 'No se pudo cargar el DNA.');
+  assert.equal(document.querySelector('#dna-status').classList.contains('loading-message'), false);
   const retry = document.querySelector('#dna-retry');
   assert.equal(retry.hidden, false);
   retry.click();

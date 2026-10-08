@@ -968,7 +968,8 @@ function destroyDnaChart() {
 
 function renderDnaLoading() {
   destroyDnaChart();
-  dnaDialogStatus.textContent = 'Cargando DNA…';
+  dnaDialogStatus.textContent = 'Cargando DNA...';
+  dnaDialogStatus.classList.add('loading-message');
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
   dnaLegend.replaceChildren();
@@ -977,6 +978,7 @@ function renderDnaLoading() {
 
 function renderDnaError() {
   destroyDnaChart();
+  dnaDialogStatus.classList.remove('loading-message');
   dnaDialogStatus.textContent = 'No se pudo cargar el DNA.';
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
@@ -985,6 +987,7 @@ function renderDnaError() {
 
 function renderDnaDialog(state) {
   destroyDnaChart();
+  dnaDialogStatus.classList.remove('loading-message');
   const isNewbie = state.principal === 'Newbie';
   dnaChart.hidden = false;
   dnaChart.classList.toggle('dna-chart-empty', isNewbie);
@@ -1399,8 +1402,8 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   const requestId = ++rankingRequestId;
   const criterio = selectedRankingCriterion;
   if (showState) {
-    rankingStatus.textContent = 'Cargando ranking...';
-    rankingStatus.className = 'status';
+    rankingStatus.textContent = 'Cargando Ranking...';
+    rankingStatus.className = 'status loading-message';
     globalRankingList.replaceChildren();
   }
   try {
@@ -1439,8 +1442,8 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
   const sessionUserId = currentSession?.user?.id;
   const requestId = ++weeklyRankingRequestId;
   if (showState) {
-    weeklyRankingStatus.textContent = 'Cargando ranking...';
-    weeklyRankingStatus.className = 'status';
+    weeklyRankingStatus.textContent = 'Cargando Ranking...';
+    weeklyRankingStatus.className = 'status loading-message';
     weeklyRankingList.replaceChildren();
   }
   try {
@@ -2301,7 +2304,8 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
   const sequence = ++analyticsHistoryRequestSequence;
   const userId = currentSession.user?.id;
   clearAnalyticsHistoryData(false);
-  analyticsHistoryStatus.textContent = 'Cargando histórico…';
+  analyticsHistoryStatus.textContent = 'Cargando Progreso...';
+  analyticsHistoryStatus.className = 'status loading-message';
   analyticsHistoryRetryButton.hidden = true;
   try {
     const query = new URLSearchParams({ from: range.from, to: range.to });
@@ -2314,6 +2318,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
       || currentSession?.user?.id !== userId) return;
     analyticsHistoryData = data;
     analyticsHistoryStatus.textContent = data.snapshots.length ? '' : 'No hay datos para este período.';
+    analyticsHistoryStatus.className = 'status';
     renderAnalyticsHistoryValue(data);
     renderAnalyticsHistoryDna(data);
     renderAnalyticsHistoryProgression(data);
@@ -2322,6 +2327,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
       || currentSession?.user?.id !== userId) return;
     analyticsHistoryData = null;
     analyticsHistoryStatus.textContent = 'No se pudo cargar el histórico.';
+    analyticsHistoryStatus.className = 'status error';
     analyticsHistoryRetryButton.hidden = false;
   }
 }

@@ -102,6 +102,32 @@ test('abre y cierra el dialogo semanal de forma independiente y restaura el foco
   dom.window.close();
 });
 
+test('el ranking semanal muestra spinner y texto hasta recibir respuesta', async () => {
+  const dom = createDom();
+  const calls = installFetch(dom.window, [entry()]);
+  const originalFetch = dom.window.fetch;
+  let resolveWeekly;
+  dom.window.fetch = async (url, options) => {
+    if (url === '/api/ranking/semanal') {
+      calls.push({ url, options });
+      return new Promise((resolve) => { resolveWeekly = resolve; });
+    }
+    return originalFetch(url, options);
+  };
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-weekly-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const status = dom.window.document.querySelector('#weekly-ranking-status');
+  assert.equal(status.textContent, 'Cargando Ranking...');
+  assert.equal(status.classList.contains('loading-message'), true);
+  resolveWeekly({ ok: true, status: 200, json: async () => ({ available: true, entries: [] }) });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(status.textContent, '');
+  assert.equal(status.classList.contains('loading-message'), false);
+  dom.window.close();
+});
+
 test('distingue No disponible de error y vuelve a consultar el semanal al reabrir', async () => {
   const dom = createDom();
   const weeklyResult = { available: false, entries: [] };
@@ -761,17 +787,25 @@ test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', 
 
 test('muestra un error controlado si falla el ranking', async () => {
   const dom = createDom();
+  let resolveRanking;
   dom.window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, status: 200, json: async () => JSON.parse(categoriasMockRaw) };
     if (url === '/minifiguras') return { ok: true, status: 200, json: async () => [] };
     if (url === '/valoracion' || url === '/gamificacion') return { ok: true, status: 200, json: async () => ({}) };
+    if (url === '/api/ranking') return new Promise((resolve) => { resolveRanking = resolve; });
     return { ok: false, status: 500, json: async () => ({ error: 'RANKING_NO_DISPONIBLE' }) };
   };
   dom.window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 10));
   dom.window.document.querySelector('#open-global-ranking').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.equal(dom.window.document.querySelector('#ranking-status').textContent, 'No se pudo cargar el ranking global.');
+  const status = dom.window.document.querySelector('#ranking-status');
+  assert.equal(status.textContent, 'Cargando Ranking...');
+  assert.equal(status.classList.contains('loading-message'), true);
+  resolveRanking({ ok: false, status: 500, json: async () => ({ error: 'RANKING_NO_DISPONIBLE' }) });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(status.textContent, 'No se pudo cargar el ranking global.');
+  assert.equal(status.classList.contains('loading-message'), false);
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 0);
   dom.window.close();
 });
