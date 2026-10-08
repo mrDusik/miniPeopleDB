@@ -234,6 +234,28 @@ create table if not exists private.daily_sync_prices (
   )
 );
 
+create table if not exists private.daily_sync_figure_prices (
+  figure_id text primary key,
+  price numeric(12, 2) not null,
+  fetched_at timestamptz not null,
+  constraint daily_sync_figure_prices_id_check check (length(btrim(figure_id)) > 0),
+  constraint daily_sync_figure_prices_price_check check (price >= 0)
+);
+
+create index if not exists daily_sync_figure_prices_fetched_at_idx
+  on private.daily_sync_figure_prices (fetched_at);
+
+insert into private.daily_sync_figure_prices (figure_id, price, fetched_at)
+select distinct on (prices.figure_id) prices.figure_id, prices.price, prices.checkpoint_at
+from private.daily_sync_prices prices
+join private.daily_sync_runs runs on runs.id = prices.run_id
+where runs.status = 'completed'
+  and prices.status = 'completed'
+  and prices.price is not null
+  and prices.checkpoint_at >= clock_timestamp() - interval '24 hours'
+order by prices.figure_id, prices.checkpoint_at desc
+on conflict (figure_id) do nothing;
+
 create table if not exists public.regalos_enviados (
   donante_id uuid not null references auth.users (id) on delete cascade,
   receptor_id uuid not null references auth.users (id) on delete cascade,
@@ -292,11 +314,31 @@ begin
   get diagnostics v_total_users = row_count;
   update private.daily_sync_runs set total_users = v_total_users where id = v_run_id;
 
-  insert into private.daily_sync_prices (run_id, figure_id)
-  select distinct v_run_id, figures.id
+  insert into private.daily_sync_prices (
+    run_id, figure_id, status, price, checkpoint_at
+  )
+  select distinct
+    v_run_id,
+    figures.id,
+    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then 'completed' else 'pending' end,
+    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then cache.price else null end,
+    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then cache.fetched_at else null end
   from public.minifiguras figures
   join private.daily_sync_users work_users
-    on work_users.run_id = v_run_id and work_users.user_id = figures.user_id;
+    on work_users.run_id = v_run_id and work_users.user_id = figures.user_id
+  left join private.daily_sync_figure_prices cache
+    on cache.figure_id = figures.id;
+
+  update public.minifiguras figures
+  set precio = work.price, updated_at = clock_timestamp()
+  from private.daily_sync_prices work
+  join private.daily_sync_users work_users
+    on work_users.run_id = work.run_id
+  where work.run_id = v_run_id
+    and work.status = 'completed'
+    and figures.user_id = work_users.user_id
+    and figures.id = work.figure_id
+    and figures.precio is distinct from work.price;
 
   return jsonb_build_object(
     'jobId', v_run_id,
@@ -555,6 +597,11 @@ begin
     if p_price is null or p_price::text = 'NaN' or p_price < 0 or p_price > 9999999999.99 or p_failure_code is not null then
       raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
     end if;
+    insert into private.daily_sync_figure_prices (figure_id, price, fetched_at)
+    values (p_figure_id, p_price, clock_timestamp())
+    on conflict (figure_id) do update set
+      price = excluded.price,
+      fetched_at = excluded.fetched_at;
     update public.minifiguras figures
     set precio = p_price, updated_at = clock_timestamp()
     where figures.id = p_figure_id
@@ -1050,12 +1097,14 @@ alter table public.user_daily_snapshots enable row level security;
 alter table private.daily_sync_runs enable row level security;
 alter table private.daily_sync_users enable row level security;
 alter table private.daily_sync_prices enable row level security;
+alter table private.daily_sync_figure_prices enable row level security;
 
 revoke all on table public.user_daily_snapshots from public, anon, authenticated;
 grant select on table public.user_daily_snapshots to authenticated;
 revoke all on table private.daily_sync_runs from public, anon, authenticated;
 revoke all on table private.daily_sync_users from public, anon, authenticated;
 revoke all on table private.daily_sync_prices from public, anon, authenticated;
+revoke all on table private.daily_sync_figure_prices from public, anon, authenticated;
 
 drop policy if exists "Users can view their minifiguras" on public.minifiguras;
 create policy "Users can view their minifiguras"

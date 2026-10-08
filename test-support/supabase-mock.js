@@ -19,6 +19,7 @@ const COLUMN_DEFAULTS = {
 };
 
 const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
+const DAILY_PRICE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const MINIFIGURA_COLUMNS = [
   ['id', 'id'],
@@ -76,7 +77,10 @@ function rlsError() {
 export function createSupabaseMock({ users = {} } = {}) {
   const tables = { minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [] };
   const failures = [];
-  const dailySync = { runs: [], users: [], prices: [], snapshots: [], authUsers: new Set(Object.values(users).map(({ id }) => id)) };
+  const dailySync = {
+    runs: [], users: [], prices: [], snapshots: [], priceCache: new Map(),
+    authUsers: new Set(Object.values(users).map(({ id }) => id)),
+  };
   const adminCalls = [];
   let sequence = 0;
 
@@ -350,7 +354,23 @@ export function createSupabaseMock({ users = {} } = {}) {
       const userIds = [...new Set([...dailySync.authUsers, ...tables.minifiguras.map(({ user_id }) => user_id)])].sort();
       for (const userId of userIds) dailySync.users.push({ run_id: run.id, user_id: userId, status: 'pending', attempts: 0 });
       const figureIds = [...new Set(tables.minifiguras.filter(({ user_id }) => userIds.includes(user_id)).map(({ id }) => id))].sort();
-      for (const figureId of figureIds) dailySync.prices.push({ run_id: run.id, figure_id: figureId, status: 'pending', attempts: 0 });
+      for (const figureId of figureIds) {
+        const cached = dailySync.priceCache.get(figureId);
+        const isFresh = cached && now.getTime() - cached.fetched_at.getTime() <= DAILY_PRICE_CACHE_TTL_MS;
+        dailySync.prices.push({
+          run_id: run.id,
+          figure_id: figureId,
+          status: isFresh ? 'completed' : 'pending',
+          attempts: 0,
+          price: isFresh ? cached.price : null,
+          checkpoint_at: isFresh ? cached.fetched_at.toISOString() : null,
+        });
+        if (isFresh) {
+          for (const figure of tables.minifiguras) {
+            if (figure.id === figureId && userIds.includes(figure.user_id)) figure.precio = cached.price;
+          }
+        }
+      }
       return { data: { jobId: run.id, status: run.status, snapshotDate: run.snapshot_date }, error: null };
     }
     if (name === 'recuperar_daily_sync') {
@@ -397,6 +417,10 @@ export function createSupabaseMock({ users = {} } = {}) {
         work.price = parameters.p_success ? parameters.p_price : null;
         work.failure_code = parameters.p_success ? null : parameters.p_failure_code;
         if (parameters.p_success) {
+          dailySync.priceCache.set(parameters.p_figure_id, {
+            price: parameters.p_price,
+            fetched_at: new Date(now),
+          });
           for (const figure of tables.minifiguras) {
             if (figure.id === parameters.p_figure_id && dailySync.users.some(({ run_id, user_id }) => run_id === run.id && user_id === figure.user_id)) {
               figure.precio = parameters.p_price;
@@ -566,6 +590,9 @@ export function createSupabaseMock({ users = {} } = {}) {
       return clone(tables[table].filter((row) => userId === undefined || row.user_id === userId));
     },
     analyticsRows(table, runId) {
+      if (table === 'cache') {
+        return clone([...dailySync.priceCache.entries()].map(([figure_id, entry]) => ({ figure_id, ...entry })));
+      }
       const rows = dailySync[table];
       if (!rows) throw new Error(`Tabla analitica desconocida: ${table}`);
       return clone(rows.filter((row) => runId === undefined || row.run_id === runId));
@@ -576,6 +603,10 @@ export function createSupabaseMock({ users = {} } = {}) {
     expireDailySyncLease(runId) {
       const run = dailySync.runs.find(({ id }) => id === runId);
       if (run) run.lease_expires_at = 0;
+    },
+    setPriceCacheFetchedAt(figureId, fetchedAt) {
+      const entry = dailySync.priceCache.get(figureId);
+      if (entry) entry.fetched_at = new Date(fetchedAt);
     },
     failNext(table, error = { code: 'PGRST000', message: 'connection refused' }, operation = null) {
       failures.push({ table, error, operation });
