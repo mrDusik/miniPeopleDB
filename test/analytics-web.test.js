@@ -196,6 +196,9 @@ test('Historico permite reintentar errores e invalida carga al cerrar o cambiar 
     trigger.click();
     await tick();
     assert.equal(attempts, 3);
+    const status = document.querySelector('#analytics-history-status');
+    assert.equal(status.textContent, 'Cargando Progreso...');
+    assert.equal(status.classList.contains('loading-message'), true);
     document.querySelector('#analytics-history-close').click();
     assert.equal(dialog.open, false);
     window.resolvePendingHistory({ ok: true, status: 200, json: async () => ({ snapshots: [{ snapshotDate: '2026-10-01' }], baseline: null }) });
