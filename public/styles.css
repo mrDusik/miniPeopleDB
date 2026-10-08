@@ -789,3 +789,14 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .results-panel th:nth-child(9) { width: 11%; }
   .results-panel th:nth-child(11) { width: 12%; }
 }
+
+@media (orientation: portrait) {
+  .ranking-order-toolbar { min-width: 0; max-width: 100%; overflow-x: auto; }
+  .ranking-criteria { display: flex; flex: 0 0 max-content; flex-wrap: nowrap; }
+  .ranking-criteria .button { flex: 0 0 auto; white-space: nowrap; }
+  .ranking-user-details { width: 100%; min-width: 0; max-width: 100%; margin-right: 0; }
+  .ranking-user-details > * { min-width: 0; max-width: 100%; }
+  .dna-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 16px; }
+  .dna-chart { width: min(200px, 100%); justify-self: center; }
+  .dna-legend-panel { align-self: center; }
+}

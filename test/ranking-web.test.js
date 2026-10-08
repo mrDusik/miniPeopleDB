@@ -137,6 +137,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
+  assert.match(styles, /@media \(orientation: portrait\) \{[^}]*\.ranking-order-toolbar \{ min-width: 0; max-width: 100%; overflow-x: auto; \}[^}]*\.ranking-criteria \{ display: flex; flex: 0 0 max-content; flex-wrap: nowrap; \}[^}]*\.ranking-criteria \.button \{ flex: 0 0 auto; white-space: nowrap; \}/);
+  assert.match(styles, /\.ranking-user-details \{ width: 100%; min-width: 0; max-width: 100%; margin-right: 0; \}/);
   assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);
   assert.match(styles, /\.ranking-expand \.ranking-collection-count \{ grid-column: 3 \/ 5; grid-row: 3; justify-self: end; width: 70px; \}/);
@@ -264,7 +266,7 @@ test('el modal conserva cinco destacados y adapta tops y tarjetas a la orientaci
     assert.equal(cards.length, 5);
     assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.map(({ nombre }) => nombre));
   }
-  assert.match(styles, /@media \(orientation: portrait\) \{\s*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
+  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
   assert.match(styles, /@media \(orientation: landscape\) \{\s*\.ranking-highlight-title-portrait \{ display: none; \}/);
   assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
   dom.window.close();
