@@ -421,6 +421,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.children[3].children[1].className, 'collection-value');
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
+    assert.equal(details.querySelector('#sync-prices').hidden, true);
     const countsPanel = main.querySelector('.collection-counts-panel');
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);

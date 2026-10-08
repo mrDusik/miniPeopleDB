@@ -66,10 +66,10 @@ El resultado SHALL reflejar los registros historicos de pruebas y produccion des
 
 ### Requirement: Consultar evolucion propia en un modal historico
 
-La interfaz SHALL ofrecer al usuario autenticado un acceso de icono con nombre accesible y tooltip `Historico` junto al panel propio, sin cambiar los accesos existentes a DNA, logros o ranking. SHALL abrir un modal consistente con los actuales con selector de 30, 90 o 365 dias, 90 por defecto, y fechas personalizadas hasta 366 dias inclusivos. SHALL consultar solo la API historica propia al abrir o cambiar rango, representar carga, error con reintento y estado vacio, descartar respuestas obsoletas y limpiar datos y graficos al terminar la sesion. Cerrar por boton o Escape SHALL devolver foco al disparador valido. SHALL ajustarse a escritorio y movil sin solapamientos ni scroll horizontal, permitiendo scroll vertical interno.
+La interfaz SHALL ofrecer al usuario autenticado un boton `📈 Progreso` con tooltip accesible en la misma fila que `Logros` y `DNA`; SHALL NOT mostrar un panel historico independiente en la pantalla principal. El boton SHALL abrir un modal consistente con los actuales titulado `Progreso`, con selector segmentado de 30, 90 o 365 dias, 90 por defecto, y fechas personalizadas hasta 366 dias inclusivos. SHALL consultar solo la API historica propia al abrir o cambiar rango, representar carga, error con reintento y estado vacio, descartar respuestas obsoletas y limpiar datos y graficos al terminar la sesion. Cerrar por boton o Escape SHALL devolver foco al disparador valido. SHALL ajustarse a escritorio y movil sin solapamientos ni scroll horizontal, permitiendo scroll vertical interno.
 
 #### Scenario: Abrir y cambiar rango
-- **WHEN** el usuario abre Historico y cambia de 90 a 30 dias
+- **WHEN** el usuario abre Progreso y cambia de 90 a 30 dias
 - **THEN** el modal consulta el rango seleccionado y una respuesta anterior tardia no sustituye la vista nueva
 
 #### Scenario: Historico vacio o fallido

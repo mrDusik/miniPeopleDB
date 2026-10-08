@@ -10,10 +10,10 @@ Permite comparar de forma segura el progreso público de los coleccionistas y re
 
 El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios mejor clasificados por el criterio elegido, aplicado en Supabase antes del límite. El parámetro opcional `criterio` SHALL aceptar exclusivamente `nivel` (por defecto), `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; los valores inválidos, vacíos o repetidos SHALL devolver `400` con `{ "error": "PARAMETRO_INVALIDO", "parametro": "criterio" }`. Nivel SHALL ordenar por nivel descendente y Bricks descendente, Colección por número de figuras en estado `COLECCIÓN` descendente, y cada rasgo por su porcentaje DNA completo descendente, usando cero para Newbie. Todos los criterios SHALL desempatar por nivel descendente, Bricks descendente y finalmente `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
 
-El modal SHALL incluir un selector alineado a la izquierda encima de las filas del ranking, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
+El modal SHALL incluir un grupo de botones segmentados alineado a la izquierda encima de las filas del ranking, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. El criterio seleccionado SHALL indicarse con `aria-pressed="true"`; los demás SHALL tener `aria-pressed="false"`. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
 
 #### Scenario: Elegir un criterio alternativo
-- **WHEN** el usuario selecciona Colección o un rasgo DNA
+- **WHEN** el usuario activa el botón segmentado Colección o un rasgo DNA
 - **THEN** el modal muestra los diez primeros de todos los usuarios según ese criterio, no una reordenación del Top 10 por Nivel
 - **AND** la distribución completa de DNA permanece privada incluso si el rasgo elegido no está entre los dos rasgos públicos
 

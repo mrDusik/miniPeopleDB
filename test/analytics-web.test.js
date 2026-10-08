@@ -58,17 +58,19 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-test('Historico ofrece controles accesibles, dialog nativo y tablas alternativas', async () => {
+test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas', async () => {
   const { dom, document } = startApp();
   try {
     await tick();
     const trigger = document.querySelector('#open-analytics-history');
     const dialog = document.querySelector('#analytics-history-dialog');
     assert.equal(trigger.type, 'button');
-    assert.equal(trigger.getAttribute('aria-label'), 'Historico');
-    assert.equal(trigger.title, 'Historico');
+    assert.equal(trigger.textContent.trim(), '📈 Progreso');
+    assert.equal(trigger.title, 'Progreso');
     assert.equal(trigger.getAttribute('aria-controls'), dialog.id);
+    assert.equal(trigger.parentElement.className, 'summary-achievements-row');
     assert.equal(dialog.getAttribute('aria-labelledby'), 'analytics-history-title');
+    assert.equal(document.querySelector('#analytics-history-title').textContent, 'Progreso');
     assert.deepEqual([...document.querySelectorAll('[data-history-days]')].map((button) => button.dataset.historyDays), ['30', '90', '365']);
     assert.equal(document.querySelectorAll('.analytics-history-chart canvas').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);

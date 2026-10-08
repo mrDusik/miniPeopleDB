@@ -65,15 +65,18 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   await new Promise((resolve) => setTimeout(resolve, 10));
   dom.window.document.querySelector('#open-global-ranking').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const select = dom.window.document.querySelector('#ranking-order');
-  assert.equal(select.value, 'nivel');
-  assert.deepEqual([...select.options].map(({ textContent }) => textContent), ['Nivel', 'Colección', 'Rarity Hunter', 'Collector', 'Explorer', 'Fan']);
-  assert.equal(select.parentElement.nextElementSibling.id, 'global-ranking-list');
+  const criteriaGroup = dom.window.document.querySelector('#ranking-order');
+  const criteriaButtons = [...criteriaGroup.querySelectorAll('[data-ranking-criterion]')];
+  assert.equal(criteriaGroup.getAttribute('role'), 'group');
+  assert.deepEqual(criteriaButtons.map(({ dataset }) => dataset.rankingCriterion), ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']);
+  assert.deepEqual(criteriaButtons.map((button) => button.getAttribute('aria-pressed')), ['true', 'false', 'false', 'false', 'false', 'false']);
+  assert.equal(criteriaGroup.parentElement.nextElementSibling.id, 'global-ranking-list');
   assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-start;/);
   for (const criterio of [...criteria, 'nivel']) {
-    select.value = criterio;
-    select.dispatchEvent(new dom.window.Event('change'));
+    const button = criteriaButtons.find(({ dataset }) => dataset.rankingCriterion === criterio);
+    button.click();
     await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
     assert.ok(calls.some(({ url }) => url === (criterio === 'nivel' ? '/api/ranking' : `/api/ranking?criterio=${criterio}`)));
     assert.equal(dom.window.document.querySelector('.global-ranking-entry').dataset.userId, criterio === 'nivel' ? 'user-a' : 'user-b');
     assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
@@ -95,18 +98,17 @@ test('cambios rapidos de criterio ignoran respuestas anteriores y el cierre de s
   await new Promise((resolve) => setTimeout(resolve, 10));
   dom.window.document.querySelector('#open-global-ranking').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const select = dom.window.document.querySelector('#ranking-order');
-  select.value = 'coleccion';
-  select.dispatchEvent(new dom.window.Event('change'));
-  select.value = 'fan';
-  select.dispatchEvent(new dom.window.Event('change'));
+  const selectedCollection = dom.window.document.querySelector('[data-ranking-criterion="coleccion"]');
+  const selectedFan = dom.window.document.querySelector('[data-ranking-criterion="fan"]');
+  selectedCollection.click();
+  selectedFan.click();
   await new Promise((resolve) => setTimeout(resolve, 10));
   resolveOld({ ok: true, json: async () => [entry({ displayName: 'Old winner' })] });
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(dom.window.document.querySelector('.ranking-name').textContent, 'Fan w.');
   dom.window.document.querySelector('#logout').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.equal(select.value, 'nivel');
+  assert.equal(dom.window.document.querySelector('[data-ranking-criterion="nivel"]').getAttribute('aria-pressed'), 'true');
   dom.window.close();
 });
 
