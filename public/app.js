@@ -1553,6 +1553,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   currentEditId = mode === 'edit' ? minifigura.id : null;
   formSynced = mode !== 'create' && mode !== 'ranking-create';
   minifiguraForm.reset();
+  formPreviewImage.src = imageFallbackUrl;
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
   formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minifigura' : mode === 'view' ? 'Ver minifigura' : 'Nueva minifigura';
@@ -1643,7 +1644,7 @@ function updateFormMode() {
   formSubmitButton.hidden = isView;
   formSubmitButton.disabled = isView || formSending || (isRankingCreate && !formSynced) || !isFormValid();
   formCancelButton.textContent = 'Cerrar';
-  formPreviewImage.hidden = !formIdInput.value.trim();
+  formPreviewImage.hidden = false;
 }
 
 function updateFormToggleStates() {
