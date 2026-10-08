@@ -738,3 +738,154 @@ test('el mock separa RPC administrativas del cliente de usuario y rechaza .from(
   assert.deepEqual(mock.adminCalls().map(({ name }) => name), ['iniciar_daily_sync', 'iniciar_daily_sync']);
   assert.equal(mock.analyticsRows('runs').length, 1);
 });
+
+test('la cache global se siembra solo con checkpoints recientes e impide acceso de clientes', async () => {
+  const db = new PGlite();
+  const userId = '00000000-0000-4000-8000-00000000000a';
+  const recentRun = '80000000-0000-4000-8000-000000000001';
+  const olderRun = '80000000-0000-4000-8000-000000000002';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (
+        instance_id uuid, id uuid primary key, aud text, role text, email text unique,
+        encrypted_password text, email_confirmed_at timestamptz,
+        raw_app_meta_data jsonb, raw_user_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
+        confirmation_token text, recovery_token text, email_change_token_new text, email_change text
+      );
+    `);
+    const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+    await db.exec(schema);
+    await db.query('insert into auth.users(id) values ($1)', [userId]);
+    await db.query(`
+      insert into private.daily_sync_runs(id, snapshot_date, status, phase)
+      values ($1, '2026-10-07', 'completed', 'completed'),
+             ($2, '2026-10-06', 'completed', 'completed')
+    `, [recentRun, olderRun]);
+    await db.query(`
+      insert into private.daily_sync_prices(run_id, figure_id, status, attempts, price, checkpoint_at)
+      values ($1, 'FIG-RECENT', 'completed', 1, 12.50, clock_timestamp() - interval '1 hour'),
+             ($2, 'FIG-OLD', 'completed', 1, 9.00, clock_timestamp() - interval '25 hours')
+    `, [recentRun, olderRun]);
+
+    await db.exec(schema);
+    const seeded = (await db.query(
+      'select figure_id, price, fetched_at from private.daily_sync_figure_prices order by figure_id',
+    )).rows;
+    assert.equal(seeded.length, 1);
+    assert.equal(seeded[0].figure_id, 'FIG-RECENT');
+    assert.equal(Number(seeded[0].price), 12.5);
+    const originalFetchedAt = seeded[0].fetched_at.toISOString();
+
+    await db.query(`
+      insert into private.daily_sync_runs(id, snapshot_date, status, phase)
+      values ('80000000-0000-4000-8000-000000000003', '2026-10-08', 'completed', 'completed')
+    `);
+    await db.query(`
+      insert into private.daily_sync_prices(run_id, figure_id, status, attempts, price, checkpoint_at)
+      values ('80000000-0000-4000-8000-000000000003', 'FIG-RECENT', 'completed', 1, 20, clock_timestamp())
+    `);
+    await db.exec(schema);
+    const unchanged = (await db.query(
+      "select price, fetched_at from private.daily_sync_figure_prices where figure_id = 'FIG-RECENT'",
+    )).rows[0];
+    assert.equal(Number(unchanged.price), 12.5);
+    assert.equal(unchanged.fetched_at.toISOString(), originalFetchedAt);
+
+    for (const role of ['anon', 'authenticated']) {
+      for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+        assert.equal((await db.query('select has_table_privilege($1, $2, $3) as allowed', [
+          role, 'private.daily_sync_figure_prices', privilege,
+        ])).rows[0].allowed, false);
+      }
+      await db.query(`set role ${role}`);
+      await assert.rejects(db.query('select * from private.daily_sync_figure_prices'));
+      await db.query('reset role');
+    }
+  } finally {
+    await db.close();
+  }
+});
+
+test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cache caducada', async () => {
+  const db = new PGlite();
+  const userId = '00000000-0000-4000-8000-00000000000a';
+  const leaseOwner = '90000000-0000-4000-8000-000000000001';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (
+        instance_id uuid, id uuid primary key, aud text, role text, email text unique,
+        encrypted_password text, email_confirmed_at timestamptz,
+        raw_app_meta_data jsonb, raw_user_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
+        confirmation_token text, recovery_token text, email_change_token_new text, email_change text
+      );
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id) values ($1)', [userId]);
+    await db.query(`
+      insert into public.minifiguras(user_id, id, nombre, categoria, precio)
+      values ($1, 'FIG-FAIL', 'Failure', 'Test', 3),
+             ($1, 'FIG-FRESH', 'Fresh', 'Test', 10),
+             ($1, 'FIG-STALE', 'Stale', 'Test', 5)
+    `, [userId]);
+    await db.query(`
+      insert into private.daily_sync_figure_prices(figure_id, price, fetched_at)
+      values ('FIG-FRESH', 50, clock_timestamp() - interval '2 hours'),
+             ('FIG-FAIL', 4, clock_timestamp() - interval '25 hours'),
+             ('FIG-STALE', 6, clock_timestamp() - interval '25 hours')
+    `);
+    await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
+
+    const started = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
+    const priceRows = (await db.query(
+      'select figure_id, status, attempts, price from private.daily_sync_prices where run_id = $1 order by figure_id',
+      [started.jobId],
+    )).rows;
+    assert.deepEqual(priceRows.map(({ figure_id, status, attempts, price }) => ({
+      figure_id, status, attempts, price: price === null ? null : Number(price),
+    })), [
+      { figure_id: 'FIG-FAIL', status: 'pending', attempts: 0, price: null },
+      { figure_id: 'FIG-FRESH', status: 'completed', attempts: 0, price: 50 },
+      { figure_id: 'FIG-STALE', status: 'pending', attempts: 0, price: null },
+    ]);
+    assert.equal(Number((await db.query("select precio from public.minifiguras where user_id = $1 and id = 'FIG-FRESH'", [userId])).rows[0].precio), 50);
+
+    await db.query('select public.reclamar_daily_sync($1, $2, 120)', [started.jobId, leaseOwner]);
+    const pending = (await db.query('select figure_id from public.leer_daily_sync_precios($1, $2, null, 1000) order by figure_id', [
+      started.jobId, leaseOwner,
+    ])).rows;
+    assert.deepEqual(pending.map(({ figure_id }) => figure_id), ['FIG-FAIL', 'FIG-STALE']);
+
+    await db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-STALE', true, 8.75, null)", [started.jobId, leaseOwner]);
+    const refreshed = (await db.query("select price, fetched_at from private.daily_sync_figure_prices where figure_id = 'FIG-STALE'")).rows[0];
+    assert.equal(Number(refreshed.price), 8.75);
+    assert.ok(refreshed.fetched_at.getTime() > Date.now() - 5000);
+    await db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-FAIL', false, null, 'TIMEOUT')", [started.jobId, leaseOwner]);
+    const preservedCache = (await db.query("select price, fetched_at from private.daily_sync_figure_prices where figure_id = 'FIG-FAIL'")).rows[0];
+    assert.equal(Number(preservedCache.price), 4);
+    assert.ok(preservedCache.fetched_at.getTime() < Date.now() - 24 * 60 * 60 * 1000);
+    assert.equal(Number((await db.query("select precio from public.minifiguras where user_id = $1 and id = 'FIG-FAIL'", [userId])).rows[0].precio), 3);
+    assert.equal((await db.query('select failed_prices from private.daily_sync_runs where id = $1', [started.jobId])).rows[0].failed_prices, 1);
+  } finally {
+    await db.close();
+  }
+});

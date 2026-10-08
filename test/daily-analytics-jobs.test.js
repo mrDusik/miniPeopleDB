@@ -426,3 +426,53 @@ test('agota reintentos de fuentes y marca el trabajo fallido sin resultado exito
   assert.equal(status.result, null);
   assert.equal(status.errorCode, 'USERS_FAILED');
 });
+
+test('329 IDs no generan fetch en el segundo job y solo se refrescan al caducar 24 horas', async () => {
+  const requestedIds = [];
+  const { jobs, mock } = analyticsHarness({
+    users: [USER_A],
+    figures: [
+      { user_id: USER_A, id: 'FIG-CACHED', nombre: 'Cached', categoria: 'Test', estado_coleccion: 'COLECCIÓN', precio: 5 },
+      ...Array.from({ length: 328 }, (_, index) => ({
+        user_id: USER_A,
+        id: `FIG-${String(index).padStart(3, '0')}`,
+        nombre: `Figure ${index}`,
+        categoria: 'Test',
+        estado_coleccion: 'COLECCIÓN',
+        precio: 5,
+      })),
+    ],
+    brickset: {
+      async getPrice(id) {
+        requestedIds.push(id);
+        return id === 'FIG-CACHED' ? 12 + requestedIds.filter((requestedId) => requestedId === id).length - 1 : 10;
+      },
+    },
+  });
+
+  const firstRun = await jobs.start();
+  await jobs.waitForIdle();
+  assert.equal(requestedIds.length, 329);
+  assert.equal(mock.analyticsRows('prices', firstRun.jobId).length, 329);
+  assert.ok(mock.analyticsRows('prices', firstRun.jobId).every(({ status }) => status === 'completed'));
+  assert.equal(Number(mock.analyticsRows('cache').find(({ figure_id }) => figure_id === 'FIG-CACHED').price), 12);
+
+  const secondRun = await jobs.start();
+  await jobs.waitForIdle();
+  assert.equal(requestedIds.length, 329);
+  assert.equal(mock.analyticsRows('prices', secondRun.jobId).length, 329);
+  assert.ok(mock.analyticsRows('prices', secondRun.jobId).every(({ status, attempts }) => status === 'completed' && attempts === 0));
+  assert.equal(mock.rows('minifiguras', USER_A)[0].precio, 12);
+
+  mock.setPriceCacheFetchedAt('FIG-CACHED', Date.now() - 25 * 60 * 60 * 1000);
+  const thirdRun = await jobs.start();
+  await jobs.waitForIdle();
+  assert.equal(requestedIds.length, 330);
+  assert.equal(requestedIds.filter((id) => id === 'FIG-CACHED').length, 2);
+  const thirdRunPrices = mock.analyticsRows('prices', thirdRun.jobId);
+  assert.equal(thirdRunPrices.filter(({ attempts }) => attempts > 0).length, 1);
+  assert.equal(thirdRunPrices.filter(({ status }) => status === 'completed').length, 329);
+  assert.equal(Number(mock.analyticsRows('cache').find(({ figure_id }) => figure_id === 'FIG-CACHED').price), 13);
+  assert.equal(mock.rows('minifiguras', USER_A).find(({ id }) => id === 'FIG-CACHED').precio, 13);
+  assert.equal(mock.analyticsRows('snapshots').length, 1);
+});

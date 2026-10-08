@@ -53,11 +53,21 @@ Cada trabajo SHALL fijar al inicio el conjunto de usuarios existentes en Supabas
 
 ### Requirement: Refrescar precios antes de capturar el estado
 
-El trabajo SHALL intentar actualizar el precio de los IDs presentes en inventarios de los usuarios incluidos, tanto en coleccion como buscadas, consultando una vez cada ID distinto por trabajo salvo reintentos acotados. SHALL compartir el limite global de peticiones de Brickset con las operaciones ordinarias, respetar `429 Retry-After` y establecer timeouts y reintentos finitos. SHALL persistir solo precios validos, conservar los anteriores ante fallo y no recrear figuras eliminadas. Antes del snapshot de cada usuario SHALL recalcular su gamificacion con las reglas vigentes y conservar regalos; el DNA SHALL corresponder a ese estado. Un fallo de scraping SHALL permitir completar usando los precios persistidos; un fallo de persistencia SHALL NOT notificarse como exito.
+El trabajo SHALL considerar los IDs presentes en inventarios de usuarios incluidos, tanto en coleccion como buscadas, y SHALL consultar una sola vez cada ID distinto cuyo precio global no exista o tenga mas de 24 horas, salvo reintentos acotados. Un precio cacheado con antiguedad menor o igual a 24 horas SHALL reutilizarse sin llamada a Brickset y SHALL aplicarse a las filas de inventario elegibles aun existentes. La cache SHALL ser compartida por todos los usuarios, persistir entre runs y SHALL NOT ser legible ni escribible directamente por clientes ordinarios. El trabajo SHALL compartir el limite global de peticiones de Brickset con operaciones ordinarias, respetar `429 Retry-After` y establecer timeouts y reintentos finitos. Una respuesta valida SHALL actualizar cache, precios de filas aun existentes y checkpoint de ID atomically. Un fallo de scraping SHALL conservar cache y precios anteriores y permitir completar; SHALL contar como `failedPrices` solo si se intento el refresco caducado. No SHALL recrear figuras eliminadas. Antes del snapshot de cada usuario SHALL recalcular su gamificacion con las reglas vigentes y conservar regalos; el DNA SHALL corresponder a ese estado. Un fallo de persistencia SHALL NOT notificarse como exito.
 
 #### Scenario: ID compartido y fallo parcial
 - **WHEN** dos usuarios tienen el mismo ID y otro ID falla en Brickset
 - **THEN** se comparte el resultado del ID comun, se conserva el precio anterior del fallido y se capturan ambos usuarios
+
+#### Scenario: Reutilizar cache fresca
+- **WHEN** el ID de inventario tiene un precio valido guardado globalmente hace menos de 24 horas
+- **THEN** el job reutiliza ese valor, no consulta Brickset y captura todos los usuarios con ese ID
+- **AND** el checkpoint del run marca el ID completado sin incrementar intentos de scraping
+
+#### Scenario: Refrescar cache caducada
+- **WHEN** el precio global del ID no existe o tiene mas de 24 horas
+- **THEN** Brickset se consulta una vez por ID distinto y el precio valido actualiza la cache para siguientes runs
+- **AND** si la consulta falla, se conservan la cache y los precios anteriores y aumenta `failedPrices`
 
 #### Scenario: Precio modifica logros
 - **WHEN** un precio actualizado cambia un requisito de gamificacion

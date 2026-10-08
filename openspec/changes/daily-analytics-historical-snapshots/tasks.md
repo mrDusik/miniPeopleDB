@@ -48,3 +48,11 @@
 - [x] 6.2 Documentar despliegue aditivo, prueba manual del trigger y rollback no destructivo con cron/worker desactivados; verificar entrega del procedimiento, incluyendo repeticion del mismo dia, lectura por dos cuentas y rotacion de secreto fuera de git.
 - [x] 6.3 Ejecutar tests focalizados SQL, API, coordinador y web y despues `npm.cmd test -- --test-reporter=dot`; verificar suite completa sin red/credenciales y regresiones de DNA, gamificacion, categorias, ranking y sincronizacion ordinaria cubiertas.
 - [x] 6.4 Validar el cambio con `openspec validate daily-analytics-historical-snapshots --strict`, revisar `git diff --check` y comprobar visualmente los tres graficos con datos de prueba en navegador; verificar todos los escenarios de aceptacion antes de marcar implementacion completada, sin configurar servicios externos ni credenciales reales automaticamente.
+
+## 7. Cache global de precios Brickset
+
+- [x] 7.1 Crear `private.daily_sync_figure_prices` por ID canonico con precio y `fetched_at`; sembrar idempotentemente desde checkpoints exitosos recientes, proteger la cache sin grants de cliente y verificar en PGlite antiguedad conservada, RLS/grants y schema repetido.
+- [x] 7.2 Cambiar inicio de run para marcar como completados los IDs con cache <=24 horas y propagar esos precios a figuras elegibles existentes; guardar cache, filas de inventario y checkpoint en la misma RPC al refrescar, y verificar en PGlite ID fresco/caducado, fallo y borrado concurrente.
+- [x] 7.3 Extender mock y worker para consultar Brickset solo para IDs ausentes/caducados, reutilizar cache entre runs y mantener snapshots completos; verificar que un segundo run fresco no hace fetch y que un ID caducado se actualiza una sola vez.
+- [x] 7.4 Actualizar README con la vigencia de 24 horas, semantica del ultimo precio conocido y efecto en `failedPrices`/duracion.
+- [x] 7.5 Ejecutar pruebas SQL, worker y regresion completa, `openspec validate --strict` y `git diff --check`; medir la segunda ejecucion del mismo conjunto frente a la primera.

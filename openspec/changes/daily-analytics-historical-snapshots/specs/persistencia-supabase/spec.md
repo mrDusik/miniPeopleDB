@@ -32,7 +32,7 @@ Las operaciones ordinarias de usuario SHALL seguir usando el JWT autenticado y R
 
 ### Requirement: Proteger snapshots y checkpoints de analitica
 
-La tabla historica SHALL tener RLS habilitado y permitir a `authenticated` unicamente SELECT de filas con `user_id = auth.uid()`. Clientes ordinarios SHALL NOT poder insertar, actualizar ni eliminar mediciones, ni acceder a ejecuciones, leases o checkpoints. Las tablas internas del trabajo SHALL carecer de grants para `public`, `anon` y `authenticated`; las RPC administrativas SHALL comprobar rol ademas de restringir EXECUTE. El historial SHALL borrarse en cascada al eliminar la cuenta y SHALL NOT publicarse mediante ranking o perfiles.
+La tabla historica SHALL tener RLS habilitado y permitir a `authenticated` unicamente SELECT de filas con `user_id = auth.uid()`. Clientes ordinarios SHALL NOT poder insertar, actualizar ni eliminar mediciones, ni acceder a ejecuciones, leases, checkpoints o la cache privada global de precios. Las tablas internas del trabajo y `private.daily_sync_figure_prices` SHALL carecer de grants para `public`, `anon` y `authenticated`; las RPC administrativas SHALL comprobar rol ademas de restringir EXECUTE. La cache global SHALL guardar solo IDs canonicos, precios Brickset no negativos y `fetched_at`; su lectura/escritura ocurrira exclusivamente dentro de RPC allowlisted del worker. El historial SHALL borrarse en cascada al eliminar la cuenta y SHALL NOT publicarse mediante ranking o perfiles.
 
 #### Scenario: Lectura y escritura directas
 - **WHEN** un cliente autenticado intenta leer snapshots ajenos, cambiar propios o consultar checkpoints
@@ -41,3 +41,7 @@ La tabla historica SHALL tener RLS habilitado y permitir a `authenticated` unica
 #### Scenario: Borrar cuenta
 - **WHEN** se elimina una cuenta de `auth.users`
 - **THEN** se eliminan sus snapshots sin afectar historicos de otras cuentas
+
+#### Scenario: Cache de precios inaccesible a clientes
+- **WHEN** roles `anon` o `authenticated` consultan o mutan `private.daily_sync_figure_prices`
+- **THEN** Postgres deniega el acceso directo; solo RPC allowlisted con `service_role` pueden utilizarla
