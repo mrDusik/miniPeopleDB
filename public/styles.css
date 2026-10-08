@@ -75,6 +75,8 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .summary-ranking-link, .summary-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
 .summary-achievements-row .button { flex: 1 1 50%; min-width: 0; }
 .summary-ranking-row .summary-ranking-link { flex: 1 1 auto; }
+.history-open-button { flex: 0 0 40px; width: 40px; min-width: 40px; aspect-ratio: 1; padding: 0; }
+.history-open-button svg { display: block; }
 .collection-counts-panel { display: flex; align-items: center; gap: 16px; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .collection-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -307,6 +309,34 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievements-heading-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; }
 .achievements-heading .button { flex: 0 0 auto; }
 .modal-ranking { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; }
+.modal-analytics-history { display: block; width: min(1100px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.analytics-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 4px solid var(--blue); }
+.analytics-history-heading h2 { margin: 0; }
+.analytics-history-heading .button { flex: 0 0 auto; }
+.analytics-history-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; gap: 12px; margin-bottom: 12px; }
+.analytics-history-ranges { display: flex; gap: 0; }
+.analytics-history-ranges .button { flex: 0 0 auto; min-width: 72px; border-radius: 0; }
+.analytics-history-ranges .button:first-child { border-radius: 4px 0 0 4px; }
+.analytics-history-ranges .button:last-child { border-radius: 0 4px 4px 0; }
+.analytics-history-ranges .button[aria-pressed="true"] { border-color: var(--blue); color: white; background: var(--blue); }
+#analytics-history-custom-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 8px; min-width: 0; margin: 0; }
+#analytics-history-custom-range label { min-width: 0; }
+#analytics-history-custom-range input { width: 100%; min-width: 0; min-height: 36px; padding: 0 6px; font: inherit; }
+#analytics-history-apply { flex: 0 0 auto; }
+#analytics-history-status { min-height: 22px; margin: 6px 0; }
+.analytics-history-charts { display: grid; gap: 18px; }
+.analytics-history-chart { min-width: 0; padding: 14px 0 0; border-top: 1px solid var(--line); }
+.analytics-history-chart h3 { margin: 0 0 10px; color: var(--ink); font: 700 1rem Arial, sans-serif; }
+.analytics-history-chart canvas { display: block; width: 100% !important; height: 250px !important; max-width: 100%; }
+.analytics-history-table-wrap { width: 100%; min-width: 0; overflow-x: hidden; }
+.analytics-history-chart table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; color: var(--ink); font: 0.78rem/1.35 Arial, sans-serif; }
+.analytics-history-chart caption { padding: 6px 0; color: var(--muted); font-weight: 700; text-align: left; }
+.analytics-history-chart th, .analytics-history-chart td { padding: 6px 5px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; text-align: left; }
+.analytics-history-chart th { color: var(--muted); font-weight: 700; }
+#analytics-history-value-table th:first-child, #analytics-history-value-table td:first-child { width: 29%; }
+#analytics-history-dna-table th:first-child, #analytics-history-dna-table td:first-child { width: 22%; }
+#analytics-history-dna-table th:not(:first-child), #analytics-history-dna-table td:not(:first-child) { width: 19.5%; }
+#analytics-history-progression-table th:first-child, #analytics-history-progression-table td:first-child { width: 45%; }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
@@ -498,6 +528,20 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-row-status .state-toggle, .modal-row-status .eye-toggle { min-height: 36px; }
   #minifigura-form .form-error { min-height: 0; }
   .modal .form-actions { grid-column: 1; grid-row: 3; }
+}
+
+@media (max-width: 600px) {
+  .history-open-button { flex-basis: 36px; width: 36px; min-width: 36px; }
+  .modal-analytics-history { width: calc(100% - 16px); max-height: calc(100dvh - 16px); padding: 12px; }
+  .analytics-history-controls { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .analytics-history-ranges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .analytics-history-ranges .button { min-width: 0; padding: 0 5px; font-size: 0.75rem; }
+  #analytics-history-custom-range { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #analytics-history-custom-range label { font-size: 0.72rem; }
+  #analytics-history-apply { grid-column: 1 / -1; width: 100%; }
+  .analytics-history-chart canvas { height: 220px !important; }
+  .analytics-history-chart table { font-size: 0.66rem; }
+  .analytics-history-chart th, .analytics-history-chart td { padding: 5px 3px; }
 }
 
 @media (min-width: 761px) and (max-width: 1200px) {

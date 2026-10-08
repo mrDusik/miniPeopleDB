@@ -122,6 +122,21 @@ const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
 const rankingOrder = document.querySelector('#ranking-order');
 const rankingMainGlobe = document.querySelector('#ranking-main-globe');
+const analyticsHistoryDialog = document.querySelector('#analytics-history-dialog');
+const analyticsHistoryOpenButton = document.querySelector('#open-analytics-history');
+const analyticsHistoryCloseButton = document.querySelector('#analytics-history-close');
+const analyticsHistoryRangeButtons = [...document.querySelectorAll('[data-history-days]')];
+const analyticsHistoryCustomRange = document.querySelector('#analytics-history-custom-range');
+const analyticsHistoryFromInput = document.querySelector('#analytics-history-from');
+const analyticsHistoryToInput = document.querySelector('#analytics-history-to');
+const analyticsHistoryStatus = document.querySelector('#analytics-history-status');
+const analyticsHistoryRetryButton = document.querySelector('#analytics-history-retry');
+const analyticsHistoryValueCanvas = document.querySelector('#analytics-history-value-chart');
+const analyticsHistoryValueTableBody = document.querySelector('#analytics-history-value-table tbody');
+const analyticsHistoryDnaCanvas = document.querySelector('#analytics-history-dna-chart');
+const analyticsHistoryDnaTableBody = document.querySelector('#analytics-history-dna-table tbody');
+const analyticsHistoryProgressionCanvas = document.querySelector('#analytics-history-progression-chart');
+const analyticsHistoryProgressionTableBody = document.querySelector('#analytics-history-progression-table tbody');
 
 const pageShell = document.querySelector('.page-shell');
 const authScreen = document.querySelector('#auth-screen');
@@ -185,6 +200,10 @@ let ownDnaState = null;
 let dnaDialogTrigger = null;
 let dnaRequestSequence = 0;
 let achievementsTrigger = null;
+let analyticsHistoryRequestSequence = 0;
+let analyticsHistoryTrigger = null;
+let analyticsHistoryRange = null;
+let analyticsHistoryData = null;
 
 formAnioInput.max = String(currentYear);
 
@@ -1795,6 +1814,390 @@ gamificationDialog.addEventListener('close', () => {
 });
 
 let rankingTrigger = rankingOpenButton;
+function madridDateString(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function shiftCalendarDate(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function historyRangeForDays(days) {
+  const to = madridDateString(new Date());
+  return { from: shiftCalendarDate(to, 1 - days), to };
+}
+
+function setAnalyticsHistoryRange(range, presetDays = null) {
+  analyticsHistoryRange = range;
+  analyticsHistoryFromInput.value = range.from;
+  analyticsHistoryToInput.value = range.to;
+  for (const button of analyticsHistoryRangeButtons) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.historyDays) === presetDays));
+  }
+}
+
+function clearAnalyticsHistoryData(clearStatus = true) {
+  analyticsHistoryData = null;
+  if (clearStatus) analyticsHistoryStatus.textContent = '';
+  analyticsHistoryRetryButton.hidden = true;
+  destroyAnalyticsHistoryCharts();
+  analyticsHistoryValueTableBody.replaceChildren();
+  analyticsHistoryDnaTableBody.replaceChildren();
+  analyticsHistoryProgressionTableBody.replaceChildren();
+}
+
+const analyticsHistoryCharts = new Map();
+
+function destroyAnalyticsHistoryCharts() {
+  for (const chart of analyticsHistoryCharts.values()) chart.destroy();
+  analyticsHistoryCharts.clear();
+}
+
+function formatAnalyticsHistoryDate(dateString) {
+  return new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).format(new Date(`${dateString}T12:00:00.000Z`));
+}
+
+function formatUniqueAnalyticsHistoryTick(value, index, ticks) {
+  const dateForTick = (tickValue) => formatAnalyticsHistoryDate(new Date(Number(tickValue)).toISOString().slice(0, 10));
+  const label = dateForTick(value);
+  return index > 0 && label === dateForTick(ticks[index - 1].value) ? '' : label;
+}
+
+function formatAnalyticsHistoryPrice(value) {
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+}
+
+function formatAnalyticsHistoryPercent(value) {
+  return `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value)}%`;
+}
+
+function chartColorWithAlpha(color, alpha) {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return color;
+  const value = match[1];
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16));
+  return `rgba(${channels.join(', ')}, ${alpha})`;
+}
+
+function analyticsHistoryValuePoints(data) {
+  const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
+  const valueSeries = [];
+  const deltaSeries = [];
+  const deltas = new Map();
+  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) {
+    const timestamp = Date.parse(`${date}T00:00:00.000Z`);
+    const snapshot = byDate.get(date);
+    valueSeries.push({ x: timestamp, y: snapshot ? snapshot.totalValue : null });
+    let previous = byDate.get(shiftCalendarDate(date, -1));
+    if (!previous && date === analyticsHistoryRange.from
+      && data.baseline?.snapshotDate === shiftCalendarDate(date, -1)) {
+      previous = { totalFigures: data.baseline.totalFigures };
+    }
+    const delta = snapshot && previous ? snapshot.totalFigures - previous.totalFigures : null;
+    if (snapshot) deltas.set(date, delta);
+    deltaSeries.push({ x: timestamp, y: snapshot ? delta : null });
+  }
+  return { valueSeries, deltaSeries, deltas };
+}
+
+function analyticsHistoryXAxisBounds() {
+  const min = Date.parse(`${analyticsHistoryRange.from}T00:00:00.000Z`);
+  const max = Date.parse(`${analyticsHistoryRange.to}T00:00:00.000Z`);
+  return min === max
+    ? { min: min - 43200000, max: max + 43200000 }
+    : { min, max };
+}
+
+function renderAnalyticsHistoryValue(data) {
+  analyticsHistoryValueTableBody.replaceChildren();
+  destroyAnalyticsHistoryCharts();
+  if (!data.snapshots.length) return;
+
+  const { valueSeries, deltaSeries, deltas } = analyticsHistoryValuePoints(data);
+  for (const snapshot of data.snapshots) {
+    const row = document.createElement('tr');
+    const values = [
+      formatAnalyticsHistoryDate(snapshot.snapshotDate),
+      formatAnalyticsHistoryPrice(snapshot.totalValue),
+      String(snapshot.totalFigures),
+      deltas.get(snapshot.snapshotDate) === null ? 'No disponible'
+        : deltas.get(snapshot.snapshotDate) > 0 ? `+${deltas.get(snapshot.snapshotDate)}`
+          : String(deltas.get(snapshot.snapshotDate)),
+    ];
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.append(cell);
+    }
+    analyticsHistoryValueTableBody.append(row);
+  }
+
+  if (typeof Chart !== 'function') return;
+
+  const styles = getComputedStyle(document.documentElement);
+  const xBounds = analyticsHistoryXAxisBounds();
+  const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
+  analyticsHistoryCharts.set('value', new Chart(analyticsHistoryValueCanvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      datasets: [
+        {
+          type: 'line', label: 'Valor de colección (€)', data: valueSeries,
+          yAxisID: 'value', borderColor: styles.getPropertyValue('--accent').trim(),
+          backgroundColor: styles.getPropertyValue('--accent').trim(), pointRadius: 3,
+          spanGaps: false, tension: 0.2,
+        },
+        {
+          type: 'bar', label: 'Cambio neto de figuras', data: deltaSeries,
+          yAxisID: 'figures', backgroundColor: styles.getPropertyValue('--blue').trim(),
+          borderColor: styles.getPropertyValue('--blue').trim(),
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            title(items) { return items.length ? formatTick(items[0].parsed.x) : ''; },
+            label(item) {
+              if (item.datasetIndex === 0) return `Valor de colección: ${formatAnalyticsHistoryPrice(item.parsed.y)}`;
+              const change = item.parsed.y > 0 ? `+${item.parsed.y}` : String(item.parsed.y);
+              return `Cambio neto de figuras: ${change}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
+        value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Valor (€)' } },
+        figures: { type: 'linear', position: 'right', beginAtZero: true, title: { display: true, text: 'Cambio neto (figuras)' }, grid: { drawOnChartArea: false } },
+      },
+    },
+  }));
+}
+
+function renderAnalyticsHistoryDna(data) {
+  analyticsHistoryDnaTableBody.replaceChildren();
+  if (!data.snapshots.length) return;
+  for (const snapshot of data.snapshots) {
+    const row = document.createElement('tr');
+    const values = [
+      formatAnalyticsHistoryDate(snapshot.snapshotDate),
+      formatAnalyticsHistoryPercent(snapshot.dna.collector),
+      formatAnalyticsHistoryPercent(snapshot.dna.explorer),
+      formatAnalyticsHistoryPercent(snapshot.dna.rarityHunter),
+      formatAnalyticsHistoryPercent(snapshot.dna.fan),
+    ];
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.append(cell);
+    }
+    analyticsHistoryDnaTableBody.append(row);
+  }
+  if (typeof Chart !== 'function') return;
+
+  const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
+  const dates = [];
+  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
+  const traits = [
+    ['collector', 'Collector', '--dna-collector'],
+    ['explorer', 'Explorer', '--dna-explorer'],
+    ['rarityHunter', 'Rarity Hunter', '--dna-rarity'],
+    ['fan', 'Fan', '--dna-fan'],
+  ];
+  const styles = getComputedStyle(document.documentElement);
+  const colors = Object.fromEntries(traits.map(([key, , variable]) => [key, styles.getPropertyValue(variable).trim()]));
+  const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
+  const xBounds = analyticsHistoryXAxisBounds();
+  analyticsHistoryCharts.set('dna', new Chart(analyticsHistoryDnaCanvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      datasets: traits.map(([key, label]) => ({
+        label,
+        data: dates.map((date) => ({
+          x: Date.parse(`${date}T00:00:00.000Z`),
+          y: byDate.get(date)?.dna[key] ?? null,
+        })),
+        borderColor: colors[key],
+        backgroundColor: chartColorWithAlpha(colors[key], 0.45),
+        fill: true,
+        stack: 'dna',
+        spanGaps: false,
+        pointRadius: 3,
+        tension: 0,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            title(items) { return items.length ? formatTick(items[0].parsed.x) : ''; },
+            label(item) { return `${item.dataset.label}: ${formatAnalyticsHistoryPercent(item.parsed.y)}`; },
+          },
+        },
+      },
+      scales: {
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
+        y: { type: 'linear', min: 0, max: 100, stacked: true, ticks: { callback: (value) => `${value}%` }, title: { display: true, text: 'DNA (%)' } },
+      },
+    },
+  }));
+}
+
+function renderAnalyticsHistoryProgression(data) {
+  analyticsHistoryProgressionTableBody.replaceChildren();
+  if (!data.snapshots.length) return;
+  for (const snapshot of data.snapshots) {
+    const row = document.createElement('tr');
+    for (const value of [formatAnalyticsHistoryDate(snapshot.snapshotDate), String(snapshot.bricks), String(snapshot.level)]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.append(cell);
+    }
+    analyticsHistoryProgressionTableBody.append(row);
+  }
+  if (typeof Chart !== 'function') return;
+
+  const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
+  const dates = [];
+  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
+  const styles = getComputedStyle(document.documentElement);
+  const xBounds = analyticsHistoryXAxisBounds();
+  const makeSeries = (key) => dates.map((date) => ({
+    x: Date.parse(`${date}T00:00:00.000Z`),
+    y: byDate.get(date)?.[key] ?? null,
+  }));
+  const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
+  analyticsHistoryCharts.set('progression', new Chart(analyticsHistoryProgressionCanvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Bricks', data: makeSeries('bricks'), yAxisID: 'bricks',
+          borderColor: styles.getPropertyValue('--blue').trim(),
+          backgroundColor: styles.getPropertyValue('--blue').trim(),
+          pointRadius: 3, spanGaps: false, tension: 0.2,
+        },
+        {
+          label: 'Nivel', data: makeSeries('level'), yAxisID: 'level',
+          borderColor: styles.getPropertyValue('--accent').trim(),
+          backgroundColor: styles.getPropertyValue('--accent').trim(),
+          pointRadius: 3, spanGaps: false, stepped: 'after',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            title(items) { return items.length ? formatTick(items[0].parsed.x) : ''; },
+          },
+        },
+      },
+      scales: {
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
+        bricks: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Bricks' } },
+        level: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: 'Nivel' }, grid: { drawOnChartArea: false } },
+      },
+    },
+  }));
+}
+
+async function loadAnalyticsHistory(range = analyticsHistoryRange) {
+  if (!range || !currentSession) return;
+  analyticsHistoryRange = { ...range };
+  const sequence = ++analyticsHistoryRequestSequence;
+  const userId = currentSession.user?.id;
+  clearAnalyticsHistoryData(false);
+  analyticsHistoryStatus.textContent = 'Cargando histórico…';
+  analyticsHistoryRetryButton.hidden = true;
+  try {
+    const query = new URLSearchParams({ from: range.from, to: range.to });
+    const response = await apiFetch(`/api/analytics/history?${query}`);
+    if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
+      || currentSession?.user?.id !== userId) return;
+    if (!response.ok) throw new Error('HISTORICO_NO_DISPONIBLE');
+    const data = await response.json();
+    if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
+      || currentSession?.user?.id !== userId) return;
+    analyticsHistoryData = data;
+    analyticsHistoryStatus.textContent = data.snapshots.length ? '' : 'No hay datos para este período.';
+    renderAnalyticsHistoryValue(data);
+    renderAnalyticsHistoryDna(data);
+    renderAnalyticsHistoryProgression(data);
+  } catch {
+    if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
+      || currentSession?.user?.id !== userId) return;
+    analyticsHistoryData = null;
+    analyticsHistoryStatus.textContent = 'No se pudo cargar el histórico.';
+    analyticsHistoryRetryButton.hidden = false;
+  }
+}
+
+function openAnalyticsHistory() {
+  analyticsHistoryTrigger = analyticsHistoryOpenButton;
+  setAnalyticsHistoryRange(historyRangeForDays(90), 90);
+  analyticsHistoryDialog.showModal();
+  analyticsHistoryCloseButton.focus();
+  void loadAnalyticsHistory();
+}
+
+analyticsHistoryOpenButton.addEventListener('click', openAnalyticsHistory);
+analyticsHistoryCloseButton.addEventListener('click', () => analyticsHistoryDialog.close());
+analyticsHistoryDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  analyticsHistoryDialog.close();
+});
+analyticsHistoryDialog.addEventListener('close', () => {
+  analyticsHistoryRequestSequence += 1;
+  clearAnalyticsHistoryData();
+  if (currentSession && analyticsHistoryTrigger?.isConnected) analyticsHistoryTrigger.focus();
+  analyticsHistoryTrigger = null;
+});
+for (const button of analyticsHistoryRangeButtons) {
+  button.addEventListener('click', () => {
+    setAnalyticsHistoryRange(historyRangeForDays(Number(button.dataset.historyDays)), Number(button.dataset.historyDays));
+    void loadAnalyticsHistory();
+  });
+}
+analyticsHistoryCustomRange.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!analyticsHistoryFromInput.value || !analyticsHistoryToInput.value) {
+    analyticsHistoryStatus.textContent = 'Selecciona ambas fechas.';
+    return;
+  }
+  setAnalyticsHistoryRange({ from: analyticsHistoryFromInput.value, to: analyticsHistoryToInput.value });
+  void loadAnalyticsHistory();
+});
+analyticsHistoryRetryButton.addEventListener('click', () => { void loadAnalyticsHistory(); });
+
 rankingOrder.addEventListener('change', () => { void loadGlobalRanking(); });
 for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
   trigger.addEventListener('click', () => {
@@ -1995,6 +2398,9 @@ document.addEventListener('keydown', (event) => {
   } else if (dnaDialog.open) {
     event.preventDefault();
     dnaDialog.close();
+  } else if (analyticsHistoryDialog.open) {
+    event.preventDefault();
+    analyticsHistoryDialog.close();
   } else if (gamificationDialog.open) {
     event.preventDefault();
     gamificationDialog.close();
@@ -2245,6 +2651,9 @@ async function apiFetch(url, init = {}) {
 function clearUserData() {
   requestSequence += 1;
   dnaRequestSequence += 1;
+  analyticsHistoryRequestSequence += 1;
+  clearAnalyticsHistoryData();
+  analyticsHistoryTrigger = null;
   ownDnaState = null;
   dnaDialogTrigger = null;
   renderGamificationDna(null);
@@ -2287,7 +2696,7 @@ function clearUserData() {
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog]) {
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog, analyticsHistoryDialog]) {
     if (dialog.open) dialog.close();
   }
 }

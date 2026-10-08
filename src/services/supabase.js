@@ -51,3 +51,11 @@ export function getSupabaseAdminConfig({ env = process.env, envPath = defaultEnv
 	}
 	return url && serviceRoleKey ? { url, serviceRoleKey } : null;
 }
+
+export function getCronSecret({ env = process.env, envPath = defaultEnvPath } = {}) {
+	let cronSecret = env.CRON_SECRET;
+	if (!cronSecret) {
+		cronSecret = readEnvFile(envPath).CRON_SECRET;
+	}
+	return cronSecret || null;
+}

@@ -16,6 +16,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **DNA de colección:** cuatro rasgos (Rarity Hunter, Collector, Explorer y Fan), porcentajes privados para el usuario y un resumen público limitado al rasgo principal.
 * **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
 * **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
+* **Analítica histórica:** capturas diarias privadas de valor, figuras, Bricks, nivel y DNA; gráficas y tablas accesibles sin reconstruir días ausentes.
 
 ### Valoración y moneda
 
@@ -33,10 +34,10 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 ## Arquitectura e integraciones
 
-* **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. El cliente Supabase JS se sirve desde `/vendor/supabase.js`.
+* **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. Supabase JS y Chart.js se sirven como recursos locales en `/vendor/supabase.js` y `/vendor/chart.js`.
 * **Identidad:** Supabase Auth delega el inicio de sesión en Google OAuth con flujo PKCE. La API valida el bearer token con Supabase Auth.
 * **Persistencia:** Supabase Postgres almacena minifiguras, gamificación, perfiles públicos, ponderaciones DNA y regalos. RLS limita las operaciones ordinarias a la identidad autenticada.
-* **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa exclusivamente desde el proceso backend para invocar la RPC allowlisted que aplica recálculos globales transaccionales cuando cambia la definición local de categorías/logros. No se entrega al navegador ni se usa en rutas ordinarias.
+* **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa exclusivamente desde el proceso backend para las RPC allowlisted del recálculo de categorías y del worker de analítica diaria. No se entrega al navegador ni se usa en rutas ordinarias; estas conservan `anon` + JWT y RLS.
 * **Brickset:** el backend lee páginas públicas de `brickset.com` mediante `fetch` y extrae campos de minifigura; no utiliza una API key. Las peticiones se serializan globalmente y, por defecto, esperan al menos 9 segundos entre inicios.
 * **Catálogo de categorías:** `data/categorias-brickset.json` es la fuente local validada. Se puede actualizar manualmente desde la página pública de categorías de Brickset con `node scripts/sync-brickset-categorias.js`.
 * **Imágenes:** las imágenes de minifiguras se cargan desde el CDN de BrickLink (`img.bricklink.com`); logos, iconos, niveles y otros recursos de la interfaz son locales en `public/`.
@@ -46,7 +47,7 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 ### Seguridad y privacidad
 
-Las rutas de colección y gamificación requieren `Authorization: Bearer <token>` y operan con el cliente `anon` más el JWT del usuario. Las tablas privadas tienen RLS por usuario. El ranking y los logros públicos usan proyecciones limitadas; no publican correos, compras ni la distribución DNA completa. La única excepción privilegiada es el reconciliador backend de categorías, restringido a su RPC administrativa.
+Las rutas de colección, gamificación e histórico propio requieren `Authorization: Bearer <token>` y operan con el cliente `anon` más el JWT del usuario. Las tablas privadas tienen RLS por usuario. El ranking y los logros públicos usan proyecciones limitadas; no publican correos, compras ni la distribución DNA completa. Las únicas excepciones privilegiadas son el reconciliador backend de categorías y el worker diario autenticado por `CRON_SECRET`; ambos se limitan a sus RPC allowlisted y no se exponen en rutas ordinarias ni en el navegador.
 
 ## API principal
 
@@ -66,8 +67,19 @@ Las rutas de colección y gamificación requieren `Authorization: Bearer <token>
 | `/api/ranking` | `GET` | Autenticado | Top 10 global con criterio opcional |
 | `/api/ranking/:userId/logros` | `GET` | Autenticado | Logros públicos del Top 10 |
 | `/api/ranking/regalar` | `POST` | Autenticado | Enviar regalo único de Bricks |
+| `/api/cron/daily-sync` | `POST` | `CRON_SECRET` | Iniciar o reutilizar un trabajo durable; devuelve `202` antes de terminar |
+| `/api/cron/daily-sync/:jobId` | `GET` | `CRON_SECRET` | Consultar estado agregado `pending`, `running`, `completed` o `failed` |
+| `/api/analytics/history` | `GET` | JWT propio | Leer snapshots propios por rango y baseline |
 
 Los estados de colección aceptados son `COLECCIÓN` y `BUSCADA`. Los filtros de nombre e ID se aplican en el cliente sobre el catálogo cargado; los parámetros de `GET /minifiguras` también están disponibles para consumidores de la API.
+
+### Analítica histórica diaria
+
+El trigger externo inicia `POST /api/cron/daily-sync` con `Authorization: Bearer <CRON_SECRET>` y sin cuerpo ni parámetros que seleccionen usuario o fecha. Una respuesta `202` contiene `{ "jobId", "status", "snapshotDate" }`: confirma que el trabajo quedó persistido, **no** que la captura haya terminado. Consulta `GET /api/cron/daily-sync/:jobId` con el mismo secreto para obtener `processedUsers`, `totalUsers`, `failedPrices` y el estado terminal. Solo `completed` incluye `result: { "success": true, "processedUsers": N, "timestamp": "...Z" }`; `failed` no informa éxito ni errores internos. La fecha lógica se fija una vez al iniciar según `Europe/Madrid` y permanece igual si el proceso cruza medianoche.
+
+El worker procesa todas las cuentas de Supabase Auth, también las que no tienen colección: su snapshot inicial contiene cero figuras, valor, Bricks y porcentajes DNA, con nivel Duplo `0`. Refresca primero IDs distintos usando el scraper Brickset compartido; un error de precio conserva el anterior y se informa en `failedPrices`. Valor de colección usa precio Brickset y, como alternativa, precio de compra; `BUSCADA` no cuenta. Cada fila es única por usuario/fecha y una repetición del mismo día actualiza esa fila sin cambiar días anteriores. No existe backfill. Los snapshots representan el estado coherente de cada cuenta al procesarla, no una fotografía global simultánea a las 04:00.
+
+`GET /api/analytics/history?from=YYYY-MM-DD&to=YYYY-MM-DD` usa el JWT normal y solo consulta el propio historial mediante RLS. Si se omiten fechas, `to` es hoy en Madrid y `from` son los 89 días anteriores; el máximo inclusivo es 366 días. Devuelve snapshots existentes en orden ascendente y el último baseline propio anterior al rango. Los días ausentes no se inventan: el cambio neto solo se calcula contra una medición del día calendario anterior, admite descensos y no representa altas brutas. El nivel es el identificador numérico vigente y puede disminuir; cuatro porcentajes DNA cero permanecen cero. Los cambios posteriores de pesos no reescriben snapshots históricos.
 
 ---
 
@@ -108,7 +120,7 @@ mi-proyecto/
 1. Aplica `supabase/schema.sql` en el SQL Editor de Supabase.
 2. En Supabase › Authentication › Providers habilita **Google** (Client ID y Secret de Google Cloud).
 3. En Supabase › Authentication › URL Configuration configura las URLs de retorno como se explica abajo.
-4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). El arranque normal requiere las tres: la clave de servicio inicializa el reconciliador backend. Nunca la copies al navegador, logs o repositorio. Las rutas de usuario siguen usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la del hosting.
+4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). El arranque normal requiere las tres: la clave de servicio inicializa el reconciliador backend. Para habilitar el trigger diario, configura además `CRON_SECRET` como secreto solo del backend y del proveedor cron. Sin él, las rutas cron responden `503 CRON_NO_CONFIGURADO`. Nunca copies claves o secretos al navegador, logs o repositorio. Las rutas de usuario siguen usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la del hosting.
 
 ```bash
 npm install
@@ -157,6 +169,22 @@ En ese caso abre `http://localhost:3001/`. En Google Cloud conserva como URI de 
 Para comprobarlo, abre la URL local e inicia sesión con Google: al terminar debes seguir en el mismo localhost y puerto. Si vuelves a Render, revisa las **Redirect URLs** del proyecto indicado por `SUPABASE_URL`. Un cambio de esquema de la spec requiere aplicarlo en ese proyecto Supabase, aunque no despliegues el código en Render.
 
 Las peticiones a Brickset se serializan y respetan un intervalo mínimo global de 9 segundos. Puede ajustarse con `BRICKSET_MIN_INTERVAL_MS`; la sincronización masiva se ejecuta en segundo plano y expone su progreso en la interfaz.
+
+### Despliegue de analítica histórica
+
+El cambio de esquema es aditivo. Antes de desplegar código, aplica `supabase/schema.sql` en el Supabase autorizado y verifica las tablas, RLS, grants y RPC con sus pruebas SQL. Mantén desactivado el proveedor cron durante esa migración. Configura `SUPABASE_SERVICE_ROLE_KEY` y `CRON_SECRET` en el gestor de secretos del backend; `sup.env.example` contiene solo nombres y placeholders. No guardes el bearer en Git, navegador, parámetros de URL ni logs.
+
+El worker requiere un backend Node residente y una sola instancia, ya que comparte el limitador serial de Brickset con la sincronización ordinaria. No despliegues este worker como función efímera ni escales a varias instancias sin un limitador distribuido. El backend recupera trabajos pendientes al arrancar y deja que un lease caduque al cerrar; no borres tablas para reiniciarlo.
+
+Antes de activar el horario:
+
+1. Envía manualmente `POST https://<HOST>/api/cron/daily-sync` con `Authorization: Bearer <CRON_SECRET>` desde un cliente HTTPS autorizado. No incluyas cuerpo, usuario ni fecha.
+2. Comprueba el `202` y guarda el `jobId`; consulta `GET https://<HOST>/api/cron/daily-sync/<jobId>` hasta ver `completed` o `failed`. Repetir POST mientras siga activo devuelve el mismo trabajo. Tras completar, una nueva ejecución del mismo día vuelve a procesar estado actual y actualiza la fila existente por usuario/fecha.
+3. Valida el historial propio desde dos cuentas de prueba distintas y confirma que cada una solo ve sus snapshots y baseline; una cuenta sin figuras debe mostrar nivel `0` y DNA en ceros.
+4. Configura el proveedor cron para llamar por HTTPS cada día a las 04:00 de `Europe/Madrid` (zona IANA, con horario de verano) y guarda allí el secreto como cabecera `Authorization`, no en una URL.
+5. Monitoriza el estado final: `202` significa aceptado, no completado. Alerta ante `failed`, un trabajo `running` estancado, o fallos/duración de scraping; consulta el endpoint de estado con el mismo secreto.
+
+**Rollback no destructivo:** desactiva primero el cron externo, espera a que el trabajo activo termine o detén el backend para que el lease pueda expirar y despliega la versión anterior. Rota o elimina `CRON_SECRET` del proveedor y del backend; si se revierte el worker, revoca solo el `EXECUTE` de sus RPC diarias y conserva lo necesario para el reconciliador de categorías. No elimines `user_daily_snapshots` ni los metadatos de runs automáticamente. Para reactivar, reaplica el esquema aditivo y rota el secreto fuera de Git. La lectura histórica puede seguir desplegada o revertirse por separado sin borrar mediciones.
 
 ### Ranking social y buscadas
 

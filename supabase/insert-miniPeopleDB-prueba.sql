@@ -144,11 +144,11 @@ with collection as (
     (16, 'in-ny-i-was', 'In NY, I was', 'Anadir la minifigura SW0465A.', 3000, false, ny),
     (17, 'welcome-to-the-upsidedown', 'Welcome to the Upsidedown!', 'Anadir la minifigura ST008.', 100, false, upside),
     (18, 'chill-nancy-im-fine', 'Chill, Nancy. I''m fine', 'Anadir la minifigura ST009.', 700, false, nancy),
-    (19, 'antiquarian', 'Antiquarian.', 'Anadir una minifigura anterior al ano 2000.', 60, true, antiquarian),
-    (20, 'to-lay-the-groundwork', 'To lay the groundwork.', 'Alcanzar un valor total de coleccion de 500 euros.', 500, false, (collection_value >= 500)::integer),
-    (21, 'investor', 'Investor.', 'Alcanzar un valor total de coleccion de 1000 euros.', 1000, false, (collection_value >= 1000)::integer),
-    (22, 'investment-fund', 'Investment fund.', 'Alcanzar un valor total de coleccion de 5000 euros.', 5000, false, (collection_value >= 5000)::integer),
-    (23, 'almost-millionaire', 'Almost millionaire.', 'Alcanzar un valor total de coleccion de 10000 euros.', 10000, false, (collection_value >= 10000)::integer)
+    (19, 'antiquarian', 'Antiquarian', 'Anadir una minifigura anterior al ano 2000.', 60, true, antiquarian),
+    (20, 'to-lay-the-groundwork', 'To lay the groundwork', 'Alcanzar un valor total de coleccion de 500 euros.', 500, false, (collection_value >= 500)::integer),
+    (21, 'investor', 'Investor', 'Alcanzar un valor total de coleccion de 1000 euros.', 1000, false, (collection_value >= 1000)::integer),
+    (22, 'investment-fund', 'Investment fund', 'Alcanzar un valor total de coleccion de 5000 euros.', 5000, false, (collection_value >= 5000)::integer),
+    (23, 'almost-millionaire', 'Almost millionaire', 'Alcanzar un valor total de coleccion de 10000 euros.', 10000, false, (collection_value >= 10000)::integer)
   ) as objective(orden, id, nombre, descripcion, bricks, repetible, cantidad)
   where objective.cantidad > 0
   group by counts.user_id

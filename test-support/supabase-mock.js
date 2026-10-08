@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DNA_PONDERACIONES, selectLevel } from '../src/gamificacion.js';
 import { collectionHighlights } from '../src/collection-highlights.js';
 
@@ -6,6 +7,7 @@ const PRIMARY_KEYS = {
   gamificacion: ['user_id'],
   perfiles_publicos: ['user_id'],
   regalos_enviados: ['donante_id', 'receptor_id'],
+  user_daily_snapshots: ['user_id', 'snapshot_date'],
 };
 
 const COLUMN_DEFAULTS = {
@@ -13,6 +15,7 @@ const COLUMN_DEFAULTS = {
   gamificacion: () => ({ bricks: 0, nivel: {}, siguiente_nivel: null, progreso: {}, logros: [] }),
   perfiles_publicos: () => ({ avatar_url: null, updated_at: new Date().toISOString() }),
   regalos_enviados: () => ({ fecha: new Date().toISOString() }),
+  user_daily_snapshots: () => ({ created_at: new Date().toISOString() }),
 };
 
 const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
@@ -71,8 +74,10 @@ function rlsError() {
 
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
 export function createSupabaseMock({ users = {} } = {}) {
-  const tables = { minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [] };
+  const tables = { minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [] };
   const failures = [];
+  const dailySync = { runs: [], users: [], prices: [], snapshots: [], authUsers: new Set(Object.values(users).map(({ id }) => id)) };
+  const adminCalls = [];
   let sequence = 0;
 
   function userForToken(token) {
@@ -101,7 +106,15 @@ export function createSupabaseMock({ users = {} } = {}) {
     if (table === 'regalos_enviados') return { data: null, error: rlsError() };
 
     const rows = tables[table];
-    const visible = (row) => uid !== null && row.user_id === uid && state.filters.every(([column, value]) => row[column] === value);
+    const visible = (row) => uid !== null && row.user_id === uid
+      && state.filters.every(([column, value]) => row[column] === value)
+      && state.comparisons.every(([column, operator, value]) => {
+        if (operator === 'gte') return row[column] >= value;
+        if (operator === 'lte') return row[column] <= value;
+        if (operator === 'lt') return row[column] < value;
+        if (operator === 'gt') return row[column] > value;
+        return false;
+      });
     let result = [];
 
     if (state.operation === 'select') {
@@ -144,6 +157,7 @@ export function createSupabaseMock({ users = {} } = {}) {
         return (left[column] < right[column] ? -1 : 1) * (ascending ? 1 : -1);
       });
     }
+    if (state.limit !== null) result = result.slice(0, state.limit);
 
     const returnsRows = state.operation === 'select' || state.returning;
     const data = returnsRows ? clone(result) : null;
@@ -286,8 +300,200 @@ export function createSupabaseMock({ users = {} } = {}) {
     return { data: null, error: { code: '42883', message: 'function does not exist' } };
   }
 
+  function dailyStatus(run) {
+    const workUsers = dailySync.users.filter((entry) => entry.run_id === run.id);
+    const workPrices = dailySync.prices.filter((entry) => entry.run_id === run.id);
+    return {
+      jobId: run.id,
+      status: run.status,
+      snapshotDate: run.snapshot_date,
+      processedUsers: workUsers.filter(({ status }) => status === 'completed').length,
+      totalUsers: workUsers.length,
+      failedPrices: workPrices.filter(({ status }) => status === 'failed').length,
+      result: clone(run.result),
+      errorCode: run.error_code,
+    };
+  }
+
+  function sourceRevision(userId) {
+    const figures = tables.minifiguras.filter(({ user_id }) => user_id === userId)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const gifts = tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === userId)
+      .sort((left, right) => left.donante_id.localeCompare(right.donante_id));
+    return createHash('sha256').update(JSON.stringify({ figures, gifts, fingerprint: dailySync.fingerprint ?? '' })).digest('hex');
+  }
+
+  function adminRpc(name, parameters) {
+    adminCalls.push({ name, parameters: clone(parameters) });
+    const failure = takeFailure(name, 'rpc');
+    if (failure) return { data: null, error: failure };
+    const now = new Date();
+    const findRun = () => dailySync.runs.find(({ id }) => id === parameters.p_run_id);
+    const ownedRun = () => {
+      const run = findRun();
+      if (!run || run.status !== 'running' || run.lease_owner !== parameters.p_lease_owner || run.lease_expires_at <= now.getTime()) {
+        return null;
+      }
+      return run;
+    };
+
+    if (name === 'iniciar_daily_sync') {
+      const active = dailySync.runs.find(({ status }) => ['pending', 'running'].includes(status));
+      if (active) return { data: { jobId: active.id, status: active.status, snapshotDate: active.snapshot_date }, error: null };
+      sequence += 1;
+      const run = {
+        id: `90000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
+        snapshot_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(now),
+        status: 'pending', lease_owner: null, lease_expires_at: 0, result: null, error_code: null,
+      };
+      dailySync.runs.push(run);
+      const userIds = [...new Set([...dailySync.authUsers, ...tables.minifiguras.map(({ user_id }) => user_id)])].sort();
+      for (const userId of userIds) dailySync.users.push({ run_id: run.id, user_id: userId, status: 'pending', attempts: 0 });
+      const figureIds = [...new Set(tables.minifiguras.filter(({ user_id }) => userIds.includes(user_id)).map(({ id }) => id))].sort();
+      for (const figureId of figureIds) dailySync.prices.push({ run_id: run.id, figure_id: figureId, status: 'pending', attempts: 0 });
+      return { data: { jobId: run.id, status: run.status, snapshotDate: run.snapshot_date }, error: null };
+    }
+    if (name === 'recuperar_daily_sync') {
+      const active = dailySync.runs.find(({ status }) => ['pending', 'running'].includes(status));
+      return { data: active ? dailyStatus(active) : null, error: null };
+    }
+    if (name === 'consultar_daily_sync') {
+      const run = findRun();
+      return { data: run ? dailyStatus(run) : null, error: null };
+    }
+    if (name === 'reclamar_daily_sync') {
+      const run = findRun();
+      if (!run || !['pending', 'running'].includes(run.status)) return { data: false, error: null };
+      if (run.lease_expires_at > now.getTime() && run.lease_owner !== parameters.p_lease_owner) return { data: false, error: null };
+      run.status = 'running';
+      run.lease_owner = parameters.p_lease_owner;
+      run.lease_expires_at = now.getTime() + (parameters.p_lease_seconds ?? 120) * 1000;
+      return { data: true, error: null };
+    }
+    if (name === 'renovar_daily_sync') {
+      const run = ownedRun();
+      if (!run) return { data: false, error: null };
+      run.lease_expires_at = now.getTime() + (parameters.p_lease_seconds ?? 120) * 1000;
+      return { data: true, error: null };
+    }
+    if (name === 'leer_daily_sync_usuarios' || name === 'leer_daily_sync_precios') {
+      if (!ownedRun()) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
+      const isUsers = name === 'leer_daily_sync_usuarios';
+      const entries = (isUsers ? dailySync.users : dailySync.prices)
+        .filter((entry) => entry.run_id === parameters.p_run_id && ['pending', 'processing'].includes(entry.status))
+        .filter((entry) => !parameters[isUsers ? 'p_after_user_id' : 'p_after_figure_id']
+          || (isUsers ? entry.user_id : entry.figure_id) > parameters[isUsers ? 'p_after_user_id' : 'p_after_figure_id'])
+        .sort((left, right) => (isUsers ? left.user_id : left.figure_id).localeCompare(isUsers ? right.user_id : right.figure_id))
+        .slice(0, parameters.p_limit ?? 1000);
+      return { data: clone(entries.map(({ user_id, figure_id, status, attempts }) => ({ user_id, figure_id, status, attempts }))), error: null };
+    }
+    if (name === 'aplicar_daily_sync_precio') {
+      const run = ownedRun();
+      const work = dailySync.prices.find(({ run_id, figure_id }) => run_id === parameters.p_run_id && figure_id === parameters.p_figure_id);
+      if (!run || !work) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
+      if (work.status !== 'completed') {
+        work.attempts += 1;
+        work.status = parameters.p_success ? 'completed' : 'failed';
+        work.price = parameters.p_success ? parameters.p_price : null;
+        work.failure_code = parameters.p_success ? null : parameters.p_failure_code;
+        if (parameters.p_success) {
+          for (const figure of tables.minifiguras) {
+            if (figure.id === parameters.p_figure_id && dailySync.users.some(({ run_id, user_id }) => run_id === run.id && user_id === figure.user_id)) {
+              figure.precio = parameters.p_price;
+            }
+          }
+        }
+      }
+      return { data: true, error: null };
+    }
+    if (name === 'leer_daily_sync_fuentes') {
+      const run = ownedRun();
+      const included = dailySync.users.some(({ run_id, user_id }) => run_id === parameters.p_run_id && user_id === parameters.p_user_id);
+      if (!run || !included) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
+      const figures = tables.minifiguras.filter(({ user_id }) => user_id === parameters.p_user_id).map((figure) => ({
+        id: figure.id, categoria: figure.categoria, subcategoria: figure.subcategoria, anio: figure.anio,
+        estadoColeccion: figure.estado_coleccion, precio: figure.precio, precioCompra: figure.precio_compra,
+      }));
+      return { data: { revision: sourceRevision(parameters.p_user_id), figures, giftsReceived: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === parameters.p_user_id).length, fingerprint: dailySync.fingerprint ?? '' }, error: null };
+    }
+    if (name === 'capturar_daily_sync_usuario') {
+      const run = ownedRun();
+      const work = dailySync.users.find(({ run_id, user_id }) => run_id === parameters.p_run_id && user_id === parameters.p_user_id);
+      if (!run || !work) return { data: false, error: null };
+      if (work.status === 'completed') return { data: true, error: null };
+      if (sourceRevision(parameters.p_user_id) !== parameters.p_expected_revision) return { data: false, error: null };
+      const figures = tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === parameters.p_user_id && estado_coleccion === 'COLECCIÓN');
+      const state = parameters.p_state;
+      const totalValue = figures.reduce((total, figure) => total + (figure.precio ?? figure.precio_compra ?? 0), 0);
+      const dna = calculateDna(state.logros ?? []);
+      const snapshot = {
+        id: `snapshot-${sequence + 1}`,
+        user_id: parameters.p_user_id, snapshot_date: run.snapshot_date,
+        total_figures: figures.length, total_value: Math.round(totalValue * 100) / 100,
+        bricks: state.bricks, level: state.nivel?.id ?? 0,
+        pct_collector: Math.round(dna.porcentajes.collector * 100) / 100,
+        pct_explorer: Math.round(dna.porcentajes.explorer * 100) / 100,
+        pct_rarity_hunter: Math.round(dna.porcentajes.rarityHunter * 100) / 100,
+        pct_fan: Math.round(dna.porcentajes.fan * 100) / 100,
+      };
+      const existingSnapshot = dailySync.snapshots.find(({ user_id, snapshot_date }) => user_id === snapshot.user_id && snapshot_date === snapshot.snapshot_date);
+      if (existingSnapshot) {
+        Object.assign(existingSnapshot, snapshot);
+      } else {
+        sequence += 1;
+        const savedSnapshot = { ...snapshot, id: `snapshot-${sequence}`, created_at: now.toISOString() };
+        dailySync.snapshots.push(savedSnapshot);
+        tables.user_daily_snapshots.push(savedSnapshot);
+      }
+      const gamification = tables.gamificacion.find(({ user_id }) => user_id === parameters.p_user_id);
+      if (gamification) Object.assign(gamification, { bricks: state.bricks, nivel: clone(state.nivel), siguiente_nivel: clone(state.siguiente_nivel), progreso: clone(state.progreso), logros: clone(state.logros) });
+      else tables.gamificacion.push(withDefaults('gamificacion', { user_id: parameters.p_user_id, bricks: state.bricks, nivel: clone(state.nivel), siguiente_nivel: clone(state.siguiente_nivel), progreso: clone(state.progreso), logros: clone(state.logros) }));
+      work.status = 'completed';
+      work.attempts += 1;
+      return { data: true, error: null };
+    }
+    if (name === 'fallar_daily_sync_usuario') {
+      const run = ownedRun();
+      const work = dailySync.users.find(({ run_id, user_id }) => run_id === parameters.p_run_id && user_id === parameters.p_user_id);
+      if (!run || !work) return { data: false, error: null };
+      work.status = 'failed';
+      work.error_code = parameters.p_error_code;
+      work.attempts += 1;
+      return { data: true, error: null };
+    }
+    if (name === 'finalizar_daily_sync') {
+      const run = ownedRun();
+      if (!run) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
+      const status = dailyStatus(run);
+      const hasOpenWork = dailySync.users.some(({ run_id, status }) => run_id === run.id && ['pending', 'processing'].includes(status))
+        || dailySync.prices.some(({ run_id, status }) => run_id === run.id && ['pending', 'processing'].includes(status));
+      if (hasOpenWork) return { data: null, error: { code: 'P0001', message: 'DAILY_SYNC_TRABAJO_INCOMPLETO' } };
+      if (dailySync.users.some(({ run_id, status }) => run_id === run.id && status === 'failed')) {
+        run.status = 'failed';
+        run.error_code = 'USERS_FAILED';
+      } else {
+        run.status = 'completed';
+        run.result = { success: true, processedUsers: status.processedUsers, timestamp: now.toISOString() };
+      }
+      run.lease_owner = null;
+      run.lease_expires_at = 0;
+      return { data: dailyStatus(run), error: null };
+    }
+    if (name === 'fallar_daily_sync') {
+      const run = ownedRun();
+      if (!run) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
+      run.status = 'failed';
+      run.error_code = parameters.p_error_code;
+      run.result = null;
+      run.lease_owner = null;
+      run.lease_expires_at = 0;
+      return { data: dailyStatus(run), error: null };
+    }
+    return { data: null, error: { code: '42883', message: 'function does not exist' } };
+  }
+
   function queryBuilder(table, uid) {
-    const state = { operation: null, values: null, filters: [], orders: [], returning: false, single: false };
+    const state = { operation: null, values: null, filters: [], comparisons: [], orders: [], limit: null, returning: false, single: false };
     const builder = {
       select() {
         if (state.operation === null) state.operation = 'select';
@@ -299,6 +505,11 @@ export function createSupabaseMock({ users = {} } = {}) {
       update(values) { state.operation = 'update'; state.values = values; return builder; },
       delete() { state.operation = 'delete'; return builder; },
       eq(column, value) { state.filters.push([column, value]); return builder; },
+      gte(column, value) { state.comparisons.push([column, 'gte', value]); return builder; },
+      lte(column, value) { state.comparisons.push([column, 'lte', value]); return builder; },
+      lt(column, value) { state.comparisons.push([column, 'lt', value]); return builder; },
+      gt(column, value) { state.comparisons.push([column, 'gt', value]); return builder; },
+      limit(value) { state.limit = value; return builder; },
       order(column, { ascending = true } = {}) { state.orders.push([column, ascending]); return builder; },
       maybeSingle() { state.single = true; return builder; },
       then(resolve, reject) {
@@ -332,6 +543,16 @@ export function createSupabaseMock({ users = {} } = {}) {
 
   return {
     createClient,
+    createAdminClient() {
+      return {
+        from() {
+          throw new Error('El cliente administrativo solo puede ejecutar RPC allowlisted');
+        },
+        rpc(name, parameters = {}) {
+          return Promise.resolve().then(() => adminRpc(name, parameters));
+        },
+      };
+    },
     calculateDna(logros, additionalWeights) {
       return clone(calculateDna(logros, additionalWeights));
     },
@@ -343,6 +564,18 @@ export function createSupabaseMock({ users = {} } = {}) {
     },
     rows(table, userId) {
       return clone(tables[table].filter((row) => userId === undefined || row.user_id === userId));
+    },
+    analyticsRows(table, runId) {
+      const rows = dailySync[table];
+      if (!rows) throw new Error(`Tabla analitica desconocida: ${table}`);
+      return clone(rows.filter((row) => runId === undefined || row.run_id === runId));
+    },
+    adminCalls() {
+      return clone(adminCalls);
+    },
+    expireDailySyncLease(runId) {
+      const run = dailySync.runs.find(({ id }) => id === runId);
+      if (run) run.lease_expires_at = 0;
     },
     failNext(table, error = { code: 'PGRST000', message: 'connection refused' }, operation = null) {
       failures.push({ table, error, operation });

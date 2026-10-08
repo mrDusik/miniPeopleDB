@@ -54,6 +54,39 @@ create table if not exists public.gamificacion (
   constraint gamificacion_logros_array_check check (jsonb_typeof(logros) = 'array')
 );
 
+create table if not exists public.user_daily_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  snapshot_date date not null,
+  total_figures integer not null,
+  total_value numeric(14, 2) not null,
+  bricks integer not null,
+  level integer not null,
+  pct_collector numeric(5, 2) not null,
+  pct_explorer numeric(5, 2) not null,
+  pct_rarity_hunter numeric(5, 2) not null,
+  pct_fan numeric(5, 2) not null,
+  created_at timestamptz not null default now(),
+  constraint user_daily_snapshots_total_figures_check check (total_figures >= 0),
+  constraint user_daily_snapshots_total_value_check check (total_value >= 0),
+  constraint user_daily_snapshots_bricks_check check (bricks >= 0),
+  constraint user_daily_snapshots_level_check check (level >= 0),
+  constraint user_daily_snapshots_dna_range_check check (
+    pct_collector between 0 and 100
+    and pct_explorer between 0 and 100
+    and pct_rarity_hunter between 0 and 100
+    and pct_fan between 0 and 100
+  ),
+  constraint user_daily_snapshots_dna_sum_check check (
+    (pct_collector = 0 and pct_explorer = 0 and pct_rarity_hunter = 0 and pct_fan = 0)
+    or abs(pct_collector + pct_explorer + pct_rarity_hunter + pct_fan - 100) <= 0.02
+  ),
+  constraint user_daily_snapshots_user_date_key unique (user_id, snapshot_date)
+);
+
+create index if not exists user_daily_snapshots_user_date_idx
+  on public.user_daily_snapshots (user_id, snapshot_date desc);
+
 create table if not exists public.gamificacion_categoria_version (
   singleton boolean primary key default true check (singleton),
   fingerprint text not null default '',
@@ -138,6 +171,774 @@ on conflict (logro_id) do update set
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
+
+create table if not exists private.daily_sync_runs (
+  id uuid primary key default gen_random_uuid(),
+  snapshot_date date not null,
+  status text not null default 'pending',
+  phase text not null default 'prices',
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  updated_at timestamptz not null default now(),
+  lease_owner uuid,
+  lease_expires_at timestamptz,
+  total_users integer not null default 0,
+  failed_prices integer not null default 0,
+  result jsonb,
+  error_code text,
+  constraint daily_sync_runs_status_check check (status in ('pending', 'running', 'completed', 'failed')),
+  constraint daily_sync_runs_phase_check check (phase in ('prices', 'users', 'completed')),
+  constraint daily_sync_runs_counts_check check (total_users >= 0 and failed_prices >= 0)
+);
+
+create unique index if not exists daily_sync_runs_one_active_idx
+  on private.daily_sync_runs ((true))
+  where status in ('pending', 'running');
+
+create table if not exists private.daily_sync_users (
+  run_id uuid not null references private.daily_sync_runs (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending',
+  attempts integer not null default 0,
+  checkpoint_at timestamptz,
+  error_code text,
+  updated_at timestamptz not null default now(),
+  primary key (run_id, user_id),
+  constraint daily_sync_users_status_check check (status in ('pending', 'processing', 'completed', 'failed', 'skipped')),
+  constraint daily_sync_users_attempts_check check (attempts >= 0)
+);
+
+create index if not exists daily_sync_users_work_idx
+  on private.daily_sync_users (run_id, user_id)
+  where status in ('pending', 'processing');
+
+create table if not exists private.daily_sync_prices (
+  run_id uuid not null references private.daily_sync_runs (id) on delete cascade,
+  figure_id text not null,
+  status text not null default 'pending',
+  attempts integer not null default 0,
+  price numeric(12, 2),
+  failure_code text,
+  checkpoint_at timestamptz,
+  updated_at timestamptz not null default now(),
+  primary key (run_id, figure_id),
+  constraint daily_sync_prices_id_check check (length(btrim(figure_id)) > 0),
+  constraint daily_sync_prices_status_check check (status in ('pending', 'processing', 'completed', 'failed')),
+  constraint daily_sync_prices_attempts_check check (attempts >= 0),
+  constraint daily_sync_prices_price_check check (price is null or price >= 0),
+  constraint daily_sync_prices_result_check check (
+    (status = 'completed' and price is not null and failure_code is null)
+    or (status = 'failed' and price is null and failure_code is not null)
+    or status in ('pending', 'processing')
+  )
+);
+
+create table if not exists public.regalos_enviados (
+  donante_id uuid not null references auth.users (id) on delete cascade,
+  receptor_id uuid not null references auth.users (id) on delete cascade,
+  fecha timestamptz not null default now(),
+  primary key (donante_id, receptor_id),
+  constraint regalos_enviados_distintos_check check (donante_id <> receptor_id)
+);
+
+create or replace function public.iniciar_daily_sync()
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run_id uuid;
+  v_snapshot_date date;
+  v_status text;
+  v_total_users integer;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+
+  select id, snapshot_date, status
+  into v_run_id, v_snapshot_date, v_status
+  from private.daily_sync_runs
+  where status in ('pending', 'running')
+  order by created_at
+  limit 1
+  for update;
+
+  if v_run_id is not null then
+    return jsonb_build_object('jobId', v_run_id, 'status', v_status, 'snapshotDate', v_snapshot_date);
+  end if;
+
+  v_snapshot_date := (clock_timestamp() at time zone 'Europe/Madrid')::date;
+  begin
+    insert into private.daily_sync_runs (snapshot_date, status, phase)
+    values (v_snapshot_date, 'pending', 'prices')
+    returning id into v_run_id;
+  exception when unique_violation then
+    select id, snapshot_date, status
+    into v_run_id, v_snapshot_date, v_status
+    from private.daily_sync_runs
+    where status in ('pending', 'running')
+    order by created_at
+    limit 1;
+    return jsonb_build_object('jobId', v_run_id, 'status', v_status, 'snapshotDate', v_snapshot_date);
+  end;
+
+  insert into private.daily_sync_users (run_id, user_id)
+  select v_run_id, users.id
+  from auth.users users;
+
+  get diagnostics v_total_users = row_count;
+  update private.daily_sync_runs set total_users = v_total_users where id = v_run_id;
+
+  insert into private.daily_sync_prices (run_id, figure_id)
+  select distinct v_run_id, figures.id
+  from public.minifiguras figures
+  join private.daily_sync_users work_users
+    on work_users.run_id = v_run_id and work_users.user_id = figures.user_id;
+
+  return jsonb_build_object(
+    'jobId', v_run_id,
+    'status', 'pending',
+    'snapshotDate', v_snapshot_date
+  );
+end;
+$$;
+
+create or replace function public.consultar_daily_sync(p_run_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+  v_processed_users integer;
+  v_total_users integer;
+  v_failed_prices integer;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id;
+  if not found then
+    return null;
+  end if;
+
+  select count(*) filter (where status = 'completed')::integer,
+    count(*)::integer
+  into v_processed_users, v_total_users
+  from private.daily_sync_users
+  where run_id = p_run_id;
+
+  select count(*)::integer into v_failed_prices
+  from private.daily_sync_prices
+  where run_id = p_run_id and status = 'failed';
+
+  return jsonb_build_object(
+    'jobId', v_run.id,
+    'status', v_run.status,
+    'snapshotDate', v_run.snapshot_date,
+    'processedUsers', coalesce(v_processed_users, 0),
+    'totalUsers', coalesce(v_total_users, 0),
+    'failedPrices', coalesce(v_failed_prices, 0),
+    'result', v_run.result,
+    'errorCode', v_run.error_code
+  );
+end;
+$$;
+
+create or replace function public.recuperar_daily_sync()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run_id uuid;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+
+  select runs.id into v_run_id
+  from private.daily_sync_runs runs
+  where runs.status in ('pending', 'running')
+  order by runs.created_at
+  limit 1;
+  if v_run_id is null then return null; end if;
+  return public.consultar_daily_sync(v_run_id);
+end;
+$$;
+
+create or replace function public.reclamar_daily_sync(p_run_id uuid, p_lease_owner uuid, p_lease_seconds integer default 120)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_lease_owner is null or p_lease_seconds not between 15 and 600 then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_LEASE_INVALIDO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'DAILY_SYNC_NO_ENCONTRADO';
+  end if;
+  if v_run.status not in ('pending', 'running') then
+    return false;
+  end if;
+  if v_run.lease_expires_at > clock_timestamp() and v_run.lease_owner is distinct from p_lease_owner then
+    return false;
+  end if;
+
+  update private.daily_sync_runs
+  set status = 'running',
+      started_at = coalesce(started_at, clock_timestamp()),
+      lease_owner = p_lease_owner,
+      lease_expires_at = clock_timestamp() + make_interval(secs => p_lease_seconds),
+      updated_at = clock_timestamp()
+  where id = p_run_id;
+  return true;
+end;
+$$;
+
+create or replace function public.renovar_daily_sync(p_run_id uuid, p_lease_owner uuid, p_lease_seconds integer default 120)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_lease_owner is null or p_lease_seconds not between 15 and 600 then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_LEASE_INVALIDO';
+  end if;
+
+  update private.daily_sync_runs
+  set lease_expires_at = clock_timestamp() + make_interval(secs => p_lease_seconds),
+      updated_at = clock_timestamp()
+  where id = p_run_id
+    and status = 'running'
+    and lease_owner = p_lease_owner
+    and lease_expires_at > clock_timestamp();
+  return found;
+end;
+$$;
+
+create or replace function public.leer_daily_sync_usuarios(
+  p_run_id uuid, p_lease_owner uuid, p_after_user_id uuid default null, p_limit integer default 1000
+)
+returns table (user_id uuid, status text, attempts integer)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_limit not between 1 and 1000 then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_PAGINA_INVALIDA';
+  end if;
+  if not exists (
+    select 1 from private.daily_sync_runs
+    where daily_sync_runs.id = p_run_id and daily_sync_runs.status = 'running'
+      and daily_sync_runs.lease_owner = p_lease_owner
+      and daily_sync_runs.lease_expires_at > clock_timestamp()
+  ) then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+
+  return query
+  select work.user_id, work.status, work.attempts
+  from private.daily_sync_users work
+  where work.run_id = p_run_id
+    and work.status in ('pending', 'processing')
+    and (p_after_user_id is null or work.user_id > p_after_user_id)
+  order by work.user_id
+  limit p_limit;
+end;
+$$;
+
+create or replace function public.leer_daily_sync_precios(
+  p_run_id uuid, p_lease_owner uuid, p_after_figure_id text default null, p_limit integer default 1000
+)
+returns table (figure_id text, status text, attempts integer)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_limit not between 1 and 1000 then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_PAGINA_INVALIDA';
+  end if;
+  if not exists (
+    select 1 from private.daily_sync_runs
+    where daily_sync_runs.id = p_run_id and daily_sync_runs.status = 'running'
+      and daily_sync_runs.lease_owner = p_lease_owner
+      and daily_sync_runs.lease_expires_at > clock_timestamp()
+  ) then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+
+  return query
+  select work.figure_id, work.status, work.attempts
+  from private.daily_sync_prices work
+  where work.run_id = p_run_id
+    and work.status in ('pending', 'processing')
+    and (p_after_figure_id is null or work.figure_id > p_after_figure_id)
+  order by work.figure_id
+  limit p_limit;
+end;
+$$;
+
+create or replace function public.aplicar_daily_sync_precio(
+  p_run_id uuid,
+  p_lease_owner uuid,
+  p_figure_id text,
+  p_success boolean,
+  p_price numeric default null,
+  p_failure_code text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+  v_work private.daily_sync_prices%rowtype;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_figure_id is null or length(btrim(p_figure_id)) = 0 or p_success is null then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found or v_run.status <> 'running' or v_run.lease_owner is distinct from p_lease_owner
+    or v_run.lease_expires_at <= clock_timestamp() then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+
+  select * into v_work
+  from private.daily_sync_prices
+  where run_id = p_run_id and figure_id = p_figure_id
+  for update;
+  if not found then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_ID_NO_INCLUIDO';
+  end if;
+  if v_work.status = 'completed' then
+    return true;
+  end if;
+
+  if p_success then
+    if p_price is null or p_price::text = 'NaN' or p_price < 0 or p_price > 9999999999.99 or p_failure_code is not null then
+      raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
+    end if;
+    update public.minifiguras figures
+    set precio = p_price, updated_at = clock_timestamp()
+    where figures.id = p_figure_id
+      and exists (
+        select 1 from private.daily_sync_users work_users
+        where work_users.run_id = p_run_id and work_users.user_id = figures.user_id
+      );
+    update private.daily_sync_prices
+    set status = 'completed', price = p_price, failure_code = null,
+        attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
+    where run_id = p_run_id and figure_id = p_figure_id;
+  else
+    if p_price is not null or p_failure_code is null
+      or p_failure_code not in ('SCRAPER_ERROR', 'TIMEOUT', 'RATE_LIMIT', 'INVALID_RESPONSE') then
+      raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
+    end if;
+    update private.daily_sync_prices
+    set status = 'failed', price = null, failure_code = p_failure_code,
+        attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
+    where run_id = p_run_id and figure_id = p_figure_id;
+    update private.daily_sync_runs
+    set failed_prices = (
+      select count(*)::integer from private.daily_sync_prices
+      where run_id = p_run_id and status = 'failed'
+    ), updated_at = clock_timestamp()
+    where id = p_run_id;
+  end if;
+  return true;
+end;
+$$;
+
+create or replace function private.daily_sync_user_revision(p_user_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+  select md5(jsonb_build_object(
+    'figures', coalesce((
+      select jsonb_agg(jsonb_build_array(
+        figures.id, figures.nombre, figures.descripcion, figures.categoria, figures.subcategoria,
+        figures.anio, figures.estado_coleccion, figures.precio_compra, figures.fecha_compra,
+        figures.precio, figures.fecha_registro, figures.observada
+      ) order by figures.id)
+      from public.minifiguras figures where figures.user_id = p_user_id
+    ), '[]'::jsonb),
+    'gifts', coalesce((
+      select jsonb_agg(jsonb_build_array(gifts.donante_id, gifts.fecha) order by gifts.donante_id)
+      from public.regalos_enviados gifts where gifts.receptor_id = p_user_id
+    ), '[]'::jsonb),
+    'fingerprint', coalesce((
+      select version.fingerprint from public.gamificacion_categoria_version version where version.singleton = true
+    ), '')
+  )::text)
+$$;
+
+create or replace function public.leer_daily_sync_fuentes(p_run_id uuid, p_lease_owner uuid, p_user_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_figures jsonb;
+  v_gifts_received integer;
+  v_fingerprint text;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if not exists (
+    select 1 from private.daily_sync_runs runs
+    where runs.id = p_run_id and runs.status = 'running' and runs.lease_owner = p_lease_owner
+      and runs.lease_expires_at > clock_timestamp()
+  ) or not exists (
+    select 1 from private.daily_sync_users work
+    where work.run_id = p_run_id and work.user_id = p_user_id
+  ) then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', figures.id,
+    'categoria', figures.categoria,
+    'subcategoria', figures.subcategoria,
+    'anio', figures.anio,
+    'estadoColeccion', figures.estado_coleccion,
+    'precio', figures.precio,
+    'precioCompra', figures.precio_compra
+  ) order by figures.id), '[]'::jsonb)
+  into v_figures
+  from public.minifiguras figures
+  where figures.user_id = p_user_id;
+
+  select count(*)::integer into v_gifts_received
+  from public.regalos_enviados gifts where gifts.receptor_id = p_user_id;
+  select version.fingerprint into v_fingerprint
+  from public.gamificacion_categoria_version version where version.singleton = true;
+
+  return jsonb_build_object(
+    'revision', private.daily_sync_user_revision(p_user_id),
+    'figures', v_figures,
+    'giftsReceived', coalesce(v_gifts_received, 0),
+    'fingerprint', coalesce(v_fingerprint, '')
+  );
+end;
+$$;
+
+create or replace function public.capturar_daily_sync_usuario(
+  p_run_id uuid,
+  p_lease_owner uuid,
+  p_user_id uuid,
+  p_expected_revision text,
+  p_state jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+  v_work private.daily_sync_users%rowtype;
+  v_revision text;
+  v_dna jsonb;
+  v_total_figures integer;
+  v_total_value numeric(14, 2);
+  v_level integer;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found or v_run.status <> 'running' or v_run.lease_owner is distinct from p_lease_owner
+    or v_run.lease_expires_at <= clock_timestamp() then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+  select * into v_work
+  from private.daily_sync_users
+  where run_id = p_run_id and user_id = p_user_id
+  for update;
+  if not found then
+    return false;
+  end if;
+  if v_work.status = 'completed' then
+    return true;
+  end if;
+  if p_state is null or jsonb_typeof(p_state) <> 'object'
+    or jsonb_typeof(p_state->'nivel') <> 'object'
+    or jsonb_typeof(p_state->'logros') <> 'array'
+    or jsonb_typeof(p_state->'progreso') <> 'object'
+    or (p_state->'siguiente_nivel' is not null and jsonb_typeof(p_state->'siguiente_nivel') not in ('object', 'null')) then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_ESTADO_INVALIDO';
+  end if;
+  if (p_state->>'bricks') !~ '^[0-9]+$'
+    or (p_state->'nivel'->>'id') !~ '^[0-9]+$' then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_ESTADO_INVALIDO';
+  end if;
+  v_level := (p_state->'nivel'->>'id')::integer;
+
+  perform 1 from public.gamificacion_categoria_version where singleton = true for share;
+  perform 1 from public.gamificacion where user_id = p_user_id for update;
+  lock table public.minifiguras, public.regalos_enviados in share mode;
+  v_revision := private.daily_sync_user_revision(p_user_id);
+  if v_revision is distinct from p_expected_revision then
+    return false;
+  end if;
+
+  select count(*)::integer,
+    coalesce(sum(case
+      when precio is not null then precio
+      when precio_compra is not null then precio_compra
+      else 0
+    end), 0)::numeric(14, 2)
+  into v_total_figures, v_total_value
+  from public.minifiguras
+  where user_id = p_user_id and estado_coleccion = 'COLECCIÓN';
+
+  insert into public.gamificacion (
+    user_id, bricks, nivel, siguiente_nivel, progreso, logros, updated_at
+  ) values (
+    p_user_id,
+    (p_state->>'bricks')::integer,
+    p_state->'nivel',
+    case when p_state->'siguiente_nivel' is null or p_state->'siguiente_nivel' = 'null'::jsonb then null else p_state->'siguiente_nivel' end,
+    p_state->'progreso',
+    p_state->'logros',
+    clock_timestamp()
+  ) on conflict (user_id) do update set
+    bricks = excluded.bricks,
+    nivel = excluded.nivel,
+    siguiente_nivel = excluded.siguiente_nivel,
+    progreso = excluded.progreso,
+    logros = excluded.logros,
+    updated_at = excluded.updated_at;
+
+  v_dna := private.dna_calcular(p_user_id);
+  insert into public.user_daily_snapshots (
+    user_id, snapshot_date, total_figures, total_value, bricks, level,
+    pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+  ) values (
+    p_user_id, v_run.snapshot_date, v_total_figures, v_total_value,
+    (p_state->>'bricks')::integer, v_level,
+    round((v_dna->'porcentajes'->>'collector')::numeric, 2),
+    round((v_dna->'porcentajes'->>'explorer')::numeric, 2),
+    round((v_dna->'porcentajes'->>'rarityHunter')::numeric, 2),
+    round((v_dna->'porcentajes'->>'fan')::numeric, 2)
+  ) on conflict (user_id, snapshot_date) do update set
+    total_figures = excluded.total_figures,
+    total_value = excluded.total_value,
+    bricks = excluded.bricks,
+    level = excluded.level,
+    pct_collector = excluded.pct_collector,
+    pct_explorer = excluded.pct_explorer,
+    pct_rarity_hunter = excluded.pct_rarity_hunter,
+    pct_fan = excluded.pct_fan;
+
+  update private.daily_sync_users
+  set status = 'completed', attempts = attempts + 1,
+      checkpoint_at = clock_timestamp(), error_code = null, updated_at = clock_timestamp()
+  where run_id = p_run_id and user_id = p_user_id;
+  return true;
+end;
+$$;
+
+create or replace function public.fallar_daily_sync_usuario(
+  p_run_id uuid, p_lease_owner uuid, p_user_id uuid, p_error_code text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_error_code is null or p_error_code not in ('CAPTURA_FALLIDA', 'MAX_RETRIES', 'FUENTES_INVALIDAS') then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_ERROR_INVALIDO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found or v_run.status <> 'running' or v_run.lease_owner is distinct from p_lease_owner
+    or v_run.lease_expires_at <= clock_timestamp() then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+
+  update private.daily_sync_users
+  set status = 'failed', attempts = attempts + 1, checkpoint_at = clock_timestamp(),
+      error_code = p_error_code, updated_at = clock_timestamp()
+  where run_id = p_run_id and user_id = p_user_id and status <> 'completed';
+  return found;
+end;
+$$;
+
+create or replace function public.finalizar_daily_sync(p_run_id uuid, p_lease_owner uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+  v_processed_users integer;
+  v_total_users integer;
+  v_failed_prices integer;
+  v_failed_users integer;
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found or v_run.status <> 'running' or v_run.lease_owner is distinct from p_lease_owner
+    or v_run.lease_expires_at <= clock_timestamp() then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+  if exists (
+    select 1 from private.daily_sync_users
+    where run_id = p_run_id and status in ('pending', 'processing')
+  ) or exists (
+    select 1 from private.daily_sync_prices
+    where run_id = p_run_id and status in ('pending', 'processing')
+  ) then
+    raise exception using errcode = 'P0001', message = 'DAILY_SYNC_TRABAJO_INCOMPLETO';
+  end if;
+
+  select count(*) filter (where status = 'completed')::integer,
+    count(*)::integer,
+    count(*) filter (where status = 'failed')::integer
+  into v_processed_users, v_total_users, v_failed_users
+  from private.daily_sync_users where run_id = p_run_id;
+  select count(*) filter (where status = 'failed')::integer
+  into v_failed_prices
+  from private.daily_sync_prices where run_id = p_run_id;
+
+  if v_failed_users > 0 then
+    update private.daily_sync_runs
+    set status = 'failed', phase = 'completed', completed_at = clock_timestamp(),
+        lease_owner = null, lease_expires_at = null, result = null,
+        error_code = 'USERS_FAILED', total_users = v_total_users,
+        failed_prices = v_failed_prices, updated_at = clock_timestamp()
+    where id = p_run_id;
+    return public.consultar_daily_sync(p_run_id);
+  end if;
+
+  v_result := jsonb_build_object(
+    'success', true,
+    'processedUsers', coalesce(v_processed_users, 0),
+    'timestamp', to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+  );
+  update private.daily_sync_runs
+  set status = 'completed', phase = 'completed', completed_at = clock_timestamp(),
+      lease_owner = null, lease_expires_at = null, result = v_result,
+      error_code = null, total_users = coalesce(v_total_users, 0),
+      failed_prices = coalesce(v_failed_prices, 0), updated_at = clock_timestamp()
+  where id = p_run_id;
+  return public.consultar_daily_sync(p_run_id);
+end;
+$$;
+
+create or replace function public.fallar_daily_sync(p_run_id uuid, p_lease_owner uuid, p_error_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_run private.daily_sync_runs%rowtype;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_error_code is null or p_error_code not in ('WORKER_ERROR', 'MAX_RETRIES', 'STORAGE_ERROR', 'CONFIGURATION_ERROR') then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_ERROR_INVALIDO';
+  end if;
+
+  select * into v_run from private.daily_sync_runs where id = p_run_id for update;
+  if not found or v_run.status <> 'running' or v_run.lease_owner is distinct from p_lease_owner
+    or v_run.lease_expires_at <= clock_timestamp() then
+    raise exception using errcode = '42501', message = 'DAILY_SYNC_LEASE_CADUCADO';
+  end if;
+  update private.daily_sync_runs
+  set status = 'failed', phase = 'completed', completed_at = clock_timestamp(),
+      lease_owner = null, lease_expires_at = null, result = null,
+      error_code = p_error_code, updated_at = clock_timestamp()
+  where id = p_run_id;
+  return public.consultar_daily_sync(p_run_id);
+end;
+$$;
+
+revoke all on function public.iniciar_daily_sync() from public, anon, authenticated;
+revoke all on function public.consultar_daily_sync(uuid) from public, anon, authenticated;
+revoke all on function public.recuperar_daily_sync() from public, anon, authenticated;
+revoke all on function public.reclamar_daily_sync(uuid, uuid, integer) from public, anon, authenticated;
+revoke all on function public.renovar_daily_sync(uuid, uuid, integer) from public, anon, authenticated;
+revoke all on function public.leer_daily_sync_usuarios(uuid, uuid, uuid, integer) from public, anon, authenticated;
+revoke all on function public.leer_daily_sync_precios(uuid, uuid, text, integer) from public, anon, authenticated;
+revoke all on function public.aplicar_daily_sync_precio(uuid, uuid, text, boolean, numeric, text) from public, anon, authenticated;
+revoke all on function private.daily_sync_user_revision(uuid) from public, anon, authenticated;
+revoke all on function public.leer_daily_sync_fuentes(uuid, uuid, uuid) from public, anon, authenticated;
+revoke all on function public.capturar_daily_sync_usuario(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
+revoke all on function public.fallar_daily_sync_usuario(uuid, uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.finalizar_daily_sync(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.fallar_daily_sync(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.iniciar_daily_sync() to service_role;
+grant execute on function public.consultar_daily_sync(uuid) to service_role;
+grant execute on function public.recuperar_daily_sync() to service_role;
+grant execute on function public.reclamar_daily_sync(uuid, uuid, integer) to service_role;
+grant execute on function public.renovar_daily_sync(uuid, uuid, integer) to service_role;
+grant execute on function public.leer_daily_sync_usuarios(uuid, uuid, uuid, integer) to service_role;
+grant execute on function public.leer_daily_sync_precios(uuid, uuid, text, integer) to service_role;
+grant execute on function public.aplicar_daily_sync_precio(uuid, uuid, text, boolean, numeric, text) to service_role;
+grant execute on function public.leer_daily_sync_fuentes(uuid, uuid, uuid) to service_role;
+grant execute on function public.capturar_daily_sync_usuario(uuid, uuid, uuid, text, jsonb) to service_role;
+grant execute on function public.fallar_daily_sync_usuario(uuid, uuid, uuid, text) to service_role;
+grant execute on function public.finalizar_daily_sync(uuid, uuid) to service_role;
+grant execute on function public.fallar_daily_sync(uuid, uuid, text) to service_role;
 
 create or replace function private.dna_calcular(p_usuario_id uuid)
 returns jsonb
@@ -231,14 +1032,6 @@ create table if not exists public.perfiles_publicos (
   constraint perfiles_publicos_display_name_check check (length(btrim(display_name)) between 1 and 120)
 );
 
-create table if not exists public.regalos_enviados (
-  donante_id uuid not null references auth.users (id) on delete cascade,
-  receptor_id uuid not null references auth.users (id) on delete cascade,
-  fecha timestamptz not null default now(),
-  primary key (donante_id, receptor_id),
-  constraint regalos_enviados_distintos_check check (donante_id <> receptor_id)
-);
-
 create index if not exists gamificacion_ranking_idx
   on public.gamificacion (bricks desc, user_id asc);
 
@@ -253,10 +1046,26 @@ alter table public.gamificacion enable row level security;
 alter table public.dna_ponderaciones enable row level security;
 alter table public.perfiles_publicos enable row level security;
 alter table public.regalos_enviados enable row level security;
+alter table public.user_daily_snapshots enable row level security;
+alter table private.daily_sync_runs enable row level security;
+alter table private.daily_sync_users enable row level security;
+alter table private.daily_sync_prices enable row level security;
+
+revoke all on table public.user_daily_snapshots from public, anon, authenticated;
+grant select on table public.user_daily_snapshots to authenticated;
+revoke all on table private.daily_sync_runs from public, anon, authenticated;
+revoke all on table private.daily_sync_users from public, anon, authenticated;
+revoke all on table private.daily_sync_prices from public, anon, authenticated;
 
 drop policy if exists "Users can view their minifiguras" on public.minifiguras;
 create policy "Users can view their minifiguras"
   on public.minifiguras for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can view their daily snapshots" on public.user_daily_snapshots;
+create policy "Users can view their daily snapshots"
+  on public.user_daily_snapshots for select
   to authenticated
   using ((select auth.uid()) = user_id);
 
