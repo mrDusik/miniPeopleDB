@@ -50,6 +50,7 @@ const formFechaCompraInput = document.querySelector('#form-fechaCompra');
 const formPrecioInput = document.querySelector('#form-precio');
 const formObservedButton = document.querySelector('#form-observada');
 const formPreviewImage = document.querySelector('#form-preview-image');
+const bricksetLoading = document.querySelector('#brickset-loading');
 
 const deleteDialog = document.querySelector('#delete-dialog');
 const deleteMessage = document.querySelector('#delete-message');
@@ -1553,6 +1554,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   currentEditId = mode === 'edit' ? minifigura.id : null;
   formSynced = mode !== 'create' && mode !== 'ranking-create';
   minifiguraForm.reset();
+  bricksetLoading.hidden = true;
   formPreviewImage.src = imageFallbackUrl;
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
@@ -2616,6 +2618,7 @@ formDialog.addEventListener('close', () => {
   currentEditId = null;
   currentFormMode = null;
   formSynced = false;
+  bricksetLoading.hidden = true;
   formPreviewImage.removeAttribute('src');
 });
 
@@ -2623,6 +2626,7 @@ formDialog.addEventListener('close', () => {
   input.addEventListener('input', () => {
     if (currentFormMode === 'create' && input === formIdInput) {
       imageLookupSequence += 1;
+      bricksetLoading.hidden = true;
       formSynced = false;
       formCategoriaInput.value = '';
       formSubcategoriaInput.value = '';
@@ -2736,7 +2740,7 @@ async function loadFormBricksetData() {
   if (id.length < 5 || formPreviewImage.src !== imagenUrlPara(id)) return;
   const lookupSequence = imageLookupSequence;
 
-  showToast('Consultando datos...', 'success');
+  bricksetLoading.hidden = false;
   try {
     const response = await apiFetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
@@ -2756,6 +2760,8 @@ async function loadFormBricksetData() {
     if (formDialog.open && currentFormMode !== 'view' && imageLookupSequence === lookupSequence && formIdInput.value.trim() === id) {
       showToast('No se encontraron datos para el ID especificado.', 'error');
     }
+  } finally {
+    if (imageLookupSequence === lookupSequence) bricksetLoading.hidden = true;
   }
 }
 
