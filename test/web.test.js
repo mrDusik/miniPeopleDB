@@ -422,11 +422,15 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.equal(details.querySelector('#sync-prices').hidden, true);
+    const summaryActions = [...details.querySelectorAll('.summary-achievements-row > button')];
+    assert.deepEqual(summaryActions.map((button) => button.id), ['open-achievements', 'open-dna', 'open-analytics-history']);
+    assert.ok(summaryActions.every((button) => button.classList.contains('button-secondary')));
     const countsPanel = main.querySelector('.collection-counts-panel');
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
     for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
+    assert.match(css, /\.summary-achievements-row \.button \{ flex: 1 1 0; min-width: 0; white-space: nowrap; \}/);
     assert.match(css, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading img').alt, 'MiniPeopleDB');
