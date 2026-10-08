@@ -2762,6 +2762,12 @@ formPreviewImage.addEventListener('load', () => {
   if (currentFormMode !== 'ranking-create') void loadFormBricksetData();
 });
 
+formPreviewImage.addEventListener('error', () => {
+  if (formPreviewImage.getAttribute('src') === imageFallbackUrl) return;
+  if (currentFormMode !== 'ranking-create') void loadFormBricksetData();
+  formPreviewImage.src = imageFallbackUrl;
+});
+
 deleteCancelButton.addEventListener('click', () => {
   closeDeleteDialog();
 });
