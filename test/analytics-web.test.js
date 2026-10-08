@@ -58,6 +58,11 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function loadHistoryRange(window, from, to) {
+  window.eval(`setAnalyticsHistoryRange(${JSON.stringify({ from, to })})`);
+  return window.eval('loadAnalyticsHistory()');
+}
+
 test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas', async () => {
   const { dom, window, document } = startApp();
   try {
@@ -80,9 +85,9 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(document.querySelectorAll('details.analytics-history-table-wrap:not([open])').length, 3);
     assert.deepEqual([...document.querySelectorAll('.analytics-history-table-wrap summary')].map((summary) => summary.textContent), ['Datos', 'Datos', 'Datos']);
     assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Valor de colecci\u00f3n y progreso de minifiguras');
-    assert.equal(document.querySelector('#analytics-history-custom-range input[name="from"]').type, 'date');
-    assert.equal(document.querySelector('#analytics-history-custom-range input[name="to"]').type, 'date');
-    assert.equal(window.getComputedStyle(document.querySelector('#analytics-history-custom-range')).gridTemplateRows, 'auto');
+    assert.equal(document.querySelector('#analytics-history-custom-range'), null);
+    assert.equal(dialog.querySelector('input[type="date"]'), null);
+    assert.equal(document.querySelector('#analytics-history-apply'), null);
     assert.equal(window.getComputedStyle(document.querySelector('#dna-canvas')).zIndex, '1');
     assert.equal(window.getComputedStyle(document.querySelector('.dna-chart-label')).zIndex, '0');
   } finally {
@@ -150,14 +155,11 @@ test('Historico envía rangos con apiFetch y descarta respuestas fuera de orden'
     await tick();
     assert.equal(document.querySelector('#analytics-history-status').textContent, 'No hay datos para este período.');
 
-    document.querySelector('#analytics-history-from').value = '2026-03-01';
-    document.querySelector('#analytics-history-to').value = '2026-03-05';
-    document.querySelector('#analytics-history-custom-range').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    document.querySelector('[data-history-days="365"]').click();
     await tick();
     assert.equal(historyRequests().length, 3);
-    const customRange = new URL(historyRequests()[2].url, 'http://localhost');
-    assert.equal(customRange.searchParams.get('from'), '2026-03-01');
-    assert.equal(customRange.searchParams.get('to'), '2026-03-05');
+    const range365 = new URL(historyRequests()[2].url, 'http://localhost');
+    assert.equal((Date.parse(`${range365.searchParams.get('to')}T00:00:00Z`) - Date.parse(`${range365.searchParams.get('from')}T00:00:00Z`)) / 86400000 + 1, 365);
     pending[2].resolve({ ok: true, status: 200, json: async () => ({ snapshots: [], baseline: null }) });
     await tick();
   } finally {
@@ -250,9 +252,7 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     const trigger = document.querySelector('#open-analytics-history');
     trigger.click();
     await tick();
-    document.querySelector('#analytics-history-from').value = '2026-10-01';
-    document.querySelector('#analytics-history-to').value = '2026-10-04';
-    document.querySelector('#analytics-history-custom-range').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await loadHistoryRange(window, '2026-10-01', '2026-10-04');
     await tick();
 
     const chart = [...chartConfigs].reverse().find(({ type }) => type === 'bar');
@@ -279,17 +279,17 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Figuras en colecci\u00f3n: 9');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 17 } }), 'Valor de colección: 17,00 €');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Progreso de minifiguras: -3');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Progreso de minifiguras: Sin datos');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: null } }), 'Valor de colecci\u00f3n (€): Sin datos');
     const tableRows = [...document.querySelectorAll('#analytics-history-value-table tbody tr')];
     assert.equal(tableRows.length, 3);
     assert.deepEqual([...tableRows[1].children].map((cell) => cell.textContent), ['02/10/2026', '17,00 €', '9', '-3']);
-    assert.equal(tableRows[2].lastElementChild.textContent, 'No disponible');
+    assert.equal(tableRows[2].lastElementChild.textContent, 'Sin datos');
 
     document.querySelector('#analytics-history-close').click();
     trigger.click();
     await tick();
-    document.querySelector('#analytics-history-from').value = '2026-11-01';
-    document.querySelector('#analytics-history-to').value = '2026-11-02';
-    document.querySelector('#analytics-history-custom-range').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await loadHistoryRange(window, '2026-11-01', '2026-11-02');
     await tick();
     const noBaselineChart = [...chartConfigs].reverse().find(({ type }) => type === 'bar');
     assert.equal(noBaselineChart.data.datasets[1].data[0].y, null);
@@ -321,9 +321,7 @@ test('DNA usa porcentajes guardados, mantiene Newbie en cero y respeta colores C
     await tick();
     document.querySelector('#open-analytics-history').click();
     await tick();
-    document.querySelector('#analytics-history-from').value = '2026-10-01';
-    document.querySelector('#analytics-history-to').value = '2026-10-03';
-    document.querySelector('#analytics-history-custom-range').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await loadHistoryRange(window, '2026-10-01', '2026-10-03');
     await tick();
 
     const chart = chartConfigs.find(({ data }) => data.datasets.some(({ label }) => label === 'Rarity Hunter'));
@@ -349,7 +347,7 @@ test('DNA usa porcentajes guardados, mantiene Newbie en cero y respeta colores C
 });
 
 test('Bricks y nivel usan ejes separados, admiten descensos y destruyen charts al cambiar rango/cerrar', async () => {
-  const { dom, document, chartConfigs, chartInstances } = startApp({
+  const { dom, window, document, chartConfigs, chartInstances } = startApp({
     fetchImpl(url) {
       if (!url.startsWith('/api/analytics/history?')) return undefined;
       const query = new URL(url, 'http://localhost').searchParams;
@@ -385,12 +383,7 @@ test('Bricks y nivel usan ejes separados, admiten descensos y destruyen charts a
     const trigger = document.querySelector('#open-analytics-history');
     trigger.click();
     await tick();
-    const from = document.querySelector('#analytics-history-from');
-    const to = document.querySelector('#analytics-history-to');
-    const rangeForm = document.querySelector('#analytics-history-custom-range');
-    from.value = '2026-11-01';
-    to.value = '2026-11-01';
-    rangeForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await loadHistoryRange(window, '2026-11-01', '2026-11-01');
     await tick();
 
     const firstCharts = chartInstances.slice();
@@ -399,16 +392,16 @@ test('Bricks y nivel usan ejes separados, admiten descensos y destruyen charts a
     assert.deepEqual(Array.from(onePoint.data.datasets[1].data, ({ y }) => y), [2]);
     assert.equal(onePoint.data.datasets[0].borderColor, '#e3000b');
     assert.equal(onePoint.data.datasets[0].backgroundColor, '#e3000b');
-    assert.equal(onePoint.data.datasets[1].borderColor, '#000000');
-    assert.equal(onePoint.data.datasets[1].backgroundColor, '#000000');
+    assert.equal(onePoint.data.datasets[1].borderColor, '#0055bf');
+    assert.equal(onePoint.data.datasets[1].backgroundColor, '#0055bf');
+    assert.equal(onePoint.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Nivel: Sin datos');
+    assert.equal(onePoint.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: 0 } }), 'Nivel: 0');
     assert.equal(onePoint.data.datasets[1].stepped, 'after');
     assert.equal(onePoint.options.scales.bricks.position, 'left');
     assert.equal(onePoint.options.scales.level.position, 'right');
     assert.equal(document.querySelectorAll('#analytics-history-progression-table tbody tr').length, 1);
 
-    from.value = '2026-12-01';
-    to.value = '2026-12-04';
-    rangeForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await loadHistoryRange(window, '2026-12-01', '2026-12-04');
     await tick();
     assert.ok(firstCharts.every((chart) => chart.destroyed));
     const progression = [...chartConfigs].reverse().find(({ data }) => data.datasets.some(({ label }) => label === 'Bricks'));

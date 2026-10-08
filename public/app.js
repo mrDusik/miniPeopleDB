@@ -126,9 +126,6 @@ const analyticsHistoryDialog = document.querySelector('#analytics-history-dialog
 const analyticsHistoryOpenButton = document.querySelector('#open-analytics-history');
 const analyticsHistoryCloseButton = document.querySelector('#analytics-history-close');
 const analyticsHistoryRangeButtons = [...document.querySelectorAll('[data-history-days]')];
-const analyticsHistoryCustomRange = document.querySelector('#analytics-history-custom-range');
-const analyticsHistoryFromInput = document.querySelector('#analytics-history-from');
-const analyticsHistoryToInput = document.querySelector('#analytics-history-to');
 const analyticsHistoryStatus = document.querySelector('#analytics-history-status');
 const analyticsHistoryRetryButton = document.querySelector('#analytics-history-retry');
 const analyticsHistoryValueCanvas = document.querySelector('#analytics-history-value-chart');
@@ -1865,8 +1862,6 @@ function historyRangeForDays(days) {
 
 function setAnalyticsHistoryRange(range, presetDays = null) {
   analyticsHistoryRange = range;
-  analyticsHistoryFromInput.value = range.from;
-  analyticsHistoryToInput.value = range.to;
   for (const button of analyticsHistoryRangeButtons) {
     button.setAttribute('aria-pressed', String(Number(button.dataset.historyDays) === presetDays));
   }
@@ -1902,10 +1897,12 @@ function formatUniqueAnalyticsHistoryTick(value, index, ticks) {
 }
 
 function formatAnalyticsHistoryPrice(value) {
+  if (!Number.isFinite(value)) return 'Sin datos';
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
 }
 
 function formatAnalyticsHistoryPercent(value) {
+  if (!Number.isFinite(value)) return 'Sin datos';
   return `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
@@ -1957,6 +1954,13 @@ function createAnalyticsChart(canvas, configuration) {
   options.plugins.legend = {
     display: true, position: 'bottom', onClick() {},
     labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 20, font: { family: 'Trebuchet MS', size: 12 } },
+  };
+  const formatTooltipLabel = options.plugins.tooltip.callbacks.label;
+  options.plugins.tooltip.callbacks.label = (item) => {
+    const label = item.dataset?.label ?? configuration.data.datasets[item.datasetIndex]?.label ?? '';
+    if (!Number.isFinite(item.parsed?.y)) return `${label}: Sin datos`;
+    return formatTooltipLabel ? formatTooltipLabel(item)
+      : `${label}: ${new Intl.NumberFormat('es-ES').format(item.parsed.y)}`;
   };
   Object.assign(options.plugins.tooltip, {
     backgroundColor: '#202124', titleColor: '#ffffff', bodyColor: '#ffffff',
@@ -2014,7 +2018,7 @@ function renderAnalyticsHistoryValue(data) {
       formatAnalyticsHistoryDate(snapshot.snapshotDate),
       formatAnalyticsHistoryPrice(snapshot.totalValue),
       String(snapshot.totalFigures),
-      deltas.get(snapshot.snapshotDate) === null ? 'No disponible'
+      deltas.get(snapshot.snapshotDate) === null ? 'Sin datos'
         : deltas.get(snapshot.snapshotDate) > 0 ? `+${deltas.get(snapshot.snapshotDate)}`
           : String(deltas.get(snapshot.snapshotDate)),
     ];
@@ -2192,8 +2196,8 @@ function renderAnalyticsHistoryProgression(data) {
         },
         {
           label: 'Nivel', data: makeSeries('level'), yAxisID: 'level',
-          borderColor: '#000000',
-          backgroundColor: '#000000',
+          borderColor: styles.getPropertyValue('--blue').trim(),
+          backgroundColor: styles.getPropertyValue('--blue').trim(),
           pointRadius: 3, spanGaps: false, stepped: 'after',
         },
       ],
@@ -2278,15 +2282,6 @@ for (const button of analyticsHistoryRangeButtons) {
     void loadAnalyticsHistory();
   });
 }
-analyticsHistoryCustomRange.addEventListener('submit', (event) => {
-  event.preventDefault();
-  if (!analyticsHistoryFromInput.value || !analyticsHistoryToInput.value) {
-    analyticsHistoryStatus.textContent = 'Selecciona ambas fechas.';
-    return;
-  }
-  setAnalyticsHistoryRange({ from: analyticsHistoryFromInput.value, to: analyticsHistoryToInput.value });
-  void loadAnalyticsHistory();
-});
 analyticsHistoryRetryButton.addEventListener('click', () => { void loadAnalyticsHistory(); });
 
 for (const button of rankingOrderButtons) {
