@@ -90,7 +90,7 @@ Respuesta: `{ snapshots: [{ snapshotDate, totalFigures, totalValue, bricks, leve
 
 Instalar Chart.js y servir su bundle UMD local mediante `/vendor/chart.js`, siguiendo `/vendor/supabase.js`; no introducir CDN ni enviar datos historicos a terceros. Usar eje temporal numerico con ticks formateados desde fechas Madrid, evitando adaptador de fechas adicional y conversion accidental a dia local del navegador.
 
-En `public/index.html`, anadir acceso Historico junto al panel propio y dialog con rango segmentado 30/90/365, fechas personalizadas, estado/reintento y tres lienzos. Mantener la composicion de accesos del desplegable existente. `public/app.js` usa `apiFetch`, secuencia de peticiones y limpieza de sesion como los modales actuales. Destruir instancias Chart al cerrar/recrear o cambiar cuenta. `public/styles.css` reserva altura responsive por grafico y scroll vertical interno, sin tarjetas anidadas ni cambios de tipografia global.
+En `public/index.html`, anadir acceso Historico junto al panel propio y dialog con rango segmentado 30/90/365, estado/reintento y tres lienzos, sin selectores Desde/Hasta ni boton Aplicar. La API conserva su contrato de fechas y limite de 366 dias. Mantener la composicion de accesos del desplegable existente. `public/app.js` usa `apiFetch`, secuencia de peticiones y limpieza de sesion como los modales actuales. Destruir instancias Chart al cerrar/recrear o cambiar cuenta. `public/styles.css` reserva altura responsive por grafico y scroll vertical interno, sin tarjetas anidadas ni cambios de tipografia global. Las etiquetas de valores ausentes usan `Sin datos` sin alterar los huecos de las series; Nivel se representa en azul para distinguirse del fondo del tooltip.
 
 Graficos:
 
