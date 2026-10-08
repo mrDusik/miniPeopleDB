@@ -209,13 +209,13 @@ test('el alta confirmada añade la figura a la tabla antes de la revalidación',
       if (url === '/minifiguras' && options.method === 'POST') {
         return ok({ ...JSON.parse(options.body), id: 'NEW', FechaRegistro: '2026-02-01T00:00:00.000Z', gamificacion: null }, 201);
       }
-      if (url === '/minifiguras/new/brickset') return ok({ categoria: 'Space', anio: 2024, precio: 12 });
+      if (url === '/minifiguras/newid/brickset') return ok({ categoria: 'Space', anio: 2024, precio: 12 });
       return intercept(url, options);
     },
   });
   control.deferGets = true;
   document.querySelector('#new-minifigura').click();
-  document.querySelector('#form-id').value = 'new';
+  document.querySelector('#form-id').value = 'newid';
   document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
   document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
   await flush();

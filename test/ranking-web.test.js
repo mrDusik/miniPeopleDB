@@ -23,8 +23,8 @@ function entry(overrides = {}) {
   return {
     userId: 'user-b', avatarUrl: 'https://example.com/b.png', displayName: 'Grace', bricks: 200,
     nivel: 4, nombreNivel: 'Citizen', imagenNivel: '/level_images/9_forestman.png', totalColeccion: 2,
-    top5Precio: [{ id: 'HIGH', nombre: 'High', precio: 50 }],
-    top5Antiguedad: [{ id: 'OLD', nombre: 'Old', anio: 1980, precio: 5 }], regaloEnviado: false, dnaPrincipal: 'Explorer',
+    top5Precio: [{ id: 'HIGH-ID', nombre: 'High', precio: 50 }],
+    top5Antiguedad: [{ id: 'OLD-ID', nombre: 'Old', anio: 1980, precio: 5 }], regaloEnviado: false, dnaPrincipal: 'Explorer',
     dnaRasgos: [{ nombre: 'Explorer', porcentaje: 60.5 }, { nombre: 'Collector', porcentaje: 30 }],
     ...overrides,
   };
