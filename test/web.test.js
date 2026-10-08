@@ -712,8 +712,9 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   const smartphoneViewport = { matches: true };
   window.matchMedia = () => smartphoneViewport;
+  let imageLoadFails = false;
   window.Image = class ImageStub {
-    set src(url) { this.onload(); }
+    set src(url) { imageLoadFails ? this.onerror?.() : this.onload(); }
   };
   assert.ok(officialCategoriaSet.has('Stranger Things'));
   const catalog = [{
@@ -782,6 +783,10 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   window.document.querySelector('#image-modal-close').click();
   assert.equal(window.document.querySelector('#image-modal-name').textContent, '');
   assert.equal(window.document.querySelector('#image-modal').open, false);
+  imageLoadFails = true;
+  thumbnail.click();
+  assert.equal(window.document.querySelector('#image-modal').open, true);
+  assert.equal(window.document.querySelector('#image-modal-image').getAttribute('src'), '/logo_images/image_fallback.png');
   dom.window.close();
 });
 
@@ -1248,7 +1253,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
       submittedPayload = JSON.parse(options.body);
       return { ok: true, status: 201, json: async () => submittedPayload };
     }
-    if (url === '/minifiguras/new-figure/brickset') {
+    if (url === '/minifiguras/new-f/brickset') {
       lookups += 1;
       return { ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) };
     }
@@ -1264,14 +1269,19 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
   window.document.querySelector('#new-minifigura').click();
-  window.document.querySelector('#form-id').value = 'new-figure';
-  window.document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
+  const idInput = window.document.querySelector('#form-id');
+  const preview = window.document.querySelector('#form-preview-image');
+  idInput.value = 'new-';
+  idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  preview.dispatchEvent(new window.Event('load'));
   assert.equal(lookups, 0);
   assert.equal(window.document.querySelector('#form-nombre').disabled, true);
   assert.equal(window.document.querySelector('#form-descripcion').disabled, true);
   assert.equal(window.document.querySelector('#form-fechaCompra').disabled, true);
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, true);
-  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+  idInput.value = 'new-f';
+  idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  preview.dispatchEvent(new window.Event('load'));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(lookups, 1);
   assert.equal(window.document.querySelector('#form-nombre').disabled, false);
@@ -1299,8 +1309,8 @@ test('el alta ignora consultas de imágenes anteriores y bloquea los campos si f
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
-    if (url === '/minifiguras/old/brickset') return new Promise((resolve) => { resolveOldLookup = resolve; });
-    if (url === '/minifiguras/new/brickset') return { ok: false, json: async () => ({ error: 'BRICKSET_NO_DISPONIBLE' }) };
+    if (url === '/minifiguras/old-id/brickset') return new Promise((resolve) => { resolveOldLookup = resolve; });
+    if (url === '/minifiguras/new-id/brickset') return { ok: false, json: async () => ({ error: 'BRICKSET_NO_DISPONIBLE' }) };
     return { ok: true, json: async () => [] };
   };
 
@@ -1309,10 +1319,10 @@ test('el alta ignora consultas de imágenes anteriores y bloquea los campos si f
   window.document.querySelector('#new-minifigura').click();
   const idInput = window.document.querySelector('#form-id');
   const preview = window.document.querySelector('#form-preview-image');
-  idInput.value = 'old';
+  idInput.value = 'old-id';
   idInput.dispatchEvent(new window.Event('input'));
   preview.dispatchEvent(new window.Event('load'));
-  idInput.value = 'new';
+  idInput.value = 'new-id';
   idInput.dispatchEvent(new window.Event('input'));
   resolveOldLookup({ ok: true, json: async () => ({ categoria: 'Space', anio: 2024, precio: 12 }) });
   await new Promise((resolve) => setTimeout(resolve, 0));

@@ -61,6 +61,8 @@ const imageModalTitle = document.querySelector('#image-modal-title');
 const imageModalName = document.querySelector('#image-modal-name');
 const imageModalImage = document.querySelector('#image-modal-image');
 const imageModalCloseButton = document.querySelector('#image-modal-close');
+const imageFallbackUrl = '/logo_images/image_fallback.png';
+let imageModalImageSequence = 0;
 
 const toastRegion = document.querySelector('#toast-region');
 const gamificationLevelButton = document.querySelector('#gamification-level');
@@ -1513,6 +1515,7 @@ function messageForErrorCode(code) {
 }
 
 function closeImageModal() {
+  imageModalImageSequence += 1;
   if (imageModal.open) imageModal.close();
   imageModalImage.removeAttribute('src');
   imageModalImage.alt = '';
@@ -1522,17 +1525,17 @@ function closeImageModal() {
 function mostrarImagenMinifigura(id, nombre) {
   const upperId = String(id).toUpperCase();
   const url = imagenUrlPara(id);
+  const requestSequence = ++imageModalImageSequence;
   const preloader = new Image();
+  imageModalImage.src = imageFallbackUrl;
+  imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
+  imageModalTitle.textContent = upperId;
+  imageModalName.textContent = nombre ?? '';
+  imageModal.showModal();
+  imageModalCloseButton.focus();
   preloader.onload = () => {
+    if (!imageModal.open || requestSequence !== imageModalImageSequence) return;
     imageModalImage.src = url;
-    imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
-    imageModalTitle.textContent = upperId;
-    imageModalName.textContent = nombre ?? '';
-    imageModal.showModal();
-    imageModalCloseButton.focus();
-  };
-  preloader.onerror = () => {
-    showToast(`No se pudo cargar la imagen de la minifigura ${upperId}.`, 'error');
   };
   preloader.src = url;
 }
@@ -2729,7 +2732,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
 async function loadFormBricksetData() {
   if (!formDialog.open || currentFormMode === 'view') return;
   const id = formIdInput.value.trim();
-  if (!id || formPreviewImage.src !== imagenUrlPara(id)) return;
+  if (id.length < 5 || formPreviewImage.src !== imagenUrlPara(id)) return;
   const lookupSequence = imageLookupSequence;
 
   showToast('Consultando datos...', 'success');
