@@ -101,7 +101,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
     const modalDocument = new JSDOM(html);
-    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 5);
+    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 6);
     modalDocument.window.close();
 
     for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
@@ -237,9 +237,10 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const portraitDeclarations = new Map([...portrait.cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(portraitDeclarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) minmax(0, 1fr)');
   assert.equal(portraitDeclarations.get('.dna-chart')?.getPropertyValue('justify-self'), 'center');
-  assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('overflow-x'), 'auto');
-  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('flex-wrap'), 'nowrap');
-  assert.equal(portraitDeclarations.get('.ranking-criteria .button')?.getPropertyValue('white-space'), 'nowrap');
+  assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('display'), 'block');
+  assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('overflow'), 'visible');
+  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
+  assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('white-space'), 'normal');
   assert.equal(portraitDeclarations.get('.ranking-user-details')?.getPropertyValue('max-width'), '100%');
   tabletDom.window.close();
 });
@@ -254,7 +255,7 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
   assert.equal(headings.style.getPropertyValue('margin-bottom'), '12px');
-  const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty');
+  const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty');
   assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
   const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button');
   assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');

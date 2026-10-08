@@ -73,7 +73,8 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .summary-ranking-link, .summary-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
 #sync-prices[hidden] { display: none; }
 .summary-achievements-row .button { flex: 1 1 0; min-width: 0; white-space: nowrap; }
-.summary-ranking-row .summary-ranking-link { flex: 1 1 auto; }
+.summary-ranking-row { width: 100%; }
+.summary-ranking-row .summary-ranking-link { flex: 1 1 0; min-width: 0; white-space: normal; }
 .collection-counts-panel { display: flex; align-items: center; gap: 16px; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .collection-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -176,7 +177,7 @@ button { min-height: 36px; }
 .result-count { margin: 5px 0 0; color: var(--accent); font: 700 0.82rem Arial, sans-serif; }
 .status { min-height: 24px; margin-bottom: 14px; color: var(--muted); font: 0.95rem Arial, sans-serif; }
 .status.error { color: var(--accent-dark); }
-#ranking-status:empty, #achievements-status:empty { display: none; }
+#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty { display: none; }
 .table-wrap { overflow-x: auto; }
 .catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; color: var(--muted); font: 700 0.8rem Arial, sans-serif; }
 .catalog-pagination .button { min-width: 92px; }
@@ -345,6 +346,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-dialog-heading h2 { margin: 0; }
 .modal-dialog-heading { margin-bottom: 12px; }
 .ranking-order-toolbar { display: flex; justify-content: flex-start; padding: 0 4px 8px 0; }
+.weekly-ranking-order-spacer { height: 44px; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
 .global-ranking-entry { min-width: 0; }
 .global-ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) 94px; align-items: center; gap: 10px; min-width: 0; }
@@ -791,12 +793,21 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 }
 
 @media (orientation: portrait) {
-  .ranking-order-toolbar { min-width: 0; max-width: 100%; overflow-x: auto; }
-  .ranking-criteria { display: flex; flex: 0 0 max-content; flex-wrap: nowrap; }
-  .ranking-criteria .button { flex: 0 0 auto; white-space: nowrap; }
+  .ranking-order-toolbar { display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; }
+  .ranking-criteria { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  #ranking-order .button { width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; }
   .ranking-user-details { width: 100%; min-width: 0; max-width: 100%; margin-right: 0; }
   .ranking-user-details > * { min-width: 0; max-width: 100%; }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 16px; }
   .dna-chart { width: min(200px, 100%); justify-self: center; }
   .dna-legend-panel { align-self: center; }
+}
+
+@media (min-width: 761px) and (orientation: portrait) {
+  .ranking-criteria { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .weekly-ranking-order-spacer { height: 52px; }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .weekly-ranking-order-spacer { height: 100px; }
 }

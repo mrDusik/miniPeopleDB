@@ -75,6 +75,7 @@
             </div>
             <div class="summary-ranking-row">
               <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
+              <button type="button" id="open-weekly-ranking" class="button button-secondary summary-ranking-link" aria-haspopup="dialog" aria-controls="weekly-ranking-dialog"><span aria-hidden="true">🗓️</span> Ranking Semanal</button>
             </div>
             <div class="summary-sync-row">
               <button type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
@@ -369,6 +370,18 @@
         </div>
       </div>
       <div id="global-ranking-list" class="global-ranking-list"></div>
+    </dialog>
+
+    <dialog id="weekly-ranking-dialog" class="modal modal-ranking" aria-labelledby="weekly-ranking-title">
+      <div class="ranking-dialog-heading modal-dialog-heading">
+        <div>
+          <h2 id="weekly-ranking-title">Ranking Semanal</h2>
+        </div>
+        <button type="button" id="weekly-ranking-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <p id="weekly-ranking-status" class="status" role="status" aria-live="polite"></p>
+      <div class="ranking-order-toolbar weekly-ranking-order-spacer" aria-hidden="true"></div>
+      <div id="weekly-ranking-list" class="global-ranking-list"></div>
     </dialog>
 
     <dialog id="analytics-history-dialog" class="modal modal-analytics-history" aria-labelledby="analytics-history-title">

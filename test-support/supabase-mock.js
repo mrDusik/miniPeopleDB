@@ -74,7 +74,7 @@ function rlsError() {
 }
 
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
-export function createSupabaseMock({ users = {} } = {}) {
+export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) {
   const tables = { minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [] };
   const failures = [];
   const dailySync = {
@@ -198,6 +198,93 @@ export function createSupabaseMock({ users = {} } = {}) {
         nivel: { id: target.nivel?.id ?? 0, nombre: target.nivel?.nombre ?? 'Duplo' },
         logros: target.logros.map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
       }), error: null };
+    }
+
+    if (name === 'ranking_semanal') {
+      const instant = new Date(typeof now === 'function' ? now() : now);
+      const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(instant).map(({ type, value }) => [type, value]));
+      const referenceDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+      const shiftDate = (date, amount) => new Date(Date.parse(`${date}T00:00:00Z`) + amount * 86400000).toISOString().slice(0, 10);
+      const weekday = (new Date(`${referenceDate}T00:00:00Z`).getUTCDay() + 6) % 7;
+      const weekStart = shiftDate(referenceDate, -weekday);
+      const weekEnd = shiftDate(weekStart, 6);
+      const availableFrom = '2026-10-12';
+      const active = referenceDate >= availableFrom;
+      const baselines = new Map(tables.user_daily_snapshots
+        .filter(({ snapshot_date }) => snapshot_date === shiftDate(weekStart, -1))
+        .map(({ user_id, bricks }) => [user_id, bricks]));
+      const latest = new Map();
+      for (const snapshot of tables.user_daily_snapshots) {
+        if (snapshot.snapshot_date < weekStart || snapshot.snapshot_date > weekEnd || snapshot.snapshot_date > referenceDate) continue;
+        const current = latest.get(snapshot.user_id);
+        if (!current || snapshot.snapshot_date > current.snapshot_date) latest.set(snapshot.user_id, snapshot);
+      }
+      const candidates = active ? [...latest.values()]
+        .filter(({ user_id }) => baselines.has(user_id))
+        .map((snapshot) => ({
+          snapshot,
+          gamification: tables.gamificacion.find(({ user_id }) => user_id === snapshot.user_id),
+          delta: snapshot.bricks - baselines.get(snapshot.user_id),
+        }))
+        .filter(({ gamification }) => gamification)
+        .sort((left, right) => right.delta - left.delta || left.snapshot.user_id.localeCompare(right.snapshot.user_id))
+        .slice(0, 10) : [];
+      const entries = candidates.map(({ snapshot, gamification, delta }) => {
+        const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === gamification.user_id);
+        const collection = tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === gamification.user_id && estado_coleccion === 'COLECCIÓN');
+        const domainCollection = collection.map((row) => ({
+          id: row.id, nombre: row.nombre, precio: row.precio, anio: row.anio,
+          fechaCompra: row.fecha_compra, FechaRegistro: row.fecha_registro,
+        }));
+        const highlights = collectionHighlights(domainCollection);
+        const withMetadata = (items) => items.map((item) => {
+          const row = collection.find(({ id }) => id === item.id);
+          return Object.fromEntries(Object.entries({ ...item, categoria: row.categoria, subcategoria: row.subcategoria, anio: row.anio })
+            .filter(([, value]) => value != null));
+        });
+        const levelId = gamification.nivel?.id ?? 0;
+        const dna = calculateDna(gamification.logros ?? []);
+        const dnaTraits = [
+          ['rarityHunter', 'Rarity Hunter'], ['explorer', 'Explorer'], ['collector', 'Collector'], ['fan', 'Fan'],
+        ].map(([key, nombre], ordinal) => ({ nombre, porcentaje: dna.porcentajes[key], ordinal }));
+        dnaTraits.sort((left, right) => Number(right.nombre === dna.principal) - Number(left.nombre === dna.principal)
+          || right.porcentaje - left.porcentaje || left.ordinal - right.ordinal);
+        return {
+          userId: gamification.user_id,
+          avatarUrl: profile?.avatar_url ?? null,
+          displayName: profile?.display_name ?? 'Coleccionista',
+          bricks: gamification.bricks,
+          nivel: levelId,
+          nombreNivel: gamification.nivel?.nombre ?? 'Duplo',
+          imagenNivel: ({
+            3: '/level_images/3_threesevenfive.png', 4: '/level_images/4_citizen.png',
+            5: '/level_images/5_skeleton.png', 6: '/level_images/6_pirate.png',
+            7: '/level_images/7_captain.png', 8: '/level_images/8_redbearb.png',
+            9: '/level_images/9_forestman.png', 10: '/level_images/10_wolfpack.png',
+            11: '/level_images/11_wolfpackmaster.png', 12: '/level_images/12_ninja.png',
+            13: '/level_images/13_rx.png', 14: '/level_images/14_dragonform.png',
+            15: '/level_images/15_spacebaby.jpg', 16: '/level_images/16_spaceman.jpg',
+            17: '/level_images/17_blacktron.png',
+          })[levelId] ?? '/level_images/9_forestman.png',
+          totalColeccion: collection.length,
+          top5Precio: withMetadata(highlights.top5Precio),
+          top5Antiguedad: withMetadata(highlights.top5Antiguedad),
+          regaloEnviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
+          dnaPrincipal: dna.principal,
+          dnaRasgos: dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
+          bricksSemanales: delta,
+          snapshotDate: snapshot.snapshot_date,
+        };
+      });
+      return { data: {
+        available: active && entries.length > 0,
+        availableFrom,
+        weekStart,
+        weekEnd,
+        entries,
+      }, error: null };
     }
 
     if (name === 'ranking_global') {

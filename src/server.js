@@ -27,6 +27,7 @@ import {
   LogrosNoDisponiblesError,
   RankingNoDisponibleError,
   RankingRepository,
+  RankingSemanalNoDisponibleError,
   ReceptorNoEncontradoError,
   RegaloYaEnviadoError,
   UsuarioNoEncontradoError,
@@ -37,7 +38,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/ranking(?:\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/ranking(?:\/semanal|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -351,6 +352,26 @@ export function createServer({
           return;
         }
         sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/ranking/semanal') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await rankingRepository.weekly());
+      } catch (error) {
+        sendJson(response, 500, {
+          error: error instanceof RankingSemanalNoDisponibleError ? error.code : 'RANKING_SEMANAL_NO_DISPONIBLE',
+        });
       }
       return;
     }
