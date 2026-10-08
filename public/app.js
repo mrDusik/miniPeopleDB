@@ -957,7 +957,15 @@ const DNA_TRAITS = [
   { key: 'fan', name: 'Fan', description: 'Muestra afinidad por temáticas y personajes.', color: 'fan' },
 ];
 
+let dnaChartInstance = null;
+
+function destroyDnaChart() {
+  dnaChartInstance?.destroy();
+  dnaChartInstance = null;
+}
+
 function renderDnaLoading() {
+  destroyDnaChart();
   dnaDialogStatus.textContent = 'Cargando DNA…';
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
@@ -966,6 +974,7 @@ function renderDnaLoading() {
 }
 
 function renderDnaError() {
+  destroyDnaChart();
   dnaDialogStatus.textContent = 'No se pudo cargar el DNA.';
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
@@ -973,25 +982,41 @@ function renderDnaError() {
 }
 
 function renderDnaDialog(state) {
+  destroyDnaChart();
   const isNewbie = state.principal === 'Newbie';
   dnaChart.hidden = false;
   dnaChart.classList.toggle('dna-chart-empty', isNewbie);
   dnaChart.setAttribute('aria-label', isNewbie
     ? 'DNA Newbie: cuatro proporciones en cero'
     : `DNA de tu colección: ${DNA_TRAITS.map(({ key, name }) => `${name} ${state.porcentajes[key]}%`).join(', ')}`);
-  if (isNewbie) {
-    dnaChart.style.removeProperty('--dna-gradient');
-    dnaDialogStatus.textContent = 'Newbie';
-  } else {
-    let position = 0;
-    const stops = DNA_TRAITS.map(({ key, color }, index) => {
-      const start = position;
-      position += state.porcentajes[key];
-      const end = index === DNA_TRAITS.length - 1 ? 100 : Math.min(100, position);
-      return `var(--dna-${color}) ${start}% ${end}%`;
+  dnaDialogStatus.textContent = isNewbie ? 'Newbie' : '';
+  const principal = DNA_TRAITS.find(({ name }) => name === state.principal);
+  document.querySelector('#dna-chart-percentage').textContent = isNewbie ? '0%' : formatAnalyticsHistoryPercent(state.porcentajes[principal?.key] ?? 0);
+  document.querySelector('#dna-chart-trait').textContent = state.principal;
+  if (!isNewbie && typeof Chart === 'function') {
+    const styles = getComputedStyle(document.documentElement);
+    dnaChartInstance = new Chart(document.querySelector('#dna-canvas').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: DNA_TRAITS.map(({ name }) => name),
+        datasets: [{
+          data: DNA_TRAITS.map(({ key }) => state.porcentajes[key]),
+          backgroundColor: DNA_TRAITS.map(({ color }) => styles.getPropertyValue(`--dna-${color}`).trim()),
+          borderColor: '#ffffff', borderWidth: 3, hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '70%', animation: false,
+        layout: { padding: 8 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#202124', padding: 12, cornerRadius: 6,
+            callbacks: { label: (item) => `${item.label}: ${formatAnalyticsHistoryPercent(item.raw)}` },
+          },
+        },
+      },
     });
-    dnaChart.style.setProperty('--dna-gradient', `conic-gradient(${stops.join(', ')})`);
-    dnaDialogStatus.textContent = '';
   }
   const traitsByPercentage = DNA_TRAITS
     .map((trait, index) => ({ trait, index }))
@@ -1800,6 +1825,7 @@ dnaDialog.addEventListener('cancel', (event) => {
 });
 dnaDialog.addEventListener('close', () => {
   dnaRequestSequence += 1;
+  destroyDnaChart();
   if (dnaDialogTrigger?.isConnected) dnaDialogTrigger.focus();
   dnaDialogTrigger = null;
 });
@@ -1917,6 +1943,64 @@ function analyticsHistoryXAxisBounds() {
     : { min, max };
 }
 
+function createAnalyticsChart(canvas, configuration) {
+  const styles = getComputedStyle(document.documentElement);
+  const ink = styles.getPropertyValue('--ink').trim();
+  const muted = styles.getPropertyValue('--muted').trim();
+  const options = configuration.options;
+  options.animation = false;
+  options.layout = { padding: { top: 8, right: 8 } };
+  options.interaction = { mode: 'index', axis: 'x', intersect: false };
+  options.plugins.legend = {
+    display: true, position: 'bottom', onClick() {},
+    labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 20, font: { family: 'Trebuchet MS', size: 12 } },
+  };
+  Object.assign(options.plugins.tooltip, {
+    backgroundColor: '#202124', titleColor: '#ffffff', bodyColor: '#ffffff',
+    padding: 12, cornerRadius: 6, boxPadding: 5,
+    titleFont: { family: 'Trebuchet MS', size: 13, weight: 'bold' },
+    bodyFont: { family: 'Trebuchet MS', size: 12 },
+  });
+  for (const [name, scale] of Object.entries(options.scales)) {
+    scale.border = { display: false };
+    scale.grid = { ...scale.grid, color: '#e9edf1', drawTicks: false };
+    scale.ticks = { ...scale.ticks, color: muted, padding: 10, font: { family: 'Trebuchet MS', size: 11 } };
+    scale.title = { ...scale.title, color: muted, font: { family: 'Trebuchet MS', size: 11 } };
+    if (name === 'x') {
+      scale.offset = false;
+      scale.grid.display = false;
+      scale.title.display = false;
+      scale.ticks.maxTicksLimit = 5;
+      scale.ticks.maxRotation = 0;
+      scale.ticks.callback = (value, index, ticks) => {
+        const label = formatUniqueAnalyticsHistoryTick(value, index, ticks);
+        return label ? label.slice(0, 5) : '';
+      };
+    } else {
+      scale.ticks.maxTicksLimit = 5;
+    }
+  }
+  for (const dataset of configuration.data.datasets) {
+    if (dataset.type === 'bar') {
+      dataset.borderRadius = 3;
+      dataset.maxBarThickness = 18;
+      dataset.backgroundColor = (context) => context.parsed?.y < 0 ? 'rgba(197, 57, 56, 0.25)' : 'rgba(24, 131, 101, 0.25)';
+      dataset.borderColor = (context) => context.parsed?.y < 0 ? '#c53938' : '#188365';
+      dataset.borderWidth = 1;
+      const changes = dataset.data.map(({ y }) => y ?? 0);
+      options.scales.figures.suggestedMax = Math.max(1, ...changes) * 3;
+      if (changes.some((change) => change < 0)) options.scales.figures.suggestedMin = Math.min(...changes) * 3;
+    } else {
+      dataset.borderWidth = 2;
+      dataset.pointRadius = configuration.data.datasets[0].data.filter(({ y }) => y !== null).length > 30 ? 0 : 3;
+      dataset.pointHoverRadius = 6;
+      dataset.pointHitRadius = 12;
+      dataset.tension = 0;
+    }
+  }
+  return new Chart(canvas.getContext('2d'), configuration);
+}
+
 function renderAnalyticsHistoryValue(data) {
   analyticsHistoryValueTableBody.replaceChildren();
   destroyAnalyticsHistoryCharts();
@@ -1946,7 +2030,7 @@ function renderAnalyticsHistoryValue(data) {
   const styles = getComputedStyle(document.documentElement);
   const xBounds = analyticsHistoryXAxisBounds();
   const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
-  analyticsHistoryCharts.set('value', new Chart(analyticsHistoryValueCanvas.getContext('2d'), {
+  analyticsHistoryCharts.set('value', createAnalyticsChart(analyticsHistoryValueCanvas, {
     type: 'bar',
     data: {
       datasets: [
@@ -1979,13 +2063,18 @@ function renderAnalyticsHistoryValue(data) {
               const change = item.parsed.y > 0 ? `+${item.parsed.y}` : String(item.parsed.y);
               return `Cambio neto de figuras: ${change}`;
             },
+            afterBody(items) {
+              const date = items.length ? new Date(items[0].parsed.x).toISOString().slice(0, 10) : '';
+              const snapshot = data.snapshots.find((entry) => entry.snapshotDate === date);
+              return snapshot ? `Figuras en colecci\u00f3n: ${snapshot.totalFigures}` : '';
+            },
           },
         },
       },
       scales: {
         x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
         value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Valor (€)' } },
-        figures: { type: 'linear', position: 'right', beginAtZero: true, title: { display: true, text: 'Cambio neto (figuras)' }, grid: { drawOnChartArea: false } },
+        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Cambio neto (figuras)' }, grid: { drawOnChartArea: false } },
       },
     },
   }));
@@ -2025,18 +2114,18 @@ function renderAnalyticsHistoryDna(data) {
   const colors = Object.fromEntries(traits.map(([key, , variable]) => [key, styles.getPropertyValue(variable).trim()]));
   const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
   const xBounds = analyticsHistoryXAxisBounds();
-  analyticsHistoryCharts.set('dna', new Chart(analyticsHistoryDnaCanvas.getContext('2d'), {
+  analyticsHistoryCharts.set('dna', createAnalyticsChart(analyticsHistoryDnaCanvas, {
     type: 'line',
     data: {
-      datasets: traits.map(([key, label]) => ({
+      datasets: traits.map(([key, label], index) => ({
         label,
         data: dates.map((date) => ({
           x: Date.parse(`${date}T00:00:00.000Z`),
           y: byDate.get(date)?.dna[key] ?? null,
         })),
         borderColor: colors[key],
-        backgroundColor: chartColorWithAlpha(colors[key], 0.45),
-        fill: true,
+        backgroundColor: chartColorWithAlpha(colors[key], 0.65),
+        fill: index === 0 ? 'origin' : '-1',
         stack: 'dna',
         spanGaps: false,
         pointRadius: 3,
@@ -2090,7 +2179,7 @@ function renderAnalyticsHistoryProgression(data) {
     y: byDate.get(date)?.[key] ?? null,
   }));
   const formatTick = (value) => formatAnalyticsHistoryDate(new Date(Number(value)).toISOString().slice(0, 10));
-  analyticsHistoryCharts.set('progression', new Chart(analyticsHistoryProgressionCanvas.getContext('2d'), {
+  analyticsHistoryCharts.set('progression', createAnalyticsChart(analyticsHistoryProgressionCanvas, {
     type: 'line',
     data: {
       datasets: [

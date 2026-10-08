@@ -182,7 +182,8 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get(':root')?.getPropertyValue('font-size'), '14px');
   assert.equal(declarations.get('.watchlist-row, .top-five .ranking-row')?.getPropertyValue('grid-template-columns'), 'repeat(5, minmax(0, 1fr))');
   assert.equal(declarations.get('.watchlist-card, .top-five .ranking-card')?.getPropertyValue('height'), '90px');
-  assert.equal(declarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), '80px minmax(0, 1fr)');
+  assert.equal(declarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
+  assert.equal(declarations.get('.dna-chart')?.getPropertyValue('width'), 'min(200px, 64vw)');
   assert.equal(declarations.get('.ranking-summary .ranking-expand')?.getPropertyValue('grid-template-rows'), 'auto auto auto');
   assert.equal(declarations.get('#form-dialog .modal-preview')?.getPropertyValue('display'), 'contents');
   assert.equal(declarations.get('#form-dialog .modal-form-column')?.getPropertyValue('grid-row'), '1');
@@ -399,8 +400,9 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.match(css, /\.gamification-dna-name \{[^}]*color: var\(--ink\)[^}]*font: italic 700 0\.75rem/);
     assert.match(css, /\.gamification-dna-name:hover \{ color: var\(--accent\); background: transparent; \}/);
     assert.doesNotMatch(css, /\.modal-dna \{[^}]*border-top:/);
-    assert.match(css, /\.dna-chart \{ width: min\(180px, 30vw\);/);
-    assert.match(css, /\.dna-chart \{ width: min\(150px, 48vw\); \}/);
+    assert.match(css, /\.dna-chart \{[^}]*max-width: 240px; aspect-ratio: 1;/);
+    assert.match(css, /\.dna-chart \{ width: min\(220px, 64vw\); \}/);
+    assert.equal(document.querySelector('#dna-canvas').tagName, 'CANVAS');
     assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
     const details = document.querySelector('#gamification-details');
     assert.ok(details.hidden);

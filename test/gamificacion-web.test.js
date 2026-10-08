@@ -12,6 +12,16 @@ function createDom() {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   dom.window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   dom.window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  dom.window.HTMLCanvasElement.prototype.getContext = () => ({});
+  dom.window.__dnaCharts = [];
+  dom.window.Chart = class ChartMock {
+    constructor(context, configuration) {
+      this.configuration = configuration;
+      this.destroyed = false;
+      dom.window.__dnaCharts.push(this);
+    }
+    destroy() { this.destroyed = true; }
+  };
   return dom;
 }
 
@@ -249,9 +259,13 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Fan');
   assert.equal(document.querySelector('#open-dna-inline').textContent, '40% Fan / 30% Collector');
   assert.equal(document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 40% Fan / 30% Collector');
-  assert.match(chart.style.getPropertyValue('--dna-gradient'), /conic-gradient/);
-  assert.match(chart.style.getPropertyValue('--dna-gradient'), /0% 10%/);
-  assert.match(chart.style.getPropertyValue('--dna-gradient'), /10% 30%/);
+  const instance = dom.window.__dnaCharts.at(-1);
+  assert.equal(instance.configuration.type, 'doughnut');
+  assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40]);
+  assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40 }), 'Fan: 40%');
+  assert.equal(document.querySelector('#dna-chart-percentage').textContent, '40%');
+  assert.equal(document.querySelector('#dna-chart-trait').textContent, 'Fan');
+  assert.match(chart.getAttribute('aria-label'), /Fan 40%/);
   assert.deepEqual([...document.querySelectorAll('.dna-legend-item strong:first-of-type')].map((item) => item.textContent), [
     'Fan', 'Collector', 'Explorer', 'Rarity Hunter',
   ]);
@@ -267,6 +281,7 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   document.querySelector('#dna-close').click();
   dialog.dispatchEvent(new dom.window.Event('close'));
   assert.equal(dialog.open, false);
+  assert.equal(instance.destroyed, true);
   assert.equal(document.activeElement, inlineTrigger);
 
   const dropdownTrigger = document.querySelector('#open-dna');
@@ -304,7 +319,7 @@ test('DNA muestra estado de error con reintento y Newbie sin segmentos inventado
   const chart = document.querySelector('#dna-chart');
   assert.equal(chart.hidden, false);
   assert.equal(chart.classList.contains('dna-chart-empty'), true);
-  assert.equal(chart.style.getPropertyValue('--dna-gradient'), '');
+  assert.equal(dom.window.__dnaCharts.length, 0);
   assert.equal(document.querySelector('#dna-status').textContent, 'Newbie');
   assert.equal(document.querySelector('#dna-status').parentElement, document.querySelector('#dna-legend').parentElement);
   assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['0%', '0%', '0%', '0%']);
