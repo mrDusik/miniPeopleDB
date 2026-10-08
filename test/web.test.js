@@ -1271,6 +1271,8 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.document.querySelector('#new-minifigura').click();
   const idInput = window.document.querySelector('#form-id');
   const preview = window.document.querySelector('#form-preview-image');
+  assert.equal(preview.getAttribute('src'), '/logo_images/image_fallback.png');
+  assert.equal(preview.hidden, false);
   idInput.value = 'new-';
   idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
   preview.dispatchEvent(new window.Event('error'));
