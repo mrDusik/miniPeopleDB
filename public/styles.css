@@ -250,6 +250,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .modal .form-actions { grid-column: 1 / -1; grid-row: 3; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--line); }
 #form-dialog.view-mode .form-actions { display: none; }
 .form-actions #form-submit { margin-left: auto; }
+.brickset-loading { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font: 700 0.9rem Arial, sans-serif; }
+.brickset-loading[hidden] { display: none; }
+.brickset-loading-icon { width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; }
+@keyframes brickset-spinner { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .brickset-loading-icon { animation-duration: 2.5s; } }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
 .filters-form .form-actions #filter-submit { margin-left: 0; }
 .form-state-toggles { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }

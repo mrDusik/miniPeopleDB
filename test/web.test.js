@@ -1247,6 +1247,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
   let submittedPayload;
   let lookups = 0;
+  let resolveBrickset;
   window.fetch = async (url, options = {}) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/minifiguras' && options.method === 'POST') {
@@ -1255,7 +1256,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
     }
     if (url === '/minifiguras/new-f/brickset') {
       lookups += 1;
-      return { ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) };
+      return new Promise((resolve) => { resolveBrickset = resolve; });
     }
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) {
       return { ok: true, json: async () => [] };
@@ -1285,8 +1286,13 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   idInput.value = 'new-f';
   idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
   preview.dispatchEvent(new window.Event('error'));
-  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(lookups, 1);
+  const bricksetLoading = window.document.querySelector('#brickset-loading');
+  assert.equal(bricksetLoading.hidden, false);
+  assert.equal(bricksetLoading.textContent.trim(), 'Autocompletando...');
+  resolveBrickset({ ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(bricksetLoading.hidden, true);
   assert.equal(preview.getAttribute('src'), '/logo_images/image_fallback.png');
   assert.equal(window.document.querySelector('#form-nombre').disabled, false);
   assert.equal(window.document.querySelector('#form-descripcion').disabled, false);
