@@ -540,6 +540,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .analytics-history-plot { height: 260px; }
   .analytics-history-chart table { font-size: 0.66rem; }
   .analytics-history-chart th, .analytics-history-chart td { padding: 5px 3px; }
+  .analytics-history-table-wrap { container-type: inline-size; }
+  #analytics-history-dna-table th { overflow-wrap: normal; word-break: normal; font-size: min(0.66rem, 3.4cqi); letter-spacing: 0; }
+  #analytics-history-dna-table th:nth-child(2), #analytics-history-dna-table td:nth-child(2) { width: 24%; }
+  #analytics-history-dna-table th:nth-child(3), #analytics-history-dna-table td:nth-child(3), #analytics-history-dna-table th:nth-child(4), #analytics-history-dna-table td:nth-child(4) { width: 22%; }
+  #analytics-history-dna-table th:last-child, #analytics-history-dna-table td:last-child { width: 10%; }
 }
 
 @media (min-width: 761px) and (max-width: 1200px) {

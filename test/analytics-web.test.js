@@ -84,7 +84,10 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
     assert.equal(document.querySelectorAll('details.analytics-history-table-wrap:not([open])').length, 3);
     assert.deepEqual([...document.querySelectorAll('.analytics-history-table-wrap summary')].map((summary) => summary.textContent), ['Datos', 'Datos', 'Datos']);
-    assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Valor de colecci\u00f3n y progreso de minifiguras');
+    assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Colecci\u00f3n y Valor');
+    assert.equal(document.querySelector('#analytics-history-progression-title').textContent, 'Bricks y Nivel');
+    assert.equal(document.querySelector('#analytics-history-value-table thead th:last-child').textContent, 'Colecci\u00f3n');
+    assert.match(stylesheet, /#analytics-history-dna-table th \{ overflow-wrap: normal; word-break: normal; font-size: min\(0\.66rem, 3\.4cqi\); letter-spacing: 0; \}/);
     assert.equal(document.querySelector('#analytics-history-custom-range'), null);
     assert.equal(dialog.querySelector('input[type="date"]'), null);
     assert.equal(document.querySelector('#analytics-history-apply'), null);
@@ -275,11 +278,12 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(valueDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-fan').trim());
     assert.equal(deltaDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim());
     assert.equal(deltaDataset.backgroundColor, 'rgba(255, 213, 0, 0.4)');
-    assert.equal(deltaDataset.label, 'Progreso de minifiguras');
+    assert.equal(deltaDataset.label, 'Colecci\u00f3n');
+    assert.equal(chart.options.scales.figures.title.text, 'Colecci\u00f3n');
     assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Figuras en colecci\u00f3n: 9');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 17 } }), 'Valor de colección: 17,00 €');
-    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Progreso de minifiguras: -3');
-    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Progreso de minifiguras: Sin datos');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Colecci\u00f3n: -3');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Colecci\u00f3n: Sin datos');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: null } }), 'Valor de colecci\u00f3n (€): Sin datos');
     const tableRows = [...document.querySelectorAll('#analytics-history-value-table tbody tr')];
     assert.equal(tableRows.length, 3);

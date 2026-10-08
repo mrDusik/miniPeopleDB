@@ -2046,7 +2046,7 @@ function renderAnalyticsHistoryValue(data) {
           spanGaps: false, tension: 0.2,
         },
         {
-          type: 'bar', label: 'Progreso de minifiguras', data: deltaSeries,
+          type: 'bar', label: 'Colección', data: deltaSeries,
           yAxisID: 'figures', backgroundColor: chartColorWithAlpha(styles.getPropertyValue('--yellow').trim(), 0.4),
           borderColor: styles.getPropertyValue('--yellow').trim(),
         },
@@ -2066,7 +2066,7 @@ function renderAnalyticsHistoryValue(data) {
             label(item) {
               if (item.datasetIndex === 0) return `Valor de colección: ${formatAnalyticsHistoryPrice(item.parsed.y)}`;
               const change = item.parsed.y > 0 ? `+${item.parsed.y}` : String(item.parsed.y);
-              return `Progreso de minifiguras: ${change}`;
+              return `Colección: ${change}`;
             },
             afterBody(items) {
               const date = items.length ? new Date(items[0].parsed.x).toISOString().slice(0, 10) : '';
@@ -2079,7 +2079,7 @@ function renderAnalyticsHistoryValue(data) {
       scales: {
         x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
         value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Valor (€)' } },
-        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Progreso (figuras)' }, grid: { drawOnChartArea: false } },
+        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Colección' }, grid: { drawOnChartArea: false } },
       },
     },
   }));
