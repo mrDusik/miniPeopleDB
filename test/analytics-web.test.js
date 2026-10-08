@@ -59,11 +59,13 @@ function tick() {
 }
 
 test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas', async () => {
-  const { dom, document } = startApp();
+  const { dom, window, document } = startApp();
   try {
     await tick();
     const trigger = document.querySelector('#open-analytics-history');
     const dialog = document.querySelector('#analytics-history-dialog');
+    assert.equal(dialog.open, false);
+    assert.equal(window.getComputedStyle(dialog).display, 'none');
     assert.equal(trigger.type, 'button');
     assert.equal(trigger.textContent.trim(), '📈 Progreso');
     assert.equal(trigger.title, 'Progreso');

@@ -422,6 +422,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.equal(details.querySelector('#sync-prices').hidden, true);
+    assert.match(css, /#sync-prices\[hidden\] \{ display: none; \}/);
     const summaryActions = [...details.querySelectorAll('.summary-achievements-row > button')];
     assert.deepEqual(summaryActions.map((button) => button.id), ['open-achievements', 'open-dna', 'open-analytics-history']);
     assert.ok(summaryActions.every((button) => button.classList.contains('button-secondary')));

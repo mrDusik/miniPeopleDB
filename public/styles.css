@@ -71,6 +71,7 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .summary-sync-row, .summary-achievements-row, .summary-ranking-row { display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; }
 .gamification-details .button { min-height: 36px; padding: 0 12px; }
 .summary-ranking-link, .summary-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+#sync-prices[hidden] { display: none; }
 .summary-achievements-row .button { flex: 1 1 0; min-width: 0; white-space: nowrap; }
 .summary-ranking-row .summary-ranking-link { flex: 1 1 auto; }
 .collection-counts-panel { display: flex; align-items: center; gap: 16px; }
@@ -305,7 +306,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievements-heading-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; }
 .achievements-heading .button { flex: 0 0 auto; }
 .modal-ranking { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; }
-.modal-analytics-history { display: block; width: min(1100px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.modal-analytics-history:not([open]) { display: none; }
+.modal-analytics-history[open] { display: block; width: min(1100px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .analytics-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 4px solid var(--blue); }
 .analytics-history-heading h2 { margin: 0; }
 .analytics-history-heading .button { flex: 0 0 auto; }
