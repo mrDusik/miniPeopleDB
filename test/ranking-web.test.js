@@ -142,6 +142,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \.ranking-collection-count \{ grid-column: 3 \/ 5; grid-row: 3; justify-self: end; width: 70px; \}/);
   assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 0\.9rem; line-height: 1;/);
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
+    assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1232px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.brand-heading \{ flex: 0 0 270px; \}\s*\.gamification-summary \{ flex: 1 1 800px; min-width: 0; \}/);
+    assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1232px\) and \(hover: hover\), \(min-width: 761px\) and \(max-width: 1232px\) and \(orientation: portrait\)/);
 });
 
 test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
@@ -235,7 +237,7 @@ test('las filas del ranking no ofrecen logros y conservan la expansion al clicar
   dom.window.close();
 });
 
-test('el modal muestra solo los tres primeros destacados por precio y antigüedad', async () => {
+test('el modal conserva cinco destacados y adapta tops y tarjetas a la orientación', async () => {
   const dom = createDom();
   const top5Precio = Array.from({ length: 5 }, (_, index) => ({
     id: `PRICE-${index}`, nombre: `Price ${index}`, precio: 50 - index,
@@ -251,14 +253,20 @@ test('el modal muestra solo los tres primeros destacados por precio y antigüeda
   dom.window.document.querySelector('.ranking-expand').click();
 
   const groups = [...dom.window.document.querySelectorAll('.ranking-highlight-group')];
-  assert.deepEqual(groups.map((group) => group.querySelector('h3').textContent), [
-    'Top 3 por precio', 'Top 3 por antigüedad',
+  assert.deepEqual(groups.map((group) => [
+    group.querySelector('.ranking-highlight-title-portrait').textContent,
+    group.querySelector('.ranking-highlight-title-landscape').textContent,
+  ]), [
+    ['Top 3 por precio', 'Top 5 por precio'], ['Top 3 por antigüedad', 'Top 5 por antigüedad'],
   ]);
   for (const [index, items] of [top5Precio, top5Antiguedad].entries()) {
     const cards = [...groups[index].querySelectorAll('.ranking-card-static')];
-    assert.equal(cards.length, 3);
-    assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.slice(0, 3).map(({ nombre }) => nombre));
+    assert.equal(cards.length, 5);
+    assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.map(({ nombre }) => nombre));
   }
+  assert.match(styles, /@media \(orientation: portrait\) \{\s*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
+  assert.match(styles, /@media \(orientation: landscape\) \{\s*\.ranking-highlight-title-portrait \{ display: none; \}/);
+  assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
   dom.window.close();
 });
 

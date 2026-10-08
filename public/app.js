@@ -1183,7 +1183,13 @@ function highlightGroup(title, items, mode, ownerUserId) {
   const section = document.createElement('section');
   section.className = 'ranking-highlight-group';
   const heading = document.createElement('h3');
-  heading.textContent = title;
+  const portraitTitle = document.createElement('span');
+  portraitTitle.className = 'ranking-highlight-title-portrait';
+  portraitTitle.textContent = `Top 3 ${title}`;
+  const landscapeTitle = document.createElement('span');
+  landscapeTitle.className = 'ranking-highlight-title-landscape';
+  landscapeTitle.textContent = `Top 5 ${title}`;
+  heading.append(portraitTitle, landscapeTitle);
   const row = document.createElement('div');
   row.className = 'ranking-row';
   for (const [index, minifigura] of items.entries()) {
@@ -1337,8 +1343,8 @@ function renderGlobalRanking() {
     details.className = 'ranking-user-details';
     details.hidden = true;
     details.append(
-      highlightGroup('Top 3 por precio', (entry.top5Precio ?? []).slice(0, 3), 'precio', entry.userId),
-      highlightGroup('Top 3 por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 3), 'antiguedad', entry.userId),
+      highlightGroup('por precio', (entry.top5Precio ?? []).slice(0, 5), 'precio', entry.userId),
+      highlightGroup('por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 5), 'antiguedad', entry.userId),
     );
     article.append(row, details);
     fragment.append(article);

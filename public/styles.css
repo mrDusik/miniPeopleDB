@@ -176,6 +176,7 @@ button { min-height: 36px; }
 .result-count { margin: 5px 0 0; color: var(--accent); font: 700 0.82rem Arial, sans-serif; }
 .status { min-height: 24px; margin-bottom: 14px; color: var(--muted); font: 0.95rem Arial, sans-serif; }
 .status.error { color: var(--accent-dark); }
+#ranking-status:empty, #achievements-status:empty { display: none; }
 .table-wrap { overflow-x: auto; }
 .catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; color: var(--muted); font: 700 0.8rem Arial, sans-serif; }
 .catalog-pagination .button { min-width: 92px; }
@@ -225,7 +226,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .modal h2 { margin-bottom: 10px; }
 #delete-dialog h2 { margin-bottom: 2rem; }
 .modal form { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-rows: auto minmax(0, 1fr) auto; align-items: stretch; gap: 10px 20px; }
-.form-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
+.form-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 #form-dialog-title { margin: 0; }
 .form-dialog-heading .button, .dna-dialog-heading .button { flex: 0 0 auto; }
 .modal-row.modal-row-identity { grid-column: 1; grid-row: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 12px; }
@@ -267,7 +268,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 
 .modal-achievements { width: min(600px, calc(100% - 32px)); }
 .modal-dna { width: min(660px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; }
-.dna-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
+.dna-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .dna-dialog-heading h2 { margin: 0; }
 .dna-dialog-body { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); align-items: center; gap: 24px; }
 .dna-legend-panel { display: grid; gap: 16px; min-width: 0; }
@@ -293,7 +294,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .dna-description { grid-column: 2 / -1; color: var(--muted); font: 0.78rem/1.35 Arial, sans-serif; }
 .modal-dna > #dna-retry { display: block; margin: 18px auto 0; }
 .modal-dna > #dna-retry[hidden] { display: none; }
-.achievements-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
+.achievements-heading { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .achievements-heading-icon { display: block; width: 3rem; height: 3rem; object-fit: contain; }
 .achievements-heading-text { display: grid; gap: 2px; }
 .achievements-heading h2 { margin: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; }
@@ -313,7 +314,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .modal-ranking { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; }
 .modal-analytics-history:not([open]) { display: none; }
 .modal-analytics-history[open] { display: block; width: min(1100px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
-.analytics-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 4px solid var(--blue); }
+.analytics-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 4px solid var(--blue); }
 .analytics-history-heading h2 { margin: 0; }
 .analytics-history-heading .button { flex: 0 0 auto; }
 .analytics-history-controls { display: flex; margin-bottom: 12px; }
@@ -342,6 +343,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
+.modal-dialog-heading { margin-bottom: 12px; }
 .ranking-order-toolbar { display: flex; justify-content: flex-start; padding: 0 4px 8px 0; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
 .global-ranking-entry { min-width: 0; }
@@ -379,6 +381,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-user-details[hidden] { display: none; }
 .ranking-highlight-group { min-width: 0; padding: 10px; border: 1px solid var(--line); background: white; }
 .ranking-highlight-group h3 { margin: 0 0 8px; font: 700 0.9rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; }
+.ranking-highlight-title-landscape { display: none; }
 .ranking-card-static { cursor: default; }
 .ranking-card-static:hover { border-color: var(--line); }
 .ranking-card-static { position: relative; padding-top: 30px; }
@@ -421,6 +424,22 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-summary .ranking-row-chevron { grid-column: 4; }
   .ranking-summary .ranking-expand .ranking-bricks { grid-column: 2 / 4; grid-row: 3; }
   .ranking-summary .ranking-expand .ranking-collection-count { grid-column: 1 / 3; grid-row: 3; justify-self: start; width: 70px; }
+}
+
+@media (min-width: 761px) and (max-width: 1232px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  .brand-heading { flex: 0 0 270px; }
+  .gamification-summary { flex: 1 1 800px; min-width: 0; }
+  .gamification-level-title { white-space: normal; }
+}
+
+@media (orientation: portrait) {
+  .ranking-highlight-group .ranking-card-static:nth-child(n + 4) { display: none; }
+  .ranking-highlight-title-landscape { display: none; }
+}
+
+@media (orientation: landscape) {
+  .ranking-highlight-title-portrait { display: none; }
+  .ranking-highlight-title-landscape { display: inline; }
 }
 
 .modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; padding: 20px; overflow: auto; background: transparent; }
@@ -547,7 +566,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   #analytics-history-dna-table th:last-child, #analytics-history-dna-table td:last-child { width: 10%; }
 }
 
-@media (min-width: 761px) and (max-width: 1200px) and (hover: hover), (min-width: 761px) and (max-width: 1200px) and (orientation: portrait) {
+@media (min-width: 761px) and (max-width: 1232px) and (hover: hover), (min-width: 761px) and (max-width: 1232px) and (orientation: portrait) {
   .brand-heading { flex-basis: 270px; }
   .gamification-summary { flex: 1 1 800px; min-width: 0; }
   .gamification-level-title { white-space: normal; }
@@ -679,8 +698,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-fields > label:not(.description-field) { white-space: normal; }
   .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 6px; }
   .achievement-item .achievement-bricks { white-space: nowrap; }
-  .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading { height: 66px; align-items: center; gap: 8px; margin-bottom: 20px; }
-  #ranking-status:empty, #achievements-status:empty { display: none; }
+  .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading { height: 66px; align-items: center; gap: 8px; margin-bottom: 12px; }
   .ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button { flex: 0 0 auto; height: 36px; min-height: 36px; padding: 0 10px; }
   .achievements-heading-icon { width: 32px; height: 32px; }
   .achievements-heading-text { min-width: 0; }
