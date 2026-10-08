@@ -212,13 +212,13 @@ test('el panel mantiene los recuentos visibles y despliega acciones y valor con 
   assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Newbie');
   window.eval("renderGamificationDna({ principal: 'Explorer', porcentajes: { explorer: 100 } })");
   assert.equal(window.document.querySelector('#gamification-dna-principal').textContent, 'Explorer');
-  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 100% Explorer / 0% Rarity Hunter');
+  assert.equal(window.document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 100% Explorer');
   toggle.click();
   assert.equal(details.hidden, true);
   dom.window.close();
 });
 
-test('el resumen DNA conserva el principal y muestra el segundo por porcentaje, limpiando estados vacios', async () => {
+test('el resumen DNA muestra solo el principal y limpia estados vacios', async () => {
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state(), undefined, { principal: 'Explorer', porcentajes: { rarityHunter: 25, explorer: 25, collector: 25, fan: 25 } });
@@ -226,25 +226,25 @@ test('el resumen DNA conserva el principal y muestra el segundo por porcentaje, 
     window.eval(script);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const button = window.document.querySelector('#open-dna-inline');
-    assert.equal(button.textContent, '25% Explorer / 25% Rarity Hunter');
+    assert.equal(button.textContent, '25% Explorer');
     window.eval("renderGamificationDna({ principal: 'Rarity Hunter', porcentajes: { rarityHunter: 40.5, explorer: 30.5, collector: 20, fan: 9 } })");
-    assert.equal(button.textContent, '40,5% Rarity Hunter / 30,5% Explorer');
+    assert.equal(button.textContent, '40,5% Rarity Hunter');
     assert.equal(button.title, button.textContent);
+    assert.equal(window.document.querySelector('#gamification-dna-secondary'), null);
     for (const dna of [{ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }, null]) {
       window.eval(`renderGamificationDna(${JSON.stringify(dna)})`);
       assert.equal(button.textContent, dna ? 'Newbie' : 'DNA no disponible');
       assert.equal(window.document.querySelector('#gamification-dna-percentage').hidden, true);
-      assert.equal(window.document.querySelector('#gamification-dna-secondary').hidden, true);
     }
   } finally {
     dom.window.close();
   }
 });
 
-test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco de retorno', async () => {
+test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento, Newbie y foco de retorno', async () => {
   const dom = createDom();
   const document = dom.window.document;
-  const dnaState = { principal: 'Fan', porcentajes: { rarityHunter: 10, explorer: 20, collector: 30, fan: 40 } };
+  const dnaState = { principal: 'Fan', porcentajes: { rarityHunter: 10, explorer: 20, collector: 30, fan: 40.56 } };
   dom.window.fetch = baseFetch([], state(), undefined, dnaState);
   dom.window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -257,25 +257,25 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   assert.equal(dialog.open, true);
   assert.equal(document.activeElement.id, 'dna-close');
   assert.equal(document.querySelector('#gamification-dna-principal').textContent, 'Fan');
-  assert.equal(document.querySelector('#open-dna-inline').textContent, '40% Fan / 30% Collector');
-  assert.equal(document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 40% Fan / 30% Collector');
+  assert.equal(document.querySelector('#open-dna-inline').textContent, '40,6% Fan');
+  assert.equal(document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 40,6% Fan');
   const instance = dom.window.__dnaCharts.at(-1);
   assert.equal(instance.configuration.type, 'doughnut');
-  assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40]);
-  assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40 }), 'Fan: 40%');
+  assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40.56]);
+  assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40.56 }), 'Fan: 40,56%');
   const centerLabel = document.querySelector('.dna-chart-label');
   assert.equal(centerLabel.hidden, false);
   instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 1 } });
   assert.equal(centerLabel.hidden, true);
   instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 0 } });
   assert.equal(centerLabel.hidden, false);
-  assert.equal(document.querySelector('#dna-chart-percentage').textContent, '40%');
+  assert.equal(document.querySelector('#dna-chart-percentage').textContent, '40,6%');
   assert.equal(document.querySelector('#dna-chart-trait').textContent, 'Fan');
-  assert.match(chart.getAttribute('aria-label'), /Fan 40%/);
+  assert.match(chart.getAttribute('aria-label'), /Fan 40\.56%/);
   assert.deepEqual([...document.querySelectorAll('.dna-legend-item strong:first-of-type')].map((item) => item.textContent), [
     'Fan', 'Collector', 'Explorer', 'Rarity Hunter',
   ]);
-  assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['40%', '30%', '20%', '10%']);
+  assert.deepEqual([...document.querySelectorAll('.dna-percentage')].map((item) => item.textContent), ['40,6%', '30%', '20%', '10%']);
   assert.deepEqual([...document.querySelectorAll('.dna-swatch')].map((item) => item.className), [
     'dna-swatch dna-swatch-fan', 'dna-swatch dna-swatch-collector', 'dna-swatch dna-swatch-explorer', 'dna-swatch dna-swatch-rarity',
   ]);

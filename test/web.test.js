@@ -158,7 +158,7 @@ test('los ajustes responsive quedan aislados de escritorio y ordenan los control
   dom.window.document.querySelector('style').textContent = css;
   assert.match(css, /\.filter-state-row\s*\{\s*display:\s*contents;\s*\}/);
   const rules = [...dom.window.document.styleSheets[0].cssRules];
-  const responsive = rules.find((rule) => rule.conditionText === '(max-width: 1024px), (max-width: 1366px) and (hover: none) and (pointer: coarse)');
+  const responsive = rules.find((rule) => rule.conditionText?.startsWith('(max-width: 1024px) and (orientation: portrait)'));
   assert.ok(responsive, 'Los ajustes deben limitarse a pantallas pequenas o tablets tactiles');
   const declarations = new Map([...responsive.cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(declarations.get('body').getPropertyValue('min-width'), '0');
@@ -172,12 +172,12 @@ test('los ajustes responsive quedan aislados de escritorio y ordenan los control
   dom.window.close();
 });
 
-test('smartphone limita las tarjetas a cinco columnas y compacta modales e inventario sin cambiar tablet', async () => {
+test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y categorías', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM('<style></style>');
   dom.window.document.querySelector('style').textContent = css;
   const rules = [...dom.window.document.styleSheets[0].cssRules];
-  const smartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').at(-1);
+  const smartphone = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).at(-1);
   const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(declarations.get(':root')?.getPropertyValue('font-size'), '14px');
   assert.equal(declarations.get('.watchlist-row, .top-five .ranking-row')?.getPropertyValue('grid-template-columns'), 'repeat(5, minmax(0, 1fr))');
@@ -220,6 +220,17 @@ test('smartphone limita las tarjetas a cinco columnas y compacta modales e inven
   assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
   assert.doesNotMatch(smartphone.cssRules.map((rule) => rule.cssText).join('\n'), /\.results-panel th:nth-child\(1\), \.results-panel td:nth-child\(1\)[^{]*\{ display: none; \}/);
   dom.window.close();
+
+  const tabletDom = new JSDOM('<style></style>');
+  tabletDom.window.document.querySelector('style').textContent = css;
+  const tabletRules = [...tabletDom.window.document.styleSheets[0].cssRules];
+  const tabletPortrait = tabletRules.find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait) and (hover: none) and (pointer: coarse)');
+  assert.ok(tabletPortrait);
+  const tabletDeclarations = new Map([...tabletPortrait.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  const restoredColumns = tabletDeclarations.get('.results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6)');
+  assert.equal(restoredColumns?.getPropertyValue('display'), 'table-cell');
+  assert.equal(tabletDeclarations.get('.results-panel th:nth-child(4)')?.getPropertyValue('width'), '21%');
+  tabletDom.window.close();
 });
 
 test('las cabeceras de modales en smartphone comparten altura y cierre sin separar los bricks', async () => {
@@ -227,7 +238,7 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   const dom = new JSDOM('<style></style>');
   dom.window.document.querySelector('style').textContent = css;
   const rules = [...dom.window.document.styleSheets[0].cssRules];
-  const smartphoneRules = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').flatMap((rule) => [...rule.cssRules]);
+  const smartphoneRules = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).flatMap((rule) => [...rule.cssRules]);
   const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading');
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
@@ -252,7 +263,7 @@ test('seguimiento en smartphone se oculta tambien cuando supera cinco figuras', 
   const style = document.querySelector('style');
   style.textContent = css;
   const rules = [...document.styleSheets[0].cssRules];
-  const smartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px)').at(-1);
+  const smartphone = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).at(-1);
   const scroller = [...smartphone.cssRules].find((rule) => rule.style?.getPropertyValue('display') === 'flex' && rule.selectorText?.includes('.watchlist-row:has('));
   const hiddenRule = rules.find((rule) => rule.selectorText === '.rankings[hidden], .watchlist-row[hidden]');
   const watchlist = document.querySelector('.watchlist-row');
@@ -303,7 +314,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-dna-row \{[^}]*grid-column: 2; grid-row: 2;/);
   assert.match(css, /\.gamification-dna-row \{ position: relative; z-index: 1;/);
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
-  assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
+  assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) and \(orientation: portrait\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
   assert.match(css, /\.user-profile\s*\{[^}]*left:\s*50%[^}]*justify-items:\s*center[^}]*text-align:\s*center[^}]*transform:\s*translateX\(-50%\)/s);
   assert.match(css, /\.user-menu-chevron\s*\{[^}]*color:\s*var\(--ink\)/s);
