@@ -117,6 +117,11 @@ const dnaRetryButton = document.querySelector('#dna-retry');
 const rankingDialog = document.querySelector('#ranking-dialog');
 const rankingCloseButton = document.querySelector('#ranking-close');
 const rankingOpenButton = document.querySelector('#open-global-ranking');
+const weeklyRankingDialog = document.querySelector('#weekly-ranking-dialog');
+const weeklyRankingCloseButton = document.querySelector('#weekly-ranking-close');
+const weeklyRankingOpenButton = document.querySelector('#open-weekly-ranking');
+const weeklyRankingStatus = document.querySelector('#weekly-ranking-status');
+const weeklyRankingList = document.querySelector('#weekly-ranking-list');
 const dnaOpenButtons = [document.querySelector('#open-dna-inline'), document.querySelector('#open-dna')];
 const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
@@ -193,6 +198,10 @@ let defaultRankingEntries = [];
 let rankingRequestId = 0;
 let selectedRankingCriterion = 'nivel';
 let expandedRankingUserId = null;
+let weeklyRankingEntries = [];
+let weeklyRankingRequestId = 0;
+let expandedWeeklyRankingUserId = null;
+let weeklyRankingTrigger = null;
 let ownGamification = null;
 let ownDnaState = null;
 let dnaDialogTrigger = null;
@@ -1152,8 +1161,8 @@ function ownsMinifigura(id) {
   return catalogCache.some((item) => String(item.id).trim().toUpperCase() === canonicalId);
 }
 
-function updateRankingWantedActions() {
-  for (const card of globalRankingList.querySelectorAll('[data-ranking-id]')) {
+function updateRankingWantedActions(list = globalRankingList) {
+  for (const card of list.querySelectorAll('[data-ranking-id]')) {
     const eligible = hasLoadedFullCatalog && currentSession && card.dataset.ownerUser !== currentSession.user.id && !ownsMinifigura(card.dataset.rankingId);
     const existing = card.querySelector('.ranking-add-wanted');
     if (!eligible) {
@@ -1209,20 +1218,20 @@ function formatRankingDisplayName(displayName) {
   return [firstName, ...rest.map((name) => `${Array.from(name)[0]}.`)].join(' ');
 }
 
-function setExpandedRankingUser(userId) {
-  expandedRankingUserId = expandedRankingUserId === userId ? null : userId;
-  for (const entry of globalRankingList.querySelectorAll('.global-ranking-entry')) {
-    const expanded = entry.dataset.userId === expandedRankingUserId;
+function setExpandedRankingUser(userId, list = globalRankingList) {
+  const isWeekly = list === weeklyRankingList;
+  const currentExpandedUserId = isWeekly ? expandedWeeklyRankingUserId : expandedRankingUserId;
+  const nextExpandedUserId = currentExpandedUserId === userId ? null : userId;
+  if (isWeekly) expandedWeeklyRankingUserId = nextExpandedUserId;
+  else expandedRankingUserId = nextExpandedUserId;
+  for (const entry of list.querySelectorAll('.global-ranking-entry')) {
+    const expanded = entry.dataset.userId === nextExpandedUserId;
     entry.querySelector('.ranking-expand').setAttribute('aria-expanded', String(expanded));
     entry.querySelector('.ranking-user-details').hidden = !expanded;
   }
 }
 
 function renderGlobalRanking() {
-  const focused = document.activeElement;
-  const focusedUserId = focused?.closest('.global-ranking-entry')?.dataset.userId;
-  const focusSelector = focused?.matches('.ranking-gift') ? '.ranking-gift' : '.ranking-expand';
-  const fragment = document.createDocumentFragment();
   const currentUserId = currentSession?.user?.id;
   const currentUserIndex = defaultRankingEntries.findIndex(({ userId }) => userId === currentUserId);
   rankingMainGlobe.hidden = currentUserIndex === -1;
@@ -1230,8 +1239,27 @@ function renderGlobalRanking() {
     ? '' : ['🥇', '🥈', '🥉'][currentUserIndex] ?? `#${currentUserIndex + 1}`;
   rankingMainGlobe.setAttribute('aria-label', currentUserIndex === -1
     ? 'En Top Global' : `En Top Global, posición ${currentUserIndex + 1}. Abrir Ranking Global`);
+  renderRankingRows({
+    entries: rankingEntries, list: globalRankingList, criterion: selectedRankingCriterion,
+    expandedUserId: expandedRankingUserId, dialog: rankingDialog, closeButton: rankingCloseButton,
+  });
+}
 
-  for (const [index, entry] of rankingEntries.entries()) {
+function renderWeeklyRanking() {
+  renderRankingRows({
+    entries: weeklyRankingEntries, list: weeklyRankingList, criterion: 'nivel',
+    expandedUserId: expandedWeeklyRankingUserId, dialog: weeklyRankingDialog,
+    closeButton: weeklyRankingCloseButton, weekly: true,
+  });
+}
+
+function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, closeButton, weekly = false }) {
+  const currentUserId = currentSession?.user?.id;
+  const focused = document.activeElement;
+  const focusedUserId = focused?.closest('.global-ranking-entry')?.dataset.userId;
+  const focusSelector = focused?.matches('.ranking-gift') ? '.ranking-gift' : '.ranking-expand';
+  const fragment = document.createDocumentFragment();
+  for (const [index, entry] of entries.entries()) {
     const article = document.createElement('article');
     article.className = 'global-ranking-entry';
     article.dataset.userId = entry.userId;
@@ -1266,7 +1294,8 @@ function renderGlobalRanking() {
     const bricks = document.createElement('span');
     bricks.className = 'gamification-bricks-value ranking-bricks';
     const bricksValue = document.createElement('strong');
-    bricksValue.textContent = entry.bricks;
+    bricksValue.textContent = weekly && entry.bricksSemanales > 0 ? `+${entry.bricksSemanales}`
+      : weekly ? String(entry.bricksSemanales) : entry.bricks;
     const brickIcon = document.createElement('img');
     brickIcon.className = 'gamification-brick-icon';
     brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
@@ -1287,7 +1316,7 @@ function renderGlobalRanking() {
     levelName.textContent = entry.nombreNivel;
     const dnaPrincipal = document.createElement('span');
     dnaPrincipal.className = 'ranking-dna-principal';
-    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(selectedRankingCriterion)) || !entry.dnaRasgos?.length
+    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
       ? entry.dnaPrincipal ?? 'Newbie'
       : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
         `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
@@ -1349,16 +1378,16 @@ function renderGlobalRanking() {
     article.append(row, details);
     fragment.append(article);
   }
-  globalRankingList.replaceChildren(fragment);
-  updateRankingWantedActions();
-  for (const article of globalRankingList.children) {
-    const expanded = article.dataset.userId === expandedRankingUserId;
+  list.replaceChildren(fragment);
+  updateRankingWantedActions(list);
+  for (const article of list.children) {
+    const expanded = article.dataset.userId === expandedUserId;
     article.querySelector('.ranking-expand').setAttribute('aria-expanded', String(expanded));
     article.querySelector('.ranking-user-details').hidden = !expanded;
   }
-  if (focusedUserId && rankingDialog.open) {
-    const entry = [...globalRankingList.children].find((item) => item.dataset.userId === focusedUserId);
-    (entry?.querySelector(focusSelector) ?? rankingCloseButton).focus();
+  if (focusedUserId && dialog.open) {
+    const entry = [...list.children].find((item) => item.dataset.userId === focusedUserId);
+    (entry?.querySelector(focusSelector) ?? closeButton).focus();
   }
 }
 
@@ -1400,6 +1429,35 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
       rankingStatus.className = 'status error';
     }
     return [];
+  }
+}
+
+async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) {
+  const sessionUserId = currentSession?.user?.id;
+  const requestId = ++weeklyRankingRequestId;
+  if (showState) {
+    weeklyRankingStatus.textContent = 'Cargando ranking...';
+    weeklyRankingStatus.className = 'status';
+    weeklyRankingList.replaceChildren();
+  }
+  try {
+    const response = await apiFetch('/api/ranking/semanal');
+    if (!response.ok) throw new Error('RANKING_SEMANAL_NO_DISPONIBLE');
+    const result = await response.json();
+    if (!result || typeof result.available !== 'boolean' || !Array.isArray(result.entries)) {
+      throw new Error('RANKING_SEMANAL_INVALIDO');
+    }
+    if (sessionUserId !== currentSession?.user?.id || requestId !== weeklyRankingRequestId) return;
+    weeklyRankingEntries = result.available ? result.entries : [];
+    renderWeeklyRanking();
+    weeklyRankingStatus.textContent = result.available ? '' : 'No disponible';
+    weeklyRankingStatus.className = 'status';
+  } catch {
+    if (sessionUserId !== currentSession?.user?.id || requestId !== weeklyRankingRequestId || !showState) return;
+    weeklyRankingEntries = [];
+    renderWeeklyRanking();
+    weeklyRankingStatus.textContent = 'No se pudo cargar el ranking semanal.';
+    weeklyRankingStatus.className = 'status error';
   }
 }
 
@@ -1804,10 +1862,15 @@ function openOwnAchievements(trigger) {
 }
 
 function restoreRankingFocus(trigger) {
-  if (!currentSession || !rankingDialog.open) return;
+  if (!currentSession) return;
+  const weekly = Boolean(trigger?.closest('#weekly-ranking-list'));
+  const dialog = weekly ? weeklyRankingDialog : rankingDialog;
+  const list = weekly ? weeklyRankingList : globalRankingList;
+  const closeButton = weekly ? weeklyRankingCloseButton : rankingCloseButton;
+  if (!dialog.open) return;
   const userId = trigger?.closest('.global-ranking-entry')?.dataset.userId ?? trigger?.dataset.ownerUser;
-  const entry = [...globalRankingList.children].find((item) => item.dataset.userId === userId);
-  const target = trigger?.isConnected ? trigger : entry?.querySelector('.ranking-expand') ?? rankingCloseButton;
+  const entry = [...list.children].find((item) => item.dataset.userId === userId);
+  const target = trigger?.isConnected ? trigger : entry?.querySelector('.ranking-expand') ?? closeButton;
   target.focus();
 }
 
@@ -2314,7 +2377,26 @@ rankingDialog.addEventListener('close', () => {
   if (currentSession) (rankingTrigger.hidden ? rankingOpenButton : rankingTrigger).focus();
 });
 
-globalRankingList.addEventListener('click', async (event) => {
+weeklyRankingOpenButton.addEventListener('click', () => {
+  weeklyRankingTrigger = weeklyRankingOpenButton;
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
+  weeklyRankingDialog.showModal();
+  expandedWeeklyRankingUserId = null;
+  weeklyRankingCloseButton.focus();
+  void loadWeeklyRanking();
+});
+
+weeklyRankingCloseButton.addEventListener('click', () => weeklyRankingDialog.close());
+weeklyRankingDialog.addEventListener('close', () => {
+  weeklyRankingRequestId += 1;
+  if (currentSession && weeklyRankingTrigger?.isConnected) weeklyRankingTrigger.focus();
+  weeklyRankingTrigger = null;
+});
+
+async function handleRankingListClick(event) {
+  const list = event.currentTarget;
+  const entries = list === weeklyRankingList ? weeklyRankingEntries : rankingEntries;
   const wanted = event.target.closest('[data-wanted-id]');
   if (wanted) {
     if (!hasLoadedFullCatalog || !currentSession || wanted.dataset.ownerUser === currentSession.user.id) return;
@@ -2323,14 +2405,14 @@ globalRankingList.addEventListener('click', async (event) => {
       showToast(messageForErrorCode('ID_DUPLICADO'), 'error');
       return;
     }
-    const entry = rankingEntries.find(({ userId }) => userId === wanted.dataset.ownerUser);
+    const entry = entries.find(({ userId }) => userId === wanted.dataset.ownerUser);
     const figure = [...(entry?.top5Precio ?? []), ...(entry?.top5Antiguedad ?? [])].find(({ id }) => id === wanted.dataset.wantedId);
     if (figure) openFormDialog('ranking-create', figure, wanted);
     return;
   }
   const expand = event.target.closest('.ranking-expand');
   if (expand) {
-    setExpandedRankingUser(expand.closest('.global-ranking-entry').dataset.userId);
+    setExpandedRankingUser(expand.closest('.global-ranking-entry').dataset.userId, list);
     return;
   }
   const gift = event.target.closest('[data-gift-user]');
@@ -2350,14 +2432,21 @@ globalRankingList.addEventListener('click', async (event) => {
       }
       throw new Error(result.error);
     }
-    await Promise.all([loadGlobalRanking(), loadGamification()]);
+    await Promise.all([
+      loadGlobalRanking({ showState: rankingDialog.open }),
+      loadWeeklyRanking({ showState: weeklyRankingDialog.open }),
+      loadGamification(),
+    ]);
     await loadGamificationDna();
     showToast('Regalo de 50 Bricks enviado.', 'success');
   } catch {
     gift.disabled = false;
     showToast('No se pudo enviar el regalo.', 'error');
   }
-});
+}
+
+globalRankingList.addEventListener('click', handleRankingListClick);
+weeklyRankingList.addEventListener('click', handleRankingListClick);
 
 userMenuToggle.addEventListener('click', () => {
   const expanded = userMenuToggle.getAttribute('aria-expanded') !== 'true';
@@ -2505,6 +2594,9 @@ document.addEventListener('keydown', (event) => {
   } else if (rankingDialog.open) {
     event.preventDefault();
     rankingDialog.close();
+  } else if (weeklyRankingDialog.open) {
+    event.preventDefault();
+    weeklyRankingDialog.close();
   }
 });
 
@@ -2784,6 +2876,12 @@ function clearUserData() {
   for (const button of rankingOrderButtons) button.setAttribute('aria-pressed', String(button.dataset.rankingCriterion === 'nivel'));
   rankingRequestId += 1;
   expandedRankingUserId = null;
+  weeklyRankingRequestId += 1;
+  weeklyRankingEntries = [];
+  expandedWeeklyRankingUserId = null;
+  weeklyRankingStatus.textContent = '';
+  weeklyRankingStatus.className = 'status';
+  weeklyRankingList.replaceChildren();
   rankingMainGlobe.hidden = true;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = '';
   rankingMainGlobe.setAttribute('aria-label', 'En Top Global');
@@ -2792,7 +2890,7 @@ function clearUserData() {
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog, analyticsHistoryDialog]) {
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog, weeklyRankingDialog, analyticsHistoryDialog]) {
     if (dialog.open) dialog.close();
   }
 }

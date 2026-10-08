@@ -1245,6 +1245,31 @@ $$;
 revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) from public, anon, authenticated;
 grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) to service_role;
 
+create or replace function private.ranking_semanal_contexto(p_instante timestamptz)
+returns table (
+  available boolean,
+  available_from date,
+  reference_date date,
+  week_start date,
+  week_end date
+)
+language sql
+stable
+security definer
+set search_path = pg_catalog, pg_temp
+as $$
+  with fecha_local as (
+    select (p_instante at time zone 'Europe/Madrid')::date as fecha
+  )
+  select
+    fecha >= date '2026-10-12',
+    date '2026-10-12',
+    fecha,
+    fecha - (extract(isodow from fecha)::integer - 1),
+    fecha - (extract(isodow from fecha)::integer - 1) + 6
+  from fecha_local;
+$$;
+
 create function public.ranking_global(p_criterio text default 'nivel')
 returns table (
   user_id uuid,
@@ -1364,6 +1389,158 @@ as $$
   left join public.perfiles_publicos p on p.user_id = top_users.user_id
   where auth.uid() is not null
   order by top_users.criterio_valor desc, coalesce((top_users.nivel->>'id')::integer, 0) desc, top_users.bricks desc, top_users.user_id asc;
+$$;
+
+create or replace function private.ranking_semanal_calcular(p_instante timestamptz)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_context record;
+  v_entries jsonb := '[]'::jsonb;
+begin
+  if auth.uid() is null then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+
+  select * into strict v_context
+  from private.ranking_semanal_contexto(p_instante);
+
+  if v_context.available then
+    with baselines as (
+      select snapshot.user_id, snapshot.bricks
+      from public.user_daily_snapshots snapshot
+      where snapshot.snapshot_date = v_context.week_start - 1
+    ), latest as (
+      select distinct on (snapshot.user_id)
+        snapshot.user_id, snapshot.bricks, snapshot.snapshot_date
+      from public.user_daily_snapshots snapshot
+      where snapshot.snapshot_date between v_context.week_start
+        and least(v_context.week_end, v_context.reference_date)
+      order by snapshot.user_id, snapshot.snapshot_date desc
+    ), candidates as (
+      select
+        latest.user_id,
+        latest.snapshot_date,
+        latest.bricks - baselines.bricks as bricks_semanales,
+        gamificacion.bricks,
+        gamificacion.nivel,
+        private.dna_calcular(latest.user_id) as dna,
+        (select count(*) from public.minifiguras figure
+          where figure.user_id = latest.user_id and figure.estado_coleccion = 'COLECCIÓN') as total_coleccion
+      from latest
+      join baselines on baselines.user_id = latest.user_id
+      join public.gamificacion gamificacion on gamificacion.user_id = latest.user_id
+      order by latest.bricks - baselines.bricks desc, latest.user_id asc
+      limit 10
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'userId', candidate.user_id,
+      'avatarUrl', profile.avatar_url,
+      'displayName', coalesce(profile.display_name, 'Coleccionista'),
+      'bricks', candidate.bricks,
+      'nivel', coalesce((candidate.nivel->>'id')::integer, 0),
+      'nombreNivel', coalesce(candidate.nivel->>'nombre', 'Duplo'),
+      'imagenNivel', case coalesce((candidate.nivel->>'id')::integer, 0)
+        when 3 then '/level_images/3_threesevenfive.png'
+        when 4 then '/level_images/4_citizen.png'
+        when 5 then '/level_images/5_skeleton.png'
+        when 6 then '/level_images/6_pirate.png'
+        when 7 then '/level_images/7_captain.png'
+        when 8 then '/level_images/8_redbearb.png'
+        when 9 then '/level_images/9_forestman.png'
+        when 10 then '/level_images/10_wolfpack.png'
+        when 11 then '/level_images/11_wolfpackmaster.png'
+        when 12 then '/level_images/12_ninja.png'
+        when 13 then '/level_images/13_rx.png'
+        when 14 then '/level_images/14_dragonform.png'
+        when 15 then '/level_images/15_spacebaby.jpg'
+        when 16 then '/level_images/16_spaceman.jpg'
+        when 17 then '/level_images/17_blacktron.png'
+        else '/level_images/9_forestman.png'
+      end,
+      'totalColeccion', candidate.total_coleccion,
+      'top5Precio', coalesce((
+        select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+          'id', ranked.id, 'nombre', ranked.nombre, 'precio', ranked.precio,
+          'categoria', ranked.categoria, 'subcategoria', ranked.subcategoria, 'anio', ranked.anio
+        )) order by ranked.position)
+        from (
+          select figure.id, figure.nombre, figure.precio, figure.categoria, figure.subcategoria, figure.anio,
+            row_number() over (order by figure.precio desc nulls last, figure.fecha_compra asc nulls last, figure.fecha_registro desc) as position
+          from public.minifiguras figure
+          where figure.user_id = candidate.user_id and figure.estado_coleccion = 'COLECCIÓN'
+          order by figure.precio desc nulls last, figure.fecha_compra asc nulls last, figure.fecha_registro desc
+          limit 5
+        ) ranked
+      ), '[]'::jsonb),
+      'top5Antiguedad', coalesce((
+        select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+          'id', ranked.id, 'nombre', ranked.nombre, 'anio', ranked.anio, 'precio', ranked.precio,
+          'categoria', ranked.categoria, 'subcategoria', ranked.subcategoria
+        )) order by ranked.position)
+        from (
+          select figure.id, figure.nombre, figure.anio, figure.precio, figure.categoria, figure.subcategoria,
+            row_number() over (order by figure.anio asc nulls last, figure.precio desc nulls last, figure.fecha_registro desc) as position
+          from public.minifiguras figure
+          where figure.user_id = candidate.user_id and figure.estado_coleccion = 'COLECCIÓN'
+          order by figure.anio asc nulls last, figure.precio desc nulls last, figure.fecha_registro desc
+          limit 5
+        ) ranked
+      ), '[]'::jsonb),
+      'regaloEnviado', exists (
+        select 1 from public.regalos_enviados gift
+        where gift.donante_id = auth.uid() and gift.receptor_id = candidate.user_id
+      ),
+      'dnaPrincipal', candidate.dna->>'principal',
+      'dnaRasgos', case when candidate.dna->>'principal' = 'Newbie' then '[]'::jsonb else coalesce((
+        select jsonb_agg(jsonb_build_object('nombre', ranked.nombre, 'porcentaje', ranked.porcentaje)
+          order by ranked.es_principal desc, ranked.porcentaje desc, ranked.ordinal)
+        from (
+          select trait.nombre, (candidate.dna->'porcentajes'->>trait.key)::numeric as porcentaje,
+            trait.nombre = candidate.dna->>'principal' as es_principal, trait.ordinal
+          from (values
+            ('rarityHunter', 'Rarity Hunter', 0),
+            ('explorer', 'Explorer', 1),
+            ('collector', 'Collector', 2),
+            ('fan', 'Fan', 3)
+          ) as trait(key, nombre, ordinal)
+          order by es_principal desc, porcentaje desc, trait.ordinal
+          limit 2
+        ) ranked
+      ), '[]'::jsonb) end,
+      'bricksSemanales', candidate.bricks_semanales,
+      'snapshotDate', candidate.snapshot_date
+    ) order by candidate.bricks_semanales desc, candidate.user_id asc), '[]'::jsonb)
+    into v_entries
+    from candidates candidate
+    left join public.perfiles_publicos profile on profile.user_id = candidate.user_id;
+  end if;
+
+  return jsonb_build_object(
+    'available', v_context.available and jsonb_array_length(v_entries) > 0,
+    'availableFrom', v_context.available_from,
+    'weekStart', v_context.week_start,
+    'weekEnd', v_context.week_end,
+    'entries', v_entries
+  );
+end;
+$$;
+
+create or replace function public.ranking_semanal()
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  return private.ranking_semanal_calcular(clock_timestamp());
+end;
 $$;
 
 create or replace function public.ranking_logros(p_usuario_id uuid)
@@ -1507,6 +1684,9 @@ as $$
 $$;
 
 revoke all on function public.ranking_global(text) from public, anon;
+revoke all on function public.ranking_semanal() from public, anon;
+revoke all on function private.ranking_semanal_contexto(timestamptz) from public, anon, authenticated;
+revoke all on function private.ranking_semanal_calcular(timestamptz) from public, anon, authenticated;
 revoke all on function public.ranking_logros(uuid) from public, anon;
 revoke all on function public.regalar_bricks(uuid) from public, anon;
 revoke all on function public.regalos_recibidos_count() from public, anon;
@@ -1514,6 +1694,7 @@ revoke all on function private.dna_calcular(uuid) from public, anon, authenticat
 revoke all on function public.gamificacion_dna() from public, anon;
 revoke all on table public.dna_ponderaciones from public, anon, authenticated;
 grant execute on function public.ranking_global(text) to authenticated;
+grant execute on function public.ranking_semanal() to authenticated;
 grant execute on function public.ranking_logros(uuid) to authenticated;
 grant execute on function public.regalar_bricks(uuid) to authenticated;
 grant execute on function public.regalos_recibidos_count() to authenticated;

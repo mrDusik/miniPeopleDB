@@ -14,7 +14,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **Sincronización Brickset:** consulta individual de categoría, subcategoría, año y precio; actualización masiva del precio en segundo plano, con progreso, pausa/reanudación, resultados parciales, límite global de peticiones y tratamiento de `429 Retry-After`.
 * **Gamificación:** Bricks, niveles, progreso y logros calculados a partir del inventario y el catálogo de categorías. Los regalos recibidos se conservan al recalcular la parte derivada de la colección.
 * **DNA de colección:** cuatro rasgos (Rarity Hunter, Collector, Explorer y Fan), porcentajes privados para el usuario y un resumen público limitado al rasgo principal.
-* **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
+* **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA, más un Top 10 semanal de Bricks netos; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
 * **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
 * **Analítica histórica:** capturas diarias privadas de valor, figuras, Bricks, nivel y DNA; gráficas y tablas accesibles sin reconstruir días ausentes.
 
@@ -65,6 +65,7 @@ Las rutas de colección, gamificación e histórico propio requieren `Authorizat
 | `/sincronizacion/brickset` | `GET`, `POST`, `PATCH` | Autenticado | Consultar/iniciar tarea y pausar/reanudarla |
 | `/gamificacion` y `/gamificacion/dna` | `GET` | Autenticado | Estado propio de gamificación y DNA |
 | `/api/ranking` | `GET` | Autenticado | Top 10 global con criterio opcional |
+| `/api/ranking/semanal` | `GET` | Autenticado | Top 10 de Bricks netos de la semana actual |
 | `/api/ranking/:userId/logros` | `GET` | Autenticado | Logros públicos del Top 10 |
 | `/api/ranking/regalar` | `POST` | Autenticado | Enviar regalo único de Bricks |
 | `/api/cron/daily-sync` | `POST` | `CRON_SECRET` | Iniciar o reutilizar un trabajo durable; devuelve `202` antes de terminar |
@@ -82,6 +83,16 @@ El worker procesa todas las cuentas de Supabase Auth, también las que no tienen
 El proceso ocurre en fases: (1) al recibir el POST, fija la fecha de Madrid y persiste el roster de Auth y los IDs distintos de sus inventarios; (2) copia al inventario los precios cacheados con hasta 24 horas y marca esos IDs completados sin llamar a Brickset; (3) consulta secuencialmente solo los IDs ausentes o caducados, guarda cada resultado válido en la caché y checkpoint, y conserva el valor anterior si falla; (4) cuando termina la fase de precios, recalcula cada usuario con sus figuras y regalos y confirma gamificación, DNA, snapshot y checkpoint en una transacción; (5) publica `completed` solo cuando todos los usuarios elegibles están capturados. Las escrituras tardan como mínimo unos 9 segundos por cada ID que realmente requiere consulta externa, más la latencia y posibles esperas de `Retry-After`; por ejemplo, 329 IDs caducados implican al menos unos 49 minutos. Un segundo run con esos precios aún frescos evita esas consultas. Los heartbeats renuevan el lease durante la espera y el worker recupera checkpoints tras reiniciar.
 
 `GET /api/analytics/history?from=YYYY-MM-DD&to=YYYY-MM-DD` usa el JWT normal y solo consulta el propio historial mediante RLS. Si se omiten fechas, `to` es hoy en Madrid y `from` son los 89 días anteriores; el máximo inclusivo es 366 días. Devuelve snapshots existentes en orden ascendente y el último baseline propio anterior al rango. Los días ausentes no se inventan: el cambio neto solo se calcula contra una medición del día calendario anterior, admite descensos y no representa altas brutas. El nivel es el identificador numérico vigente y puede disminuir; cuatro porcentajes DNA cero permanecen cero. Los cambios posteriores de pesos no reescriben snapshots históricos.
+
+### Ranking semanal de Bricks
+
+`GET /api/ranking/semanal` requiere JWT y no acepta parámetros para elegir usuario, fecha, semana o criterio. Devuelve `{ available, availableFrom, weekStart, weekEnd, entries }`; cada entrada conserva el saldo global `bricks` y añade `bricksSemanales` y `snapshotDate`. La proyección pública reutiliza nivel, perfil, destacados, DNA acotado y estado de regalo del ranking global; no incluye la base semanal, snapshots completos, compras ni correos. Los errores de lectura responden `500 RANKING_SEMANAL_NO_DISPONIBLE`; una consulta válida sin candidatos comparables responde `200` con `available: false` y `entries: []`.
+
+La activación es fija para el lunes **2026-10-12** en `Europe/Madrid`. El primer resultado necesita tanto el snapshot de base del domingo **2026-10-11** como una captura de la semana que empieza el lunes. Cada semana compara el snapshot disponible más reciente de lunes a domingo con la fila exacta del domingo anterior; no sustituye bases ausentes por cero ni reutiliza fechas anteriores. Se conservan deltas positivos, cero y negativos. Son diferencias entre estados medidos por el worker, no un registro de actividad ni un corte simultáneo exacto a medianoche; regalos y cambios de precio o reglas pueden formar parte del neto cuando aparezcan en las capturas.
+
+El cambio de esquema es aditivo y el worker diario no cambia. Antes de desplegar el código, una persona autorizada debe aplicar `supabase/schema.sql` al proyecto Supabase destino y verificar RPC, permisos y RLS. Tener el archivo local actualizado no aplica el esquema remoto. No se configura ni modifica el proveedor cron: confirma por separado que seguirá generando las capturas diarias y que la del domingo 2026-10-11 se completará. Para rollback, retirar la ruta y el acceso de interfaz y revocar la RPC semanal y sus helpers cuando ya no tengan consumidores; conservar los snapshots existentes y el ranking global.
+
+La comprobación visual local usó respuestas fixture interceptadas, sin modificar colecciones: Playwright verificó accesos y criterios en 390×844, 800×1100, 844×390 y 1280×900; los modales global y semanal conservaron iguales dimensiones y tipografía, con filas y destacados expandidos. La consulta semanal mostró el delta firmado y `No disponible` antes del estreno, sin scroll horizontal en portrait. Estas pruebas no aplican el esquema remoto ni sustituyen verificar allí los grants/RLS o confirmar el snapshot del domingo.
 
 ---
 

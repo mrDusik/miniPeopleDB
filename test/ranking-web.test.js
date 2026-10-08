@@ -30,7 +30,7 @@ function entry(overrides = {}) {
   };
 }
 
-function installFetch(window, ranking, orderedRankings = {}) {
+function installFetch(window, ranking, orderedRankings = {}, weeklyResult = { available: false, entries: [] }) {
   const calls = [];
   window.fetch = async (url, options = {}) => {
     calls.push({ url, options });
@@ -39,15 +39,213 @@ function installFetch(window, ranking, orderedRankings = {}) {
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] }) };
     if (url === '/api/ranking/regalar') {
-      ranking.find(({ userId }) => userId === JSON.parse(options.body).receptorId).regaloEnviado = true;
+      const receiverId = JSON.parse(options.body).receptorId;
+      ranking.find(({ userId }) => userId === receiverId).regaloEnviado = true;
+      const weeklyReceiver = weeklyResult.entries?.find(({ userId }) => userId === receiverId);
+      if (weeklyReceiver) weeklyReceiver.regaloEnviado = true;
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
+    if (url === '/api/ranking/semanal') return { ok: true, status: 200, json: async () => structuredClone(weeklyResult) };
     if (url === '/api/ranking') return { ok: true, status: 200, json: async () => structuredClone(ranking) };
     if (url.startsWith('/api/ranking?')) return { ok: true, status: 200, json: async () => structuredClone(orderedRankings[new URL(url, 'http://localhost').searchParams.get('criterio')] ?? ranking) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
   return calls;
 }
+
+test('el acceso y el dialogo semanal tienen semantica propia y reutilizan la estructura visual global', () => {
+  const dom = createDom();
+  const launcher = dom.window.document.querySelector('#open-weekly-ranking');
+  const globalLauncher = dom.window.document.querySelector('#open-global-ranking');
+  const dialog = dom.window.document.querySelector('#weekly-ranking-dialog');
+  assert.equal(launcher.parentElement, globalLauncher.parentElement);
+  assert.equal(launcher.textContent.trim(), '🗓️ Ranking Semanal');
+  assert.equal(launcher.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(launcher.getAttribute('aria-controls'), dialog.id);
+  assert.equal(dialog.getAttribute('aria-labelledby'), 'weekly-ranking-title');
+  assert.equal(dialog.querySelector('#weekly-ranking-title').textContent, 'Ranking Semanal');
+  assert.ok(dialog.querySelector('#weekly-ranking-close'));
+  assert.equal(dialog.querySelector('#weekly-ranking-status').getAttribute('aria-live'), 'polite');
+  assert.equal(dialog.querySelector('#weekly-ranking-list').className, 'global-ranking-list');
+  assert.equal(dialog.querySelectorAll('[data-ranking-criterion]').length, 0);
+  assert.ok(dialog.classList.contains('modal-ranking'));
+  dom.window.close();
+});
+
+test('abre y cierra el dialogo semanal de forma independiente y restaura el foco al acceso', async () => {
+  const dom = createDom();
+  const calls = installFetch(dom.window, [entry({ userId: 'user-a' })], {}, {
+    available: true, entries: [entry({ bricksSemanales: 125 })],
+  });
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const launcher = dom.window.document.querySelector('#open-weekly-ranking');
+  launcher.click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const dialog = dom.window.document.querySelector('#weekly-ranking-dialog');
+  assert.equal(dialog.open, true);
+  assert.equal(dom.window.document.activeElement.id, 'weekly-ranking-close');
+  assert.equal(dom.window.document.querySelector('#weekly-ranking-status').textContent, '');
+  assert.equal(dom.window.document.querySelector('#weekly-ranking-list .ranking-bricks strong').textContent, '+125');
+  assert.equal(dom.window.document.querySelectorAll('#weekly-ranking-dialog [data-ranking-criterion]').length, 0);
+
+  dom.window.document.querySelector('#weekly-ranking-close').click();
+  assert.equal(dialog.open, false);
+  assert.equal(dom.window.document.activeElement, launcher);
+  launcher.click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(calls.filter(({ url }) => url === '/api/ranking/semanal').length, 2);
+  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert.equal(dialog.open, false);
+  assert.equal(dom.window.document.activeElement, launcher);
+  assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
+  dom.window.close();
+});
+
+test('distingue No disponible de error y vuelve a consultar el semanal al reabrir', async () => {
+  const dom = createDom();
+  const weeklyResult = { available: false, entries: [] };
+  const calls = installFetch(dom.window, [entry({ userId: 'user-a' })], {}, weeklyResult);
+  const originalFetch = dom.window.fetch;
+  let failWeekly = false;
+  let weeklyCalls = 0;
+  dom.window.fetch = (url, options) => {
+    if (url === '/api/ranking/semanal') weeklyCalls += 1;
+    return url === '/api/ranking/semanal' && failWeekly
+      ? Promise.resolve({ ok: false, status: 500, json: async () => ({ error: 'RANKING_SEMANAL_NO_DISPONIBLE' }) })
+      : originalFetch(url, options);
+  };
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  const launcher = document.querySelector('#open-weekly-ranking');
+  launcher.click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-status').textContent, 'No disponible');
+  assert.equal(document.querySelector('#weekly-ranking-status').className, 'status');
+  assert.equal(document.querySelectorAll('#weekly-ranking-list .global-ranking-entry').length, 0);
+
+  document.querySelector('#weekly-ranking-close').click();
+  failWeekly = true;
+  launcher.click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-status').textContent, 'No se pudo cargar el ranking semanal.');
+  assert.equal(document.querySelector('#weekly-ranking-status').className, 'status error');
+  assert.equal(document.querySelectorAll('#weekly-ranking-list .global-ranking-entry').length, 0);
+  assert.equal(weeklyCalls, 2);
+  dom.window.close();
+});
+
+test('ignora respuestas semanales obsoletas al cerrar, reabrir y cerrar sesion', async () => {
+  const dom = createDom();
+  installFetch(dom.window, [entry({ userId: 'user-a' })]);
+  const originalFetch = dom.window.fetch;
+  const pendingWeekly = [];
+  dom.window.fetch = (url, options) => url === '/api/ranking/semanal'
+    ? new Promise((resolve) => pendingWeekly.push(resolve))
+    : originalFetch(url, options);
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  const launcher = document.querySelector('#open-weekly-ranking');
+  launcher.click();
+  document.querySelector('#weekly-ranking-close').click();
+  launcher.click();
+  const response = (name) => ({
+    ok: true, status: 200,
+    json: async () => ({ available: true, entries: [entry({ userId: name, displayName: name, bricksSemanales: 30 })] }),
+  });
+  pendingWeekly[0](response('stale-user'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-list .global-ranking-entry'), null);
+  pendingWeekly[1](response('current-user'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-list .global-ranking-entry').dataset.userId, 'current-user');
+
+  document.querySelector('#weekly-ranking-close').click();
+  launcher.click();
+  dom.window.__supabaseStub.setSession('SIGNED_OUT', null);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  pendingWeekly[2](response('previous-account'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-dialog').open, false);
+  assert.equal(document.querySelectorAll('#weekly-ranking-list .global-ranking-entry').length, 0);
+  assert.equal(document.querySelector('#weekly-ranking-status').textContent, '');
+  dom.window.close();
+});
+
+test('las filas semanales conservan el orden y los deltas firmados sin cambiar el estado global', async () => {
+  const dom = createDom();
+  const global = [entry({ userId: 'user-a', bricks: 300 }), entry({ userId: 'user-b', bricks: 200 })];
+  const weekly = [
+    entry({ userId: 'user-a', bricks: 300, bricksSemanales: -25, totalColeccion: 3 }),
+    entry({ userId: 'user-b', bricks: 200, bricksSemanales: 0 }),
+    entry({ userId: 'user-c', bricks: 50, bricksSemanales: 75 }),
+  ];
+  installFetch(dom.window, global, { fan: [global[1], global[0]] }, { available: true, entries: weekly });
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  dom.window.document.querySelector('[data-ranking-criterion="fan"]').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const globalPosition = dom.window.document.querySelector('#ranking-main-position').textContent;
+  dom.window.document.querySelector('#ranking-close').click();
+
+  dom.window.document.querySelector('#open-weekly-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const weeklyRows = [...dom.window.document.querySelectorAll('#weekly-ranking-list .global-ranking-entry')];
+  assert.deepEqual(weeklyRows.map(({ dataset }) => dataset.userId), ['user-a', 'user-b', 'user-c']);
+  assert.deepEqual(weeklyRows.map((row) => row.querySelector('.ranking-bricks strong').textContent), ['-25', '0', '+75']);
+  assert.equal(weeklyRows[0].querySelector('.ranking-collection-count strong').textContent, '3');
+  assert.equal(weeklyRows[0].querySelector('.ranking-avatar').getAttribute('src'), 'https://example.com/b.png');
+  assert.equal(weeklyRows[0].querySelector('.ranking-level-number').textContent, '4');
+  weeklyRows[1].querySelector('.ranking-expand').click();
+  assert.equal(weeklyRows[1].querySelector('.ranking-user-details').hidden, false);
+  assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, globalPosition);
+
+  dom.window.document.querySelector('#weekly-ranking-close').click();
+  dom.window.document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(dom.window.document.querySelector('[data-ranking-criterion="fan"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, globalPosition);
+  dom.window.close();
+});
+
+test('el modal semanal reutiliza destacados y buscadas, y los regalos no alteran el delta medido', async () => {
+  const dom = createDom();
+  const global = [entry({ userId: 'user-a' }), entry({ userId: 'user-b' })];
+  const weekly = [
+    entry({ userId: 'user-a', bricksSemanales: 20 }),
+    entry({ userId: 'user-b', bricksSemanales: 80, top5Precio: [{ id: 'WEEK-FIG', nombre: 'Weekly figure', precio: 50 }] }),
+  ];
+  const calls = installFetch(dom.window, global, {}, { available: true, entries: weekly });
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#open-weekly-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const row = document.querySelector('#weekly-ranking-list [data-user-id="user-b"]');
+  row.querySelector('.ranking-expand').click();
+  assert.equal(row.querySelector('.ranking-user-details').hidden, false);
+  const wanted = row.querySelector('.ranking-add-wanted');
+  assert.ok(wanted);
+  wanted.click();
+  assert.equal(document.querySelector('#form-dialog').open, true);
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert.equal(document.activeElement, wanted);
+
+  row.querySelector('.ranking-gift').click();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const refreshedRow = document.querySelector('#weekly-ranking-list [data-user-id="user-b"]');
+  assert.equal(refreshedRow.querySelector('.ranking-gift').disabled, true);
+  assert.equal(refreshedRow.querySelector('.ranking-bricks strong').textContent, '+80');
+  assert.equal(weekly.find(({ userId }) => userId === 'user-b').bricks, 200);
+  assert.equal(calls.filter(({ url, options }) => url === '/api/ranking/regalar' && options.method === 'POST').length, 1);
+  assert.ok(calls.some(({ url }) => url === '/api/ranking'));
+  assert.ok(calls.filter(({ url }) => url === '/api/ranking/semanal').length >= 2);
+  dom.window.close();
+});
 
 test('el selector encima de los regalos solicita cada criterio y conserva la posicion principal por nivel', async () => {
   const dom = createDom();
@@ -117,10 +315,12 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
   assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
   assert.match(styles, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
+  assert.match(styles, /\.summary-ranking-row \.summary-ranking-link \{ flex: 1 1 0; min-width: 0; white-space: normal; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.achievements-heading \{ display: flex; align-items: center;/);
   assert.match(styles, /\.achievements-heading-text \{ min-width: 0; \}/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
+  assert.match(styles, /#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty \{ display: none; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
   assert.doesNotMatch(styles, /\.modal-ranking \{[^}]*border-top:/);
   assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ min-width: 252px; \}/);
@@ -137,7 +337,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
-  assert.match(styles, /@media \(orientation: portrait\) \{[^}]*\.ranking-order-toolbar \{ min-width: 0; max-width: 100%; overflow-x: auto; \}[^}]*\.ranking-criteria \{ display: flex; flex: 0 0 max-content; flex-wrap: nowrap; \}[^}]*\.ranking-criteria \.button \{ flex: 0 0 auto; white-space: nowrap; \}/);
+  assert.match(styles, /@media \(orientation: portrait\) \{[^}]*\.ranking-order-toolbar \{ display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; \}[^}]*\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: 4px; \}[^}]*#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; \}/);
+  assert.match(styles, /@media \(min-width: 761px\) and \(orientation: portrait\) \{\s*\.ranking-criteria \{ grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); \}/);
   assert.match(styles, /\.ranking-user-details \{ width: 100%; min-width: 0; max-width: 100%; margin-right: 0; \}/);
   assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);

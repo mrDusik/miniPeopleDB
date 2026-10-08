@@ -565,7 +565,7 @@ Los dos hitos SHALL tener como descripción `Añadir una minifigura que suponga 
 
 ### Requirement: Calcular DNA propio dinamico y retroactivo
 
-El sistema SHALL calcular DNA en Supabase mediante una consulta dinamica sobre los logros obtenidos y sus cantidades actuales, sin almacenar porcentajes derivados ni calcular pesos en el cliente. Cada contribucion SHALL ser cantidad por peso del caracter, sin multiplicar por Bricks o total de Bricks. Las proporciones SHALL ser 100 por la suma de contribuciones de un caracter dividida por la suma de contribuciones de los cuatro caracteres. Los logros de coleccion SHALL tener los siguientes pesos privados, con suma 100 por fila; `someone-liked-your-collection` SHALL ser la unica excepcion confirmada con pesos cero y SHALL NOT contribuir a sumas ni denominador. Un identificador desconocido SHALL NOT recibir pesos inventados ni diluir el denominador. Nuevos logros de coleccion SHALL requerir una ponderacion de suma 100 antes de habilitarse para DNA.
+El sistema SHALL calcular DNA actual en Supabase mediante una consulta dinamica sobre los logros obtenidos y sus cantidades actuales, sin almacenar porcentajes derivados como fuente del estado actual ni calcular pesos en el cliente. La unica excepcion de almacenamiento SHALL ser la medicion diaria privada de `analitica-historica`, que conserva porcentajes agregados a la fecha de captura, no sustituye la consulta dinamica y no se reescribe retroactivamente por cambios de ponderaciones. Cada contribucion SHALL ser cantidad por peso del caracter, sin multiplicar por Bricks o total de Bricks. Las proporciones SHALL ser 100 por la suma de contribuciones de un caracter dividida por la suma de contribuciones de los cuatro caracteres. Los logros de coleccion SHALL tener los siguientes pesos privados, con suma 100 por fila; `someone-liked-your-collection` SHALL ser la unica excepcion confirmada con pesos cero y SHALL NOT contribuir a sumas ni denominador. Un identificador desconocido SHALL NOT recibir pesos inventados ni diluir el denominador. Nuevos logros de coleccion SHALL requerir una ponderacion de suma 100 antes de habilitarse para DNA.
 
 | Logro | Rarity Hunter | Collector | Explorer | Fan |
 | --- | --- | --- | --- | --- |
@@ -616,11 +616,12 @@ El resultado SHALL reflejar los registros historicos de pruebas y produccion des
 
 #### Scenario: Actualizar cantidades
 - **WHEN** una alta, edicion, eliminacion, cambio de estado o sincronizacion modifica logros de coleccion y se confirma el recalculo
-- **THEN** el siguiente refresco muestra el DNA correspondiente sin persistir porcentajes calculados previamente
+- **THEN** el siguiente refresco muestra el DNA correspondiente sin reutilizar porcentajes calculados previamente como fuente del estado actual
 
 #### Scenario: Cambios en las ponderaciones
 - **WHEN** se inserta, modifica o elimina una fila de `dna_ponderaciones`
 - **THEN** la siguiente consulta DNA y Ranking Global de todos los usuarios refleja las ponderaciones vigentes sin backfill ni recalculo de logros
+- **AND** las mediciones de dias anteriores conservan los porcentajes capturados
 
 ### Requirement: Seleccionar caracter principal sin ambiguedad
 
@@ -699,3 +700,51 @@ El modal DNA SHALL conservar la linea grafica de los modales existentes y repres
 - **WHEN** se cierra DNA con Cerrar o Escape, o termina la sesion durante una consulta
 - **THEN** el cierre devuelve foco al disparador valido y el cambio de sesion limpia el modal
 - **AND** una respuesta obsoleta no modifica el DNA de la nueva cuenta ni la vista de logros abierta
+
+### Requirement: Consultar evolucion propia en un modal historico
+
+La interfaz SHALL ofrecer al usuario autenticado un boton `📈 Progreso` con tooltip accesible, del mismo ancho y altura que `Logros` y `DNA`, en la misma fila que esos controles; SHALL NOT mostrar un panel historico independiente en la pantalla principal. El boton SHALL abrir un modal consistente con los actuales titulado `Progreso`, con selector segmentado de 30, 90 o 365 dias, 90 por defecto, sin selectores Desde/Hasta ni boton Aplicar. SHALL consultar solo la API historica propia al abrir o cambiar rango, representar carga, error con reintento y estado vacio, descartar respuestas obsoletas y limpiar datos y graficos al terminar la sesion. Cerrar por boton o Escape SHALL devolver foco al disparador valido. SHALL ajustarse a escritorio y movil sin solapamientos ni scroll horizontal, permitiendo scroll vertical interno. Los valores ausentes en tooltips y tablas SHALL mostrarse como `Sin datos`, conservando huecos y sin convertirlos en ceros.
+
+#### Scenario: Abrir y cambiar rango
+- **WHEN** el usuario abre Progreso y cambia de 90 a 30 dias
+- **THEN** el modal consulta el rango seleccionado y una respuesta anterior tardia no sustituye la vista nueva
+
+#### Scenario: Historico vacio o fallido
+- **WHEN** la API devuelve cero snapshots o falla
+- **THEN** el modal muestra respectivamente estado vacio o error con reintento, sin inventar datos ni conservar los de una cuenta previa
+
+#### Scenario: Cerrar o cambiar cuenta
+- **WHEN** se cierra el modal o finaliza la sesion durante la carga
+- **THEN** se invalidan respuestas pendientes, se liberan los graficos y al cerrar se restaura el foco cuando corresponde
+
+### Requirement: Representar valor y cambio neto de coleccion
+
+El modal SHALL mostrar linea de valor total EUR y barras de cambio neto de figuras en ejes separados y etiquetados. El cambio SHALL ser total actual menos total del dia inmediatamente anterior, usando `baseline` para el inicio del rango cuando corresponda; SHALL admitir valores negativos. Sin snapshot del dia anterior SHALL mostrar cambio no disponible, no cero ni una incorporacion ficticia. Las fechas ausentes SHALL mostrarse como huecos, sin interpolar ni repartir cambios entre dias. SHALL permitir inspeccionar fecha, EUR, total de figuras y cambio neto mediante tooltip y alternativa tabular accesible.
+
+#### Scenario: Perdida de figuras
+- **WHEN** dos dias consecutivos tienen 12 y 9 figuras
+- **THEN** el segundo muestra barra de cambio neto -3 y su valor EUR correspondiente
+
+#### Scenario: Baseline y huecos
+- **WHEN** el rango tiene un baseline del dia anterior al primero, y mas adelante falta un dia
+- **THEN** la primera barra usa ese baseline y el dia posterior al hueco no inventa un cambio diario
+
+### Requirement: Representar evolucion historica de DNA
+
+El modal SHALL mostrar areas apiladas sobre un eje fijo de 0 a 100 para Collector azul, Explorer rojo, Rarity Hunter amarillo y Fan verde, conservando colores actuales y nombres en leyenda accesible. SHALL usar exclusivamente porcentajes historicos devueltos, sin exponer pesos ni recalcularlos en el cliente. Cuatro ceros SHALL representar ausencia de contribuciones, no normalizarse a una personalidad inventada. Dias ausentes SHALL cortar las series. La inspeccion por fecha SHALL informar los cuatro porcentajes guardados y SHALL tolerar el redondeo de captura sin modificar los valores.
+
+#### Scenario: Composicion historica y Newbie
+- **WHEN** hay un snapshot con cuatro porcentajes positivos y otro con cuatro ceros
+- **THEN** el primero muestra areas proporcionales con los colores definidos y el segundo muestra ausencia de contribuciones
+
+### Requirement: Representar Bricks y nivel historicos
+
+El modal SHALL mostrar Bricks y nivel en series temporales con escalas independientes, etiquetas claras y nivel entero escalonado. SHALL permitir descensos conforme a las reglas vigentes, nivel inicial cero y un unico punto cuando solo exista una medicion, sin imponer crecimiento monotono ni inventar estados intermedios. Fechas, Bricks y nivel SHALL estar disponibles mediante tooltip y alternativa tabular accesible.
+
+#### Scenario: Progresion no monotona
+- **WHEN** el historico registra descenso de Bricks y nivel tras retirar una figura
+- **THEN** ambas series reflejan el descenso y mantienen las fechas originales
+
+#### Scenario: Una sola medicion
+- **WHEN** el rango contiene un unico snapshot
+- **THEN** los tres graficos muestran una medicion inspeccionable sin errores ni puntos ficticios

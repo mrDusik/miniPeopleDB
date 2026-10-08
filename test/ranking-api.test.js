@@ -6,11 +6,11 @@ import { TEST_TOKEN, OTHER_TOKEN, authFetch, startTestServer } from '../test-sup
 const RANKING_USER = { id: '00000000-0000-4000-8000-00000000000a', email: 'a@example.com' };
 const OTHER_RANKING_USER = { id: '00000000-0000-4000-8000-00000000000b', email: 'b@example.com' };
 
-function rankingSupabase() {
+function rankingSupabase({ now } = {}) {
   const supabase = createSupabaseMock({ users: {
     [TEST_TOKEN]: { ...RANKING_USER, user_metadata: { full_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' } },
     [OTHER_TOKEN]: { ...OTHER_RANKING_USER, user_metadata: { name: 'Grace Google', avatar_url: 'https://example.com/grace.png' } },
-  } });
+  }, ...(now ? { now } : {}) });
   supabase.seed('gamificacion', RANKING_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
   supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] }]);
   supabase.seed('perfiles_publicos', OTHER_RANKING_USER.id, [{ display_name: 'Grace', avatar_url: 'https://example.com/grace.png' }]);
@@ -85,6 +85,57 @@ test('GET /api/ranking exige autenticación y devuelve solo el contrato público
     assert.deepEqual(context.supabase.rows('perfiles_publicos', RANKING_USER.id).map(({ display_name, avatar_url }) => ({ display_name, avatar_url })), [
       { display_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' },
     ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test('GET /api/ranking/semanal protege la lectura, fija el calendario y distingue disponibilidad de errores', async () => {
+  let currentTime = '2026-10-08T12:00:00Z';
+  const supabase = rankingSupabase({ now: () => new Date(currentTime) });
+  const context = await startTestServer({ supabase });
+  const get = authFetch(TEST_TOKEN);
+  const path = `${context.baseUrl}/api/ranking/semanal`;
+  try {
+    assert.equal((await fetch(path)).status, 401);
+    const wrongMethod = await get(path, { method: 'POST' });
+    assert.equal(wrongMethod.status, 405);
+    assert.equal(wrongMethod.headers.get('allow'), 'GET');
+    for (const query of ['userId=any', 'date=2026-10-12', 'week=2026-10-12', 'criterio=nivel']) {
+      const invalid = await get(`${path}?${query}`);
+      assert.equal(invalid.status, 400);
+      assert.deepEqual(await invalid.json(), { error: 'PARAMETRO_INVALIDO' });
+    }
+
+    const beforeLaunch = await get(path);
+    assert.equal(beforeLaunch.status, 200);
+    assert.deepEqual(await beforeLaunch.json(), {
+      available: false, availableFrom: '2026-10-12', weekStart: '2026-10-05', weekEnd: '2026-10-11', entries: [],
+    });
+
+    currentTime = '2026-10-12T08:00:00Z';
+    const mondayWithoutCapture = await get(path);
+    assert.equal((await mondayWithoutCapture.json()).available, false);
+    supabase.seed('user_daily_snapshots', OTHER_RANKING_USER.id, [
+      { snapshot_date: '2026-10-11', bricks: 100 },
+      { snapshot_date: '2026-10-12', bricks: 250 },
+    ]);
+    const available = await get(path);
+    assert.equal(available.status, 200);
+    const weekly = await available.json();
+    assert.equal(weekly.available, true);
+    assert.equal(weekly.entries[0].userId, OTHER_RANKING_USER.id);
+    assert.equal(weekly.entries[0].bricksSemanales, 150);
+    assert.equal(weekly.entries[0].bricks, 200);
+    assert.equal(weekly.entries[0].snapshotDate, '2026-10-12');
+
+    supabase.failNext('ranking_semanal', { message: 'secret storage details' });
+    const failed = await get(path);
+    assert.equal(failed.status, 500);
+    assert.deepEqual(await failed.json(), { error: 'RANKING_SEMANAL_NO_DISPONIBLE' });
+    assert.deepEqual(supabase.adminCalls(), []);
+    const unchangedGlobal = await get(`${context.baseUrl}/api/ranking`);
+    assert.equal(unchangedGlobal.status, 200);
   } finally {
     await context.close();
   }

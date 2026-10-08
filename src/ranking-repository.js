@@ -22,6 +22,14 @@ export class RankingNoDisponibleError extends Error {
   }
 }
 
+export class RankingSemanalNoDisponibleError extends Error {
+  constructor() {
+    super('El ranking semanal no esta disponible');
+    this.name = 'RankingSemanalNoDisponibleError';
+    this.code = 'RANKING_SEMANAL_NO_DISPONIBLE';
+  }
+}
+
 export class AutorregaloNoPermitidoError extends Error {
   constructor() {
     super('No se puede regalar al usuario autenticado');
@@ -57,6 +65,18 @@ function publicName(user) {
   const metadata = user?.user_metadata ?? {};
   const name = metadata.full_name || metadata.name;
   return typeof name === 'string' && name.trim() ? name.trim() : 'Coleccionista';
+}
+
+function isCalendarDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function finiteNumber(value) {
+  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export class RankingRepository {
@@ -104,6 +124,66 @@ export class RankingRepository {
       dnaPrincipal: row.dna_principal,
       dnaRasgos: (row.dna_rasgos ?? []).slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
     }));
+  }
+
+  async weekly() {
+    const failure = () => new RankingSemanalNoDisponibleError();
+    const data = await this.run(this.client.rpc('ranking_semanal'), failure);
+    if (!data || typeof data !== 'object'
+      || typeof data.available !== 'boolean'
+      || data.availableFrom !== '2026-10-12'
+      || !isCalendarDate(data.weekStart)
+      || !isCalendarDate(data.weekEnd)
+      || !Array.isArray(data.entries)
+      || data.entries.length > 10
+      || (!data.available && data.entries.length !== 0)
+      || (data.available && data.entries.length === 0)) throw failure();
+
+    const entries = data.entries.map((row) => {
+      const bricks = finiteNumber(row?.bricks);
+      const nivel = finiteNumber(row?.nivel);
+      const totalColeccion = finiteNumber(row?.totalColeccion);
+      const bricksSemanales = finiteNumber(row?.bricksSemanales);
+      if (!row || typeof row.userId !== 'string' || !row.userId
+        || !Number.isInteger(bricks) || bricks < 0
+        || !Number.isInteger(nivel) || nivel < 0
+        || !Number.isInteger(totalColeccion) || totalColeccion < 0
+        || !Number.isInteger(bricksSemanales)
+        || typeof row.displayName !== 'string'
+        || typeof row.nombreNivel !== 'string'
+        || typeof row.imagenNivel !== 'string'
+        || !isCalendarDate(row.snapshotDate)
+        || !Array.isArray(row.top5Precio) || !Array.isArray(row.top5Antiguedad)
+        || !Array.isArray(row.dnaRasgos) || row.dnaRasgos.length > 2
+        || row.dnaRasgos.some((trait) => typeof trait?.nombre !== 'string' || finiteNumber(trait.porcentaje) === null)) {
+        throw failure();
+      }
+      return {
+        userId: row.userId,
+        avatarUrl: typeof row.avatarUrl === 'string' ? row.avatarUrl : null,
+        displayName: row.displayName,
+        bricks,
+        nivel,
+        nombreNivel: row.nombreNivel,
+        imagenNivel: row.imagenNivel,
+        totalColeccion,
+        top5Precio: row.top5Precio,
+        top5Antiguedad: row.top5Antiguedad,
+        regaloEnviado: row.regaloEnviado === true,
+        dnaPrincipal: typeof row.dnaPrincipal === 'string' ? row.dnaPrincipal : 'Newbie',
+        dnaRasgos: row.dnaRasgos.map(({ nombre, porcentaje }) => ({ nombre, porcentaje: finiteNumber(porcentaje) })),
+        bricksSemanales,
+        snapshotDate: row.snapshotDate,
+      };
+    });
+
+    return {
+      available: data.available,
+      availableFrom: data.availableFrom,
+      weekStart: data.weekStart,
+      weekEnd: data.weekEnd,
+      entries,
+    };
   }
 
   async achievements(targetId) {

@@ -30,7 +30,33 @@ test('el schema instala snapshots diarios idempotentes, validados y en cascada',
     const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
     await db.exec(schema);
     await db.exec(schema);
+
+    const rankingDates = [
+      { instant: '2026-10-11T21:59:59Z', active: false, start: '2026-10-05', end: '2026-10-11' },
+      { instant: '2026-10-11T22:00:00Z', active: true, start: '2026-10-12', end: '2026-10-18' },
+      { instant: '2026-03-29T01:00:00Z', active: false, start: '2026-03-23', end: '2026-03-29' },
+      { instant: '2026-10-25T23:00:00Z', active: true, start: '2026-10-26', end: '2026-11-01' },
+    ];
+    for (const expected of rankingDates) {
+      const context = (await db.query(
+        'select * from private.ranking_semanal_contexto($1::timestamptz)',
+        [expected.instant],
+      )).rows[0];
+      assert.equal(context.available, expected.active);
+      assert.equal(context.available_from.toISOString().slice(0, 10), '2026-10-12');
+      assert.equal(context.week_start.toISOString().slice(0, 10), expected.start);
+      assert.equal(context.week_end.toISOString().slice(0, 10), expected.end);
+    }
+    assert.equal((await db.query("select to_regprocedure('public.ranking_semanal()') is not null as exists")).rows[0].exists, true);
     await db.query('insert into auth.users(id, email) values ($1, $2)', [userId, 'snapshot@example.invalid']);
+    await assert.rejects(db.query('select public.ranking_semanal()'), /NO_AUTENTICADO/);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+    const emptyWeeklyRanking = (await db.query('select public.ranking_semanal() as result')).rows[0].result;
+    assert.equal(emptyWeeklyRanking.available, false);
+    assert.equal(emptyWeeklyRanking.availableFrom, '2026-10-12');
+    assert.deepEqual(emptyWeeklyRanking.entries, []);
+    assert.match(emptyWeeklyRanking.weekStart, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(emptyWeeklyRanking.weekEnd, /^\d{4}-\d{2}-\d{2}$/);
 
     const snapshot = {
       user_id: userId,
@@ -103,6 +129,140 @@ test('el schema instala snapshots diarios idempotentes, validados y en cascada',
     }
     await db.query('delete from auth.users where id = $1', [userId]);
     assert.equal((await db.query('select count(*)::integer as count from public.user_daily_snapshots')).rows[0].count, 0);
+  } finally {
+    await db.close();
+  }
+});
+
+test('el ranking semanal calcula deltas netos privados antes del Top 10 y publica solo la proyeccion autorizada', async () => {
+  const db = new PGlite();
+  const userId = (index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  const rankingUsers = [
+    { index: 1, bricks: 900, delta: 450 },
+    { index: 2, bricks: 20, delta: 700 },
+    { index: 3, bricks: 600, delta: 0 },
+    { index: 4, bricks: 500, delta: -100 },
+    ...Array.from({ length: 6 }, (_, index) => ({ index: index + 5, bricks: 1000, delta: 1 })),
+  ];
+  const excludedUsers = [{ index: 11, bricks: 75 }, { index: 12, bricks: 80 }];
+  const globalOnlyUsers = Array.from({ length: 10 }, (_, index) => ({ index: index + 20, bricks: 30000 - index }));
+  const allUsers = [...rankingUsers, ...excludedUsers, ...globalOnlyUsers];
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (
+        instance_id uuid, id uuid primary key, aud text, role text, email text unique,
+        encrypted_password text, email_confirmed_at timestamptz,
+        raw_app_meta_data jsonb, raw_user_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
+        confirmation_token text, recovery_token text, email_change_token_new text, email_change text
+      );
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email) select $1::uuid, $2', [userId(1), 'weekly@example.invalid']);
+    for (const user of allUsers.slice(1)) {
+      await db.query('insert into auth.users(id, email) values ($1, $2)', [userId(user.index), `user-${user.index}@example.invalid`]);
+    }
+    for (const user of allUsers) {
+      await db.query('insert into public.gamificacion(user_id, bricks, nivel) values ($1, $2, $3)', [
+        userId(user.index), user.bricks,
+        JSON.stringify({ id: user.index >= 20 ? 25 : 1, nombre: user.index >= 20 ? 'Mr. Gold' : 'Stud' }),
+      ]);
+    }
+    for (const user of rankingUsers) {
+      const baseline = user.index === 1 ? 1000 : user.index === 2 ? 500 : user.index === 3 ? 200 : user.index === 4 ? 400 : 100;
+      for (const snapshot of [
+        { date: '2026-10-11', bricks: baseline },
+        { date: '2026-10-13', bricks: baseline + user.delta },
+      ]) {
+        await db.query(`
+          insert into public.user_daily_snapshots (
+            user_id, snapshot_date, total_figures, total_value, bricks, level,
+            pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+          ) values ($1, $2, 1, 50, $3, 1, 25, 25, 25, 25)
+        `, [userId(user.index), snapshot.date, snapshot.bricks]);
+      }
+    }
+    await db.query(`
+      insert into public.user_daily_snapshots (
+        user_id, snapshot_date, total_figures, total_value, bricks, level,
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+      ) values
+        ($1, '2026-10-13', 1, 50, 999, 1, 25, 25, 25, 25),
+        ($2, '2026-10-11', 1, 50, 100, 1, 25, 25, 25, 25),
+        ($2, '2026-10-15', 1, 50, 200, 1, 25, 25, 25, 25)
+    `, [userId(11), userId(12)]);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId(1)]);
+
+    const beforeLaunch = (await db.query(
+      "select private.ranking_semanal_calcular('2026-10-08T12:00:00Z'::timestamptz) as result",
+    )).rows[0].result;
+    assert.equal(beforeLaunch.available, false);
+    assert.deepEqual(beforeLaunch.entries, []);
+    const mondayWithoutCapture = (await db.query(
+      "select private.ranking_semanal_calcular('2026-10-12T08:00:00Z'::timestamptz) as result",
+    )).rows[0].result;
+    assert.equal(mondayWithoutCapture.available, false);
+    assert.deepEqual(mondayWithoutCapture.entries, []);
+
+    await db.query(`
+      insert into public.minifiguras(user_id, id, nombre, categoria, precio, precio_compra, fecha_compra, anio)
+      values ($1, 'WEEK-1', 'Weekly figure', 'Test', 200, 50, '2020-01-01', 2020)
+    `, [userId(2)]);
+    await db.query('insert into public.regalos_enviados(donante_id, receptor_id) values ($1, $2)', [userId(1), userId(2)]);
+
+    const result = (await db.query(
+      "select private.ranking_semanal_calcular('2026-10-14T12:00:00Z'::timestamptz) as result",
+    )).rows[0].result;
+    assert.equal(result.available, true);
+    assert.equal(result.weekStart, '2026-10-12');
+    assert.equal(result.weekEnd, '2026-10-18');
+    assert.equal(result.entries.length, 10);
+    assert.deepEqual(result.entries.map(({ userId: id, bricksSemanales }) => [id, bricksSemanales]), [
+      [userId(2), 700], [userId(1), 450],
+      ...Array.from({ length: 6 }, (_, index) => [userId(index + 5), 1]),
+      [userId(3), 0], [userId(4), -100],
+    ]);
+    assert.equal(result.entries[0].bricks, 20);
+    assert.equal(result.entries[0].snapshotDate, '2026-10-13');
+    assert.equal(result.entries[0].regaloEnviado, true);
+    assert.equal(result.entries[0].totalColeccion, 1);
+    assert.equal(result.entries[0].top5Precio[0].id, 'WEEK-1');
+    assert.ok(result.entries.every(({ dnaRasgos }) => dnaRasgos.length <= 2));
+    assert.deepEqual(Object.keys(result.entries[0]).sort(), [
+      'avatarUrl', 'bricks', 'bricksSemanales', 'displayName', 'dnaPrincipal', 'dnaRasgos',
+      'imagenNivel', 'nivel', 'nombreNivel', 'regaloEnviado', 'snapshotDate', 'top5Antiguedad',
+      'top5Precio', 'totalColeccion', 'userId',
+    ].sort());
+    assert.equal(JSON.stringify(result).includes('precio_compra'), false);
+    assert.equal(JSON.stringify(result).includes('total_value'), false);
+    assert.equal(JSON.stringify(result).includes('weekly@example.invalid'), false);
+    assert.equal(result.entries.some(({ userId: id }) => id === userId(11) || id === userId(12)), false);
+    const globalIds = (await db.query('select user_id from public.ranking_global()')).rows.map(({ user_id }) => user_id);
+    assert.equal(globalIds.length, 10);
+    assert.equal(globalIds.includes(userId(2)), false);
+
+    assert.equal((await db.query("select has_function_privilege('authenticated', 'public.ranking_semanal()', 'EXECUTE') as allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select has_function_privilege('anon', 'public.ranking_semanal()', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    for (const role of ['anon', 'authenticated']) {
+      assert.equal((await db.query('select has_function_privilege($1, $2, \'EXECUTE\') as allowed', [
+        role, 'private.ranking_semanal_calcular(timestamptz)',
+      ])).rows[0].allowed, false);
+      assert.equal((await db.query('select has_function_privilege($1, $2, \'EXECUTE\') as allowed', [
+        role, 'private.ranking_semanal_contexto(timestamptz)',
+      ])).rows[0].allowed, false);
+    }
+    await db.query('set role authenticated');
+    assert.equal((await db.query('select count(*)::integer as count from public.user_daily_snapshots where user_id <> $1', [userId(1)])).rows[0].count, 0);
+    await db.query('reset role');
   } finally {
     await db.close();
   }
