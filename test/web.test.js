@@ -233,6 +233,14 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const restoredColumns = tabletDeclarations.get('.results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6)');
   assert.equal(restoredColumns?.getPropertyValue('display'), 'table-cell');
   assert.equal(tabletDeclarations.get('.results-panel th:nth-child(4)')?.getPropertyValue('width'), '21%');
+  const portrait = tabletRules.filter((rule) => rule.conditionText === '(orientation: portrait)').at(-1);
+  const portraitDeclarations = new Map([...portrait.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(portraitDeclarations.get('.dna-dialog-body')?.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) minmax(0, 1fr)');
+  assert.equal(portraitDeclarations.get('.dna-chart')?.getPropertyValue('justify-self'), 'center');
+  assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('overflow-x'), 'auto');
+  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('flex-wrap'), 'nowrap');
+  assert.equal(portraitDeclarations.get('.ranking-criteria .button')?.getPropertyValue('white-space'), 'nowrap');
+  assert.equal(portraitDeclarations.get('.ranking-user-details')?.getPropertyValue('max-width'), '100%');
   tabletDom.window.close();
 });
 
