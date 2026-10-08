@@ -76,7 +76,7 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(window.document.querySelector('#gamification-dialog').open, false);
   window.document.querySelector('#gamification-toggle').click();
   const achievementsButton = window.document.querySelector('#open-achievements');
-  assert.equal(achievementsButton.textContent.trim(), '🏆 Ver Logros');
+  assert.equal(achievementsButton.textContent.trim(), '🏆 Logros');
   achievementsButton.click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, true);
   assert.equal(window.document.activeElement.id, 'gamification-close');

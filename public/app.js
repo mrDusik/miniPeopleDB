@@ -120,7 +120,7 @@ const rankingOpenButton = document.querySelector('#open-global-ranking');
 const dnaOpenButtons = [document.querySelector('#open-dna-inline'), document.querySelector('#open-dna')];
 const rankingStatus = document.querySelector('#ranking-status');
 const globalRankingList = document.querySelector('#global-ranking-list');
-const rankingOrder = document.querySelector('#ranking-order');
+const rankingOrderButtons = [...document.querySelectorAll('[data-ranking-criterion]')];
 const rankingMainGlobe = document.querySelector('#ranking-main-globe');
 const analyticsHistoryDialog = document.querySelector('#analytics-history-dialog');
 const analyticsHistoryOpenButton = document.querySelector('#open-analytics-history');
@@ -194,6 +194,7 @@ let syncPausedByModal = false;
 let rankingEntries = [];
 let defaultRankingEntries = [];
 let rankingRequestId = 0;
+let selectedRankingCriterion = 'nivel';
 let expandedRankingUserId = null;
 let ownGamification = null;
 let ownDnaState = null;
@@ -1260,7 +1261,7 @@ function renderGlobalRanking() {
     levelName.textContent = entry.nombreNivel;
     const dnaPrincipal = document.createElement('span');
     dnaPrincipal.className = 'ranking-dna-principal';
-    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(rankingOrder.value)) || !entry.dnaRasgos?.length
+    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(selectedRankingCriterion)) || !entry.dnaRasgos?.length
       ? entry.dnaPrincipal ?? 'Newbie'
       : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
         `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
@@ -1338,7 +1339,7 @@ function renderGlobalRanking() {
 async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   const sessionUserId = currentSession?.user?.id;
   const requestId = ++rankingRequestId;
-  const criterio = rankingOrder.value;
+  const criterio = selectedRankingCriterion;
   if (showState) {
     rankingStatus.textContent = 'Cargando ranking...';
     rankingStatus.className = 'status';
@@ -2198,7 +2199,15 @@ analyticsHistoryCustomRange.addEventListener('submit', (event) => {
 });
 analyticsHistoryRetryButton.addEventListener('click', () => { void loadAnalyticsHistory(); });
 
-rankingOrder.addEventListener('change', () => { void loadGlobalRanking(); });
+for (const button of rankingOrderButtons) {
+  button.addEventListener('click', () => {
+    selectedRankingCriterion = button.dataset.rankingCriterion;
+    for (const criterionButton of rankingOrderButtons) {
+      criterionButton.setAttribute('aria-pressed', String(criterionButton === button));
+    }
+    void loadGlobalRanking();
+  });
+}
 for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
   trigger.addEventListener('click', () => {
     rankingTrigger = trigger;
@@ -2685,7 +2694,8 @@ function clearUserData() {
   renderGamification({});
   rankingEntries = [];
   defaultRankingEntries = [];
-  rankingOrder.value = 'nivel';
+  selectedRankingCriterion = 'nivel';
+  for (const button of rankingOrderButtons) button.setAttribute('aria-pressed', String(button.dataset.rankingCriterion === 'nivel'));
   rankingRequestId += 1;
   expandedRankingUserId = null;
   rankingMainGlobe.hidden = true;

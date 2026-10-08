@@ -69,17 +69,15 @@
               <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
             </div>
             <div class="summary-achievements-row">
-              <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> Ver Logros</button>
+              <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> Logros</button>
               <button type="button" id="open-dna" class="button button-secondary" aria-haspopup="dialog" aria-controls="dna-dialog"><span aria-hidden="true">🧬</span> DNA</button>
+              <button type="button" id="open-analytics-history" class="button button-secondary" title="Progreso" aria-haspopup="dialog" aria-controls="analytics-history-dialog"><span aria-hidden="true">📈</span> Progreso</button>
             </div>
             <div class="summary-ranking-row">
               <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
-              <button type="button" id="open-analytics-history" class="button button-secondary history-open-button" aria-label="Historico" title="Historico" aria-haspopup="dialog" aria-controls="analytics-history-dialog">
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 14l4-4 4 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
             </div>
             <div class="summary-sync-row">
-              <button type="button" id="sync-prices" class="button button-secondary summary-sync">🔄 Sincronizar Precios</button>
+              <button type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
               <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
@@ -358,21 +356,21 @@
       </div>
       <p id="ranking-status" class="status" role="status" aria-live="polite"></p>
       <div class="ranking-order-toolbar">
-        <select id="ranking-order" aria-label="Ordenar ranking por">
-          <option value="nivel">Nivel</option>
-          <option value="coleccion">Colección</option>
-          <option value="rarityHunter">Rarity Hunter</option>
-          <option value="collector">Collector</option>
-          <option value="explorer">Explorer</option>
-          <option value="fan">Fan</option>
-        </select>
+        <div id="ranking-order" class="analytics-history-ranges ranking-criteria" role="group" aria-label="Ordenar ranking por">
+          <button type="button" class="button button-secondary" data-ranking-criterion="nivel" aria-pressed="true">Nivel</button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="coleccion" aria-pressed="false">Colección</button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="rarityHunter" aria-pressed="false">Rarity Hunter</button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="collector" aria-pressed="false">Collector</button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="explorer" aria-pressed="false">Explorer</button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="fan" aria-pressed="false">Fan</button>
+        </div>
       </div>
       <div id="global-ranking-list" class="global-ranking-list"></div>
     </dialog>
 
     <dialog id="analytics-history-dialog" class="modal modal-analytics-history" aria-labelledby="analytics-history-title">
       <div class="analytics-history-heading">
-        <h2 id="analytics-history-title">Historico</h2>
+        <h2 id="analytics-history-title">Progreso</h2>
         <button type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="analytics-history-controls">
