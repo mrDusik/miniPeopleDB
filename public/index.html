@@ -7,6 +7,7 @@
   <link rel="icon" type="image/webp" href="/toast_images/hero_2026-01-05_16-38-47-871.webp">
   <link rel="stylesheet" href="/styles.css">
   <script src="/vendor/supabase.js" defer></script>
+  <script src="/vendor/chart.js" defer></script>
   <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
@@ -73,6 +74,9 @@
             </div>
             <div class="summary-ranking-row">
               <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
+              <button type="button" id="open-analytics-history" class="button button-secondary history-open-button" aria-label="Historico" title="Historico" aria-haspopup="dialog" aria-controls="analytics-history-dialog">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 14l4-4 4 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
             </div>
             <div class="summary-sync-row">
               <button type="button" id="sync-prices" class="button button-secondary summary-sync">🔄 Sincronizar Precios</button>
@@ -364,6 +368,62 @@
         </select>
       </div>
       <div id="global-ranking-list" class="global-ranking-list"></div>
+    </dialog>
+
+    <dialog id="analytics-history-dialog" class="modal modal-analytics-history" aria-labelledby="analytics-history-title">
+      <div class="analytics-history-heading">
+        <h2 id="analytics-history-title">Historico</h2>
+        <button type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <div class="analytics-history-controls">
+        <div id="analytics-history-ranges" class="analytics-history-ranges" role="group" aria-label="Rango temporal">
+          <button type="button" class="button button-secondary" data-history-days="30" aria-pressed="false">30 días</button>
+          <button type="button" class="button button-secondary" data-history-days="90" aria-pressed="true">90 días</button>
+          <button type="button" class="button button-secondary" data-history-days="365" aria-pressed="false">365 días</button>
+        </div>
+        <form id="analytics-history-custom-range" class="analytics-history-custom-range">
+          <label for="analytics-history-from">Desde<input id="analytics-history-from" name="from" type="date"></label>
+          <label for="analytics-history-to">Hasta<input id="analytics-history-to" name="to" type="date"></label>
+          <button type="submit" id="analytics-history-apply" class="button button-secondary">Aplicar</button>
+        </form>
+      </div>
+      <p id="analytics-history-status" class="status" role="status" aria-live="polite"></p>
+      <button type="button" id="analytics-history-retry" class="button button-secondary" hidden>Reintentar</button>
+      <div class="analytics-history-charts">
+        <section class="analytics-history-chart" aria-labelledby="analytics-history-value-title">
+          <h3 id="analytics-history-value-title">Valor y cambio neto</h3>
+          <canvas id="analytics-history-value-chart" role="img" aria-label="Valor de colección y cambio neto de figuras"></canvas>
+          <div class="analytics-history-table-wrap">
+            <table id="analytics-history-value-table">
+              <caption>Valor y cambio neto por fecha</caption>
+              <thead><tr><th scope="col">Fecha</th><th scope="col">Valor</th><th scope="col">Figuras</th><th scope="col">Cambio neto</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="analytics-history-chart" aria-labelledby="analytics-history-dna-title">
+          <h3 id="analytics-history-dna-title">DNA</h3>
+          <canvas id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas>
+          <div class="analytics-history-table-wrap">
+            <table id="analytics-history-dna-table">
+              <caption>Porcentajes de DNA por fecha</caption>
+              <thead><tr><th scope="col">Fecha</th><th scope="col">Collector</th><th scope="col">Explorer</th><th scope="col">Rarity Hunter</th><th scope="col">Fan</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="analytics-history-chart" aria-labelledby="analytics-history-progression-title">
+          <h3 id="analytics-history-progression-title">Bricks y nivel</h3>
+          <canvas id="analytics-history-progression-chart" role="img" aria-label="Bricks y nivel por fecha"></canvas>
+          <div class="analytics-history-table-wrap">
+            <table id="analytics-history-progression-table">
+              <caption>Bricks y nivel por fecha</caption>
+              <thead><tr><th scope="col">Fecha</th><th scope="col">Bricks</th><th scope="col">Nivel</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>

@@ -95,6 +95,8 @@ export class BricksetScraper {
     maxRateLimitRetries = 3,
     now = Date.now,
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+    setTimeoutImpl = setTimeout,
+    clearTimeoutImpl = clearTimeout,
   } = {}) {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
@@ -104,24 +106,44 @@ export class BricksetScraper {
     this.maxRateLimitRetries = maxRateLimitRetries;
     this.now = now;
     this.sleep = sleep;
+    this.setTimeoutImpl = setTimeoutImpl;
+    this.clearTimeoutImpl = clearTimeoutImpl;
     this.queue = Promise.resolve();
     this.lastRequestAt = null;
     this.blockedUntil = 0;
   }
 
-  async _fetchHtml(id) {
+  async _fetchHtml(id, signal) {
     if (typeof id !== 'string' || id.trim() === '') {
       throw new BricksetPriceError('BRICKSET_ID_INVALIDO');
     }
 
-    const operation = this.queue.then(() => this._fetchHtmlQueued(id));
+    const operation = this.queue.then(() => this._fetchHtmlQueued(id, signal));
     this.queue = operation.catch(() => {});
     return operation;
   }
 
-  async _wait(duration) {
+  async _wait(duration, signal) {
     if (duration > 0) {
-      await this.sleep(duration);
+      if (!signal) {
+        await this.sleep(duration);
+        return;
+      }
+      await new Promise((resolve, reject) => {
+        if (signal.aborted) {
+          reject(new BricksetPriceError('BRICKSET_CANCELADO'));
+          return;
+        }
+        const timeout = this.setTimeoutImpl(() => {
+          signal.removeEventListener('abort', onAbort);
+          resolve();
+        }, duration);
+        const onAbort = () => {
+          this.clearTimeoutImpl(timeout);
+          reject(new BricksetPriceError('BRICKSET_CANCELADO'));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
     }
   }
 
@@ -137,7 +159,7 @@ export class BricksetScraper {
     return Number.isFinite(timestamp) ? Math.max(0, timestamp - this.now()) : this.defaultRetryAfterMs;
   }
 
-  async _fetchHtmlQueued(id) {
+  async _fetchHtmlQueued(id, signal) {
     const url = `${BRICKSET_BASE_URL}${encodeURIComponent(id)}`;
     let lastError;
     let rateLimitRetries = 0;
@@ -145,10 +167,13 @@ export class BricksetScraper {
       const waitUntil = this.lastRequestAt === null
         ? this.blockedUntil
         : Math.max(this.blockedUntil, this.lastRequestAt + this.minIntervalMs);
-      await this._wait(waitUntil - this.now());
+      await this._wait(waitUntil - this.now(), signal);
+      if (signal?.aborted) throw new BricksetPriceError('BRICKSET_CANCELADO');
       this.lastRequestAt = this.now();
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      const onAbort = () => controller.abort();
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const timeout = this.setTimeoutImpl(() => controller.abort(), this.timeoutMs);
       try {
         const response = await this.fetchImpl(url, {
           headers: {
@@ -186,14 +211,15 @@ export class BricksetScraper {
           console.error(`[BricksetScraper] Error de red al consultar ${url}: ${error?.message ?? error}`);
         }
       } finally {
-        clearTimeout(timeout);
+        this.clearTimeoutImpl(timeout);
+        signal?.removeEventListener('abort', onAbort);
       }
     }
     throw lastError ?? new BricksetPriceError();
   }
 
-  async getPrice(id) {
-    const { html, url } = await this._fetchHtml(id);
+  async getPrice(id, { signal } = {}) {
+    const { html, url } = await this._fetchHtml(id, signal);
     try {
       return parseBricksetPrice(html);
     } catch (error) {
@@ -202,8 +228,8 @@ export class BricksetScraper {
     }
   }
 
-  async getDetails(id) {
-    const { html, url } = await this._fetchHtml(id);
+  async getDetails(id, { signal } = {}) {
+    const { html, url } = await this._fetchHtml(id, signal);
     try {
       return parseBricksetDetails(html);
     } catch (error) {

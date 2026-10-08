@@ -1128,6 +1128,9 @@ test('GET /config/supabase expone solo la configuracion publica', async () => {
     const vendor = await globalThis.fetch(`${baseUrl}/vendor/supabase.js`);
     assert.equal(vendor.status, 200);
     assert.match(vendor.headers.get('content-type'), /javascript/);
+  }, {
+    cronSecret: 'cron-secret-sentinel',
+    adminConfig: { url: 'https://proyecto.supabase.test', serviceRoleKey: 'service-role-sentinel' },
   });
 
   await withServer('[]', async (baseUrl) => {

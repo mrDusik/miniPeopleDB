@@ -70,6 +70,10 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     assert.match(script.headers.get('content-type'), /^text\/javascript/);
     const scriptText = await script.text();
     assert.match(scriptText, /iconSrc = '\/toast_images\/87X2Rz8y2ZY\.png'/);
+    const chart = await fetch(`${baseUrl}/vendor/chart.js`);
+    assert.equal(chart.status, 200);
+    assert.match(chart.headers.get('content-type'), /javascript/);
+    assert.match(await chart.text(), /Chart\.js/i);
     const clientAssets = `${html}\n${await styles.text()}\n${scriptText}`;
     assert.doesNotMatch(clientAssets, /dna_ponderaciones|rarity_hunter|new-mini-person/);
 

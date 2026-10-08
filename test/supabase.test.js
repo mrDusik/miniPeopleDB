@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
-import { getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
+import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
 test('getSupabaseConfig devuelve null sin variables ni sup.env', () => {
@@ -32,6 +32,19 @@ test('getSupabaseConfig prioriza variables de entorno y usa sup.env como alterna
       getSupabaseAdminConfig({ env: { SUPABASE_URL: 'https://env.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'env-server-key' }, envPath }),
       { url: 'https://env.supabase.co', serviceRoleKey: 'env-server-key' },
     );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('getCronSecret prioriza entorno y usa archivo backend sin revelar valores reales', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'cron-secret-config-'));
+  const envPath = join(directory, 'sup.env');
+  await writeFile(envPath, 'CRON_SECRET=file-secret-for-test\n');
+  try {
+    assert.equal(getCronSecret({ env: {}, envPath }), 'file-secret-for-test');
+    assert.equal(getCronSecret({ env: { CRON_SECRET: 'env-secret-for-test' }, envPath }), 'env-secret-for-test');
+    assert.equal(getCronSecret({ env: {}, envPath: join(directory, 'missing.env') }), null);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
