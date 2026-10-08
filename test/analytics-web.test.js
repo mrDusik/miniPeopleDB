@@ -78,8 +78,13 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
     assert.equal(document.querySelectorAll('details.analytics-history-table-wrap:not([open])').length, 3);
+    assert.deepEqual([...document.querySelectorAll('.analytics-history-table-wrap summary')].map((summary) => summary.textContent), ['Datos', 'Datos', 'Datos']);
+    assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Valor de colecci\u00f3n y progreso de minifiguras');
     assert.equal(document.querySelector('#analytics-history-custom-range input[name="from"]').type, 'date');
     assert.equal(document.querySelector('#analytics-history-custom-range input[name="to"]').type, 'date');
+    assert.equal(window.getComputedStyle(document.querySelector('#analytics-history-custom-range')).gridTemplateRows, 'auto');
+    assert.equal(window.getComputedStyle(document.querySelector('#dna-canvas')).zIndex, '1');
+    assert.equal(window.getComputedStyle(document.querySelector('.dna-chart-label')).zIndex, '0');
   } finally {
     dom.window.close();
   }
@@ -267,10 +272,13 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(valueDataset.tension, 0);
     assert.equal(deltaDataset.maxBarThickness, 18);
     assert.equal(chart.options.scales.figures.suggestedMin, -9);
-    assert.notEqual(deltaDataset.backgroundColor({ parsed: { y: -3 } }), deltaDataset.backgroundColor({ parsed: { y: 3 } }));
+    assert.equal(valueDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-fan').trim());
+    assert.equal(deltaDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim());
+    assert.equal(deltaDataset.backgroundColor, 'rgba(255, 213, 0, 0.4)');
+    assert.equal(deltaDataset.label, 'Progreso de minifiguras');
     assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Figuras en colecci\u00f3n: 9');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 17 } }), 'Valor de colección: 17,00 €');
-    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Cambio neto de figuras: -3');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Progreso de minifiguras: -3');
     const tableRows = [...document.querySelectorAll('#analytics-history-value-table tbody tr')];
     assert.equal(tableRows.length, 3);
     assert.deepEqual([...tableRows[1].children].map((cell) => cell.textContent), ['02/10/2026', '17,00 €', '9', '-3']);
@@ -389,6 +397,10 @@ test('Bricks y nivel usan ejes separados, admiten descensos y destruyen charts a
     const onePoint = chartConfigs.find(({ data }) => data.datasets.some(({ label }) => label === 'Bricks'));
     assert.deepEqual(Array.from(onePoint.data.datasets[0].data, ({ y }) => y), [59]);
     assert.deepEqual(Array.from(onePoint.data.datasets[1].data, ({ y }) => y), [2]);
+    assert.equal(onePoint.data.datasets[0].borderColor, '#e3000b');
+    assert.equal(onePoint.data.datasets[0].backgroundColor, '#e3000b');
+    assert.equal(onePoint.data.datasets[1].borderColor, '#000000');
+    assert.equal(onePoint.data.datasets[1].backgroundColor, '#000000');
     assert.equal(onePoint.data.datasets[1].stepped, 'after');
     assert.equal(onePoint.options.scales.bricks.position, 'left');
     assert.equal(onePoint.options.scales.level.position, 'right');

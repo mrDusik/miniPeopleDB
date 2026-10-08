@@ -263,6 +263,12 @@ test('el dialogo DNA representa proporciones, leyenda, reintento, Newbie y foco 
   assert.equal(instance.configuration.type, 'doughnut');
   assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40]);
   assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40 }), 'Fan: 40%');
+  const centerLabel = document.querySelector('.dna-chart-label');
+  assert.equal(centerLabel.hidden, false);
+  instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 1 } });
+  assert.equal(centerLabel.hidden, true);
+  instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 0 } });
+  assert.equal(centerLabel.hidden, false);
   assert.equal(document.querySelector('#dna-chart-percentage').textContent, '40%');
   assert.equal(document.querySelector('#dna-chart-trait').textContent, 'Fan');
   assert.match(chart.getAttribute('aria-label'), /Fan 40%/);

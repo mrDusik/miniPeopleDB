@@ -990,6 +990,8 @@ function renderDnaDialog(state) {
     ? 'DNA Newbie: cuatro proporciones en cero'
     : `DNA de tu colección: ${DNA_TRAITS.map(({ key, name }) => `${name} ${state.porcentajes[key]}%`).join(', ')}`);
   dnaDialogStatus.textContent = isNewbie ? 'Newbie' : '';
+  const centerLabel = document.querySelector('.dna-chart-label');
+  centerLabel.hidden = false;
   const principal = DNA_TRAITS.find(({ name }) => name === state.principal);
   document.querySelector('#dna-chart-percentage').textContent = isNewbie ? '0%' : formatAnalyticsHistoryPercent(state.porcentajes[principal?.key] ?? 0);
   document.querySelector('#dna-chart-trait').textContent = state.principal;
@@ -1012,6 +1014,7 @@ function renderDnaDialog(state) {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#202124', padding: 12, cornerRadius: 6,
+            external({ tooltip }) { centerLabel.hidden = tooltip.opacity > 0; },
             callbacks: { label: (item) => `${item.label}: ${formatAnalyticsHistoryPercent(item.raw)}` },
           },
         },
@@ -1984,8 +1987,6 @@ function createAnalyticsChart(canvas, configuration) {
     if (dataset.type === 'bar') {
       dataset.borderRadius = 3;
       dataset.maxBarThickness = 18;
-      dataset.backgroundColor = (context) => context.parsed?.y < 0 ? 'rgba(197, 57, 56, 0.25)' : 'rgba(24, 131, 101, 0.25)';
-      dataset.borderColor = (context) => context.parsed?.y < 0 ? '#c53938' : '#188365';
       dataset.borderWidth = 1;
       const changes = dataset.data.map(({ y }) => y ?? 0);
       options.scales.figures.suggestedMax = Math.max(1, ...changes) * 3;
@@ -2036,14 +2037,14 @@ function renderAnalyticsHistoryValue(data) {
       datasets: [
         {
           type: 'line', label: 'Valor de colección (€)', data: valueSeries,
-          yAxisID: 'value', borderColor: styles.getPropertyValue('--accent').trim(),
-          backgroundColor: styles.getPropertyValue('--accent').trim(), pointRadius: 3,
+          yAxisID: 'value', borderColor: styles.getPropertyValue('--dna-fan').trim(),
+          backgroundColor: styles.getPropertyValue('--dna-fan').trim(), pointRadius: 3,
           spanGaps: false, tension: 0.2,
         },
         {
-          type: 'bar', label: 'Cambio neto de figuras', data: deltaSeries,
-          yAxisID: 'figures', backgroundColor: styles.getPropertyValue('--blue').trim(),
-          borderColor: styles.getPropertyValue('--blue').trim(),
+          type: 'bar', label: 'Progreso de minifiguras', data: deltaSeries,
+          yAxisID: 'figures', backgroundColor: chartColorWithAlpha(styles.getPropertyValue('--yellow').trim(), 0.4),
+          borderColor: styles.getPropertyValue('--yellow').trim(),
         },
       ],
     },
@@ -2061,7 +2062,7 @@ function renderAnalyticsHistoryValue(data) {
             label(item) {
               if (item.datasetIndex === 0) return `Valor de colección: ${formatAnalyticsHistoryPrice(item.parsed.y)}`;
               const change = item.parsed.y > 0 ? `+${item.parsed.y}` : String(item.parsed.y);
-              return `Cambio neto de figuras: ${change}`;
+              return `Progreso de minifiguras: ${change}`;
             },
             afterBody(items) {
               const date = items.length ? new Date(items[0].parsed.x).toISOString().slice(0, 10) : '';
@@ -2074,7 +2075,7 @@ function renderAnalyticsHistoryValue(data) {
       scales: {
         x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
         value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Valor (€)' } },
-        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Cambio neto (figuras)' }, grid: { drawOnChartArea: false } },
+        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Progreso (figuras)' }, grid: { drawOnChartArea: false } },
       },
     },
   }));
@@ -2185,14 +2186,14 @@ function renderAnalyticsHistoryProgression(data) {
       datasets: [
         {
           label: 'Bricks', data: makeSeries('bricks'), yAxisID: 'bricks',
-          borderColor: styles.getPropertyValue('--blue').trim(),
-          backgroundColor: styles.getPropertyValue('--blue').trim(),
+          borderColor: styles.getPropertyValue('--accent').trim(),
+          backgroundColor: styles.getPropertyValue('--accent').trim(),
           pointRadius: 3, spanGaps: false, tension: 0.2,
         },
         {
           label: 'Nivel', data: makeSeries('level'), yAxisID: 'level',
-          borderColor: styles.getPropertyValue('--accent').trim(),
-          backgroundColor: styles.getPropertyValue('--accent').trim(),
+          borderColor: '#000000',
+          backgroundColor: '#000000',
           pointRadius: 3, spanGaps: false, stepped: 'after',
         },
       ],
