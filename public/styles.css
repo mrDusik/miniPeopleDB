@@ -273,8 +273,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .dna-legend-panel { display: grid; gap: 16px; min-width: 0; }
 .dna-chart { position: relative; width: 100%; max-width: 240px; aspect-ratio: 1; }
 .dna-chart[hidden] { display: none; }
-.dna-chart canvas { display: block; width: 100% !important; height: 100% !important; }
-.dna-chart-label { position: absolute; inset: 25%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
+.dna-chart canvas { position: relative; z-index: 1; display: block; width: 100% !important; height: 100% !important; }
+.dna-chart-label { position: absolute; z-index: 0; inset: 25%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
+.dna-chart-label[hidden] { display: none; }
 .dna-chart-label strong { color: var(--ink); font: 700 1.7rem 'Trebuchet MS', sans-serif; }
 .dna-chart-label span { color: var(--muted); font: 700 0.75rem 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
 .dna-chart-empty::before { content: ''; position: absolute; inset: 5%; border: 20px solid var(--dna-empty); border-radius: 50%; }
@@ -321,7 +322,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .analytics-history-ranges .button:first-child { border-radius: 4px 0 0 4px; }
 .analytics-history-ranges .button:last-child { border-radius: 0 4px 4px 0; }
 .analytics-history-ranges .button[aria-pressed="true"] { border-color: var(--blue); color: white; background: var(--blue); }
-#analytics-history-custom-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 8px; min-width: 0; margin: 0; }
+#analytics-history-custom-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; grid-template-rows: auto; align-items: end; gap: 8px; min-width: 0; margin: 0; }
 #analytics-history-custom-range label { min-width: 0; }
 #analytics-history-custom-range input { width: 100%; min-width: 0; min-height: 36px; padding: 0 6px; font: inherit; }
 #analytics-history-apply { flex: 0 0 auto; }
