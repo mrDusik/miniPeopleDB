@@ -76,6 +76,8 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.deepEqual([...document.querySelectorAll('[data-history-days]')].map((button) => button.dataset.historyDays), ['30', '90', '365']);
     assert.equal(document.querySelectorAll('.analytics-history-chart canvas').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);
+    assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
+    assert.equal(document.querySelectorAll('details.analytics-history-table-wrap:not([open])').length, 3);
     assert.equal(document.querySelector('#analytics-history-custom-range input[name="from"]').type, 'date');
     assert.equal(document.querySelector('#analytics-history-custom-range input[name="to"]').type, 'date');
   } finally {
@@ -257,6 +259,16 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(chart.options.scales.x.max, Date.parse('2026-10-04T00:00:00.000Z'));
     assert.equal(chart.options.parsing, false);
     assert.equal(chart.options.plugins.tooltip.callbacks.title([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), '02/10/2026');
+    assert.equal(chart.options.plugins.legend.position, 'bottom');
+    assert.equal(chart.options.scales.x.grid.display, false);
+    assert.equal(chart.options.scales.x.offset, false);
+    assert.equal(chart.options.scales.x.ticks.maxRotation, 0);
+    assert.equal(chart.options.scales.x.ticks.callback(Date.parse('2026-10-02T00:00:00.000Z'), 0, []), '02/10');
+    assert.equal(valueDataset.tension, 0);
+    assert.equal(deltaDataset.maxBarThickness, 18);
+    assert.equal(chart.options.scales.figures.suggestedMin, -9);
+    assert.notEqual(deltaDataset.backgroundColor({ parsed: { y: -3 } }), deltaDataset.backgroundColor({ parsed: { y: 3 } }));
+    assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Figuras en colecci\u00f3n: 9');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 17 } }), 'Valor de colección: 17,00 €');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Cambio neto de figuras: -3');
     const tableRows = [...document.querySelectorAll('#analytics-history-value-table tbody tr')];
@@ -310,6 +322,7 @@ test('DNA usa porcentajes guardados, mantiene Newbie en cero y respeta colores C
     assert.equal(chart.options.scales.y.min, 0);
     assert.equal(chart.options.scales.y.max, 100);
     assert.equal(chart.options.scales.y.stacked, true);
+    assert.deepEqual(Array.from(chart.data.datasets, ({ fill }) => fill), ['origin', '-1', '-1', '-1']);
     assert.equal(chart.options.parsing, false);
     const datasets = Object.fromEntries(chart.data.datasets.map((dataset) => [dataset.label, dataset]));
     assert.deepEqual(Array.from(datasets.Collector.data, ({ y }) => y), [60.12, null, 0]);

@@ -338,7 +338,10 @@
         <button type="button" id="dna-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="dna-dialog-body">
-        <div id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden></div>
+        <div id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden>
+          <canvas id="dna-canvas" aria-hidden="true"></canvas>
+          <div class="dna-chart-label" aria-hidden="true"><strong id="dna-chart-percentage"></strong><span id="dna-chart-trait"></span></div>
+        </div>
         <div class="dna-legend-panel">
           <p id="dna-status" class="dna-status" role="status" aria-live="polite">Cargando DNA…</p>
           <ul id="dna-legend" class="dna-legend" aria-label="Rasgos DNA" hidden></ul>
@@ -390,36 +393,39 @@
       <div class="analytics-history-charts">
         <section class="analytics-history-chart" aria-labelledby="analytics-history-value-title">
           <h3 id="analytics-history-value-title">Valor y cambio neto</h3>
-          <canvas id="analytics-history-value-chart" role="img" aria-label="Valor de colección y cambio neto de figuras"></canvas>
-          <div class="analytics-history-table-wrap">
+          <div class="analytics-history-plot"><canvas id="analytics-history-value-chart" role="img" aria-label="Valor de colección y cambio neto de figuras"></canvas></div>
+          <details class="analytics-history-table-wrap">
+            <summary>Datos de valor y figuras</summary>
             <table id="analytics-history-value-table">
               <caption>Valor y cambio neto por fecha</caption>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Valor</th><th scope="col">Figuras</th><th scope="col">Cambio neto</th></tr></thead>
               <tbody></tbody>
             </table>
-          </div>
+          </details>
         </section>
         <section class="analytics-history-chart" aria-labelledby="analytics-history-dna-title">
           <h3 id="analytics-history-dna-title">DNA</h3>
-          <canvas id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas>
-          <div class="analytics-history-table-wrap">
+          <div class="analytics-history-plot"><canvas id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas></div>
+          <details class="analytics-history-table-wrap">
+            <summary>Datos de DNA</summary>
             <table id="analytics-history-dna-table">
               <caption>Porcentajes de DNA por fecha</caption>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Collector</th><th scope="col">Explorer</th><th scope="col">Rarity Hunter</th><th scope="col">Fan</th></tr></thead>
               <tbody></tbody>
             </table>
-          </div>
+          </details>
         </section>
         <section class="analytics-history-chart" aria-labelledby="analytics-history-progression-title">
           <h3 id="analytics-history-progression-title">Bricks y nivel</h3>
-          <canvas id="analytics-history-progression-chart" role="img" aria-label="Bricks y nivel por fecha"></canvas>
-          <div class="analytics-history-table-wrap">
+          <div class="analytics-history-plot"><canvas id="analytics-history-progression-chart" role="img" aria-label="Bricks y nivel por fecha"></canvas></div>
+          <details class="analytics-history-table-wrap">
+            <summary>Datos de Bricks y nivel</summary>
             <table id="analytics-history-progression-table">
               <caption>Bricks y nivel por fecha</caption>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Bricks</th><th scope="col">Nivel</th></tr></thead>
               <tbody></tbody>
             </table>
-          </div>
+          </details>
         </section>
       </div>
     </dialog>
