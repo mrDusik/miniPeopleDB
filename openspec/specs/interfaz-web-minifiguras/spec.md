@@ -169,7 +169,7 @@ Mientras una actualización masiva esté en curso, la interfaz SHALL mostrar en 
 
 #### Scenario: Retomar al cargar la página
 - **WHEN** el usuario inicia sesión o recarga la página con una tarea en curso
-- **THEN** la interfaz muestra la barra de progreso y deshabilita el botón `🔄` sin iniciar otra tarea
+- **THEN** la interfaz muestra la barra de progreso sin iniciar otra tarea ni mostrar un disparador manual
 
 #### Scenario: Cierre de sesión
 - **WHEN** el usuario cierra sesión con una tarea en curso
@@ -423,7 +423,7 @@ El número y el nombre del nivel en el panel principal SHALL usar la misma pila 
 
 ### Requirement: Abrir el Ranking Global desde el panel de nivel
 
-La cabecera SHALL usar la imagen local de `public/logo_images/` en lugar del texto de marca y autor, con un ancho menor que el texto anterior y el panel de nivel ampliado a su derecha en escritorio. El panel de nivel SHALL mostrar los iconos y recuentos de colección y búsqueda sin abrir el desplegable. El menú desplegable SHALL mostrar el progreso en su primera fila, los controles `Ver Logros` y `Ranking Global` juntos en una misma línea en su segunda fila, y `Sincronizar Precios` seguido del icono de billete y valor total de la colección en su tercera y última fila de controles. Al activar `Ranking Global` SHALL abrir un modal visualmente consistente con la aplicación y solicitar el ranking autenticado.
+La cabecera SHALL usar la imagen local de `public/logo_images/` en lugar del texto de marca y autor, con un ancho menor que el texto anterior y el panel de nivel ampliado a su derecha en escritorio. El panel de nivel SHALL mostrar los iconos y recuentos de colección y búsqueda sin abrir el desplegable. El menú desplegable SHALL mostrar el progreso en su primera fila; `Logros`, `DNA` y `Progreso` como botones del mismo tamaño en su segunda fila; y `Ranking Global` en una fila posterior. El dashboard SHALL NOT mostrar el disparador manual de sincronización de precios, aunque el endpoint autenticado y el wiring se conserven para posible reactivación futura. Al activar `Ranking Global` SHALL abrir un modal visualmente consistente con la aplicación y solicitar el ranking autenticado.
 
 #### Scenario: Abrir el modal
 - **WHEN** el usuario activa `Ranking Global`
