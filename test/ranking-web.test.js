@@ -293,6 +293,11 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   const criteriaButtons = [...criteriaGroup.querySelectorAll('[data-ranking-criterion]')];
   assert.equal(criteriaGroup.getAttribute('role'), 'group');
   assert.deepEqual(criteriaButtons.map(({ dataset }) => dataset.rankingCriterion), ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']);
+  const collectionButton = criteriaButtons.find(({ dataset }) => dataset.rankingCriterion === 'coleccion');
+  assert.equal(collectionButton.getAttribute('aria-label'), 'Colección');
+  assert.equal(collectionButton.title, 'Colección');
+  assert.equal(collectionButton.querySelector('.ranking-criterion-label-compact').textContent, 'Colec.');
+  assert.match(styles, /@media \(max-width: 480px\) and \(orientation: portrait\) \{[^}]*#ranking-order \[data-ranking-criterion="coleccion"\] \{ padding: 0 1px; font-size: 0\.68rem; white-space: nowrap; overflow-wrap: normal; \}/);
   assert.deepEqual(criteriaButtons.map((button) => button.getAttribute('aria-pressed')), ['true', 'false', 'false', 'false', 'false', 'false']);
   assert.equal(criteriaGroup.parentElement.nextElementSibling.id, 'global-ranking-list');
   assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-start;/);
