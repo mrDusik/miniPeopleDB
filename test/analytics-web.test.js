@@ -79,6 +79,7 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(dialog.getAttribute('aria-labelledby'), 'analytics-history-title');
     assert.equal(document.querySelector('#analytics-history-title').textContent, 'Progreso');
     assert.deepEqual([...document.querySelectorAll('[data-history-days]')].map((button) => button.dataset.historyDays), ['7', '30', '90', '365']);
+    assert.match(stylesheet, /@media \(orientation: portrait\) \{[^}]*#analytics-history-ranges \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); \}/);
     assert.equal(document.querySelectorAll('.analytics-history-chart canvas').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
