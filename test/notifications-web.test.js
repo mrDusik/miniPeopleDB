@@ -79,6 +79,61 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+test('comparte el indicador animado del ranking y oculta la limpieza durante carga, vacío y error', async () => {
+  const { dom, window } = startApp();
+  try {
+    await tick();
+    await tick();
+    const status = window.document.querySelector('#notifications-status');
+    const toolbar = window.document.querySelector('.notifications-toolbar');
+    const button = window.document.querySelector('#notifications-mark-all');
+    const originalFetch = window.fetch;
+    let finishRequest;
+    window.fetch = (url, init) => url === '/api/notificaciones'
+      ? new Promise((resolve) => { finishRequest = resolve; })
+      : originalFetch(url, init);
+
+    const open = () => window.document.querySelector('#open-notifications').click();
+    const finish = async (notifications) => {
+      finishRequest({ ok: true, json: async () => ({ notifications, unreadCount: notifications.filter((item) => !item.isRead).length, nextCursor: null }) });
+      await tick();
+    };
+    open();
+    assert.equal(status.textContent, 'Cargando notificaciones...');
+    assert.equal(status.className, 'status loading-message');
+    assert.equal(toolbar.hidden, true);
+    assert.match(styles, /\.loading-message::before \{[^}]*animation: brickset-spinner/);
+    assert.match(styles, /\.notifications-toolbar\[hidden\] \{ display: none; \}/);
+    await finish([createNotification('a1', 'Ada')]);
+    assert.equal(status.className, 'status');
+    assert.equal(status.textContent, '');
+    assert.equal(toolbar.hidden, false);
+    assert.equal(button.disabled, false);
+
+    window.__supabaseStub.channels[0].emit({ new: { id: 'loading-refresh' } });
+    assert.equal(window.document.querySelectorAll('.notification-item').length, 1);
+    assert.equal(toolbar.hidden, true);
+    await finish([createNotification('a1', 'Ada', true)]);
+    assert.equal(toolbar.hidden, false);
+    assert.equal(button.disabled, true);
+
+    open();
+    await finish([]);
+    assert.equal(status.textContent, 'No tienes notificaciones.');
+    assert.equal(status.className, 'status');
+    assert.equal(toolbar.hidden, true);
+
+    open();
+    finishRequest({ ok: false, json: async () => ({}) });
+    await tick();
+    assert.equal(status.textContent, 'No se pudieron cargar las notificaciones.');
+    assert.equal(status.className, 'status');
+    assert.equal(toolbar.hidden, true);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar globalmente reduce el badge', async () => {
   const { dom, window, requests, setRealtimeInserted } = startApp();
   try {

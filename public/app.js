@@ -1976,6 +1976,7 @@ function renderNotificationMessage(notification) {
 }
 
 function renderNotifications() {
+  notificationsMarkAllButton.parentElement.hidden = notificationsLoading || notificationsItems.length === 0;
   notificationsList.replaceChildren();
   const now = notificationsClock();
   let currentGroup = null;
@@ -2200,7 +2201,11 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
     renderNotifications();
   }
   notificationsLoading = true;
-  if (notificationsDialog.open) notificationsStatus.textContent = 'Cargando notificaciones...';
+  notificationsMarkAllButton.parentElement.hidden = true;
+  if (notificationsDialog.open) {
+    notificationsStatus.textContent = 'Cargando notificaciones...';
+    notificationsStatus.className = 'status loading-message';
+  }
   const cursor = reset ? null : notificationsNextCursor;
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   try {
@@ -2226,7 +2231,11 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
       notificationsStatus.textContent = 'No se pudieron cargar las notificaciones.';
     }
   } finally {
-    if (requestId === notificationsRequestSequence) notificationsLoading = false;
+    if (requestId === notificationsRequestSequence) {
+      notificationsLoading = false;
+      notificationsStatus.classList.remove('loading-message');
+      notificationsMarkAllButton.parentElement.hidden = notificationsItems.length === 0;
+    }
   }
 }
 
@@ -2284,6 +2293,8 @@ function clearNotifications() {
   notificationsTrigger = null;
   notificationsList.replaceChildren();
   notificationsStatus.textContent = '';
+  notificationsStatus.className = 'status';
+  notificationsMarkAllButton.parentElement.hidden = true;
   setNotificationsUnreadCount(0);
   if (notificationsDialog.open) notificationsDialog.close();
 }

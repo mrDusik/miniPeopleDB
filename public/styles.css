@@ -67,6 +67,7 @@ body {
 .notifications-unread-badge[hidden] { display: none; }
 .notifications-entry-row { display: flex; justify-content: flex-start; margin: -18px 0 12px; }
 .notifications-toolbar { display: flex; justify-content: flex-start; padding: 2px 0 0; }
+.notifications-toolbar[hidden] { display: none; }
 #notifications-dialog #notifications-status { min-height: 0; margin: 0; }
 #notifications-dialog .achievements-list { margin-top: 0; margin-bottom: 4px; }
 .notifications-list .notification-item { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
@@ -298,7 +299,10 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .brickset-loading, .loading-message { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 700 0.9rem Arial, sans-serif; }
 .brickset-loading[hidden] { display: none; }
 .brickset-loading-icon, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
-#dna-status.loading-message { justify-content: center; }
+.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *):not(:has(.loading-message)) { display: none; }
+#dna-dialog:has(#dna-status.loading-message) .dna-dialog-body { display: block; }
+#dna-dialog:has(#dna-status.loading-message) .dna-legend-panel { width: 100%; }
+#dna-status.loading-message { justify-content: flex-start; text-align: left; }
 @keyframes brickset-spinner { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .brickset-loading-icon, .loading-message::before { animation: none; } }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
