@@ -352,6 +352,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-dialog-heading h2 { margin: 0; }
 .modal-dialog-heading { margin-bottom: 12px; }
 .ranking-order-toolbar { display: flex; justify-content: flex-start; padding: 0 4px 8px 0; }
+.ranking-criterion-label-compact { display: none; }
 .weekly-ranking-order-spacer { height: 44px; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
 .global-ranking-entry { min-width: 0; }
@@ -817,4 +818,10 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 
 @media (max-width: 760px) and (orientation: portrait) {
   .weekly-ranking-order-spacer { height: 100px; }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+  #ranking-order [data-ranking-criterion="coleccion"] { padding: 0 1px; font-size: 0.68rem; white-space: nowrap; overflow-wrap: normal; }
+  #ranking-order [data-ranking-criterion="coleccion"] .ranking-criterion-label-full { display: none; }
+  #ranking-order [data-ranking-criterion="coleccion"] .ranking-criterion-label-compact { display: inline; }
 }
