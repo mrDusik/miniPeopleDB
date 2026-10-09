@@ -15,6 +15,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **Gamificación:** Bricks, niveles, progreso y logros calculados a partir del inventario y el catálogo de categorías. Los regalos recibidos se conservan al recalcular la parte derivada de la colección.
 * **DNA de colección:** cuatro rasgos (Rarity Hunter, Collector, Explorer y Fan), porcentajes privados para el usuario y un resumen público limitado al rasgo principal.
 * **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA, más un Top 10 semanal de Bricks netos; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
+* **Notificaciones en tiempo real:** avisos personales de entradas y salidas del Top 10, regalos recibidos y agradecimientos, además del resumen diario. La bandeja pagina resultados, actualiza el badge de no leídas y permite marcar avisos como leídos o agradecer regalos para dar 5 Bricks.
 * **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
 * **Analítica histórica:** capturas diarias privadas de valor, figuras, Bricks, nivel y DNA; gráficas y tablas accesibles sin reconstruir días ausentes.
 
@@ -68,11 +69,19 @@ Las rutas de colección, gamificación e histórico propio requieren `Authorizat
 | `/api/ranking/semanal` | `GET` | Autenticado | Top 10 de Bricks netos de la semana actual |
 | `/api/ranking/:userId/logros` | `GET` | Autenticado | Logros públicos del Top 10 |
 | `/api/ranking/regalar` | `POST` | Autenticado | Enviar regalo único de Bricks |
+| `/api/notificaciones` | `GET` | Autenticado | Listar notificaciones propias; acepta `cursor` para paginar |
+| `/api/notificaciones/leer-todas` | `POST` | Autenticado | Marcar todas las notificaciones propias como leídas |
+| `/api/notificaciones/:id/leer` | `POST` | Autenticado | Marcar una notificación propia como leída |
+| `/api/notificaciones/:id/agradecer` | `POST` | Autenticado | Agradecer un regalo recibido y reclamar la recompensa |
 | `/api/cron/daily-sync` | `POST` | `CRON_SECRET` | Iniciar o reutilizar un trabajo durable; devuelve `202` antes de terminar |
 | `/api/cron/daily-sync/:jobId` | `GET` | `CRON_SECRET` | Consultar estado agregado `pending`, `running`, `completed` o `failed` |
 | `/api/analytics/history` | `GET` | JWT propio | Leer snapshots propios por rango y baseline |
 
 Los estados de colección aceptados son `COLECCIÓN` y `BUSCADA`. Los filtros de nombre e ID se aplican en el cliente sobre el catálogo cargado; los parámetros de `GET /minifiguras` también están disponibles para consumidores de la API.
+
+### Notificaciones
+
+La bandeja carga hasta 15 avisos por página y usa el cursor devuelto para continuar. Supabase Realtime avisa de cambios de la sesión autenticada; recibir o abrir la bandeja no marca avisos como leídos. El badge cambia al marcar una notificación individualmente o usar `POST /api/notificaciones/leer-todas`. Los avisos de regalo incluyen la acción para agradecerlo; agradecer es independiente de marcarlo como leído.
 
 ### Analítica histórica diaria
 

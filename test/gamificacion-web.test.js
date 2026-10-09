@@ -98,6 +98,34 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   dom.window.close();
 });
 
+test('el sobre accesible muestra el badge solo con no leídas y devuelve el foco al cerrar', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state());
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const button = window.document.querySelector('#open-notifications');
+  const badge = window.document.querySelector('#notifications-unread-badge');
+  const dialog = window.document.querySelector('#notifications-dialog');
+
+  assert.equal(button.getAttribute('aria-label'), 'Notificaciones');
+  assert.equal(badge.hidden, true);
+  window.eval('setNotificationsUnreadCount(3)');
+  assert.equal(badge.hidden, false);
+  assert.equal(button.getAttribute('aria-label'), 'Notificaciones, 3 sin leer');
+  window.eval('setNotificationsUnreadCount(0)');
+  assert.equal(badge.hidden, true);
+
+  button.click();
+  assert.equal(dialog.open, true);
+  assert.equal(window.document.activeElement.id, 'notifications-close');
+  window.document.querySelector('#notifications-close').click();
+  dialog.dispatchEvent(new window.Event('close'));
+  assert.equal(dialog.open, false);
+  assert.equal(window.document.activeElement, button);
+  dom.window.close();
+});
+
 test('renderizar logros ajenos no cambia el panel y abrir propios restaura su contenido', async () => {
   const dom = createDom();
   dom.window.fetch = baseFetch([], state());

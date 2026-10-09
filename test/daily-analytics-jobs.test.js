@@ -50,6 +50,23 @@ test('procesa usuarios vacios y captura una vez; IDs repetidos se refrescan una 
   assert.ok(snapshots.some(({ user_id, total_figures, total_value, level }) => user_id === USER_B && total_figures === 0 && total_value === 0 && level === 0));
 });
 
+test('daily-sync conserva logros y Bricks derivados del ledger de agradecimientos', async () => {
+  const { jobs, mock } = analyticsHarness({ users: [USER_A, USER_B] });
+  mock.seed('agradecimientos_regalo', USER_A, [{
+    gift_notification_id: 'gift-notification-a', thanker_id: USER_A, donor_id: USER_B,
+  }]);
+
+  await jobs.start();
+  await jobs.waitForIdle();
+
+  const thanker = mock.rows('gamificacion', USER_A)[0];
+  const donor = mock.rows('gamificacion', USER_B)[0];
+  assert.equal(thanker.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(thanker.bricks, 0);
+  assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift')?.cantidad, 1);
+  assert.equal(donor.bricks, 10);
+});
+
 test('usa el scraper compartido, deduplica el ID y preserva precios ante fallo', async () => {
   const requested = [];
   const { jobs, mock } = analyticsHarness({

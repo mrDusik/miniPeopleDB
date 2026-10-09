@@ -9,7 +9,8 @@ export function supabaseStubScript({ session = DEFAULT_SESSION, signInError = nu
   const options = ${JSON.stringify({ session, signInError })};
   let session = options.session;
   const listeners = [];
-  const calls = { createClient: [], signInWithOAuth: [], signOut: [] };
+  const calls = { createClient: [], signInWithOAuth: [], signOut: [], channel: [], removeChannel: [] };
+  const channels = [];
   const appFetch = window.fetch;
   window.fetch = (url, init) => url === '/config/supabase'
     ? Promise.resolve({ ok: true, status: 200, json: async () => ({ url: 'https://proyecto.supabase.test', anonKey: 'anon-key-publica' }) })
@@ -17,12 +18,32 @@ export function supabaseStubScript({ session = DEFAULT_SESSION, signInError = nu
   const emit = (event) => listeners.forEach((listener) => listener(event, session));
   window.__supabaseStub = {
     calls,
+    channels,
     setSession(event, next) { session = next; emit(event); },
   };
   window.supabase = {
     createClient(url, key, clientOptions) {
       calls.createClient.push({ url, key, clientOptions });
       return {
+        channel(name) {
+          const channel = {
+            name,
+            handlers: [],
+            statusHandler: null,
+            on(_event, filter, callback) { this.handlers.push({ filter, callback }); return this; },
+            subscribe(callback) { this.statusHandler = callback; callback?.('SUBSCRIBED'); return this; },
+            emit(payload) { this.handlers.forEach(({ callback }) => callback(payload)); },
+            setStatus(status) { this.statusHandler?.(status); },
+            unsubscribe() { this.unsubscribed = true; return Promise.resolve('ok'); },
+          };
+          channels.push(channel);
+          calls.channel.push(name);
+          return channel;
+        },
+        removeChannel(channel) {
+          calls.removeChannel.push(channel.name);
+          return channel.unsubscribe();
+        },
         auth: {
           async getSession() { return { data: { session }, error: null }; },
           onAuthStateChange(listener) {

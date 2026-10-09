@@ -4,8 +4,10 @@ import { basename, dirname } from 'node:path';
 import { calcularGamificacion, OBJETIVOS } from './gamificacion.js';
 
 const PAGE_SIZE = 1000;
+const THANKS_COUNT_PAGE_SIZE = 1000;
 const VERSION_TABLE = 'gamificacion_categoria_version';
 const APPLY_RPC = 'aplicar_recalculo_gamificacion_categorias';
+const THANKS_COUNT_RPC = 'recalcular_agradecimientos_regalo_count';
 
 async function readAll(client, table, columns) {
   const rows = [];
@@ -21,6 +23,20 @@ async function readAll(client, table, columns) {
 
 function fingerprint(categorias) {
   return createHash('sha256').update(JSON.stringify({ categorias, objetivos: OBJETIVOS })).digest('hex');
+}
+
+async function readThanksCounts(client, userIds) {
+  const counts = [];
+  for (let offset = 0; offset < userIds.length; offset += THANKS_COUNT_PAGE_SIZE) {
+    const { data, error } = await client.rpc(THANKS_COUNT_RPC, {
+      p_user_ids: userIds.slice(offset, offset + THANKS_COUNT_PAGE_SIZE),
+    });
+    if (error || !Array.isArray(data)) {
+      throw new Error('No se pudieron leer los agradecimientos para recalcular gamificación');
+    }
+    counts.push(...data);
+  }
+  return counts;
 }
 
 export class CategoryGamificationRecalculator {
@@ -62,6 +78,7 @@ export class CategoryGamificationRecalculator {
       ...figureRows.map(({ user_id }) => user_id),
       ...gifts.map(({ receptor_id }) => receptor_id),
     ].filter((userId) => typeof userId === 'string' && userId !== ''));
+    const thanksByUser = new Map((await readThanksCounts(this.client, [...userIds])).map((row) => [row.user_id, row]));
     const figuresByUser = new Map();
     for (const figure of figureRows) {
       if (!figuresByUser.has(figure.user_id)) figuresByUser.set(figure.user_id, []);
@@ -81,7 +98,11 @@ export class CategoryGamificationRecalculator {
     }
 
     const states = [...userIds].sort().map((userId) => {
-      const state = calcularGamificacion(figuresByUser.get(userId) || [], categorias, giftsByUser.get(userId) || 0);
+      const thanks = thanksByUser.get(userId);
+      const state = calcularGamificacion(
+        figuresByUser.get(userId) || [], categorias, giftsByUser.get(userId) || 0,
+        thanks?.received_count ?? 0,
+      );
       return {
         user_id: userId,
         bricks: state.bricks,

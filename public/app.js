@@ -111,6 +111,13 @@ const achievementsOpenButton = document.querySelector('#open-achievements');
 const achievementsHeadingImage = document.querySelector('.achievements-heading-icon');
 const gamificationAchievements = document.querySelector('#gamification-achievements');
 const gamificationCloseButton = document.querySelector('#gamification-close');
+const notificationsOpenButton = document.querySelector('#open-notifications');
+const notificationsUnreadBadge = document.querySelector('#notifications-unread-badge');
+const notificationsDialog = document.querySelector('#notifications-dialog');
+const notificationsCloseButton = document.querySelector('#notifications-close');
+const notificationsMarkAllButton = document.querySelector('#notifications-mark-all');
+const notificationsStatus = document.querySelector('#notifications-status');
+const notificationsList = document.querySelector('#notifications-list');
 const dnaDialog = document.querySelector('#dna-dialog');
 const dnaDialogCloseButton = document.querySelector('#dna-close');
 const dnaDialogStatus = document.querySelector('#dna-status');
@@ -210,6 +217,20 @@ let ownDnaState = null;
 let dnaDialogTrigger = null;
 let dnaRequestSequence = 0;
 let achievementsTrigger = null;
+let notificationsTrigger = null;
+let notificationsItems = [];
+let notificationsNextCursor = null;
+let notificationsHasMore = true;
+let notificationsLoading = false;
+let notificationsRequestSequence = 0;
+let notificationsChannel = null;
+let notificationsChannelConnected = false;
+const notificationThankRequests = new Set();
+const notificationThankErrors = new Map();
+const notificationReadRequests = new Set();
+const notificationReadErrors = new Map();
+const notificationToastIds = new Set();
+let notificationsClock = () => new Date();
 let analyticsHistoryRequestSequence = 0;
 let analyticsHistoryTrigger = null;
 let analyticsHistoryRange = null;
@@ -1200,10 +1221,10 @@ function highlightGroup(title, items, mode, ownerUserId) {
   const heading = document.createElement('h3');
   const portraitTitle = document.createElement('span');
   portraitTitle.className = 'ranking-highlight-title-portrait';
-  portraitTitle.textContent = `Top 3 ${title}`;
+  portraitTitle.textContent = `Top 5 ${title}`;
   const landscapeTitle = document.createElement('span');
   landscapeTitle.className = 'ranking-highlight-title-landscape';
-  landscapeTitle.textContent = `Top 5 ${title}`;
+  landscapeTitle.textContent = `Top 3 ${title}`;
   heading.append(portraitTitle, landscapeTitle);
   const row = document.createElement('div');
   row.className = 'ranking-row';
@@ -1478,7 +1499,8 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   if (icon) {
     icon.className = 'toast-icon';
     icon.src = iconSrc;
-    icon.alt = type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Separador de ladrillos';
+    icon.alt = type === 'notification' ? 'Notificaciones'
+      : type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Separador de ladrillos';
   }
   if (icon && iconPosition === 'before') toast.append(icon);
   toast.append(messageNode);
@@ -1870,6 +1892,409 @@ function openOwnAchievements(trigger) {
   gamificationCloseButton.focus();
 }
 
+function setNotificationsUnreadCount(count) {
+  const unreadCount = Number.isInteger(count) && count > 0 ? count : 0;
+  const label = unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones';
+  notificationsUnreadBadge.hidden = unreadCount === 0;
+  notificationsMarkAllButton.disabled = unreadCount === 0;
+  notificationsOpenButton.setAttribute('aria-label', label);
+  notificationsOpenButton.title = label;
+}
+
+function notificationDateGroup(createdAt, now = notificationsClock()) {
+  const timestamp = new Date(createdAt);
+  if (Number.isNaN(timestamp.getTime())) return 'Hace más de dos semanas';
+  const age = now.getTime() - timestamp.getTime();
+  if (age >= 0 && age < 60_000) return 'Hace un instante';
+  const date = madridDateString(timestamp);
+  const today = madridDateString(now);
+  if (date === today) return 'Hoy';
+  if (date === shiftCalendarDate(today, -1)) return 'Ayer';
+  const weekday = (new Date(`${today}T00:00:00.000Z`).getUTCDay() + 6) % 7;
+  const thisWeekStart = shiftCalendarDate(today, -weekday);
+  if (date >= thisWeekStart) return 'Esta semana';
+  if (date >= shiftCalendarDate(thisWeekStart, -7)) return 'La semana pasada';
+  return 'Hace más de dos semanas';
+}
+
+function exactNotificationTimestamp(createdAt) {
+  const parts = new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(createdAt));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.day}/${values.month}/${values.year} ${values.hour}:${values.minute}`;
+}
+
+function notificationClockTime(createdAt) {
+  const parts = new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(createdAt));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.hour}:${values.minute}`;
+}
+
+function appendNotificationBrick(container) {
+  const icon = document.createElement('img');
+  icon.className = 'ranking-gift-icon notification-brick-icon';
+  icon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+  icon.alt = '';
+  icon.setAttribute('aria-hidden', 'true');
+  container.append(icon);
+}
+
+function renderNotificationMessage(notification) {
+  const data = notification.data ?? {};
+  const message = document.createElement('p');
+  message.className = 'notification-message';
+  if (notification.type === 'gift_received' || notification.type === 'gift_thanks') {
+    const userName = document.createElement('strong');
+    userName.textContent = data.user ?? 'Coleccionista';
+    const amount = document.createElement('span');
+    amount.textContent = String(Number.isFinite(data.amount) ? data.amount : notification.type === 'gift_received' ? 50 : 5);
+    if (notification.type === 'gift_received') {
+      message.append(userName, document.createTextNode(' vio tus tops en el Ranking Global y te regaló '), amount);
+      appendNotificationBrick(message);
+      message.append(document.createTextNode('.'));
+    } else {
+      message.append(userName, document.createTextNode(' agradeció tu regalo con '), amount);
+      appendNotificationBrick(message);
+    }
+    return message;
+  }
+  if (notification.type === 'ranking_entered' || notification.type === 'ranking_exited') {
+    const marker = document.createElement('span');
+    marker.className = 'notification-leading-emoji';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = notification.type === 'ranking_exited'
+      ? '❌' : data.ranking === 'weekly' ? '🗓️' : '🌐';
+    message.append(marker, document.createTextNode(` ${data.message ?? 'Tienes una notificación de ranking.'}`));
+    return message;
+  }
+  message.textContent = data.message ?? 'Tienes una notificación.';
+  return message;
+}
+
+function renderNotifications() {
+  notificationsList.replaceChildren();
+  const now = notificationsClock();
+  let currentGroup = null;
+  for (const notification of notificationsItems) {
+    const group = notificationDateGroup(notification.createdAt, now);
+    if (group !== currentGroup) {
+      const heading = document.createElement('li');
+      heading.className = 'notification-date-group';
+      const label = document.createElement('h3');
+      label.textContent = group;
+      heading.append(label);
+      notificationsList.append(heading);
+      currentGroup = group;
+    }
+    const item = document.createElement('li');
+    item.className = 'notification-item';
+    item.dataset.notificationId = notification.id;
+    item.tabIndex = -1;
+    item.classList.toggle('is-read', notification.isRead);
+    const content = document.createElement('div');
+    content.className = 'notification-content';
+    const time = document.createElement('time');
+    time.className = 'notification-time';
+    time.dateTime = notification.createdAt;
+    time.title = exactNotificationTimestamp(notification.createdAt);
+    time.setAttribute('aria-label', time.title);
+    time.textContent = notificationClockTime(notification.createdAt);
+    content.append(time);
+    if (notification.type === 'daily_summary') {
+      content.append(renderDailyNotification(notification));
+    } else {
+      content.append(renderNotificationMessage(notification));
+    }
+    const actions = document.createElement('div');
+    actions.className = 'notification-actions';
+    if (notification.type === 'gift_received') {
+      const thankButton = document.createElement('button');
+      const isPending = notificationThankRequests.has(notification.id);
+      thankButton.type = 'button';
+      thankButton.className = 'button button-secondary ranking-gift notification-thank';
+      thankButton.dataset.notificationId = notification.id;
+      thankButton.append(document.createTextNode('¡Gracias! +5 '));
+      appendNotificationBrick(thankButton);
+      thankButton.disabled = isPending || notification.canThank === false;
+      if (isPending) thankButton.setAttribute('aria-busy', 'true');
+      actions.append(thankButton);
+      const error = notificationThankErrors.get(notification.id);
+      if (error) {
+        const errorMessage = document.createElement('p');
+        errorMessage.className = 'notification-error';
+        errorMessage.setAttribute('role', 'alert');
+        errorMessage.textContent = error;
+        actions.append(errorMessage);
+      }
+    }
+    if (actions.childElementCount) content.append(actions);
+    const controls = document.createElement('div');
+    controls.className = 'notification-controls';
+    const markReadButton = document.createElement('button');
+    markReadButton.type = 'button';
+    markReadButton.className = 'button button-secondary notification-mark-read';
+    markReadButton.dataset.notificationId = notification.id;
+    markReadButton.setAttribute('aria-label', notification.isRead ? 'Notificación leída' : 'Marcar notificación como leída');
+    markReadButton.title = notification.isRead ? 'Notificación leída' : 'Marcar como leída';
+    markReadButton.textContent = '✅';
+    markReadButton.disabled = notification.isRead || notificationReadRequests.has(notification.id);
+    const readError = notificationReadErrors.get(notification.id);
+    controls.append(markReadButton);
+    if (readError) {
+      const errorMessage = document.createElement('p');
+      errorMessage.className = 'notification-error';
+      errorMessage.setAttribute('role', 'alert');
+      errorMessage.textContent = readError;
+      content.append(errorMessage);
+    }
+    item.append(content, controls);
+    notificationsList.append(item);
+  }
+}
+
+function formatSignedNumber(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return `${value > 0 ? '+' : ''}${value}`;
+}
+
+function formatSignedCurrency(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const amount = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(value));
+  return `${value > 0 ? '+' : value < 0 ? '-' : ''}${amount} €`;
+}
+
+function renderDailyNotification(notification) {
+  const details = document.createElement('details');
+  details.className = 'daily-notification';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Resumen diario';
+  details.append(summary);
+  const deltas = notification.data.deltas;
+  if (!deltas) {
+    const noBaseline = document.createElement('p');
+    noBaseline.className = 'daily-no-baseline';
+    noBaseline.textContent = 'Sin medición previa.';
+    details.append(noBaseline);
+    return details;
+  }
+
+  const metrics = document.createElement('div');
+  metrics.className = 'daily-summary-metrics';
+  const rankingMetrics = document.createElement('div');
+  rankingMetrics.className = 'daily-ranking-deltas';
+  const addMetric = (label, value, iconPath = null, target = metrics) => {
+    const metric = document.createElement('div');
+    metric.className = 'daily-summary-metric';
+    if (iconPath) {
+      metric.classList.add('has-icon');
+      const icon = document.createElement('img');
+      icon.className = 'daily-summary-icon';
+      icon.src = iconPath;
+      icon.alt = '';
+      metric.append(icon);
+    }
+    const name = document.createElement('span');
+    name.className = 'daily-summary-label';
+    name.textContent = label;
+    const amount = document.createElement('strong');
+    amount.className = 'daily-summary-value';
+    amount.textContent = value;
+    metric.append(name, amount);
+    target.append(metric);
+  };
+  addMetric('Figuras', formatSignedNumber(deltas.figures), '/status_images/caja.png');
+  addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
+  addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  addMetric('👉 Nivel', formatSignedNumber(deltas.level));
+  details.append(metrics);
+  if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);
+  if (Number.isFinite(deltas.weeklyPosition)) addMetric('🗓️ Ranking Semanal', `${formatSignedNumber(deltas.weeklyPosition)} puestos`, null, rankingMetrics);
+  if (rankingMetrics.childElementCount) details.append(rankingMetrics);
+
+  const traits = [
+    ['collector', 'Collector', 'collector'],
+    ['explorer', 'Explorer', 'explorer'],
+    ['rarityHunter', 'Rarity Hunter', 'rarity'],
+    ['fan', 'Fan', 'fan'],
+  ];
+  const dnaGrid = document.createElement('div');
+  dnaGrid.className = 'daily-dna-grid';
+  for (const [key, name, color] of traits) {
+    const trait = document.createElement('div');
+    trait.className = 'daily-dna-trait';
+    const swatch = document.createElement('span');
+    swatch.className = `dna-swatch dna-swatch-${color}`;
+    swatch.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'daily-dna-name';
+    label.textContent = name;
+    const percentage = document.createElement('strong');
+    percentage.textContent = `${formatSignedNumber(deltas.dna?.[key])}%`;
+    trait.append(swatch, label, percentage);
+    dnaGrid.append(trait);
+  }
+  details.append(dnaGrid);
+  return details;
+}
+
+async function thankNotification(notificationId) {
+  const notification = notificationsItems.find((item) => item.id === notificationId);
+  const sessionUserId = currentSession?.user?.id;
+  if (!notification || notification.type !== 'gift_received' || notification.canThank === false
+    || notificationThankRequests.has(notificationId) || !sessionUserId) return;
+  notificationThankRequests.add(notificationId);
+  notificationThankErrors.delete(notificationId);
+  renderNotifications();
+  try {
+    const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/agradecer`, { method: 'POST' });
+    if (sessionUserId !== currentSession?.user?.id) return;
+    if (response.ok || response.status === 404 || response.status === 409) {
+      notificationsItems = notificationsItems.map((item) => item.id === notificationId ? { ...item, canThank: false } : item);
+    } else {
+      throw new Error('thanks unavailable');
+    }
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) notificationThankErrors.set(notificationId, 'No se pudo enviar el agradecimiento.');
+  } finally {
+    notificationThankRequests.delete(notificationId);
+    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+  }
+}
+
+async function markNotificationRead(notificationId) {
+  const notification = notificationsItems.find((item) => item.id === notificationId);
+  const sessionUserId = currentSession?.user?.id;
+  if (!notification || notification.isRead || notificationReadRequests.has(notificationId) || !sessionUserId) return;
+  notificationReadRequests.add(notificationId);
+  notificationReadErrors.delete(notificationId);
+  renderNotifications();
+  try {
+    const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/leer`, { method: 'POST' });
+    const result = await response.json();
+    if (sessionUserId !== currentSession?.user?.id) return;
+    if (!response.ok || !Number.isInteger(result.unreadCount)) throw new Error('read unavailable');
+    notificationsItems = notificationsItems.map((item) => item.id === notificationId ? { ...item, isRead: true } : item);
+    setNotificationsUnreadCount(result.unreadCount);
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) notificationReadErrors.set(notificationId, 'No se pudo marcar como leída.');
+  } finally {
+    notificationReadRequests.delete(notificationId);
+    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+  }
+}
+
+async function loadNotifications({ reset = false, preserveItems = false } = {}) {
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId || (!reset && (notificationsLoading || !notificationsHasMore))) return;
+  const requestId = ++notificationsRequestSequence;
+  const previousCursor = notificationsNextCursor;
+  const previousHasMore = notificationsHasMore;
+  if (reset && !preserveItems) {
+    notificationsItems = [];
+    notificationsNextCursor = null;
+    notificationsHasMore = true;
+    renderNotifications();
+  }
+  notificationsLoading = true;
+  if (notificationsDialog.open) notificationsStatus.textContent = 'Cargando notificaciones...';
+  const cursor = reset ? null : notificationsNextCursor;
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  try {
+    const response = await apiFetch(`/api/notificaciones${query}`);
+    const result = await response.json();
+    if (requestId !== notificationsRequestSequence || sessionUserId !== currentSession?.user?.id) return;
+    if (!response.ok || !Array.isArray(result.notifications) || !Number.isInteger(result.unreadCount)) {
+      throw new Error('notifications unavailable');
+    }
+    const merged = new Map((reset && !preserveItems ? [] : notificationsItems).map((item) => [item.id, item]));
+    for (const item of result.notifications) merged.set(item.id, item);
+    notificationsItems = [...merged.values()].sort((left, right) =>
+      right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+    notificationsNextCursor = preserveItems && previousCursor ? previousCursor : result.nextCursor;
+    notificationsHasMore = preserveItems
+      ? previousHasMore || result.nextCursor !== null
+      : result.nextCursor !== null;
+    setNotificationsUnreadCount(result.unreadCount);
+    renderNotifications();
+    notificationsStatus.textContent = notificationsItems.length ? '' : 'No tienes notificaciones.';
+  } catch {
+    if (requestId === notificationsRequestSequence && sessionUserId === currentSession?.user?.id) {
+      notificationsStatus.textContent = 'No se pudieron cargar las notificaciones.';
+    }
+  } finally {
+    if (requestId === notificationsRequestSequence) notificationsLoading = false;
+  }
+}
+
+function stopNotificationsRealtime() {
+  if (!notificationsChannel) return;
+  try {
+    const removal = supabaseClient?.removeChannel?.(notificationsChannel);
+    removal?.catch?.(() => {});
+    if (!supabaseClient?.removeChannel) notificationsChannel.unsubscribe?.();
+  } catch {
+    notificationsChannel.unsubscribe?.();
+  }
+  notificationsChannel = null;
+  notificationsChannelConnected = false;
+}
+
+function startNotificationsRealtime() {
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId || !supabaseClient?.channel) return;
+  notificationsChannel = supabaseClient.channel(`notificaciones-${sessionUserId}`)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'notificaciones', filter: `user_id=eq.${sessionUserId}`,
+    }, (payload) => {
+      if (currentSession?.user?.id !== sessionUserId) return;
+      const notificationId = payload?.new?.id;
+      if (notificationId && !notificationToastIds.has(notificationId)) {
+        notificationToastIds.add(notificationId);
+        showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
+      }
+      void loadNotifications({ reset: true, preserveItems: true });
+      if (['gift_received', 'gift_thanks'].includes(payload?.new?.type)) void loadGamification();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED' && currentSession?.user?.id === sessionUserId) {
+        const isReconnect = notificationsChannelConnected;
+        notificationsChannelConnected = true;
+        void loadNotifications({ reset: true, preserveItems: true });
+        if (isReconnect) void loadGamification();
+      }
+    });
+}
+
+function clearNotifications() {
+  stopNotificationsRealtime();
+  notificationsRequestSequence += 1;
+  notificationsItems = [];
+  notificationsNextCursor = null;
+  notificationsHasMore = true;
+  notificationsLoading = false;
+  notificationThankRequests.clear();
+  notificationThankErrors.clear();
+  notificationReadRequests.clear();
+  notificationReadErrors.clear();
+  notificationToastIds.clear();
+  notificationsTrigger = null;
+  notificationsList.replaceChildren();
+  notificationsStatus.textContent = '';
+  setNotificationsUnreadCount(0);
+  if (notificationsDialog.open) notificationsDialog.close();
+}
+
+function openNotifications(trigger) {
+  notificationsTrigger = trigger;
+  notificationsDialog.showModal();
+  notificationsCloseButton.focus();
+  void loadNotifications({ reset: true });
+}
+
 function restoreRankingFocus(trigger) {
   if (!currentSession) return;
   const weekly = Boolean(trigger?.closest('#weekly-ranking-list'));
@@ -1885,6 +2310,7 @@ function restoreRankingFocus(trigger) {
 
 gamificationLevelButton.addEventListener('click', () => openOwnAchievements(gamificationLevelButton));
 achievementsOpenButton.addEventListener('click', () => openOwnAchievements(achievementsOpenButton));
+notificationsOpenButton.addEventListener('click', () => openNotifications(notificationsOpenButton));
 
 for (const trigger of dnaOpenButtons) {
   trigger.addEventListener('click', () => openDnaDialog(trigger));
@@ -1912,6 +2338,50 @@ gamificationDialog.addEventListener('close', () => {
   else if (currentSession && achievementsTrigger?.isConnected) achievementsTrigger.focus();
   achievementsTrigger = null;
 });
+
+notificationsCloseButton.addEventListener('click', () => notificationsDialog.close());
+notificationsDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  notificationsDialog.close();
+});
+notificationsDialog.addEventListener('close', () => {
+  if (notificationsTrigger?.isConnected) notificationsTrigger.focus();
+  notificationsTrigger = null;
+});
+
+notificationsList.addEventListener('scroll', () => {
+  if (notificationsList.scrollTop + notificationsList.clientHeight >= notificationsList.scrollHeight - 72) {
+    void loadNotifications();
+  }
+});
+
+notificationsList.addEventListener('click', (event) => {
+  const markReadButton = event.target.closest('.notification-mark-read');
+  if (markReadButton) {
+    void markNotificationRead(markReadButton.dataset.notificationId);
+    return;
+  }
+  const button = event.target.closest('.notification-thank');
+  if (button) void thankNotification(button.dataset.notificationId);
+});
+
+notificationsMarkAllButton.addEventListener('click', async () => {
+  notificationsMarkAllButton.disabled = true;
+  try {
+    const response = await apiFetch('/api/notificaciones/leer-todas', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok || !Number.isInteger(result.unreadCount)) throw new Error('notifications unavailable');
+    notificationsItems = notificationsItems.map((item) => ({ ...item, isRead: true }));
+    setNotificationsUnreadCount(result.unreadCount);
+    renderNotifications();
+    notificationsStatus.textContent = '';
+  } catch {
+    notificationsStatus.textContent = 'No se pudieron marcar las notificaciones como leídas.';
+    notificationsMarkAllButton.disabled = false;
+  }
+});
+
+setNotificationsUnreadCount(0);
 
 let rankingTrigger = rankingOpenButton;
 function madridDateString(date) {
@@ -2859,6 +3329,7 @@ async function apiFetch(url, init = {}) {
 
 function clearUserData() {
   requestSequence += 1;
+  clearNotifications();
   dnaRequestSequence += 1;
   analyticsHistoryRequestSequence += 1;
   clearAnalyticsHistoryData();
@@ -2912,7 +3383,7 @@ function clearUserData() {
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, dnaDialog, rankingDialog, weeklyRankingDialog, analyticsHistoryDialog]) {
+  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, notificationsDialog, dnaDialog, rankingDialog, weeklyRankingDialog, analyticsHistoryDialog]) {
     if (dialog.open) dialog.close();
   }
 }
@@ -2956,6 +3427,7 @@ function handleSession(session, message = '') {
   pageShell.hidden = false;
   if (!appStarted) {
     appStarted = true;
+    startNotificationsRealtime();
     initialize();
   }
 }

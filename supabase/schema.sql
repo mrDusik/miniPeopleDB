@@ -115,10 +115,19 @@ create table if not exists public.dna_ponderaciones (
     and fan between 0 and 100
   ),
   constraint dna_ponderaciones_suma_check check (
-    (logro_id = 'someone-liked-your-collection' and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
-    or (logro_id <> 'someone-liked-your-collection' and rarity_hunter + collector + explorer + fan = 100)
+    (logro_id in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
+    or (logro_id not in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter + collector + explorer + fan = 100)
   )
 );
+
+alter table public.dna_ponderaciones
+  drop constraint if exists dna_ponderaciones_suma_check;
+
+alter table public.dna_ponderaciones
+  add constraint dna_ponderaciones_suma_check check (
+    (logro_id in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
+    or (logro_id not in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter + collector + explorer + fan = 100)
+  );
 
 insert into public.dna_ponderaciones (logro_id, rarity_hunter, collector, explorer, fan)
 values
@@ -162,7 +171,8 @@ values
   ('hooked', 0, 100, 0, 0),
   ('land-ho', 0, 0, 100, 0),
   ('nerd', 0, 0, 0, 100),
-  ('someone-liked-your-collection', 0, 0, 0, 0)
+  ('someone-liked-your-collection', 0, 0, 0, 0),
+  ('thanks-for-the-gift', 0, 0, 0, 0)
 on conflict (logro_id) do update set
   rarity_hunter = excluded.rarity_hunter,
   collector = excluded.collector,
@@ -263,6 +273,92 @@ create table if not exists public.regalos_enviados (
   primary key (donante_id, receptor_id),
   constraint regalos_enviados_distintos_check check (donante_id <> receptor_id)
 );
+
+create table if not exists public.notificaciones (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now(),
+  snapshot_date date,
+  gift_donante_id uuid,
+  gift_thanked_at timestamptz,
+  constraint notificaciones_type_check check (type in (
+    'gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary'
+  )),
+  constraint notificaciones_payload_object_check check (jsonb_typeof(payload) = 'object'),
+  constraint notificaciones_gift_reference_check check (
+    (type = 'gift_received' and gift_donante_id is not null)
+    or (type <> 'gift_received' and gift_donante_id is null)
+  ),
+  constraint notificaciones_gift_thanked_check check (type = 'gift_received' or gift_thanked_at is null),
+  constraint notificaciones_snapshot_reference_check check (
+    (type = 'daily_summary' and snapshot_date is not null)
+    or (type <> 'daily_summary' and snapshot_date is null)
+  ),
+  constraint notificaciones_gift_key unique (id, user_id),
+  constraint notificaciones_regalo_fk foreign key (gift_donante_id, user_id)
+    references public.regalos_enviados (donante_id, receptor_id) on delete cascade
+);
+
+create index if not exists notificaciones_user_created_idx
+  on public.notificaciones (user_id, created_at desc, id desc);
+
+create index if not exists notificaciones_user_unread_idx
+  on public.notificaciones (user_id)
+  where is_read = false;
+
+create unique index if not exists notificaciones_daily_snapshot_key
+  on public.notificaciones (user_id, snapshot_date)
+  where type = 'daily_summary';
+
+create unique index if not exists notificaciones_gift_received_key
+  on public.notificaciones (user_id, gift_donante_id)
+  where type = 'gift_received';
+
+create table if not exists public.agradecimientos_regalo (
+  gift_notification_id uuid primary key references public.notificaciones (id) on delete cascade,
+  thanker_id uuid not null references auth.users (id) on delete cascade,
+  donor_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint agradecimientos_regalo_distintos_check check (thanker_id <> donor_id)
+);
+
+create table if not exists private.thanks_reward_ownership_migration (
+  singleton boolean primary key default true check (singleton),
+  applied boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+insert into private.thanks_reward_ownership_migration (singleton, applied)
+values (true, false)
+on conflict (singleton) do nothing;
+alter table private.thanks_reward_ownership_migration enable row level security;
+revoke all on table private.thanks_reward_ownership_migration from public, anon, authenticated, service_role;
+
+create table if not exists public.ranking_top10_membership (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  ranking_type text not null,
+  position smallint not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, ranking_type),
+  constraint ranking_top10_type_check check (ranking_type in ('global', 'weekly')),
+  constraint ranking_top10_position_check check (position between 1 and 10)
+);
+
+create index if not exists ranking_top10_position_idx
+  on public.ranking_top10_membership (ranking_type, position, user_id);
+
+create table if not exists private.ranking_top10_reconciliation_state (
+  singleton boolean primary key default true check (singleton),
+  initialized boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+insert into private.ranking_top10_reconciliation_state (singleton, initialized)
+values (true, false)
+on conflict (singleton) do nothing;
 
 create or replace function public.iniciar_daily_sync()
 returns jsonb
@@ -653,6 +749,13 @@ as $$
       select jsonb_agg(jsonb_build_array(gifts.donante_id, gifts.fecha) order by gifts.donante_id)
       from public.regalos_enviados gifts where gifts.receptor_id = p_user_id
     ), '[]'::jsonb),
+    'thanks', coalesce((
+      select jsonb_agg(jsonb_build_array(
+        thanks.gift_notification_id, thanks.thanker_id, thanks.donor_id, thanks.created_at
+      ) order by thanks.gift_notification_id)
+      from public.agradecimientos_regalo thanks
+      where thanks.thanker_id = p_user_id or thanks.donor_id = p_user_id
+    ), '[]'::jsonb),
     'fingerprint', coalesce((
       select version.fingerprint from public.gamificacion_categoria_version version where version.singleton = true
     ), '')
@@ -669,6 +772,8 @@ as $$
 declare
   v_figures jsonb;
   v_gifts_received integer;
+  v_thanks_sent integer;
+  v_thanks_received integer;
   v_fingerprint text;
 begin
   if auth.role() is distinct from 'service_role' then
@@ -700,6 +805,11 @@ begin
 
   select count(*)::integer into v_gifts_received
   from public.regalos_enviados gifts where gifts.receptor_id = p_user_id;
+  select count(*) filter (where thanks.thanker_id = p_user_id)::integer,
+    count(*) filter (where thanks.donor_id = p_user_id)::integer
+  into v_thanks_sent, v_thanks_received
+  from public.agradecimientos_regalo thanks
+  where thanks.thanker_id = p_user_id or thanks.donor_id = p_user_id;
   select version.fingerprint into v_fingerprint
   from public.gamificacion_categoria_version version where version.singleton = true;
 
@@ -707,6 +817,8 @@ begin
     'revision', private.daily_sync_user_revision(p_user_id),
     'figures', v_figures,
     'giftsReceived', coalesce(v_gifts_received, 0),
+    'thanksSent', coalesce(v_thanks_sent, 0),
+    'thanksReceived', coalesce(v_thanks_received, 0),
     'fingerprint', coalesce(v_fingerprint, '')
   );
 end;
@@ -862,6 +974,66 @@ begin
 end;
 $$;
 
+create or replace function private.ranking_semanal_contexto(p_instante timestamptz)
+returns table (
+  available boolean,
+  available_from date,
+  reference_date date,
+  week_start date,
+  week_end date
+)
+language sql
+stable
+security definer
+set search_path = pg_catalog, pg_temp
+as $$
+  with fecha_local as (
+    select (p_instante at time zone 'Europe/Madrid')::date as fecha
+  )
+  select
+    fecha >= date '2026-10-12',
+    date '2026-10-12',
+    fecha,
+    fecha - (extract(isodow from fecha)::integer - 1),
+    fecha - (extract(isodow from fecha)::integer - 1) + 6
+  from fecha_local;
+$$;
+
+create or replace function private.daily_sync_weekly_membership(p_snapshot_date date)
+returns table (user_id uuid, rank_position smallint)
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+  with context as (
+    select * from private.ranking_semanal_contexto(
+      ((p_snapshot_date + 1)::timestamp at time zone 'Europe/Madrid') - interval '1 microsecond'
+    )
+  ), baselines as (
+    select snapshot.user_id, snapshot.bricks
+    from public.user_daily_snapshots snapshot
+    cross join context
+    where snapshot.snapshot_date = context.week_start - 1
+  ), latest as (
+    select distinct on (snapshot.user_id) snapshot.user_id, snapshot.bricks
+    from public.user_daily_snapshots snapshot
+    cross join context
+    where snapshot.snapshot_date between context.week_start and least(context.week_end, context.reference_date)
+    order by snapshot.user_id, snapshot.snapshot_date desc
+  ), ranked as (
+    select latest.user_id,
+      row_number() over (order by latest.bricks - baselines.bricks desc, latest.user_id) as rank_position
+    from latest
+    join baselines using (user_id)
+    join public.gamificacion using (user_id)
+  )
+  select ranked.user_id, ranked.rank_position::smallint
+  from ranked cross join context
+  where context.available and ranked.rank_position <= 10
+  order by ranked.rank_position;
+$$;
+
 create or replace function public.finalizar_daily_sync(p_run_id uuid, p_lease_owner uuid)
 returns jsonb
 language plpgsql
@@ -875,6 +1047,8 @@ declare
   v_failed_prices integer;
   v_failed_users integer;
   v_result jsonb;
+  v_has_weekly_baseline boolean;
+  v_weekly_count integer;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
@@ -912,6 +1086,130 @@ begin
         failed_prices = v_failed_prices, updated_at = clock_timestamp()
     where id = p_run_id;
     return public.consultar_daily_sync(p_run_id);
+  end if;
+
+  with snapshots_to_publish as (
+    select current_snapshot.user_id, current_snapshot.snapshot_date,
+      current_snapshot.total_figures, current_snapshot.total_value, current_snapshot.bricks,
+      current_snapshot.level, current_snapshot.pct_collector, current_snapshot.pct_explorer,
+      current_snapshot.pct_rarity_hunter, current_snapshot.pct_fan,
+      previous_snapshot.id as previous_id,
+      previous_snapshot.snapshot_date as previous_snapshot_date,
+      previous_snapshot.total_figures as previous_total_figures,
+      previous_snapshot.total_value as previous_total_value,
+      previous_snapshot.bricks as previous_bricks,
+      previous_snapshot.level as previous_level,
+      previous_snapshot.pct_collector as previous_pct_collector,
+      previous_snapshot.pct_explorer as previous_pct_explorer,
+      previous_snapshot.pct_rarity_hunter as previous_pct_rarity_hunter,
+      previous_snapshot.pct_fan as previous_pct_fan
+    from public.user_daily_snapshots current_snapshot
+    join private.daily_sync_users work
+      on work.user_id = current_snapshot.user_id and work.run_id = p_run_id and work.status = 'completed'
+    left join lateral (
+      select previous.*
+      from public.user_daily_snapshots previous
+      where previous.user_id = current_snapshot.user_id
+        and previous.snapshot_date < current_snapshot.snapshot_date
+      order by previous.snapshot_date desc
+      limit 1
+    ) previous_snapshot on true
+    where current_snapshot.snapshot_date = v_run.snapshot_date
+  ), comparison_dates as (
+    select snapshot_date from snapshots_to_publish
+    union
+    select previous_snapshot_date from snapshots_to_publish where previous_snapshot_date is not null
+  ), global_positions as (
+    select ranked.snapshot_date, ranked.user_id, ranked.rank_position::smallint as rank_position
+    from (
+      select snapshot.snapshot_date, snapshot.user_id,
+        row_number() over (
+          partition by snapshot.snapshot_date
+          order by snapshot.level desc, snapshot.bricks desc, snapshot.user_id asc
+        ) as rank_position
+      from public.user_daily_snapshots snapshot
+      where snapshot.snapshot_date in (select snapshot_date from comparison_dates)
+    ) ranked
+    where ranked.rank_position <= 10
+  ), weekly_positions as (
+    select dates.snapshot_date, members.user_id, members.rank_position
+    from comparison_dates dates
+    cross join lateral private.daily_sync_weekly_membership(dates.snapshot_date) members
+  )
+  insert into public.notificaciones (user_id, type, payload, snapshot_date)
+  select current.user_id,
+    'daily_summary',
+    jsonb_build_object(
+      'snapshotDate', current.snapshot_date,
+      'hasPrevious', current.previous_id is not null
+    ) || case when current.previous_id is null then '{}'::jsonb else jsonb_build_object(
+      'deltas', jsonb_build_object(
+        'figures', current.total_figures - current.previous_total_figures,
+        'valueEur', current.total_value - current.previous_total_value,
+        'bricks', current.bricks - current.previous_bricks,
+        'level', current.level - current.previous_level,
+        'dna', jsonb_build_object(
+          'collector', current.pct_collector - current.previous_pct_collector,
+          'explorer', current.pct_explorer - current.previous_pct_explorer,
+          'rarityHunter', current.pct_rarity_hunter - current.previous_pct_rarity_hunter,
+          'fan', current.pct_fan - current.previous_pct_fan
+        )
+      )
+      || case when current_global.rank_position is not null and previous_global.rank_position is not null
+        then jsonb_build_object('globalPosition', previous_global.rank_position - current_global.rank_position)
+        else '{}'::jsonb end
+      || case when current_weekly.rank_position is not null and previous_weekly.rank_position is not null
+        then jsonb_build_object('weeklyPosition', previous_weekly.rank_position - current_weekly.rank_position)
+        else '{}'::jsonb end
+    ) end,
+    current.snapshot_date
+  from snapshots_to_publish current
+  left join global_positions current_global
+    on current_global.user_id = current.user_id and current_global.snapshot_date = current.snapshot_date
+  left join global_positions previous_global
+    on previous_global.user_id = current.user_id and previous_global.snapshot_date = current.previous_snapshot_date
+  left join weekly_positions current_weekly
+    on current_weekly.user_id = current.user_id and current_weekly.snapshot_date = current.snapshot_date
+  left join weekly_positions previous_weekly
+    on previous_weekly.user_id = current.user_id and previous_weekly.snapshot_date = current.previous_snapshot_date
+  on conflict (user_id, snapshot_date) where type = 'daily_summary'
+  do update set payload = excluded.payload;
+
+  select exists (
+    select 1 from public.ranking_top10_membership where ranking_type = 'weekly'
+  ) into v_has_weekly_baseline;
+  select count(*)::integer into v_weekly_count
+  from private.daily_sync_weekly_membership(v_run.snapshot_date);
+  if v_weekly_count > 0 then
+    if v_has_weekly_baseline then
+      insert into public.notificaciones (user_id, type, payload)
+      select current_members.user_id, 'ranking_entered', jsonb_build_object(
+        'ranking', 'weekly', 'position', current_members.rank_position,
+        'message', 'Has entrado en el Top 10 del Ranking Semanal en el puesto ' || current_members.rank_position || '.'
+      )
+      from private.daily_sync_weekly_membership(v_run.snapshot_date) current_members
+      left join public.ranking_top10_membership previous_members
+        on previous_members.user_id = current_members.user_id and previous_members.ranking_type = 'weekly'
+      where previous_members.user_id is null;
+
+      insert into public.notificaciones (user_id, type, payload)
+      select previous_members.user_id, 'ranking_exited', jsonb_build_object(
+        'ranking', 'weekly',
+        'message', 'Has salido del Top 10 del Ranking Semanal.'
+      )
+      from public.ranking_top10_membership previous_members
+      left join private.daily_sync_weekly_membership(v_run.snapshot_date) current_members
+        on current_members.user_id = previous_members.user_id
+      where previous_members.ranking_type = 'weekly' and current_members.user_id is null;
+    end if;
+
+    delete from public.ranking_top10_membership where ranking_type = 'weekly';
+    insert into public.ranking_top10_membership (user_id, ranking_type, position, updated_at)
+    select user_id, 'weekly', rank_position, clock_timestamp()
+    from private.daily_sync_weekly_membership(v_run.snapshot_date)
+    on conflict (user_id, ranking_type) do update set
+      position = excluded.position,
+      updated_at = excluded.updated_at;
   end if;
 
   v_result := jsonb_build_object(
@@ -972,6 +1270,7 @@ revoke all on function public.leer_daily_sync_fuentes(uuid, uuid, uuid) from pub
 revoke all on function public.capturar_daily_sync_usuario(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
 revoke all on function public.fallar_daily_sync_usuario(uuid, uuid, uuid, text) from public, anon, authenticated;
 revoke all on function public.finalizar_daily_sync(uuid, uuid) from public, anon, authenticated;
+revoke all on function private.daily_sync_weekly_membership(date) from public, anon, authenticated;
 revoke all on function public.fallar_daily_sync(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.iniciar_daily_sync() to service_role;
 grant execute on function public.consultar_daily_sync(uuid) to service_role;
@@ -1094,6 +1393,10 @@ alter table public.dna_ponderaciones enable row level security;
 alter table public.perfiles_publicos enable row level security;
 alter table public.regalos_enviados enable row level security;
 alter table public.user_daily_snapshots enable row level security;
+alter table public.notificaciones enable row level security;
+alter table public.agradecimientos_regalo enable row level security;
+alter table public.ranking_top10_membership enable row level security;
+alter table private.ranking_top10_reconciliation_state enable row level security;
 alter table private.daily_sync_runs enable row level security;
 alter table private.daily_sync_users enable row level security;
 alter table private.daily_sync_prices enable row level security;
@@ -1101,6 +1404,12 @@ alter table private.daily_sync_figure_prices enable row level security;
 
 revoke all on table public.user_daily_snapshots from public, anon, authenticated;
 grant select on table public.user_daily_snapshots to authenticated;
+revoke all on table public.notificaciones from public, anon, authenticated, service_role;
+grant select on table public.notificaciones to authenticated;
+grant update (is_read) on table public.notificaciones to authenticated;
+revoke all on table public.agradecimientos_regalo from public, anon, authenticated, service_role;
+revoke all on table public.ranking_top10_membership from public, anon, authenticated, service_role;
+revoke all on table private.ranking_top10_reconciliation_state from public, anon, authenticated, service_role;
 revoke all on table private.daily_sync_runs from public, anon, authenticated;
 revoke all on table private.daily_sync_users from public, anon, authenticated;
 revoke all on table private.daily_sync_prices from public, anon, authenticated;
@@ -1117,6 +1426,19 @@ create policy "Users can view their daily snapshots"
   on public.user_daily_snapshots for select
   to authenticated
   using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can view their notifications" on public.notificaciones;
+create policy "Users can view their notifications"
+  on public.notificaciones for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can mark their notifications read" on public.notificaciones;
+create policy "Users can mark their notifications read"
+  on public.notificaciones for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can insert their minifiguras" on public.minifiguras;
 create policy "Users can insert their minifiguras"
@@ -1180,6 +1502,20 @@ create policy "Users can update their public profile"
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'notificaciones'
+    ) then
+    execute 'alter publication supabase_realtime add table public.notificaciones';
+  end if;
+end;
+$$;
 
 begin;
 drop function if exists public.ranking_global();
@@ -1245,31 +1581,6 @@ $$;
 revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) from public, anon, authenticated;
 grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) to service_role;
 
-create or replace function private.ranking_semanal_contexto(p_instante timestamptz)
-returns table (
-  available boolean,
-  available_from date,
-  reference_date date,
-  week_start date,
-  week_end date
-)
-language sql
-stable
-security definer
-set search_path = pg_catalog, pg_temp
-as $$
-  with fecha_local as (
-    select (p_instante at time zone 'Europe/Madrid')::date as fecha
-  )
-  select
-    fecha >= date '2026-10-12',
-    date '2026-10-12',
-    fecha,
-    fecha - (extract(isodow from fecha)::integer - 1),
-    fecha - (extract(isodow from fecha)::integer - 1) + 6
-  from fecha_local;
-$$;
-
 create function public.ranking_global(p_criterio text default 'nivel')
 returns table (
   user_id uuid,
@@ -1297,15 +1608,18 @@ as $$
     from public.gamificacion g
     where auth.uid() is not null
       and p_criterio in ('nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan')
+  ), level_top_users as (
+    select * from candidates
+    order by coalesce((nivel->>'id')::numeric, 0) desc, bricks desc, user_id asc
+    limit 10
   ), top_users as (
     select *, case p_criterio
       when 'coleccion' then total_coleccion::numeric
       when 'nivel' then coalesce((nivel->>'id')::numeric, 0)
       else coalesce((dna->'porcentajes'->>p_criterio)::numeric, 0)
     end as criterio_valor
-    from candidates
+    from level_top_users
     order by criterio_valor desc, coalesce((nivel->>'id')::integer, 0) desc, bricks desc, user_id asc
-    limit 10
   )
   select
     top_users.user_id,
@@ -1592,6 +1906,7 @@ declare
   v_desde integer;
   v_hasta integer;
   v_logros jsonb;
+  v_nombre_donante text;
 begin
   if v_donante_id is null then
     raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
@@ -1668,6 +1983,258 @@ begin
       updated_at = now()
   where user_id = p_receptor_id;
 
+  select coalesce(profile.display_name, 'Coleccionista') into v_nombre_donante
+  from public.perfiles_publicos profile
+  where profile.user_id = v_donante_id;
+  v_nombre_donante := coalesce(v_nombre_donante, 'Coleccionista');
+
+  insert into public.notificaciones (user_id, type, payload, gift_donante_id)
+  values (
+    p_receptor_id,
+    'gift_received',
+    jsonb_build_object(
+      'user', v_nombre_donante,
+      'amount', 50,
+      'message', 'El usuario ' || v_nombre_donante || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
+    ),
+    v_donante_id
+  );
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function private.gamificacion_ajustar_bricks(p_user_id uuid, p_delta integer)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_bricks integer;
+  v_level_id integer;
+  v_level_name text;
+  v_next_id integer;
+  v_next_name text;
+  v_from integer;
+  v_to integer;
+begin
+  if p_delta = 0 then
+    raise exception using errcode = '22023', message = 'RECOMPENSA_INVALIDA';
+  end if;
+  select bricks + p_delta into v_bricks
+  from public.gamificacion where user_id = p_user_id for update;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'USUARIO_NO_ENCONTRADO';
+  end if;
+  if v_bricks < 0 then
+    raise exception using errcode = '22023', message = 'RECOMPENSA_INVALIDA';
+  end if;
+
+  select current_level.id, current_level.nombre, current_level.umbral,
+    next_level.id, next_level.nombre, coalesce(next_level.umbral, current_level.umbral)
+  into v_level_id, v_level_name, v_from, v_next_id, v_next_name, v_to
+  from (values
+    (0,'Duplo',0),(1,'Stud',20),(2,'Plate',50),(3,'Three-Seven-Five',100),(4,'Citizen',200),(5,'Skeleton',300),
+    (6,'Pirate',400),(7,'Captain',500),(8,'Redbeard',750),(9,'Forestman',1000),(10,'Wolfpack',1500),(11,'Wolfpack Master',2000),
+    (12,'Ninja',2500),(13,'RX',3000),(14,'Dragon Form',5000),(15,'Space Baby',6000),(16,'Space Man',7000),(17,'Blacktron',8000),
+    (18,'Technic',9000),(19,'Majisto',10000),(20,'Castle Knight',12500),(21,'Chrome Gold',15000),(22,'Wooden Duck',20000),
+    (23,'De Billund',30000),(24,'Mr. Kirk',50000),(25,'Mr. Gold',100000)
+  ) as current_level(id, nombre, umbral)
+  left join (values
+    (0,'Duplo',0),(1,'Stud',20),(2,'Plate',50),(3,'Three-Seven-Five',100),(4,'Citizen',200),(5,'Skeleton',300),
+    (6,'Pirate',400),(7,'Captain',500),(8,'Redbeard',750),(9,'Forestman',1000),(10,'Wolfpack',1500),(11,'Wolfpack Master',2000),
+    (12,'Ninja',2500),(13,'RX',3000),(14,'Dragon Form',5000),(15,'Space Baby',6000),(16,'Space Man',7000),(17,'Blacktron',8000),
+    (18,'Technic',9000),(19,'Majisto',10000),(20,'Castle Knight',12500),(21,'Chrome Gold',15000),(22,'Wooden Duck',20000),
+    (23,'De Billund',30000),(24,'Mr. Kirk',50000),(25,'Mr. Gold',100000)
+  ) as next_level(id, nombre, umbral) on next_level.id = current_level.id + 1
+  where current_level.umbral <= v_bricks
+  order by current_level.umbral desc
+  limit 1;
+
+  update public.gamificacion
+  set bricks = v_bricks,
+      nivel = jsonb_build_object('id', v_level_id, 'nombre', v_level_name, 'umbral', v_from),
+      siguiente_nivel = case when v_next_id is null then null else jsonb_build_object('id', v_next_id, 'nombre', v_next_name, 'umbral', v_to) end,
+      progreso = jsonb_build_object(
+        'actual', v_bricks,
+        'desde', v_from,
+        'hasta', v_to,
+        'porcentaje', case when v_next_id is null then 100 else round(least(100, greatest(0, ((v_bricks - v_from)::numeric / (v_to - v_from)) * 100))) end
+      ),
+      updated_at = now()
+  where user_id = p_user_id;
+end;
+$$;
+
+create or replace function private.migrar_propiedad_logro_agradecimiento()
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_applied boolean;
+  v_user record;
+  v_logros jsonb;
+begin
+  select applied into v_applied
+  from private.thanks_reward_ownership_migration
+  where singleton = true
+  for update;
+  if coalesce(v_applied, false) then
+    return;
+  end if;
+
+  for v_user in
+    select users.user_id,
+      count(*) filter (where thanks.thanker_id = users.user_id)::integer as sent_count,
+      count(*) filter (where thanks.donor_id = users.user_id)::integer as received_count
+    from (
+      select thanker_id as user_id from public.agradecimientos_regalo
+      union
+      select donor_id as user_id from public.agradecimientos_regalo
+    ) users
+    join public.gamificacion gamification on gamification.user_id = users.user_id
+    join public.agradecimientos_regalo thanks
+      on thanks.thanker_id = users.user_id or thanks.donor_id = users.user_id
+    group by users.user_id
+  loop
+    select logros into v_logros
+    from public.gamificacion where user_id = v_user.user_id;
+    select coalesce(jsonb_agg(entries.item order by entries.ordinality), '[]'::jsonb)
+    into v_logros
+    from jsonb_array_elements(v_logros) with ordinality as entries(item, ordinality)
+    where entries.item->>'id' <> 'thanks-for-the-gift';
+    if v_user.received_count > 0 then
+      v_logros := v_logros || jsonb_build_array(jsonb_build_object(
+        'id', 'thanks-for-the-gift',
+        'type', 'regalo',
+        'nombre', 'Gratitude is the sign of noble souls',
+        'descripcion', 'Un coleccionista te dio las gracias por tu regalo.',
+        'bricks', 5,
+        'repetible', true,
+        'cantidad', v_user.received_count,
+        'total', v_user.received_count * 5
+      ));
+    end if;
+    update public.gamificacion
+    set logros = v_logros, updated_at = clock_timestamp()
+    where user_id = v_user.user_id;
+    if v_user.received_count <> v_user.sent_count then
+      perform private.gamificacion_ajustar_bricks(
+        v_user.user_id, (v_user.received_count - v_user.sent_count) * 5
+      );
+    end if;
+  end loop;
+
+  update private.thanks_reward_ownership_migration
+  set applied = true, updated_at = clock_timestamp()
+  where singleton = true;
+end;
+$$;
+
+select private.migrar_propiedad_logro_agradecimiento();
+
+update public.gamificacion gamification
+set logros = (
+  select coalesce(jsonb_agg(
+    case when achievement.item->>'id' = 'thanks-for-the-gift' then
+      jsonb_set(
+        jsonb_set(achievement.item, '{nombre}', to_jsonb('Gratitude is the sign of noble souls'::text), true),
+        '{descripcion}', to_jsonb('Un coleccionista te dio las gracias por tu regalo.'::text), true
+      )
+    else achievement.item end
+    order by achievement.ordinality
+  ), '[]'::jsonb)
+  from jsonb_array_elements(gamification.logros) with ordinality as achievement(item, ordinality)
+), updated_at = clock_timestamp()
+where gamification.logros @> '[{"id":"thanks-for-the-gift"}]'::jsonb
+  and exists (
+    select 1
+    from jsonb_array_elements(gamification.logros) as achievement(item)
+    where achievement.item->>'id' = 'thanks-for-the-gift'
+      and (
+        achievement.item->>'nombre' is distinct from 'Gratitude is the sign of noble souls'
+        or achievement.item->>'descripcion' is distinct from 'Un coleccionista te dio las gracias por tu regalo.'
+      )
+  );
+
+create or replace function public.agradecer_regalo(p_notification_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private, pg_temp
+as $$
+declare
+  v_thanker_id uuid := auth.uid();
+  v_notification public.notificaciones%rowtype;
+  v_thanker_name text;
+  v_thanks_count integer;
+  v_logros jsonb;
+begin
+  if v_thanker_id is null then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+
+  select * into v_notification
+  from public.notificaciones
+  where id = p_notification_id
+    and user_id = v_thanker_id
+    and type = 'gift_received'
+  for update;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'REGALO_NO_ENCONTRADO';
+  end if;
+  if exists (select 1 from public.agradecimientos_regalo where gift_notification_id = p_notification_id) then
+    raise exception using errcode = 'P0001', message = 'REGALO_YA_AGRADECIDO';
+  end if;
+
+  perform 1 from public.gamificacion
+  where user_id in (v_thanker_id, v_notification.gift_donante_id)
+  order by user_id
+  for update;
+
+  insert into public.agradecimientos_regalo (gift_notification_id, thanker_id, donor_id)
+  values (p_notification_id, v_thanker_id, v_notification.gift_donante_id);
+  update public.notificaciones set gift_thanked_at = clock_timestamp()
+  where id = p_notification_id;
+
+  perform private.gamificacion_ajustar_bricks(v_notification.gift_donante_id, 10);
+
+  select coalesce(profile.display_name, 'Coleccionista') into v_thanker_name
+  from public.perfiles_publicos profile where profile.user_id = v_thanker_id;
+  v_thanker_name := coalesce(v_thanker_name, 'Coleccionista');
+  insert into public.notificaciones (user_id, type, payload)
+  values (
+    v_notification.gift_donante_id,
+    'gift_thanks',
+    jsonb_build_object(
+      'user', v_thanker_name,
+      'amount', 5,
+      'message', v_thanker_name || ' te dio las gracias por tu regalo.'
+    )
+  );
+
+  select logros into v_logros from public.gamificacion where user_id = v_notification.gift_donante_id;
+  select count(*)::integer into v_thanks_count
+  from public.agradecimientos_regalo where donor_id = v_notification.gift_donante_id;
+  select coalesce(jsonb_agg(item), '[]'::jsonb) into v_logros
+  from jsonb_array_elements(v_logros) item
+  where item->>'id' <> 'thanks-for-the-gift';
+  v_logros := v_logros || jsonb_build_array(jsonb_build_object(
+    'id', 'thanks-for-the-gift',
+    'type', 'regalo',
+    'nombre', 'Gratitude is the sign of noble souls',
+    'descripcion', 'Un coleccionista te dio las gracias por tu regalo.',
+    'bricks', 5,
+    'repetible', true,
+    'cantidad', v_thanks_count,
+    'total', v_thanks_count * 5
+  ));
+  update public.gamificacion set logros = v_logros, updated_at = now()
+  where user_id = v_notification.gift_donante_id;
+
   return jsonb_build_object('ok', true);
 end;
 $$;
@@ -1683,6 +2250,46 @@ as $$
   where receptor_id = auth.uid() and auth.uid() is not null;
 $$;
 
+create or replace function public.agradecimientos_regalo_count()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  return jsonb_build_object(
+    'sent', (select count(*)::integer from public.agradecimientos_regalo where thanker_id = v_user_id),
+    'received', (select count(*)::integer from public.agradecimientos_regalo where donor_id = v_user_id)
+  );
+end;
+$$;
+
+create or replace function public.recalcular_agradecimientos_regalo_count(p_user_ids uuid[])
+returns table (user_id uuid, sent_count integer, received_count integer)
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'RECALCULO_AGRADECIMIENTOS_NO_AUTORIZADO';
+  end if;
+  if p_user_ids is null or cardinality(p_user_ids) > 10000 then
+    raise exception using errcode = '22023', message = 'RECALCULO_AGRADECIMIENTOS_INVALIDO';
+  end if;
+  return query
+  select requested.user_id,
+    (select count(*)::integer from public.agradecimientos_regalo thanks where thanks.thanker_id = requested.user_id),
+    (select count(*)::integer from public.agradecimientos_regalo thanks where thanks.donor_id = requested.user_id)
+  from (select distinct ids.user_id from unnest(p_user_ids) as ids(user_id)) requested;
+end;
+$$;
+
 revoke all on function public.ranking_global(text) from public, anon;
 revoke all on function public.ranking_semanal() from public, anon;
 revoke all on function private.ranking_semanal_contexto(timestamptz) from public, anon, authenticated;
@@ -1690,6 +2297,11 @@ revoke all on function private.ranking_semanal_calcular(timestamptz) from public
 revoke all on function public.ranking_logros(uuid) from public, anon;
 revoke all on function public.regalar_bricks(uuid) from public, anon;
 revoke all on function public.regalos_recibidos_count() from public, anon;
+revoke all on function public.agradecer_regalo(uuid) from public, anon, service_role;
+revoke all on function public.agradecimientos_regalo_count() from public, anon, service_role;
+revoke all on function public.recalcular_agradecimientos_regalo_count(uuid[]) from public, anon, authenticated;
+revoke all on function private.gamificacion_ajustar_bricks(uuid, integer) from public, anon, authenticated, service_role;
+revoke all on function private.migrar_propiedad_logro_agradecimiento() from public, anon, authenticated, service_role;
 revoke all on function private.dna_calcular(uuid) from public, anon, authenticated;
 revoke all on function public.gamificacion_dna() from public, anon;
 revoke all on table public.dna_ponderaciones from public, anon, authenticated;
@@ -1698,5 +2310,101 @@ grant execute on function public.ranking_semanal() to authenticated;
 grant execute on function public.ranking_logros(uuid) to authenticated;
 grant execute on function public.regalar_bricks(uuid) to authenticated;
 grant execute on function public.regalos_recibidos_count() to authenticated;
+grant execute on function public.agradecer_regalo(uuid) to authenticated;
+grant execute on function public.agradecimientos_regalo_count() to authenticated;
+grant execute on function public.recalcular_agradecimientos_regalo_count(uuid[]) to service_role;
 grant execute on function public.gamificacion_dna() to authenticated;
+
+create or replace function private.reconcile_global_top10()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_initialized boolean;
+begin
+  select initialized into v_initialized
+  from private.ranking_top10_reconciliation_state
+  where singleton = true
+  for update;
+
+  if v_initialized then
+    insert into public.notificaciones (user_id, type, payload)
+    with current_members as (
+      select ranked.user_id,
+        row_number() over (order by coalesce((ranked.nivel->>'id')::integer, 0) desc, ranked.bricks desc, ranked.user_id asc) as rank_position
+      from public.gamificacion ranked
+      order by coalesce((ranked.nivel->>'id')::integer, 0) desc, ranked.bricks desc, ranked.user_id asc
+      limit 10
+    )
+    select current_members.user_id, 'ranking_entered', jsonb_build_object(
+      'ranking', 'global',
+      'position', current_members.rank_position,
+      'message', 'Has entrado en el Top 10 del Ranking Global en el puesto ' || current_members.rank_position || '.'
+    )
+    from current_members
+    left join public.ranking_top10_membership previous_members
+      on previous_members.user_id = current_members.user_id and previous_members.ranking_type = 'global'
+    where previous_members.user_id is null;
+
+    insert into public.notificaciones (user_id, type, payload)
+    with current_members as (
+      select ranked.user_id
+      from public.gamificacion ranked
+      order by coalesce((ranked.nivel->>'id')::integer, 0) desc, ranked.bricks desc, ranked.user_id asc
+      limit 10
+    )
+    select previous_members.user_id, 'ranking_exited', jsonb_build_object(
+      'ranking', 'global',
+      'message', 'Has salido del Top 10 del Ranking Global.'
+    )
+    from public.ranking_top10_membership previous_members
+    left join current_members on current_members.user_id = previous_members.user_id
+    where previous_members.ranking_type = 'global' and current_members.user_id is null;
+  end if;
+
+  delete from public.ranking_top10_membership where ranking_type = 'global';
+  insert into public.ranking_top10_membership (user_id, ranking_type, position, updated_at)
+  select ranked.user_id, 'global', ranked.rank_position::smallint, clock_timestamp()
+  from (
+    select gamification.user_id,
+      row_number() over (order by coalesce((gamification.nivel->>'id')::integer, 0) desc, gamification.bricks desc, gamification.user_id asc) as rank_position
+    from public.gamificacion gamification
+    order by coalesce((gamification.nivel->>'id')::integer, 0) desc, gamification.bricks desc, gamification.user_id asc
+    limit 10
+  ) ranked;
+  update private.ranking_top10_reconciliation_state
+  set initialized = true, updated_at = clock_timestamp()
+  where singleton = true;
+  return null;
+end;
+$$;
+
+drop trigger if exists gamificacion_global_top10_reconcile on public.gamificacion;
+create trigger gamificacion_global_top10_reconcile
+after insert or update or delete on public.gamificacion
+for each statement execute function private.reconcile_global_top10();
+
+do $$
+begin
+  if not (select initialized from private.ranking_top10_reconciliation_state where singleton = true) then
+    insert into public.ranking_top10_membership (user_id, ranking_type, position, updated_at)
+    select ranked.user_id, 'global', ranked.rank_position::smallint, clock_timestamp()
+    from (
+      select gamification.user_id,
+        row_number() over (order by coalesce((gamification.nivel->>'id')::integer, 0) desc, gamification.bricks desc, gamification.user_id asc) as rank_position
+      from public.gamificacion gamification
+      order by coalesce((gamification.nivel->>'id')::integer, 0) desc, gamification.bricks desc, gamification.user_id asc
+      limit 10
+    ) ranked
+    on conflict (user_id, ranking_type) do nothing;
+    update private.ranking_top10_reconciliation_state
+    set initialized = true, updated_at = clock_timestamp()
+    where singleton = true;
+  end if;
+end;
+$$;
+
+revoke all on function private.reconcile_global_top10() from public, anon, authenticated, service_role;
 commit;

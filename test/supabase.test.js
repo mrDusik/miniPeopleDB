@@ -10,6 +10,145 @@ import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
+test('schema migra la constraint heredada de DNA antes de insertar el logro de agradecimiento', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+      create table public.dna_ponderaciones (
+        logro_id text primary key,
+        rarity_hunter smallint not null,
+        collector smallint not null,
+        explorer smallint not null,
+        fan smallint not null,
+        constraint dna_ponderaciones_suma_check check (
+          (logro_id = 'someone-liked-your-collection' and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
+          or (logro_id <> 'someone-liked-your-collection' and rarity_hunter + collector + explorer + fan = 100)
+        )
+      );
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    assert.deepEqual((await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'thanks-for-the-gift'")).rows[0], {
+      rarity_hunter: 0, collector: 0, explorer: 0, fan: 0,
+    });
+  } finally {
+    await db.close();
+  }
+});
+
+test('schema migra el logro de agradecimiento del autor al donante y es idempotente', async () => {
+  const db = new PGlite();
+  const donorId = '00000000-0000-4000-8000-0000000000d1';
+  const thankerId = '00000000-0000-4000-8000-0000000000d2';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+    await db.exec(schema);
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
+      donorId, 'donor@example.invalid', thankerId, 'thanker@example.invalid',
+    ]);
+    await db.query(`
+      insert into public.gamificacion(user_id, bricks, nivel, siguiente_nivel, progreso, logros) values
+        ($1, 10, '{"id":0,"nombre":"Duplo"}', '{"id":1,"nombre":"Stud"}', '{"actual":10,"desde":0,"hasta":20,"porcentaje":50}', '[]'),
+        ($2, 5, '{"id":0,"nombre":"Duplo"}', '{"id":1,"nombre":"Stud"}', '{"actual":5,"desde":0,"hasta":20,"porcentaje":25}',
+          '[{"id":"thanks-for-the-gift","type":"regalo","nombre":"Agradeciste un regalo","descripcion":"Agradeciste un regalo.","bricks":5,"repetible":true,"cantidad":1,"total":5}]')
+    `, [donorId, thankerId]);
+    await db.query('insert into public.regalos_enviados(donante_id, receptor_id) values ($1, $2)', [donorId, thankerId]);
+    const giftNotification = (await db.query(`
+      insert into public.notificaciones(user_id, type, payload, gift_donante_id)
+      values ($1, 'gift_received', '{"amount":50}'::jsonb, $2) returning id
+    `, [thankerId, donorId])).rows[0];
+    await db.query(`
+      insert into public.agradecimientos_regalo(gift_notification_id, thanker_id, donor_id)
+      values ($1, $2, $3)
+    `, [giftNotification.id, thankerId, donorId]);
+    await db.query('update private.thanks_reward_ownership_migration set applied = false where singleton = true');
+
+    await db.exec(schema);
+    await db.query('update public.gamificacion set logros = $2::jsonb where user_id = $1', [donorId, JSON.stringify([{
+      id: 'thanks-for-the-gift', type: 'regalo', nombre: 'Someone thanked you',
+      descripcion: 'A collector thanked you for your gift.', bricks: 5, repetible: true, cantidad: 1, total: 5,
+    }])]);
+    await db.exec(schema);
+
+    const donor = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [donorId])).rows[0];
+    const thanker = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [thankerId])).rows[0];
+    assert.equal(donor.bricks, 15);
+    assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift').nombre, 'Gratitude is the sign of noble souls');
+    assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
+    assert.equal(thanker.bricks, 0);
+    assert.equal(thanker.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  } finally {
+    await db.close();
+  }
+});
+
+test('reset de miniPeopleDB_prueba vacía todas las tablas de datos de aplicación y Auth', async () => {
+  const db = new PGlite();
+  const resetSql = await readFile(new URL('../supabase/reset-miniPeopleDB-prueba.sql', import.meta.url), 'utf8');
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (
+        instance_id uuid, id uuid primary key, aud text, role text, email text unique,
+        encrypted_password text, email_confirmed_at timestamptz,
+        raw_app_meta_data jsonb, raw_user_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
+        confirmation_token text, recovery_token text, email_change_token_new text, email_change text
+      );
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/insert-miniPeopleDB-prueba.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email, raw_user_meta_data) values ($1, $2, $3)', [
+      '00000000-0000-4000-8000-0000000000e1', 'outside@example.invalid', '{}',
+    ]);
+    await db.exec(resetSql);
+
+    for (const table of [
+      'auth.users', 'public.minifiguras', 'public.gamificacion', 'public.user_daily_snapshots',
+      'public.gamificacion_categoria_version', 'public.dna_ponderaciones', 'public.regalos_enviados',
+      'public.notificaciones', 'public.agradecimientos_regalo', 'public.ranking_top10_membership',
+      'public.perfiles_publicos', 'private.daily_sync_users', 'private.daily_sync_prices',
+      'private.daily_sync_runs', 'private.daily_sync_figure_prices',
+      'private.thanks_reward_ownership_migration', 'private.ranking_top10_reconciliation_state',
+    ]) {
+      assert.equal((await db.query(`select count(*)::integer as total from ${table}`)).rows[0].total, 0, table);
+    }
+  } finally {
+    await db.close();
+  }
+});
+
 test('getSupabaseConfig devuelve null sin variables ni sup.env', () => {
   assert.equal(getSupabaseConfig({ env: {}, envPath: join(tmpdir(), 'no-existe-sup.env') }), null);
   assert.equal(getSupabaseAdminConfig({ env: {}, envPath: join(tmpdir(), 'no-existe-sup.env') }), null);
@@ -166,6 +305,56 @@ test('el mock aplica regalos únicos y revierte la transacción si falla gamific
   assert.equal(mock.rows('regalos_enviados').length, 1);
 });
 
+test('el mock aísla la bandeja y procesa agradecimientos con recompensa única y atómica', async () => {
+  const mock = createSupabaseMock({ users: {
+    'token-sender': { id: 'sender' }, 'token-receiver': { id: 'receiver' }, 'token-other': { id: 'other' },
+  } });
+  const sender = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-sender' } } });
+  const receiver = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-receiver' } } });
+  mock.seed('gamificacion', 'sender', [{ bricks: 10, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
+  mock.seed('gamificacion', 'receiver', [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
+  mock.seed('perfiles_publicos', 'sender', [{ display_name: 'Ada' }]);
+  mock.seed('perfiles_publicos', 'receiver', [{ display_name: 'Grace' }]);
+
+  assert.deepEqual((await sender.rpc('regalar_bricks', { p_receptor_id: 'receiver' })).data, { ok: true });
+  const gift = mock.rows('notificaciones', 'receiver')[0];
+  assert.equal(gift.type, 'gift_received');
+  assert.equal(gift.payload.user, 'Ada');
+  assert.equal(gift.payload.amount, 50);
+  assert.deepEqual((await receiver.from('notificaciones').select('*')).data.map(({ id }) => id), [gift.id]);
+  assert.deepEqual((await sender.from('notificaciones').select('*')).data, []);
+  assert.equal((await receiver.from('notificaciones').insert({ type: 'gift_thanks' })).error.code, '42501');
+  assert.equal((await receiver.from('notificaciones').update({ payload: { forged: true } }).eq('id', gift.id)).error.code, '42501');
+  assert.equal((await receiver.from('agradecimientos_regalo').select('*')).error.code, '42501');
+
+  mock.failNext('notificaciones', { code: 'PGRST000', message: 'fallo' }, 'insert');
+  assert.equal((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).error.message, 'fallo');
+  assert.equal(mock.rows('agradecimientos_regalo').length, 0);
+  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 10);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 50);
+
+  assert.deepEqual((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).data, { ok: true });
+  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 20);
+  assert.equal(mock.rows('gamificacion', 'sender')[0].logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 50);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(mock.rows('notificaciones', 'receiver')[0].is_read, false);
+  assert.equal(mock.rows('notificaciones', 'sender')[0].type, 'gift_thanks');
+  assert.equal((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).error.message, 'REGALO_YA_AGRADECIDO');
+  assert.deepEqual((await receiver.rpc('agradecimientos_regalo_count')).data, { sent: 1, received: 0 });
+  assert.deepEqual((await sender.rpc('agradecimientos_regalo_count')).data, { sent: 0, received: 1 });
+
+  const counts = await mock.createAdminClient().rpc('recalcular_agradecimientos_regalo_count', { p_user_ids: ['sender', 'receiver'] });
+  assert.deepEqual(counts.data, [
+    { user_id: 'sender', sent_count: 0, received_count: 1 },
+    { user_id: 'receiver', sent_count: 1, received_count: 0 },
+  ]);
+  const markedRead = await receiver.from('notificaciones').update({ is_read: true }).eq('id', gift.id).select('id');
+  assert.deepEqual(markedRead.data.map(({ id }) => id), [gift.id]);
+  assert.equal(mock.rows('notificaciones', 'receiver')[0].is_read, true);
+  assert.equal(mock.rows('notificaciones', 'sender')[0].is_read, false);
+});
+
 test('dos regalos concurrentes del mismo donante solo incrementan una vez', async () => {
   const mock = createSupabaseMock({ users: { 'token-a': { id: 'user-a' } } });
   const client = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-a' } } });
@@ -214,7 +403,33 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
         confirmation_token text, recovery_token text, email_change_token_new text, email_change text
       );
     `);
+    await db.exec('create publication supabase_realtime');
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    assert.equal((await db.query("select count(*)::integer as total from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notificaciones'")).rows[0].total, 1);
+    assert.equal((await db.query("select has_table_privilege('authenticated', 'public.notificaciones', 'SELECT') as allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select has_table_privilege('authenticated', 'public.notificaciones', 'INSERT') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_column_privilege('authenticated', 'public.notificaciones', 'is_read', 'UPDATE') as allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select has_column_privilege('authenticated', 'public.notificaciones', 'payload', 'UPDATE') as allowed")).rows[0].allowed, false);
+    for (const table of ['public.agradecimientos_regalo', 'public.ranking_top10_membership']) {
+      for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+        assert.equal((await db.query('select has_table_privilege($1, $2, $3) as allowed', ['authenticated', table, privilege])).rows[0].allowed, false);
+        assert.equal((await db.query('select has_table_privilege($1, $2, $3) as allowed', ['service_role', table, privilege])).rows[0].allowed, false);
+      }
+    }
+    const inboxUser = '00000000-0000-4000-8000-0000000000e1';
+    const otherInboxUser = '00000000-0000-4000-8000-0000000000e2';
+    await db.query('insert into auth.users(id) values ($1), ($2)', [inboxUser, otherInboxUser]);
+    await db.query("insert into public.notificaciones(user_id, type, payload) values ($1, 'gift_thanks', '{\"message\":\"own\"}'), ($2, 'gift_thanks', '{\"message\":\"other\"}')", [inboxUser, otherInboxUser]);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [inboxUser]);
+    await db.exec('set role authenticated');
+    assert.equal((await db.query('select count(*)::integer as total from public.notificaciones')).rows[0].total, 1);
+    assert.equal((await db.query('update public.notificaciones set is_read = true where user_id = $1 returning id', [otherInboxUser])).rows.length, 0);
+    assert.equal((await db.query('update public.notificaciones set is_read = true where user_id = $1 returning id', [inboxUser])).rows.length, 1);
+    await assert.rejects(db.query("update public.notificaciones set payload = '{\"forged\":true}' where user_id = $1", [inboxUser]), /permission denied/);
+    await assert.rejects(db.query("insert into public.notificaciones(user_id, type) values ($1, 'gift_thanks')", [inboxUser]), /permission denied/);
+    await assert.rejects(db.query('delete from public.notificaciones where user_id = $1', [inboxUser]), /permission denied/);
+    await db.exec('reset role');
+    await db.query('delete from auth.users where id in ($1, $2)', [inboxUser, otherInboxUser]);
     const expectedDnaWeights = {
       'new-mini-person': [0, 80, 10, 10],
       woah: [50, 20, 10, 20],
@@ -257,11 +472,12 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       'land-ho': [0, 0, 100, 0],
       nerd: [0, 0, 0, 100],
       [LOGRO_REGALO.id]: [0, 0, 0, 0],
+      'thanks-for-the-gift': [0, 0, 0, 0],
     };
     assert.deepEqual(Object.fromEntries(DNA_PONDERACIONES), expectedDnaWeights);
     const dnaRows = (await db.query('select logro_id, rarity_hunter, collector, explorer, fan from public.dna_ponderaciones order by logro_id')).rows;
     assert.deepEqual(Object.fromEntries(dnaRows.map(({ logro_id, rarity_hunter, collector, explorer, fan }) => [logro_id, [rarity_hunter, collector, explorer, fan]])), expectedDnaWeights);
-    assert.deepEqual(Object.keys(expectedDnaWeights).sort(), [...OBJETIVOS.map(({ id }) => id), LOGRO_REGALO.id].sort());
+    assert.deepEqual(Object.keys(expectedDnaWeights).sort(), [...OBJETIVOS.map(({ id }) => id), LOGRO_REGALO.id, 'thanks-for-the-gift'].sort());
     assert.equal((await db.query("select count(*)::integer as total from pg_policies where schemaname = 'public' and tablename = 'dna_ponderaciones'")).rows[0].total, 0);
     for (const role of ['anon', 'authenticated']) {
       for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
@@ -384,9 +600,77 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
         userId, state.bricks, JSON.stringify(state.nivel), JSON.stringify(state.siguienteNivel), JSON.stringify(state.progreso), JSON.stringify(state.logros),
       ]);
     }
+    const receiverBricks = (await db.query('select bricks from public.gamificacion where user_id = $1', [originalA])).rows[0].bricks;
+    await db.exec(`
+      create function public.fail_gift_notification() returns trigger language plpgsql as $$
+      begin
+        if new.type = 'gift_received' then raise exception 'TEST_GIFT_NOTIFICATION_FAILURE'; end if;
+        return new;
+      end $$;
+      create trigger fail_gift_notification before insert on public.notificaciones
+        for each row execute function public.fail_gift_notification();
+    `);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [originalB]);
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select public.regalar_bricks($1)', [originalA]), /TEST_GIFT_NOTIFICATION_FAILURE/);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from public.regalos_enviados where donante_id = $1 and receptor_id = $2', [originalB, originalA])).rows[0].total, 0);
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalA])).rows[0].bricks, receiverBricks);
+    await db.exec('drop trigger fail_gift_notification on public.notificaciones; drop function public.fail_gift_notification()');
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select public.regalar_bricks($1) as result', [originalA])).rows[0].result, { ok: true });
+    await db.exec('reset role');
+    const giftNotification = (await db.query("select * from public.notificaciones where user_id = $1 and type = 'gift_received'", [originalA])).rows[0];
+    assert.equal(giftNotification.gift_donante_id, originalB);
+    assert.equal(giftNotification.payload.amount, 50);
+    assert.equal(giftNotification.payload.user, 'Original B');
+    assert.equal(giftNotification.payload.message, 'El usuario Original B vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱');
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select public.regalar_bricks($1)', [originalA]), /REGALO_YA_ENVIADO/);
+    await db.exec('reset role');
+
+    const donorBricks = (await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks;
+    await db.exec(`
+      create function public.fail_thanks_notification() returns trigger language plpgsql as $$
+      begin
+        if new.type = 'gift_thanks' then raise exception 'TEST_THANKS_NOTIFICATION_FAILURE'; end if;
+        return new;
+      end $$;
+      create trigger fail_thanks_notification before insert on public.notificaciones
+        for each row execute function public.fail_thanks_notification();
+    `);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [originalA]);
+    await assert.rejects(db.query('select public.agradecer_regalo($1)', [giftNotification.id]), /TEST_THANKS_NOTIFICATION_FAILURE/);
+    assert.equal((await db.query('select count(*)::integer as total from public.agradecimientos_regalo where gift_notification_id = $1', [giftNotification.id])).rows[0].total, 0);
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks, donorBricks);
+    await db.exec('drop trigger fail_thanks_notification on public.notificaciones; drop function public.fail_thanks_notification()');
+    assert.deepEqual((await db.query('select public.agradecer_regalo($1) as result', [giftNotification.id])).rows[0].result, { ok: true });
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks, donorBricks + 10);
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalA])).rows[0].bricks, receiverBricks + 50);
+    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalB])).rows[0].logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
+    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalA])).rows[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+    await assert.rejects(db.query('select public.agradecer_regalo($1)', [giftNotification.id]), /REGALO_YA_AGRADECIDO/);
+    const ownThanks = (await db.query('select public.agradecimientos_regalo_count() as data')).rows[0].data;
+    assert.deepEqual(ownThanks, { sent: 1, received: 0 });
+    await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
+    await db.exec('set role service_role');
+    assert.deepEqual((await db.query('select * from public.recalcular_agradecimientos_regalo_count($1)', [[originalA, originalB]])).rows, [
+      { user_id: originalA, sent_count: 1, received_count: 0 },
+      { user_id: originalB, sent_count: 0, received_count: 1 },
+    ]);
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select * from public.recalcular_agradecimientos_regalo_count($1)', [[originalA]]), /permission denied/);
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.role', '', false)");
     const original = await snapshot();
     await db.exec(insertSql);
     assert.equal((await db.query('select count(*)::integer as total from auth.users')).rows[0].total, 22);
+    assert.equal((await db.query('select count(*)::integer as total from public.user_daily_snapshots')).rows[0].total, 40);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'daily_summary'")).rows[0].total, 20);
+    assert.ok((await db.query('select count(*)::integer as total from public.agradecimientos_regalo')).rows[0].total > 0);
+    assert.equal((await db.query("select count(*)::integer as total from public.ranking_top10_membership where ranking_type = 'global'")).rows[0].total, 10);
     const users = (await db.query("select * from auth.users where raw_user_meta_data->>'minipeopledb_seed' = 'lego-13-prueba-v1' order by id")).rows;
     assert.equal(users.length, 20);
     assert.ok(users.every((user) => user.encrypted_password === null && user.email.endsWith('@example.invalid')));
@@ -401,7 +685,8 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       const client = mock.createClient('url', 'key', { global: { headers: { Authorization: `Bearer ${user.id}` } } });
       const catalog = await new MinifigurasRepository({ client, userId: user.id, categoriasRepository: { read: async () => categories } }).readCatalog();
       const stored = await new GamificacionRepository({ client, userId: user.id }).read();
-      const expected = calcularGamificacion(catalog, categories, gifts);
+      const thanksReceived = (await db.query('select count(*)::integer as total from public.agradecimientos_regalo where donor_id = $1', [user.id])).rows[0].total;
+      const expected = calcularGamificacion(catalog, categories, gifts, thanksReceived);
       assert.equal(stored.bricks, expected.bricks);
       assert.deepEqual(stored.nivel, expected.nivel);
       assert.deepEqual(stored.siguienteNivel, expected.siguienteNivel);
@@ -426,9 +711,11 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       await db.query('insert into public.gamificacion(user_id, bricks, nivel, logros) values ($1, $2, $3, $4)', [
         userId, index < 10 ? (index < 2 ? 1000 : 1000 - index) : index === 10 ? 5 : 10,
         JSON.stringify({ id: index < 10 ? 3 : index === 10 ? 2 : 1 }),
-        JSON.stringify(index < 10 ? [] : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 }))),
+        JSON.stringify(index < 10
+          ? ({ 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' }[index] ? [{ id: ({ 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' }[index]), cantidad: 1 }] : [])
+          : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 }))),
       ]);
-      if (index >= 10) {
+      if (index === 9 || index >= 10) {
         await db.query("insert into public.minifiguras(user_id,id,nombre,categoria) values ($1,'ONE','One','Space')", [userId]);
       } else {
         await db.query("insert into public.minifiguras(user_id,id,nombre,categoria,estado_coleccion) values ($1,'WANTED','Wanted','Space','BUSCADA')", [userId]);
@@ -436,15 +723,22 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     }
     const defaultOrder = (await db.query('select * from public.ranking_global()')).rows;
     assert.deepEqual(defaultOrder.map(({ user_id }) => user_id), orderIds.slice(0, 10));
+    const expectedOrders = {
+      nivel: orderIds.slice(0, 10),
+      coleccion: [orderIds[9], ...orderIds.slice(0, 9)],
+      rarityHunter: [orderIds[9], ...orderIds.slice(0, 9)],
+      collector: [orderIds[8], ...orderIds.slice(0, 8), orderIds[9]],
+      explorer: [orderIds[7], ...orderIds.slice(0, 7), ...orderIds.slice(8, 10)],
+      fan: [orderIds[6], ...orderIds.slice(0, 6), ...orderIds.slice(7, 10)],
+    };
     for (const criterio of ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']) {
       const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
       assert.equal(ordered.length, 10);
-      assert.deepEqual(ordered.map(({ user_id }) => user_id), criterio === 'nivel'
-        ? orderIds.slice(0, 10) : [...orderIds.slice(10), ...orderIds.slice(0, 8)]);
+      assert.deepEqual(ordered.map(({ user_id }) => user_id), expectedOrders[criterio]);
       assert.ok(ordered.every((row) => !('dna_porcentajes' in row) && row.dna_rasgos.length <= 2));
       if (!['nivel', 'coleccion'].includes(criterio)) {
         const nombre = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
-        assert.deepEqual(ordered[0].dna_rasgos, [{ nombre, porcentaje: 25 }]);
+        assert.deepEqual(ordered[0].dna_rasgos, [{ nombre, porcentaje: 100 }]);
         assert.deepEqual(ordered[2].dna_rasgos, [{ nombre, porcentaje: 0 }]);
       }
       assert.equal((await db.query("select has_function_privilege('anon', 'public.ranking_global(text)', 'EXECUTE') as allowed")).rows[0].allowed, false);
@@ -453,9 +747,8 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     for (const [criterio, logroId] of [['rarityHunter', 'weirdo'], ['collector', 'hooked'], ['explorer', 'land-ho'], ['fan', 'nerd']]) {
       await db.query('update public.gamificacion set logros = $1 where user_id = $2', [JSON.stringify([{ id: logroId, cantidad: 1 }]), orderIds[10]]);
       const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
-      assert.deepEqual(ordered.slice(0, 2).map(({ user_id }) => user_id), orderIds.slice(10));
-      assert.equal(ordered[0].dna_rasgos[0].porcentaje, 100);
-      assert.equal(ordered[0].dna_rasgos.length, 1);
+      assert.deepEqual(ordered.map(({ user_id }) => user_id), expectedOrders[criterio]);
+      assert.equal(ordered.some(({ user_id }) => user_id === orderIds[10]), false);
     }
     await db.query("select set_config('request.jwt.claim.sub', '', false)");
     assert.deepEqual((await db.query("select * from public.ranking_global('fan')")).rows, []);

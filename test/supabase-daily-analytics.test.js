@@ -649,12 +649,32 @@ test('captura rechaza revisiones obsoletas de inventario, regalos y fingerprint 
     assert.equal(afterGift.giftsReceived, 1);
     assert.equal((await db.query('select count(*)::integer as count from public.regalos_enviados where receptor_id = $1', [userId])).rows[0].count, 1);
 
-    await db.query("update public.gamificacion_categoria_version set fingerprint = $1 where singleton = true", ['a'.repeat(64)]);
+    const giftNotification = (await db.query(`
+      insert into public.notificaciones(user_id, type, payload, gift_donante_id)
+      values ($1, 'gift_received', '{"amount":50}'::jsonb, $2)
+      returning id
+    `, [userId, donorId])).rows[0];
+    await db.query(`
+      insert into public.agradecimientos_regalo(gift_notification_id, thanker_id, donor_id)
+      values ($1, $2, $3)
+    `, [giftNotification.id, userId, donorId]);
+    const afterThanks = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, userId])).rows[0].data;
+    assert.notEqual(afterThanks.revision, afterGift.revision);
+    assert.equal(afterThanks.thanksSent, 1);
+    assert.equal(afterThanks.thanksReceived, 0);
+    const donorSources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, donorId])).rows[0].data;
+    assert.equal(donorSources.thanksSent, 0);
+    assert.equal(donorSources.thanksReceived, 1);
     assert.equal((await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb) as captured', [
       started.jobId, leaseOwner, userId, afterGift.revision, JSON.stringify(oldState),
     ])).rows[0].captured, false);
+
+    await db.query("update public.gamificacion_categoria_version set fingerprint = $1 where singleton = true", ['a'.repeat(64)]);
+    assert.equal((await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb) as captured', [
+      started.jobId, leaseOwner, userId, afterThanks.revision, JSON.stringify(oldState),
+    ])).rows[0].captured, false);
     const currentSources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, userId])).rows[0].data;
-    assert.notEqual(currentSources.revision, afterGift.revision);
+    assert.notEqual(currentSources.revision, afterThanks.revision);
     assert.equal(currentSources.fingerprint, 'a'.repeat(64));
 
     const currentState = {
@@ -824,10 +844,21 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
       userA, 'user-a@example.invalid', userB, 'user-b@example.invalid',
     ]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select public.finalizar_daily_sync($1, $2)', [userA, leaseOwner]), /permission denied/);
+    await db.exec('reset role');
     await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
 
     const firstRun = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
     await db.query('select public.reclamar_daily_sync($1, $2, 120)', [firstRun.jobId, leaseOwner]);
+    await db.query("update private.daily_sync_runs set snapshot_date = '2026-10-12' where id = $1", [firstRun.jobId]);
+    await db.query(`
+      insert into public.user_daily_snapshots (
+        user_id, snapshot_date, total_figures, total_value, bricks, level,
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+      ) values ($1, '2026-10-11', 5, 99, 100, 5, 25, 25, 25, 25)
+    `, [userA]);
     const sources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [firstRun.jobId, leaseOwner, userA])).rows[0].data;
     await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb)', [
       firstRun.jobId, leaseOwner, userA, sources.revision, JSON.stringify(state),
@@ -841,6 +872,7 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     assert.equal(beforeDelete.totalUsers, 2);
     await assert.rejects(db.query('select public.finalizar_daily_sync($1, $2)', [firstRun.jobId, leaseOwner]), /DAILY_SYNC_TRABAJO_INCOMPLETO/);
     assert.equal((await db.query('select status from private.daily_sync_runs where id = $1', [firstRun.jobId])).rows[0].status, 'running');
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'daily_summary'")).rows[0].total, 0);
 
     const savedSnapshot = (await db.query('select pct_collector, pct_explorer, pct_rarity_hunter, pct_fan from public.user_daily_snapshots where user_id = $1', [userA])).rows[0];
     await db.query('delete from auth.users where id = $1', [userB]);
@@ -861,6 +893,21 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
       timestamp: complete.result.timestamp,
     });
     assert.match(complete.result.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    const dailyNotification = (await db.query("select payload, is_read from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0];
+    assert.equal(dailyNotification.is_read, false);
+    assert.equal(dailyNotification.payload.hasPrevious, true);
+    assert.deepEqual(dailyNotification.payload.deltas, {
+      figures: -5,
+      valueEur: -99,
+      bricks: -100,
+      level: -5,
+      globalPosition: 0,
+      dna: { collector: 55, explorer: -15, rarityHunter: -25, fan: -15 },
+    });
+    assert.deepEqual((await db.query("select user_id, position from public.ranking_top10_membership where ranking_type = 'weekly'", [])).rows, [
+      { user_id: userA, position: 1 },
+    ]);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type in ('ranking_entered', 'ranking_exited') and payload->>'ranking' = 'weekly'")).rows[0].total, 0);
 
     const secondRun = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
     await db.query('select public.reclamar_daily_sync($1, $2, 120)', [secondRun.jobId, leaseOwner]);
@@ -869,6 +916,7 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     assert.equal(failedUserRun.status, 'failed');
     assert.equal(failedUserRun.result, null);
     assert.equal(failedUserRun.errorCode, 'USERS_FAILED');
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'daily_summary' and user_id = $1", [userA])).rows[0].total, 1);
 
     const thirdRun = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
     await db.query('select public.reclamar_daily_sync($1, $2, 120)', [thirdRun.jobId, leaseOwner]);
@@ -1048,4 +1096,169 @@ test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cac
   } finally {
     await db.close();
   }
+});
+
+test('los resúmenes diarios incluyen movimiento de ranking elegible y preservan lectura al reintentar el día', async () => {
+  const db = new PGlite();
+  const userA = '00000000-0000-4000-8000-0000000000a1';
+  const userB = '00000000-0000-4000-8000-0000000000b1';
+  const userC = '00000000-0000-4000-8000-0000000000c1';
+  const leaseOwner = '90000000-0000-4000-8000-0000000000c1';
+  const state = (bricks, level) => ({
+    bricks,
+    nivel: { id: level, nombre: `Level ${level}` },
+    siguiente_nivel: null,
+    progreso: { actual: bricks },
+    logros: [],
+  });
+  const confirmRun = async (states) => {
+    const started = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
+    await db.query('select public.reclamar_daily_sync($1, $2, 120)', [started.jobId, leaseOwner]);
+    await db.query("update private.daily_sync_runs set snapshot_date = '2026-10-13' where id = $1", [started.jobId]);
+    for (const [userId, current] of states) {
+      const sources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, userId])).rows[0].data;
+      await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb)', [
+        started.jobId, leaseOwner, userId, sources.revision, JSON.stringify(current),
+      ]);
+    }
+    return (await db.query('select public.finalizar_daily_sync($1, $2) as data', [started.jobId, leaseOwner])).rows[0].data;
+  };
+
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4), ($5, $6)', [
+      userA, 'rank-a@example.invalid', userB, 'rank-b@example.invalid', userC, 'rank-c@example.invalid',
+    ]);
+    await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
+    await db.query(`
+      insert into public.gamificacion(user_id, bricks, nivel) values
+        ($1, 100, '{"id":5,"nombre":"Five"}'),
+        ($2, 200, '{"id":5,"nombre":"Five"}'),
+        ($3, 0, '{"id":0,"nombre":"Zero"}')
+    `, [userA, userB, userC]);
+    await db.query(`
+      insert into public.user_daily_snapshots (
+        user_id, snapshot_date, total_figures, total_value, bricks, level,
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+      ) values
+        ($1, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25),
+        ($2, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25),
+        ($1, '2026-10-12', 2, 25, 100, 5, 25, 25, 25, 25),
+        ($2, '2026-10-12', 2, 25, 200, 5, 25, 25, 25, 25)
+    `, [userA, userB]);
+
+    const completed = await confirmRun([[userA, state(220, 6)], [userB, state(210, 5)], [userC, state(0, 0)]]);
+    assert.equal(completed.status, 'completed');
+    const summaryA = (await db.query("select id, payload, is_read, created_at from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0];
+    assert.deepEqual({ global: summaryA.payload.deltas.globalPosition, weekly: summaryA.payload.deltas.weeklyPosition }, { global: 1, weekly: 1 });
+    const summaryC = (await db.query("select payload from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userC])).rows[0].payload;
+    assert.equal(summaryC.hasPrevious, false);
+    assert.equal(Object.hasOwn(summaryC, 'deltas'), false);
+
+    await db.query('update public.notificaciones set is_read = true where id = $1', [summaryA.id]);
+    const rerun = await confirmRun([[userA, state(200, 6)], [userB, state(210, 5)], [userC, state(0, 0)]]);
+    assert.equal(rerun.status, 'completed');
+    const updated = (await db.query("select id, payload, is_read, created_at from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0];
+    assert.equal(updated.id, summaryA.id);
+    assert.equal(updated.is_read, true);
+    assert.equal(updated.created_at.toISOString(), summaryA.created_at.toISOString());
+    assert.equal(updated.payload.deltas.bricks, 100);
+    assert.equal(updated.payload.deltas.globalPosition, 1);
+    assert.equal(updated.payload.deltas.weeklyPosition, 0);
+    assert.equal((await db.query("select count(*)::integer as count from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0].count, 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test('el mock publica resúmenes diarios solo al completar y conserva la lectura en reintentos', async () => {
+  const userA = '00000000-0000-4000-8000-0000000000a1';
+  const userB = '00000000-0000-4000-8000-0000000000b1';
+  const leaseOwner = '90000000-0000-4000-8000-0000000000c1';
+  const mock = createSupabaseMock({ users: { 'token-a': { id: userA }, 'token-b': { id: userB } } });
+  const admin = mock.createAdminClient();
+  const clientA = mock.createClient('url', 'anon', { global: { headers: { Authorization: 'Bearer token-a' } } });
+  const run = async (stateA, stateB, failB = false) => {
+    const started = await admin.rpc('iniciar_daily_sync');
+    await admin.rpc('reclamar_daily_sync', { p_run_id: started.data.jobId, p_lease_owner: leaseOwner });
+    for (const [userId, state] of [[userA, stateA], [userB, stateB]]) {
+      const sources = await admin.rpc('leer_daily_sync_fuentes', {
+        p_run_id: started.data.jobId, p_lease_owner: leaseOwner, p_user_id: userId,
+      });
+      if (userId === userB && failB) {
+        await admin.rpc('fallar_daily_sync_usuario', {
+          p_run_id: started.data.jobId, p_lease_owner: leaseOwner, p_user_id: userId, p_error_code: 'MAX_RETRIES',
+        });
+      } else {
+        await admin.rpc('capturar_daily_sync_usuario', {
+          p_run_id: started.data.jobId, p_lease_owner: leaseOwner, p_user_id: userId,
+          p_expected_revision: sources.data.revision, p_state: state,
+        });
+      }
+    }
+    return admin.rpc('finalizar_daily_sync', { p_run_id: started.data.jobId, p_lease_owner: leaseOwner });
+  };
+  const state = (bricks) => ({
+    bricks, nivel: { id: 0, nombre: 'Duplo' }, siguiente_nivel: null,
+    progreso: { actual: bricks }, logros: [],
+  });
+  const currentDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
+  const previousDate = new Date(Date.parse(`${currentDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  mock.seed('user_daily_snapshots', userA, [{
+    snapshot_date: previousDate, total_figures: 5, total_value: 99, bricks: 100, level: 5,
+    pct_collector: 25, pct_explorer: 25, pct_rarity_hunter: 25, pct_fan: 25,
+  }]);
+
+  const first = await admin.rpc('iniciar_daily_sync');
+  await admin.rpc('reclamar_daily_sync', { p_run_id: first.data.jobId, p_lease_owner: leaseOwner });
+  const sourcesA = await admin.rpc('leer_daily_sync_fuentes', {
+    p_run_id: first.data.jobId, p_lease_owner: leaseOwner, p_user_id: userA,
+  });
+  await admin.rpc('capturar_daily_sync_usuario', {
+    p_run_id: first.data.jobId, p_lease_owner: leaseOwner, p_user_id: userA,
+    p_expected_revision: sourcesA.data.revision, p_state: state(10),
+  });
+  assert.equal((await admin.rpc('finalizar_daily_sync', { p_run_id: first.data.jobId, p_lease_owner: leaseOwner })).error.message, 'DAILY_SYNC_TRABAJO_INCOMPLETO');
+  assert.equal(mock.rows('notificaciones').length, 0);
+  const sourcesB = await admin.rpc('leer_daily_sync_fuentes', {
+    p_run_id: first.data.jobId, p_lease_owner: leaseOwner, p_user_id: userB,
+  });
+  await admin.rpc('capturar_daily_sync_usuario', {
+    p_run_id: first.data.jobId, p_lease_owner: leaseOwner, p_user_id: userB,
+    p_expected_revision: sourcesB.data.revision, p_state: state(0),
+  });
+  assert.equal((await admin.rpc('finalizar_daily_sync', { p_run_id: first.data.jobId, p_lease_owner: leaseOwner })).data.status, 'completed');
+  const notificationA = mock.rows('notificaciones', userA).find(({ type }) => type === 'daily_summary');
+  const notificationB = mock.rows('notificaciones', userB).find(({ type }) => type === 'daily_summary');
+  assert.deepEqual(notificationA.payload.deltas, {
+    figures: -5, valueEur: -99, bricks: -90, level: -5,
+    dna: { collector: -25, explorer: -25, rarityHunter: -25, fan: -25 },
+  });
+  assert.equal(notificationB.payload.hasPrevious, false);
+  assert.equal(Object.hasOwn(notificationB.payload, 'deltas'), false);
+  await clientA.from('notificaciones').update({ is_read: true }).eq('id', notificationA.id);
+
+  const second = await run(state(5), state(0));
+  assert.equal(second.data.status, 'completed');
+  const updatedA = mock.rows('notificaciones', userA).filter(({ type }) => type === 'daily_summary');
+  assert.equal(updatedA.length, 1);
+  assert.equal(updatedA[0].is_read, true);
+  assert.equal(updatedA[0].payload.deltas.bricks, -95);
+
+  const failed = await run(state(0), state(0), true);
+  assert.equal(failed.data.status, 'failed');
+  assert.equal(mock.rows('notificaciones').filter(({ type }) => type === 'daily_summary').length, 2);
 });

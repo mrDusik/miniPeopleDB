@@ -148,8 +148,11 @@ export class GamificacionRepository {
 
   async calculate(catalogo) {
     const categorias = this.categoriasRepository ? await this.categoriasRepository.read() : [];
-    const regalos = await this.run(this.client.rpc('regalos_recibidos_count'));
-    return calcularGamificacion(catalogo, categorias, regalos ?? 0);
+    const [regalos, agradecimientos] = await Promise.all([
+      this.run(this.client.rpc('regalos_recibidos_count')),
+      this.run(this.client.rpc('agradecimientos_regalo_count')),
+    ]);
+    return calcularGamificacion(catalogo, categorias, regalos ?? 0, agradecimientos?.received ?? 0);
   }
 
   async recalculate(catalogo) {

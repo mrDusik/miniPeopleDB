@@ -29,6 +29,26 @@ test('los nuevos logros de categoría e ID conservan nombre, descripción, Brick
   }
 });
 
+test('el logro y los Bricks por agradecimiento pertenecen a quien recibe las gracias', () => {
+  const thanker = calcularGamificacion([], [], 0, 0);
+  const giftDonor = calcularGamificacion([], [], 0, 1);
+
+  assert.equal(thanker.bricks, 0);
+  assert.equal(thanker.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(giftDonor.bricks, 10);
+  assert.deepEqual(giftDonor.logros.find(({ id }) => id === 'thanks-for-the-gift'), {
+    id: 'thanks-for-the-gift',
+    type: 'regalo',
+    nombre: 'Gratitude is the sign of noble souls',
+    descripcion: 'Un coleccionista te dio las gracias por tu regalo.',
+    bricks: 5,
+    repetible: true,
+    cantidad: 1,
+    total: 5,
+  });
+  assert.equal(giftDonor.logros.some(({ id }) => id === 'someone-liked-your-collection'), false);
+});
+
 test('los hitos de categoría se acumulan por categoría con total conocido y se retiran al bajar del umbral', () => {
   const categorias = [
     { categoria: 'Space', total: 3, subcategorias: [{ subcategoria: 'Classic', total: 1 }] },

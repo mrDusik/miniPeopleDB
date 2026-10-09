@@ -25,15 +25,20 @@ function rankingSupabase({ now } = {}) {
 test('el ranking valida los seis criterios y selecciona el Top 10 antes de proyectar datos publicos', async () => {
   const supabase = rankingSupabase();
   const ids = Array.from({ length: 12 }, (_, index) => `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`);
+  const candidateAchievements = { 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' };
   for (const [index, userId] of ids.entries()) {
     supabase.seed('gamificacion', userId, [{ bricks: index < 10 ? 1000 - index : 10,
       nivel: { id: index < 10 ? 5 : index === 10 ? 2 : 1 },
-      logros: index < 10 ? [] : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 })),
+      logros: index < 10
+        ? (candidateAchievements[index] ? [{ id: candidateAchievements[index], cantidad: 1 }] : [])
+        : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 })),
     }]);
-    if (index >= 10) supabase.seed('minifiguras', userId, [
+    if (index === 9 || index >= 10) supabase.seed('minifiguras', userId, [
       { id: 'ONE', nombre: 'One', estado_coleccion: 'COLECCIÓN' },
-      { id: 'TWO', nombre: 'Two', estado_coleccion: 'COLECCIÓN' },
-      { id: 'THREE', nombre: 'Three', estado_coleccion: 'COLECCIÓN' },
+      ...(index >= 10 ? [
+        { id: 'TWO', nombre: 'Two', estado_coleccion: 'COLECCIÓN' },
+        { id: 'THREE', nombre: 'Three', estado_coleccion: 'COLECCIÓN' },
+      ] : []),
     ]);
   }
   const context = await startTestServer({ supabase });
@@ -44,14 +49,14 @@ test('el ranking valida los seis criterios y selecciona el Top 10 antes de proye
       assert.equal(response.status, 200);
       const ranking = await response.json();
       assert.equal(ranking.length, 10);
+      assert.ok(ranking.every(({ userId }) => ids.slice(0, 10).includes(userId)));
+      assert.equal(ranking.some(({ userId }) => ids.slice(10).includes(userId)), false);
       if (criterio === 'nivel') assert.deepEqual(ranking.map(({ userId }) => userId), ids.slice(0, 10));
-      else if (criterio === 'coleccion') assert.deepEqual(ranking.slice(0, 2).map(({ userId }) => userId), ids.slice(10));
-      else {
-        const traitEntries = ranking.filter(({ userId }) => ids.slice(10).includes(userId));
-        assert.deepEqual(traitEntries.map(({ userId }) => userId), ids.slice(10));
-        const nombre = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
-        assert.deepEqual(traitEntries[0].dnaRasgos, [{ nombre, porcentaje: 25 }]);
-        assert.deepEqual(ranking.find(({ dnaPrincipal }) => dnaPrincipal === 'Newbie').dnaRasgos, [{ nombre, porcentaje: 0 }]);
+      if (criterio === 'coleccion') assert.equal(ranking[0].userId, ids[9]);
+      if (['rarityHunter', 'collector', 'explorer', 'fan'].includes(criterio)) {
+        const winner = { rarityHunter: 9, collector: 8, explorer: 7, fan: 6 }[criterio];
+        assert.equal(ranking[0].userId, ids[winner]);
+        assert.equal(ranking[0].dnaRasgos[0].porcentaje, 100);
       }
       assert.ok(ranking.every((row) => !('porcentajes' in row) && row.dnaRasgos.length <= 2));
     }
