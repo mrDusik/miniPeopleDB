@@ -158,6 +158,49 @@ test('los modales usan bordes neutros como los paneles principales', async () =>
   assert.match(css, /\.modal-content\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
 });
 
+test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a la izquierda', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.append(style);
+    const selector = '.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *):not(:has(.loading-message))';
+    const rule = [...style.sheet.cssRules].find((entry) => entry.selectorText === selector);
+    assert.equal(rule?.style.display, 'none');
+    for (const [dialogId, statusId, contentSelectors] of [
+      ['ranking-dialog', 'ranking-status', ['.ranking-order-toolbar', '#global-ranking-list']],
+      ['weekly-ranking-dialog', 'weekly-ranking-status', ['.weekly-ranking-order-spacer', '#weekly-ranking-list']],
+      ['notifications-dialog', 'notifications-status', ['.notifications-toolbar', '#notifications-list']],
+      ['analytics-history-dialog', 'analytics-history-status', ['.analytics-history-controls', '.analytics-history-charts', '#analytics-history-retry']],
+      ['gamification-dialog', 'achievements-status', ['#gamification-achievements']],
+      ['dna-dialog', 'dna-status', ['#dna-retry', '#dna-chart', '#dna-legend']],
+    ]) {
+      const dialog = document.getElementById(dialogId);
+      const status = document.getElementById(statusId);
+      status.classList.add('loading-message');
+      assert.equal(dialog.querySelector('.modal-dialog-heading').matches(selector), false);
+      assert.equal(dialog.querySelector('.modal-dialog-heading button').matches(selector), false);
+      assert.equal(status.matches(selector), false);
+      for (const contentSelector of contentSelectors) {
+        assert.equal(dialog.querySelector(contentSelector).matches(selector), true, `${dialogId}: ${contentSelector}`);
+      }
+      status.classList.remove('loading-message');
+      assert.equal(dialog.querySelector(contentSelectors[0]).matches(selector), false);
+    }
+    const formDialog = document.getElementById('form-dialog');
+    formDialog.querySelector('#brickset-loading').classList.add('loading-message');
+    assert.equal(formDialog.querySelector('form').matches(selector), false);
+    assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-dialog-body \{ display: block; \}/);
+    assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-legend-panel \{ width: 100%; \}/);
+    assert.match(css, /#dna-status\.loading-message \{ justify-content: flex-start; text-align: left; \}/);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('los ajustes responsive quedan aislados de escritorio y ordenan los controles', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM('<style></style>');
