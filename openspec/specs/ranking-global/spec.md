@@ -55,6 +55,18 @@ Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, cuyos objetos contienen
 - **THEN** muestra el activo local asociado al ID de ese nivel
 - **AND** usa la imagen de Forestman cuando no existe un activo específico
 
+### Requirement: Distribuir los criterios a ancho completo en portrait
+
+En orientacion portrait, el grupo de seis criterios del modal Ranking Global SHALL ocupar el mismo ancho util que la linea azul de su encabezado. Todos los botones SHALL tener igual ancho, sin desplazamiento horizontal ni recorte de texto. En pantallas donde seis columnas no permitan leer las etiquetas, SHALL distribuirse en filas manteniendo columnas de igual ancho y cubriendo todo el ancho util. Se SHALL conservar las etiquetas, aria-pressed, criterios, orden del Top 10 y comportamiento landscape existentes. Este ajuste no SHALL introducir selectores en el modal semanal.
+
+#### Scenario: Movil portrait
+- **WHEN** se abre el global en un viewport portrait estrecho
+- **THEN** los seis criterios se distribuyen con igual ancho, el grupo cubre la linea azul y no hay scroll horizontal ni textos solapados
+
+#### Scenario: Tablet portrait y landscape
+- **WHEN** se abre el global en tablet portrait y despues en landscape
+- **THEN** portrait mantiene igual ancho y ancho completo, mientras landscape conserva su comportamiento actual
+
 ### Requirement: Consultar los destacados de cada colección clasificada
 
 Cada entrada de `GET /api/ranking` SHALL incluir `top5Precio` y `top5Antiguedad`, limitados a minifiguras del usuario en estado `COLECCIÓN`. `top5Precio` SHALL usar exactamente el orden y los desempates de `top5` en la valoración de la colección, y `top5Antiguedad` SHALL usar exactamente el orden y los desempates de `top5Antiguas`. Cada elemento SHALL limitarse a los datos necesarios para renderizar la misma imagen, texto y tooltip que en la pantalla principal.
