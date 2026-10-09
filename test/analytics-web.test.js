@@ -78,7 +78,7 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(trigger.parentElement.className, 'summary-achievements-row');
     assert.equal(dialog.getAttribute('aria-labelledby'), 'analytics-history-title');
     assert.equal(document.querySelector('#analytics-history-title').textContent, 'Progreso');
-    assert.deepEqual([...document.querySelectorAll('[data-history-days]')].map((button) => button.dataset.historyDays), ['30', '90', '365']);
+    assert.deepEqual([...document.querySelectorAll('[data-history-days]')].map((button) => button.dataset.historyDays), ['7', '30', '90', '365']);
     assert.equal(document.querySelectorAll('.analytics-history-chart canvas').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
@@ -164,6 +164,16 @@ test('Historico envía rangos con apiFetch y descarta respuestas fuera de orden'
     const range365 = new URL(historyRequests()[2].url, 'http://localhost');
     assert.equal((Date.parse(`${range365.searchParams.get('to')}T00:00:00Z`) - Date.parse(`${range365.searchParams.get('from')}T00:00:00Z`)) / 86400000 + 1, 365);
     pending[2].resolve({ ok: true, status: 200, json: async () => ({ snapshots: [], baseline: null }) });
+    await tick();
+
+    document.querySelector('[data-history-days="7"]').click();
+    await tick();
+    assert.equal(historyRequests().length, 4);
+    const range7 = new URL(historyRequests()[3].url, 'http://localhost');
+    assert.equal((Date.parse(`${range7.searchParams.get('to')}T00:00:00Z`) - Date.parse(`${range7.searchParams.get('from')}T00:00:00Z`)) / 86400000 + 1, 7);
+    assert.equal(document.querySelector('[data-history-days="7"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(document.querySelector('[data-history-days="365"]').getAttribute('aria-pressed'), 'false');
+    pending[3].resolve({ ok: true, status: 200, json: async () => ({ snapshots: [], baseline: null }) });
     await tick();
   } finally {
     dom.window.close();
