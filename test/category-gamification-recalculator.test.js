@@ -7,7 +7,7 @@ import { CategoryGamificationRecalculator } from '../src/category-gamification-r
 import { CategoriasRepository } from '../src/categorias-repository.js';
 import { OBJETIVOS } from '../src/gamificacion.js';
 
-function createAdminClient({ version = null, gamificacion = [], minifiguras = [], regalos = [] } = {}) {
+function createAdminClient({ version = null, gamificacion = [], minifiguras = [], regalos = [], agradecimientos = [] } = {}) {
   const tables = { gamificacion, minifiguras, regalos_enviados: regalos };
   const applications = [];
   const client = {
@@ -31,6 +31,16 @@ function createAdminClient({ version = null, gamificacion = [], minifiguras = []
       };
     },
     async rpc(name, parameters) {
+      if (name === 'recalcular_agradecimientos_regalo_count') {
+        return {
+          data: parameters.p_user_ids.map((userId) => ({
+            user_id: userId,
+            sent_count: agradecimientos.filter((row) => row.thanker_id === userId).length,
+            received_count: agradecimientos.filter((row) => row.donor_id === userId).length,
+          })),
+          error: null,
+        };
+      }
       applications.push({ name, parameters });
       version = parameters.p_fingerprint;
       return { data: true, error: null };
@@ -178,4 +188,26 @@ test('el watcher detecta cambios de archivo y vuelve a reconciliar', async () =>
     recalculator.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('el recálculo global conserva los agradecimientos enviados y recibidos', async () => {
+  const { client, applications } = createAdminClient({
+    gamificacion: [{ user_id: 'user-a' }, { user_id: 'user-b' }],
+    agradecimientos: [
+      { thanker_id: 'user-a', donor_id: 'user-b' },
+      { thanker_id: 'user-a', donor_id: 'user-b' },
+    ],
+  });
+  const recalculator = new CategoryGamificationRecalculator({
+    client,
+    categoriasRepository: { filePath: 'categories.json', read: async () => [] },
+  });
+
+  await recalculator.reconcile();
+
+  const states = applications.at(-1).parameters.p_estados;
+  assert.equal(states.find(({ user_id }) => user_id === 'user-a').logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(states.find(({ user_id }) => user_id === 'user-a').bricks, 0);
+  assert.equal(states.find(({ user_id }) => user_id === 'user-b').logros.find(({ id }) => id === 'thanks-for-the-gift').cantidad, 2);
+  assert.equal(states.find(({ user_id }) => user_id === 'user-b').bricks, 20);
 });

@@ -23,6 +23,13 @@ import { createDailyAnalyticsJobs } from './daily-analytics-jobs.js';
 import { createDailyAnalyticsRepository } from './daily-analytics-repository.js';
 import { DailyAnalyticsHistoryRepository } from './daily-analytics-history-repository.js';
 import {
+  CursorNotificacionesInvalidoError,
+  NotificacionesNoDisponiblesError,
+  NotificacionesRepository,
+  RegaloNoAgradecibleError,
+  RegaloYaAgradecidoError,
+} from './notificaciones-repository.js';
+import {
   AutorregaloNoPermitidoError,
   LogrosNoDisponiblesError,
   RankingNoDisponibleError,
@@ -38,7 +45,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/ranking(?:\/semanal|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -180,6 +187,7 @@ export function createServer({
 
     const rankingRepository = new RankingRepository({ client, userId });
       const historyRepository = new DailyAnalyticsHistoryRepository({ client });
+    const notificationsRepository = new NotificacionesRepository({ client });
     try {
       await rankingRepository.syncProfile(user);
     } catch {
@@ -196,6 +204,7 @@ export function createServer({
       userId,
       repository,
       rankingRepository,
+      notificationsRepository,
         historyRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
       readGamificationDna: () => gamificacionRepository.dna(),
@@ -297,6 +306,7 @@ export function createServer({
     let userId;
     let ensureGamificacion;
     let rankingRepository;
+    let notificationsRepository;
     let historyRepository;
     let readGamificationDna;
     if (protectedPath.test(requestUrl.pathname)) {
@@ -305,7 +315,101 @@ export function createServer({
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository, historyRepository, readGamificationDna } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, notificationsRepository, historyRepository, readGamificationDna } = context);
+    }
+
+    if (requestUrl.pathname === '/api/notificaciones') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if ([...requestUrl.searchParams.keys()].some((key) => key !== 'cursor')
+        || requestUrl.searchParams.getAll('cursor').length > 1
+        || (requestUrl.searchParams.has('cursor') && !requestUrl.searchParams.get('cursor'))) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await notificationsRepository.list({ cursor: requestUrl.searchParams.get('cursor') ?? undefined }));
+      } catch (error) {
+        sendJson(response, error instanceof CursorNotificacionesInvalidoError ? 400 : 500, {
+          error: error instanceof CursorNotificacionesInvalidoError ? error.code : 'NOTIFICACIONES_NO_DISPONIBLES',
+        });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/notificaciones/leer-todas') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await notificationsRepository.markAllRead());
+      } catch {
+        sendJson(response, 500, { error: 'NOTIFICACIONES_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
+    const markNotificationReadRoute = /^\/api\/notificaciones\/([^/]+)\/leer$/.exec(requestUrl.pathname);
+    if (markNotificationReadRoute) {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(markNotificationReadRoute[1])) {
+        sendJson(response, 400, { error: 'NOTIFICACION_INVALIDA' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await notificationsRepository.markRead(markNotificationReadRoute[1].toLowerCase()));
+      } catch {
+        sendJson(response, 500, { error: 'NOTIFICACIONES_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
+    const thankRoute = /^\/api\/notificaciones\/([^/]+)\/agradecer$/.exec(requestUrl.pathname);
+    if (thankRoute) {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(thankRoute[1])) {
+        sendJson(response, 400, { error: 'NOTIFICACION_INVALIDA' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await notificationsRepository.thank(thankRoute[1].toLowerCase()));
+      } catch (error) {
+        if (error instanceof RegaloNoAgradecibleError) {
+          sendJson(response, 404, { error: error.code });
+          return;
+        }
+        if (error instanceof RegaloYaAgradecidoError) {
+          sendJson(response, 409, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: error instanceof NotificacionesNoDisponiblesError ? error.code : 'NOTIFICACIONES_NO_DISPONIBLES' });
+      }
+      return;
     }
 
     if (requestUrl.pathname === '/api/analytics/history') {

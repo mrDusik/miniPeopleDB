@@ -53,6 +53,9 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const logoImage = await fetch(`${baseUrl}${logo.getAttribute('src')}`);
     assert.equal(logoImage.status, 200);
     assert.match(logoImage.headers.get('content-type'), /^image\/png/);
+    const envelopeImage = await fetch(`${baseUrl}/status_images/sobre.png`);
+    assert.equal(envelopeImage.status, 200);
+    assert.match(envelopeImage.headers.get('content-type'), /^image\/png/);
 
     const levelImage = await fetch(`${baseUrl}/level_images/9_forestman.png`);
     assert.equal(levelImage.status, 200);
@@ -101,7 +104,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
     const modalDocument = new JSDOM(html);
-    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 6);
+    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 7);
     modalDocument.window.close();
 
     for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
@@ -411,6 +414,16 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     const headerTop = document.querySelector('.header-top');
     assert.equal(headerTop.children[0].className, 'brand-heading');
     assert.equal(headerTop.children[1].className, 'gamification-summary');
+    assert.equal(document.querySelector('.notifications-entry-row #open-notifications')?.getAttribute('aria-controls'), 'notifications-dialog');
+    assert.equal(document.querySelector('.notifications-entry-row').nextElementSibling.classList.contains('rankings-panel'), true);
+    assert.match(css, /\.notifications-entry-row \{ display: flex; justify-content: flex-start;/);
+    assert.match(css, /@media \(max-width: 600px\) and \(orientation: portrait\), \(max-width: 600px\) and \(max-height: 500px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.page-shell \{ position: relative; \}\s*\.notifications-entry-row \{ position: absolute; top: 48px; left: 0; z-index: 2; margin: 0; \}/);
+    assert.match(css, /\.notifications-toolbar \{ display: flex; justify-content: flex-start;/);
+    assert.match(css, /\.toast-notification \{ color: white; background: #2e7d32;/);
+    assert.equal(document.querySelector('#open-notifications img').getAttribute('src'), '/status_images/sobre.png');
+    assert.equal(document.querySelector('.notifications-entry-row #open-notifications img').getAttribute('src'), '/status_images/sobre.png');
+    assert.equal(document.querySelector('#notifications-unread-badge').hidden, true);
+    assert.equal(document.querySelector('#notifications-dialog').getAttribute('aria-labelledby'), 'notifications-dialog-title');
     const main = document.querySelector('.gamification-main');
     assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
     assert.deepEqual([...main.querySelector('.gamification-level-stack').children].map((element) => element.className), ['gamification-level', 'gamification-dna-row']);

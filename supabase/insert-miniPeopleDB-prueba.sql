@@ -20,6 +20,68 @@ begin
 end;
 $$;
 
+insert into public.gamificacion_categoria_version (singleton, fingerprint)
+values (true, '')
+on conflict (singleton) do update set fingerprint = excluded.fingerprint, updated_at = now();
+
+insert into private.thanks_reward_ownership_migration (singleton, applied)
+values (true, true)
+on conflict (singleton) do update set applied = true, updated_at = now();
+
+insert into private.ranking_top10_reconciliation_state (singleton, initialized)
+values (true, false)
+on conflict (singleton) do update set initialized = false, updated_at = now();
+
+insert into public.dna_ponderaciones (logro_id, rarity_hunter, collector, explorer, fan)
+values
+  ('new-mini-person', 0, 80, 10, 10),
+  ('woah', 50, 20, 10, 20),
+  ('deal-master', 80, 10, 0, 10),
+  ('masterpiece', 90, 5, 0, 5),
+  ('holy-grail', 80, 10, 0, 10),
+  ('omgold', 95, 5, 0, 0),
+  ('lets-go', 0, 5, 90, 5),
+  ('collector', 5, 90, 0, 5),
+  ('step-by-step', 5, 45, 50, 0),
+  ('bricky-potter', 0, 10, 20, 70),
+  ('bricky-mouse', 0, 10, 20, 70),
+  ('its-a-me-mario', 0, 10, 20, 70),
+  ('green-hill-zone', 0, 10, 20, 70),
+  ('dimensional', 60, 10, 20, 10),
+  ('warsie', 0, 10, 20, 70),
+  ('in-ny-i-was', 80, 10, 0, 10),
+  ('welcome-to-the-upsidedown', 60, 30, 0, 10),
+  ('chill-nancy-im-fine', 80, 10, 0, 10),
+  ('the-legend', 0, 10, 20, 70),
+  ('heh-there-is-another-one-for-you', 0, 10, 20, 70),
+  ('change-will-not-come-in-a-single-sunrise', 0, 10, 20, 70),
+  ('start-poetry', 0, 10, 20, 70),
+  ('mental-breakdown', 90, 5, 0, 5),
+  ('the-dark-plastic', 90, 5, 0, 5),
+  ('concrete-savanna', 90, 5, 0, 5),
+  ('youre-shooting-for-the-stars', 20, 40, 0, 40),
+  ('strike', 20, 40, 0, 40),
+  ('retired-police', 90, 5, 5, 0),
+  ('retired-firefighter', 90, 5, 5, 0),
+  ('retired-doctor', 90, 5, 5, 0),
+  ('trio-of-senior-citizens', 90, 5, 0, 5),
+  ('antiquarian', 80, 10, 0, 10),
+  ('to-lay-the-groundwork', 50, 50, 0, 0),
+  ('investor', 50, 50, 0, 0),
+  ('investment-fund', 50, 50, 0, 0),
+  ('almost-millionaire', 50, 50, 0, 0),
+  ('weirdo', 100, 0, 0, 0),
+  ('hooked', 0, 100, 0, 0),
+  ('land-ho', 0, 0, 100, 0),
+  ('nerd', 0, 0, 0, 100),
+  ('someone-liked-your-collection', 0, 0, 0, 0),
+  ('thanks-for-the-gift', 0, 0, 0, 0)
+on conflict (logro_id) do update set
+  rarity_hunter = excluded.rarity_hunter,
+  collector = excluded.collector,
+  explorer = excluded.explorer,
+  fan = excluded.fan;
+
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -98,6 +160,73 @@ select
   timestamptz '2026-09-01 00:00:00+00' + position * interval '1 day'
 from generate_series(1, 20) as positions(position)
 cross join lateral generate_series(1, 1 + position % 3) as displacements(displacement);
+
+insert into public.notificaciones (user_id, type, payload, is_read, created_at, gift_donante_id)
+select
+  gift.receptor_id,
+  'gift_received',
+  jsonb_build_object(
+    'user', coalesce(profile.display_name, 'Coleccionista'),
+    'amount', 50,
+    'message', 'El usuario ' || coalesce(profile.display_name, 'Coleccionista') || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
+  ),
+  mod(row_number() over (order by gift.donante_id, gift.receptor_id), 3) = 0,
+  gift.fecha,
+  gift.donante_id
+from public.regalos_enviados gift
+left join public.perfiles_publicos profile on profile.user_id = gift.donante_id
+where gift.donante_id in (
+  select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+  from generate_series(1, 20) as positions(position)
+) and gift.receptor_id in (
+  select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+  from generate_series(1, 20) as positions(position)
+);
+
+with gift_notifications as (
+  select notification.id, notification.user_id, notification.gift_donante_id, notification.created_at,
+    row_number() over (order by notification.created_at, notification.id) as ordinal
+  from public.notificaciones notification
+  where notification.type = 'gift_received'
+    and notification.user_id in (
+      select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+      from generate_series(1, 20) as positions(position)
+    )
+    and notification.gift_donante_id in (
+      select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+      from generate_series(1, 20) as positions(position)
+    )
+)
+insert into public.agradecimientos_regalo (gift_notification_id, thanker_id, donor_id, created_at)
+select id, user_id, gift_donante_id, created_at + interval '1 minute'
+from gift_notifications
+where ordinal % 3 = 0;
+
+update public.notificaciones notification
+set gift_thanked_at = thanks.created_at
+from public.agradecimientos_regalo thanks
+where notification.id = thanks.gift_notification_id;
+
+insert into public.notificaciones (user_id, type, payload, is_read, created_at)
+select
+  thanks.donor_id,
+  'gift_thanks',
+  jsonb_build_object(
+    'user', coalesce(profile.display_name, 'Coleccionista'),
+    'amount', 5,
+    'message', coalesce(profile.display_name, 'Coleccionista') || ' te dio las gracias por tu regalo.'
+  ),
+  false,
+  thanks.created_at
+from public.agradecimientos_regalo thanks
+left join public.perfiles_publicos profile on profile.user_id = thanks.thanker_id
+where thanks.thanker_id in (
+  select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+  from generate_series(1, 20) as positions(position)
+) and thanks.donor_id in (
+  select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+  from generate_series(1, 20) as positions(position)
+);
 
 with collection as (
   select * from public.minifiguras
@@ -190,11 +319,25 @@ with collection as (
     select count(*)::integer as cantidad
     from public.regalos_enviados where receptor_id = achievements.user_id
   ) received
+), with_thanks as (
+  select with_gifts.user_id,
+    with_gifts.logros || case when thanks.cantidad > 0 then jsonb_build_array(jsonb_build_object(
+      'id', 'thanks-for-the-gift', 'type', 'regalo',
+      'nombre', 'Gratitude is the sign of noble souls',
+      'descripcion', 'Un coleccionista te dio las gracias por tu regalo.',
+      'bricks', 5, 'repetible', true, 'cantidad', thanks.cantidad, 'total', 5 * thanks.cantidad
+    )) else '[]'::jsonb end as logros,
+    thanks.cantidad as thanks_received
+  from with_gifts
+  cross join lateral (
+    select count(*)::integer as cantidad
+    from public.agradecimientos_regalo where donor_id = with_gifts.user_id
+  ) thanks
 ), balances as (
   select user_id, logros, (
     select sum((item->>'total')::integer)::integer from jsonb_array_elements(logros) as items(item)
-  ) as bricks
-  from with_gifts
+  ) + 5 * thanks_received as bricks
+  from with_thanks
 ), levels as (
   select * from (values
     (0, 'Duplo', 0), (1, 'Stud', 20), (2, 'Plate', 50), (3, 'Three-Seven-Five', 100),
@@ -223,6 +366,106 @@ cross join lateral (
   select * from levels where umbral <= balances.bricks order by umbral desc limit 1
 ) current_level
 left join levels next_level on next_level.id = current_level.id + 1;
+
+with collection_metrics as (
+  select user_id,
+    count(*)::integer as total_figures,
+    coalesce(sum(coalesce(precio, precio_compra, 0)), 0)::numeric(14, 2) as total_value
+  from public.minifiguras
+  where estado_coleccion = 'COLECCI' || chr(211) || 'N'
+  group by user_id
+), current_values as (
+  select gamification.user_id,
+    gamification.bricks,
+    coalesce((gamification.nivel->>'id')::integer, 0) as level,
+    coalesce(metrics.total_figures, 0) as total_figures,
+    coalesce(metrics.total_value, 0)::numeric(14, 2) as total_value,
+    private.dna_calcular(gamification.user_id) as dna
+  from public.gamificacion gamification
+  left join collection_metrics metrics using (user_id)
+  where gamification.user_id in (
+    select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+    from generate_series(1, 20) as positions(position)
+  )
+), snapshot_rows as (
+  select user_id, date '2026-10-08' as snapshot_date,
+    greatest(total_figures - 1, 0) as total_figures,
+    greatest(total_value - 10, 0)::numeric(14, 2) as total_value,
+    greatest(bricks - 10, 0) as bricks,
+    greatest(level - 1, 0) as level,
+    round((dna->'porcentajes'->>'collector')::numeric, 2) as pct_collector,
+    round((dna->'porcentajes'->>'explorer')::numeric, 2) as pct_explorer,
+    round((dna->'porcentajes'->>'rarityHunter')::numeric, 2) as pct_rarity_hunter,
+    round((dna->'porcentajes'->>'fan')::numeric, 2) as pct_fan
+  from current_values
+  union all
+  select user_id, date '2026-10-09', total_figures, total_value, bricks, level,
+    round((dna->'porcentajes'->>'collector')::numeric, 2),
+    round((dna->'porcentajes'->>'explorer')::numeric, 2),
+    round((dna->'porcentajes'->>'rarityHunter')::numeric, 2),
+    round((dna->'porcentajes'->>'fan')::numeric, 2)
+  from current_values
+)
+insert into public.user_daily_snapshots (
+  user_id, snapshot_date, total_figures, total_value, bricks, level,
+  pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+)
+select user_id, snapshot_date, total_figures, total_value, bricks, level,
+  pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+from snapshot_rows;
+
+with ranked_snapshots as (
+  select snapshot.*,
+    row_number() over (partition by snapshot_date order by level desc, bricks desc, user_id asc) as rank_position
+  from public.user_daily_snapshots snapshot
+), snapshot_pairs as (
+  select current.user_id, current.snapshot_date,
+    current.total_figures, previous.total_figures as previous_total_figures,
+    current.total_value, previous.total_value as previous_total_value,
+    current.bricks, previous.bricks as previous_bricks,
+    current.level, previous.level as previous_level,
+    current.pct_collector, previous.pct_collector as previous_pct_collector,
+    current.pct_explorer, previous.pct_explorer as previous_pct_explorer,
+    current.pct_rarity_hunter, previous.pct_rarity_hunter as previous_pct_rarity_hunter,
+    current.pct_fan, previous.pct_fan as previous_pct_fan,
+    current.rank_position, previous.rank_position as previous_rank_position
+  from ranked_snapshots current
+  join ranked_snapshots previous on previous.user_id = current.user_id
+    and previous.snapshot_date = date '2026-10-08'
+  where current.snapshot_date = date '2026-10-09'
+)
+insert into public.notificaciones (user_id, type, payload, snapshot_date)
+select user_id, 'daily_summary',
+  jsonb_build_object(
+    'snapshotDate', snapshot_date,
+    'hasPrevious', true,
+    'deltas', jsonb_build_object(
+      'figures', total_figures - previous_total_figures,
+      'valueEur', total_value - previous_total_value,
+      'bricks', bricks - previous_bricks,
+      'level', level - previous_level,
+      'dna', jsonb_build_object(
+        'collector', pct_collector - previous_pct_collector,
+        'explorer', pct_explorer - previous_pct_explorer,
+        'rarityHunter', pct_rarity_hunter - previous_pct_rarity_hunter,
+        'fan', pct_fan - previous_pct_fan
+      )
+    ) || case when rank_position <= 10 and previous_rank_position <= 10
+      then jsonb_build_object('globalPosition', previous_rank_position - rank_position)
+      else '{}'::jsonb end
+  ), snapshot_date
+from snapshot_pairs;
+
+insert into public.notificaciones (user_id, type, payload)
+select user_id, 'ranking_entered', jsonb_build_object(
+  'ranking', 'global', 'position', position,
+  'message', 'Has entrado en el Top 10 del Ranking Global en el puesto ' || position || '.'
+)
+from public.ranking_top10_membership
+where ranking_type = 'global' and position = 1 and user_id in (
+  select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+  from generate_series(1, 20) as positions(position)
+);
 
 commit;
 

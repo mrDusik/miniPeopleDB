@@ -472,7 +472,7 @@ test('las filas del ranking no ofrecen logros y conservan la expansion al clicar
   dom.window.close();
 });
 
-test('el modal conserva cinco destacados y adapta tops y tarjetas a la orientación', async () => {
+test('el modal limita los destacados a tres en smartphone y landscape, y conserva cinco en tablet portrait', async () => {
   const dom = createDom();
   const top5Precio = Array.from({ length: 5 }, (_, index) => ({
     id: `PRICE-${index}`, nombre: `Price ${index}`, precio: 50 - index,
@@ -492,15 +492,16 @@ test('el modal conserva cinco destacados y adapta tops y tarjetas a la orientaci
     group.querySelector('.ranking-highlight-title-portrait').textContent,
     group.querySelector('.ranking-highlight-title-landscape').textContent,
   ]), [
-    ['Top 3 por precio', 'Top 5 por precio'], ['Top 3 por antigüedad', 'Top 5 por antigüedad'],
+    ['Top 5 por precio', 'Top 3 por precio'], ['Top 5 por antigüedad', 'Top 3 por antigüedad'],
   ]);
   for (const [index, items] of [top5Precio, top5Antiguedad].entries()) {
     const cards = [...groups[index].querySelectorAll('.ranking-card-static')];
     assert.equal(cards.length, 5);
     assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.map(({ nombre }) => nombre));
   }
-  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
-  assert.match(styles, /@media \(orientation: landscape\) \{\s*\.ranking-highlight-title-portrait \{ display: none; \}/);
+  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 6\) \{ display: none; \}/);
+  assert.match(styles, /@media \(max-width: 600px\) and \(orientation: portrait\) \{\s*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}\s*\.ranking-highlight-title-portrait \{ display: none; \}\s*\.ranking-highlight-title-landscape \{ display: inline; \}/);
+  assert.match(styles, /@media \(orientation: landscape\) \{[^}]*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}[^}]*\.ranking-highlight-title-portrait \{ display: none; \}/s);
   assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
   dom.window.close();
 });

@@ -8,6 +8,9 @@ const PRIMARY_KEYS = {
   perfiles_publicos: ['user_id'],
   regalos_enviados: ['donante_id', 'receptor_id'],
   user_daily_snapshots: ['user_id', 'snapshot_date'],
+  notificaciones: ['id'],
+  agradecimientos_regalo: ['gift_notification_id'],
+  ranking_top10_membership: ['user_id', 'ranking_type'],
 };
 
 const COLUMN_DEFAULTS = {
@@ -16,6 +19,9 @@ const COLUMN_DEFAULTS = {
   perfiles_publicos: () => ({ avatar_url: null, updated_at: new Date().toISOString() }),
   regalos_enviados: () => ({ fecha: new Date().toISOString() }),
   user_daily_snapshots: () => ({ created_at: new Date().toISOString() }),
+  notificaciones: () => ({ is_read: false, created_at: new Date().toISOString(), payload: {}, gift_thanked_at: null }),
+  agradecimientos_regalo: () => ({ created_at: new Date().toISOString() }),
+  ranking_top10_membership: () => ({ updated_at: new Date().toISOString() }),
 };
 
 const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
@@ -75,7 +81,10 @@ function rlsError() {
 
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
 export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) {
-  const tables = { minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [] };
+  const tables = {
+    minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [],
+    notificaciones: [], agradecimientos_regalo: [], ranking_top10_membership: [],
+  };
   const failures = [];
   const dailySync = {
     runs: [], users: [], prices: [], snapshots: [], priceCache: new Map(),
@@ -103,11 +112,77 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     return failures.splice(index, 1)[0].error;
   }
 
+  function timestamp() {
+    return new Date(typeof now === 'function' ? now() : now).toISOString();
+  }
+
+  function insertNotification(row) {
+    sequence += 1;
+    const notification = {
+      id: `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
+      is_read: false,
+      created_at: timestamp(),
+      payload: {},
+      gift_thanked_at: null,
+      ...clone(row),
+    };
+    tables.notificaciones.push(notification);
+    return notification;
+  }
+
+  function addBricks(gamification, amount) {
+    gamification.bricks += amount;
+    const { nivel, siguienteNivel, progreso } = selectLevel(gamification.bricks);
+    gamification.nivel = nivel;
+    gamification.siguiente_nivel = siguienteNivel;
+    gamification.progreso = progreso;
+  }
+
+  function publishDailySummaries(run) {
+    const completedUserIds = new Set(dailySync.users
+      .filter(({ run_id, status }) => run_id === run.id && status === 'completed')
+      .map(({ user_id }) => user_id));
+    for (const snapshot of dailySync.snapshots.filter(({ snapshot_date, user_id }) =>
+      snapshot_date === run.snapshot_date && completedUserIds.has(user_id))) {
+      const previous = tables.user_daily_snapshots
+        .filter(({ user_id, snapshot_date }) => user_id === snapshot.user_id && snapshot_date < snapshot.snapshot_date)
+        .sort((left, right) => right.snapshot_date.localeCompare(left.snapshot_date))[0];
+      const payload = {
+        snapshotDate: snapshot.snapshot_date,
+        hasPrevious: Boolean(previous),
+      };
+      if (previous) {
+        payload.deltas = {
+          figures: snapshot.total_figures - previous.total_figures,
+          valueEur: Number((snapshot.total_value - previous.total_value).toFixed(2)),
+          bricks: snapshot.bricks - previous.bricks,
+          level: snapshot.level - previous.level,
+          dna: {
+            collector: Number((snapshot.pct_collector - previous.pct_collector).toFixed(2)),
+            explorer: Number((snapshot.pct_explorer - previous.pct_explorer).toFixed(2)),
+            rarityHunter: Number((snapshot.pct_rarity_hunter - previous.pct_rarity_hunter).toFixed(2)),
+            fan: Number((snapshot.pct_fan - previous.pct_fan).toFixed(2)),
+          },
+        };
+      }
+      const existing = tables.notificaciones.find(({ user_id, type, snapshot_date }) =>
+        user_id === snapshot.user_id && type === 'daily_summary' && snapshot_date === snapshot.snapshot_date);
+      if (existing) existing.payload = payload;
+      else insertNotification({ user_id: snapshot.user_id, type: 'daily_summary', payload, snapshot_date: snapshot.snapshot_date });
+    }
+  }
+
   function execute(table, state, uid) {
     const failure = takeFailure(table, state.operation);
     if (failure) return { data: null, error: failure };
     if (!tables[table]) return { data: null, error: { code: '42P01', message: 'relation does not exist' } };
     if (table === 'regalos_enviados') return { data: null, error: rlsError() };
+    if (['agradecimientos_regalo', 'ranking_top10_membership'].includes(table)) return { data: null, error: rlsError() };
+    if (table === 'notificaciones'
+      && (state.operation === 'insert' || state.operation === 'upsert' || state.operation === 'delete'
+        || (state.operation === 'update' && Object.keys(state.values ?? {}).some((column) => column !== 'is_read')))) {
+      return { data: null, error: rlsError() };
+    }
 
     const rows = tables[table];
     const visible = (row) => uid !== null && row.user_id === uid
@@ -118,7 +193,11 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         if (operator === 'lt') return row[column] < value;
         if (operator === 'gt') return row[column] > value;
         return false;
-      });
+      })
+      && (!state.or || (() => {
+        const match = /^created_at\.lt\.([^,]+),and\(created_at\.eq\.([^,]+),id\.lt\.([^)]+)\)$/.exec(state.or);
+        return match && (row.created_at < match[1] || (row.created_at === match[2] && row.id < match[3]));
+      })());
     let result = [];
 
     if (state.operation === 'select') {
@@ -155,6 +234,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       tables[table] = rows.filter((row) => !result.includes(row));
     }
 
+    const totalCount = result.length;
     for (const [column, ascending] of [...state.orders].reverse()) {
       result = [...result].sort((left, right) => {
         if (left[column] === right[column]) return 0;
@@ -164,12 +244,12 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     if (state.limit !== null) result = result.slice(0, state.limit);
 
     const returnsRows = state.operation === 'select' || state.returning;
-    const data = returnsRows ? clone(result) : null;
+    const data = state.head ? [] : returnsRows ? clone(result) : null;
     if (state.single) {
       if (data.length > 1) return { data: null, error: { code: 'PGRST116', message: 'multiple rows' } };
       return { data: data[0] ?? null, error: null };
     }
-    return { data, error: null };
+    return state.count === 'exact' ? { data, error: null, count: totalCount } : { data, error: null };
   }
 
   function rpc(name, parameters, uid) {
@@ -179,6 +259,13 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
 
     if (name === 'regalos_recibidos_count') {
       return { data: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === uid).length, error: null };
+    }
+
+    if (name === 'agradecimientos_regalo_count') {
+      return { data: {
+        sent: tables.agradecimientos_regalo.filter(({ thanker_id }) => thanker_id === uid).length,
+        received: tables.agradecimientos_regalo.filter(({ donor_id }) => donor_id === uid).length,
+      }, error: null };
     }
 
     if (name === 'gamificacion_dna') {
@@ -294,10 +381,13 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         : criterio === 'coleccion'
           ? tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === row.user_id && estado_coleccion === 'COLECCIÓN').length
           : calculateDna(row.logros ?? []).porcentajes[criterio] ?? 0;
-      const data = [...tables.gamificacion]
+      const levelCandidates = [...tables.gamificacion]
+        .sort((left, right) => (right.nivel?.id ?? 0) - (left.nivel?.id ?? 0)
+          || right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
+        .slice(0, 10);
+      const data = levelCandidates
         .sort((left, right) => value(right) - value(left) || (right.nivel?.id ?? 0) - (left.nivel?.id ?? 0)
           || right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
-        .slice(0, 10)
         .map((gamification) => {
           const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === gamification.user_id);
           const collection = tables.minifiguras.filter(({ user_id, estado_coleccion }) => user_id === gamification.user_id && estado_coleccion === 'COLECCIÓN');
@@ -365,6 +455,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       if (giftFailure) return { data: null, error: giftFailure };
       const snapshot = clone(receiver);
       const giftsSnapshot = clone(tables.regalos_enviados);
+      const notificationsSnapshot = clone(tables.notificaciones);
       try {
         tables.regalos_enviados.push(withDefaults('regalos_enviados', { donante_id: uid, receptor_id: receiverId }));
         const updateFailure = takeFailure('gamificacion', 'update');
@@ -381,10 +472,73 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
           descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.', bricks: 50,
           repetible: true, cantidad: count, total: count * 50,
         });
+        const notificationFailure = takeFailure('notificaciones', 'insert');
+        if (notificationFailure) throw notificationFailure;
+        const donorName = tables.perfiles_publicos.find(({ user_id }) => user_id === uid)?.display_name ?? 'Coleccionista';
+        insertNotification({
+          user_id: receiverId,
+          type: 'gift_received',
+          gift_donante_id: uid,
+          payload: {
+            user: donorName,
+            amount: 50,
+            message: `El usuario ${donorName} vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱`,
+          },
+        });
         return { data: { ok: true }, error: null };
       } catch (error) {
         Object.assign(receiver, snapshot);
         tables.regalos_enviados = giftsSnapshot;
+        tables.notificaciones = notificationsSnapshot;
+        return { data: null, error };
+      }
+    }
+
+    if (name === 'agradecer_regalo') {
+      const giftNotification = tables.notificaciones.find(({ id, user_id, type }) =>
+        id === parameters?.p_notification_id && user_id === uid && type === 'gift_received');
+      if (!giftNotification) return { data: null, error: { code: 'P0001', message: 'REGALO_NO_ENCONTRADO' } };
+      if (tables.agradecimientos_regalo.some(({ gift_notification_id }) => gift_notification_id === giftNotification.id)) {
+        return { data: null, error: { code: 'P0001', message: 'REGALO_YA_AGRADECIDO' } };
+      }
+      const donor = tables.gamificacion.find(({ user_id }) => user_id === giftNotification.gift_donante_id);
+      const thanker = tables.gamificacion.find(({ user_id }) => user_id === uid);
+      if (!donor || !thanker) return { data: null, error: { code: 'P0001', message: 'USUARIO_NO_ENCONTRADO' } };
+      const donorSnapshot = clone(donor);
+      const thankerSnapshot = clone(thanker);
+      const thanksSnapshot = clone(tables.agradecimientos_regalo);
+      const notificationsSnapshot = clone(tables.notificaciones);
+      try {
+        const ledgerFailure = takeFailure('agradecimientos_regalo', 'insert');
+        if (ledgerFailure) throw ledgerFailure;
+        tables.agradecimientos_regalo.push(withDefaults('agradecimientos_regalo', {
+          gift_notification_id: giftNotification.id, thanker_id: uid, donor_id: donor.user_id,
+        }));
+        giftNotification.gift_thanked_at = timestamp();
+        const updateFailure = takeFailure('gamificacion', 'update');
+        if (updateFailure) throw updateFailure;
+        addBricks(donor, 10);
+        const count = tables.agradecimientos_regalo.filter(({ donor_id }) => donor_id === donor.user_id).length;
+        donor.logros = donor.logros.filter(({ id }) => id !== 'thanks-for-the-gift');
+        donor.logros.push({
+          id: 'thanks-for-the-gift', type: 'regalo', nombre: 'Gratitude is the sign of noble souls',
+          descripcion: 'Un coleccionista te dio las gracias por tu regalo.', bricks: 5,
+          repetible: true, cantidad: count, total: count * 5,
+        });
+        const notificationFailure = takeFailure('notificaciones', 'insert');
+        if (notificationFailure) throw notificationFailure;
+        const thankerName = tables.perfiles_publicos.find(({ user_id }) => user_id === uid)?.display_name ?? 'Coleccionista';
+        insertNotification({
+          user_id: donor.user_id,
+          type: 'gift_thanks',
+          payload: { user: thankerName, amount: 5, message: `${thankerName} te dio las gracias por tu regalo.` },
+        });
+        return { data: { ok: true }, error: null };
+      } catch (error) {
+        Object.assign(donor, donorSnapshot);
+        Object.assign(thanker, thankerSnapshot);
+        tables.agradecimientos_regalo = thanksSnapshot;
+        tables.notificaciones = notificationsSnapshot;
         return { data: null, error };
       }
     }
@@ -411,13 +565,23 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       .sort((left, right) => left.id.localeCompare(right.id));
     const gifts = tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === userId)
       .sort((left, right) => left.donante_id.localeCompare(right.donante_id));
-    return createHash('sha256').update(JSON.stringify({ figures, gifts, fingerprint: dailySync.fingerprint ?? '' })).digest('hex');
+    const thanks = tables.agradecimientos_regalo.filter(({ thanker_id, donor_id }) => thanker_id === userId || donor_id === userId)
+      .sort((left, right) => left.gift_notification_id.localeCompare(right.gift_notification_id));
+    return createHash('sha256').update(JSON.stringify({ figures, gifts, thanks, fingerprint: dailySync.fingerprint ?? '' })).digest('hex');
   }
 
   function adminRpc(name, parameters) {
     adminCalls.push({ name, parameters: clone(parameters) });
     const failure = takeFailure(name, 'rpc');
     if (failure) return { data: null, error: failure };
+    if (name === 'recalcular_agradecimientos_regalo_count') {
+      const userIds = [...new Set(parameters.p_user_ids ?? [])];
+      return { data: userIds.map((user_id) => ({
+        user_id,
+        sent_count: tables.agradecimientos_regalo.filter(({ thanker_id }) => thanker_id === user_id).length,
+        received_count: tables.agradecimientos_regalo.filter(({ donor_id }) => donor_id === user_id).length,
+      })), error: null };
+    }
     const now = new Date();
     const findRun = () => dailySync.runs.find(({ id }) => id === parameters.p_run_id);
     const ownedRun = () => {
@@ -525,7 +689,15 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         id: figure.id, categoria: figure.categoria, subcategoria: figure.subcategoria, anio: figure.anio,
         estadoColeccion: figure.estado_coleccion, precio: figure.precio, precioCompra: figure.precio_compra,
       }));
-      return { data: { revision: sourceRevision(parameters.p_user_id), figures, giftsReceived: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === parameters.p_user_id).length, fingerprint: dailySync.fingerprint ?? '' }, error: null };
+      const thankRows = tables.agradecimientos_regalo.filter(({ thanker_id, donor_id }) =>
+        thanker_id === parameters.p_user_id || donor_id === parameters.p_user_id);
+      return { data: {
+        revision: sourceRevision(parameters.p_user_id), figures,
+        giftsReceived: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === parameters.p_user_id).length,
+        thanksSent: thankRows.filter(({ thanker_id }) => thanker_id === parameters.p_user_id).length,
+        thanksReceived: thankRows.filter(({ donor_id }) => donor_id === parameters.p_user_id).length,
+        fingerprint: dailySync.fingerprint ?? '',
+      }, error: null };
     }
     if (name === 'capturar_daily_sync_usuario') {
       const run = ownedRun();
@@ -583,6 +755,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         run.status = 'failed';
         run.error_code = 'USERS_FAILED';
       } else {
+        publishDailySummaries(run);
         run.status = 'completed';
         run.result = { success: true, processedUsers: status.processedUsers, timestamp: now.toISOString() };
       }
@@ -604,11 +777,13 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
   }
 
   function queryBuilder(table, uid) {
-    const state = { operation: null, values: null, filters: [], comparisons: [], orders: [], limit: null, returning: false, single: false };
+    const state = { operation: null, values: null, filters: [], comparisons: [], orders: [], limit: null, returning: false, single: false, head: false, count: null, or: null };
     const builder = {
-      select() {
+      select(_columns, options = {}) {
         if (state.operation === null) state.operation = 'select';
         else state.returning = true;
+        state.head = options.head === true;
+        state.count = options.count ?? null;
         return builder;
       },
       insert(values) { state.operation = 'insert'; state.values = values; return builder; },
@@ -620,6 +795,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       lte(column, value) { state.comparisons.push([column, 'lte', value]); return builder; },
       lt(column, value) { state.comparisons.push([column, 'lt', value]); return builder; },
       gt(column, value) { state.comparisons.push([column, 'gt', value]); return builder; },
+      or(expression) { state.or = expression; return builder; },
       limit(value) { state.limit = value; return builder; },
       order(column, { ascending = true } = {}) { state.orders.push([column, ascending]); return builder; },
       maybeSingle() { state.single = true; return builder; },

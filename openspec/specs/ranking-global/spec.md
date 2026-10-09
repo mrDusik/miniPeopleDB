@@ -8,13 +8,14 @@ Permite comparar de forma segura el progreso público de los coleccionistas y re
 
 ### Requirement: Consultar el ranking global
 
-El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados y SHALL devolver como máximo los 10 usuarios mejor clasificados por el criterio elegido, aplicado en Supabase antes del límite. El parámetro opcional `criterio` SHALL aceptar exclusivamente `nivel` (por defecto), `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; los valores inválidos, vacíos o repetidos SHALL devolver `400` con `{ "error": "PARAMETRO_INVALIDO", "parametro": "criterio" }`. Nivel SHALL ordenar por nivel descendente y Bricks descendente, Colección por número de figuras en estado `COLECCIÓN` descendente, y cada rasgo por su porcentaje DNA completo descendente, usando cero para Newbie. Todos los criterios SHALL desempatar por nivel descendente, Bricks descendente y finalmente `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
+El sistema SHALL exponer `GET /api/ranking` para usuarios autenticados. La membresía SHALL ser siempre el Top 10 por Nivel y Bricks; los criterios alternativos SHALL reordenar únicamente esos mismos usuarios y no SHALL incorporar usuarios fuera del Top 10 por Nivel. El parámetro opcional `criterio` SHALL aceptar exclusivamente `nivel` (por defecto), `coleccion`, `rarityHunter`, `collector`, `explorer` y `fan`; los valores inválidos, vacíos o repetidos SHALL devolver `400` con `{ "error": "PARAMETRO_INVALIDO", "parametro": "criterio" }`. Nivel SHALL ordenar por nivel descendente y Bricks descendente, Colección por número de figuras en estado `COLECCIÓN` descendente, y cada rasgo por su porcentaje DNA completo descendente, usando cero para Newbie. Todos los criterios SHALL desempatar por nivel descendente, Bricks descendente y finalmente `user_id` ascendente. Cada entrada SHALL incluir `userId`, `avatarUrl`, `displayName`, `bricks`, `nivel`, `nombreNivel`, `imagenNivel`, `totalColeccion` y `regaloEnviado`, sin exponer correo ni otros metadatos privados.
 
 El modal SHALL incluir un grupo de botones segmentados alineado a la izquierda encima de las filas del ranking, con las etiquetas exactas Nivel, Colección, Rarity Hunter, Collector, Explorer y Fan, sin aclaraciones entre paréntesis. El criterio seleccionado SHALL indicarse con `aria-pressed="true"`; los demás SHALL tener `aria-pressed="false"`. Cada cambio SHALL solicitar el Top 10 del criterio elegido e ignorar respuestas anteriores que lleguen tarde. El indicador de posición del panel principal SHALL conservar el criterio Nivel. El cierre de sesión SHALL restaurar Nivel.
 
 #### Scenario: Elegir un criterio alternativo
 - **WHEN** el usuario activa el botón segmentado Colección o un rasgo DNA
-- **THEN** el modal muestra los diez primeros de todos los usuarios según ese criterio, no una reordenación del Top 10 por Nivel
+- **THEN** el modal reordena según ese criterio únicamente los diez usuarios que ya pertenecen al Top 10 por Nivel
+- **AND** ningún usuario fuera del Top 10 por Nivel aparece aunque puntúe más alto en el criterio alternativo
 - **AND** la distribución completa de DNA permanece privada incluso si el rasgo elegido no está entre los dos rasgos públicos
 
 #### Scenario: Empatar en un criterio alternativo
@@ -69,7 +70,7 @@ En orientacion portrait, el grupo de seis criterios del modal Ranking Global SHA
 
 ### Requirement: Consultar los destacados de cada colección clasificada
 
-Cada entrada de `GET /api/ranking` SHALL incluir `top5Precio` y `top5Antiguedad`, limitados a minifiguras del usuario en estado `COLECCIÓN`. `top5Precio` SHALL usar exactamente el orden y los desempates de `top5` en la valoración de la colección, y `top5Antiguedad` SHALL usar exactamente el orden y los desempates de `top5Antiguas`. Cada elemento SHALL limitarse a los datos necesarios para renderizar la misma imagen, texto y tooltip que en la pantalla principal.
+Cada entrada de `GET /api/ranking` SHALL incluir `top5Precio` y `top5Antiguedad`, limitados a minifiguras del usuario en estado `COLECCIÓN`. `top5Precio` SHALL usar exactamente el orden y los desempates de `top5` en la valoración de la colección, y `top5Antiguedad` SHALL usar exactamente el orden y los desempates de `top5Antiguas`. Cada elemento SHALL limitarse a los datos necesarios para renderizar la misma imagen, texto y tooltip que en la pantalla principal. En landscape, las filas expandidas de los modales Global y Semanal SHALL mostrar como máximo tres elementos de cada grupo; en portrait SHALL mostrar como máximo cinco.
 
 #### Scenario: Usuario con más de cinco minifiguras en colección
 - **WHEN** un usuario clasificado tiene más de cinco minifiguras en `COLECCIÓN`
@@ -117,3 +118,22 @@ Cada regalo válido SHALL añadir o incrementar en la gamificación del receptor
 - **WHEN** un receptor obtiene regalos válidos de dos donantes diferentes
 - **THEN** el logro de regalo tiene cantidad 2 y total 100
 - **AND** ambos regalos forman parte de sus Bricks
+
+### Requirement: Notificar regalos y procesar agradecimientos
+
+Una donacion confirmada por el contrato existente de Ranking Global SHALL crear una notificacion para el receptor. El receptor SHALL poder agradecer cada donacion como maximo una vez. El agradecimiento SHALL otorgar 5 Bricks directos al donante original, notificarlo y concederle un logro adicional repetible de tipo `regalo` por recibir las gracias, independiente del logro existente de 50 Bricks por regalo recibido. El usuario que agradece SHALL NOT recibir ese logro ni sus Bricks.
+
+#### Scenario: Donacion confirmada
+- **WHEN** `POST /api/ranking/regalar` confirma una donacion valida
+- **THEN** el receptor obtiene una notificacion que incluye el nombre visible del donante y los 50 Bricks concedidos
+- **AND** un fallo al crear la notificacion no deja una donacion confirmada sin su evento asociado
+
+#### Scenario: Recompensar un agradecimiento
+- **WHEN** el receptor agradece una donacion valida no agradecida
+- **THEN** el donante recibe exactamente 5 Bricks y una notificacion de agradecimiento
+- **AND** el donante original obtiene una concesion separada de tipo `regalo` por recibir las gracias, por 5 Bricks adicionales
+- **AND** quien agradece no obtiene esa concesion
+
+#### Scenario: Solicitud duplicada o ajena
+- **WHEN** se repite el agradecimiento o se intenta agradecer una donacion que no fue recibida por la sesion
+- **THEN** la operacion no concede Bricks ni altera logros o notificaciones

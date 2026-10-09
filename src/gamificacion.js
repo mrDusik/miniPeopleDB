@@ -79,6 +79,15 @@ export const LOGRO_REGALO = {
   repetible: true,
 };
 
+export const LOGRO_AGRADECIMIENTO = {
+  id: 'thanks-for-the-gift',
+  type: 'regalo',
+  nombre: 'Gratitude is the sign of noble souls',
+  descripcion: 'Un coleccionista te dio las gracias por tu regalo.',
+  bricks: 5,
+  repetible: true,
+};
+
 const CATEGORY_OBJECTIVES = new Map([
   ['bricky-potter', 'Harry Potter'],
   ['bricky-mouse', 'Disney'],
@@ -147,6 +156,7 @@ export const DNA_PONDERACIONES = new Map(Object.entries({
   'land-ho': [0, 0, 100, 0],
   nerd: [0, 0, 0, 100],
   'someone-liked-your-collection': [0, 0, 0, 0],
+  'thanks-for-the-gift': [0, 0, 0, 0],
 }));
 
 const DNA_THRESHOLD_OBJECTIVES = new Map([
@@ -301,7 +311,7 @@ export function selectLevel(bricks) {
   };
 }
 
-export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos = 0) {
+export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos = 0, agradecimientosRecibidos = 0) {
   const catalogoColeccion = catalogo.filter((minifigura) => minifigura.estadoColeccion === 'COLECCIÓN');
   const logros = OBJETIVOS.map((objective) => {
     const cantidad = achievementCount(objective, catalogoColeccion, categorias);
@@ -318,7 +328,11 @@ export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos
   if (Number.isInteger(regalosRecibidos) && regalosRecibidos > 0) {
     logros.push({ ...LOGRO_REGALO, cantidad: regalosRecibidos, total: regalosRecibidos * LOGRO_REGALO.bricks });
   }
-  const bricks = logros.reduce((total, logro) => total + logro.total, 0);
+  if (Number.isInteger(agradecimientosRecibidos) && agradecimientosRecibidos > 0) {
+    logros.push({ ...LOGRO_AGRADECIMIENTO, cantidad: agradecimientosRecibidos, total: agradecimientosRecibidos * LOGRO_AGRADECIMIENTO.bricks });
+  }
+  const bricks = logros.reduce((total, logro) => total + logro.total, 0)
+    + (Number.isInteger(agradecimientosRecibidos) && agradecimientosRecibidos > 0 ? agradecimientosRecibidos * 5 : 0);
   return { bricks, ...selectLevel(bricks), logros };
 }
 

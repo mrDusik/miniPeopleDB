@@ -90,6 +90,13 @@
       </div>
     </header>
 
+    <div class="notifications-entry-row">
+      <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
+        <img src="/status_images/sobre.png" alt="">
+        <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
+      </button>
+    </div>
+
     <section class="rankings-panel" aria-labelledby="rankings-title">
       <div class="section-heading">
         <div>
@@ -335,6 +342,21 @@
       </div>
       <p id="achievements-status" class="status" role="status" aria-live="polite"></p>
       <ul id="gamification-achievements" class="achievements-list"></ul>
+    </dialog>
+
+    <dialog id="notifications-dialog" class="modal modal-achievements" aria-labelledby="notifications-dialog-title">
+      <div class="achievements-heading modal-dialog-heading">
+        <img class="achievements-heading-icon" src="/status_images/sobre.png" alt="">
+        <div class="achievements-heading-text">
+          <h2 id="notifications-dialog-title">Notificaciones</h2>
+        </div>
+        <button type="button" id="notifications-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <div class="notifications-toolbar">
+        <button type="button" id="notifications-mark-all" class="button button-secondary" disabled>Marcar todas como leídas</button>
+      </div>
+      <p id="notifications-status" class="status" role="status" aria-live="polite">Cargando notificaciones...</p>
+      <ul id="notifications-list" class="achievements-list notifications-list"></ul>
     </dialog>
 
     <dialog id="dna-dialog" class="modal modal-dna" aria-labelledby="dna-dialog-title">
