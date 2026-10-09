@@ -144,6 +144,8 @@ test('Historico envía rangos con apiFetch y descarta respuestas fuera de orden'
     const defaultRange = new URL(historyRequests()[0].url, 'http://localhost');
     assert.equal(defaultRange.searchParams.has('from'), true);
     assert.equal(defaultRange.searchParams.has('to'), true);
+    assert.equal((Date.parse(`${defaultRange.searchParams.get('to')}T00:00:00Z`) - Date.parse(`${defaultRange.searchParams.get('from')}T00:00:00Z`)) / 86400000 + 1, 7);
+    assert.equal(document.querySelector('[data-history-days="7"]').getAttribute('aria-pressed'), 'true');
 
     document.querySelector('[data-history-days="30"]').click();
     await tick();
