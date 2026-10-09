@@ -562,7 +562,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
   .modal-analytics-history { width: calc(100% - 16px); max-height: calc(100dvh - 16px); padding: 12px; }
   .analytics-history-controls { display: block; }
-  .analytics-history-ranges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .analytics-history-ranges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .analytics-history-ranges .button { min-width: 0; padding: 0 5px; font-size: 0.75rem; }
   .analytics-history-plot { height: 260px; }
   .analytics-history-chart table { font-size: 0.66rem; }
@@ -799,8 +799,10 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 }
 
 @media (orientation: portrait) {
+  #analytics-history-ranges { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #analytics-history-ranges .button { width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   .ranking-order-toolbar { display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; }
-  .ranking-criteria { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .ranking-criteria { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
   #ranking-order .button { width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; }
   .ranking-user-details { width: 100%; min-width: 0; max-width: 100%; margin-right: 0; }
   .ranking-user-details > * { min-width: 0; max-width: 100%; }
@@ -810,7 +812,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 }
 
 @media (min-width: 761px) and (orientation: portrait) {
-  .ranking-criteria { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .weekly-ranking-order-spacer { height: 52px; }
 }
 

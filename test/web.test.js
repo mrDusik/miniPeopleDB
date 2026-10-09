@@ -239,7 +239,8 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(portraitDeclarations.get('.dna-chart')?.getPropertyValue('justify-self'), 'center');
   assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('display'), 'block');
   assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('overflow'), 'visible');
-  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
+  assert.equal(portraitDeclarations.get('#analytics-history-ranges')?.getPropertyValue('grid-template-columns'), 'repeat(4, minmax(0, 1fr))');
+  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('grid-template-columns'), 'repeat(6, minmax(0, 1fr))');
   assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('white-space'), 'normal');
   assert.equal(portraitDeclarations.get('.ranking-user-details')?.getPropertyValue('max-width'), '100%');
   tabletDom.window.close();

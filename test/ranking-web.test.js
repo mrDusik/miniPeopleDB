@@ -363,8 +363,9 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
-  assert.match(styles, /@media \(orientation: portrait\) \{[^}]*\.ranking-order-toolbar \{ display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; \}[^}]*\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: 4px; \}[^}]*#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; \}/);
-  assert.match(styles, /@media \(min-width: 761px\) and \(orientation: portrait\) \{\s*\.ranking-criteria \{ grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); \}/);
+  assert.match(styles, /\.ranking-order-toolbar \{ display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; \}/);
+  assert.match(styles, /\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); gap: 4px; \}/);
+  assert.match(styles, /#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; \}/);
   assert.match(styles, /\.ranking-user-details \{ width: 100%; min-width: 0; max-width: 100%; margin-right: 0; \}/);
   assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);
