@@ -2334,7 +2334,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
 
 function openAnalyticsHistory() {
   analyticsHistoryTrigger = analyticsHistoryOpenButton;
-  setAnalyticsHistoryRange(historyRangeForDays(90), 90);
+  setAnalyticsHistoryRange(historyRangeForDays(7), 7);
   analyticsHistoryDialog.showModal();
   analyticsHistoryCloseButton.focus();
   void loadAnalyticsHistory();
