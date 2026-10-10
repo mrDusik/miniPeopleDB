@@ -168,6 +168,42 @@ test('recupera el run persistido y mantiene heartbeat durante una consulta larga
   assert.deepEqual(repositoryCalls, ['recover', 'claim', 'price', 'finalize']);
 });
 
+test('reintenta reclamar un run recuperado cuando el lease anterior sigue vigente', async () => {
+  const run = { jobId: 'run-live-lease', status: 'running', snapshotDate: '2026-10-07' };
+  const calls = [];
+  let leaseExpired = false;
+  const repository = {
+    async start() { return run; },
+    async recover() { calls.push('recover'); return run; },
+    async status() { calls.push('status'); return { status: 'running' }; },
+    async claim() {
+      calls.push('claim');
+      return leaseExpired;
+    },
+    async pricesPage() { calls.push('prices'); return []; },
+    async usersPage() { calls.push('users'); return []; },
+    async finalize() { calls.push('finalize'); },
+    async fail() { calls.push('fail'); },
+  };
+  const jobs = createDailyAnalyticsJobs({
+    repository,
+    brickset: { async getPrice() { return 1; } },
+    categoriasRepository: { async read() { return []; } },
+    sleepImpl: async (duration) => {
+      calls.push(`wait:${duration}`);
+      leaseExpired = true;
+    },
+    claimRetryMs: 5000,
+  });
+
+  assert.equal((await jobs.recover()).jobId, run.jobId);
+  await jobs.waitForIdle();
+
+  assert.deepEqual(calls, [
+    'recover', 'claim', 'status', 'wait:5000', 'claim', 'prices', 'users', 'finalize',
+  ]);
+});
+
 test('reintenta errores transitorios de almacenamiento con backoff acotado e inyectable', async () => {
   const run = { jobId: 'run-backoff', status: 'pending', snapshotDate: '2026-10-07' };
   const sleeps = [];

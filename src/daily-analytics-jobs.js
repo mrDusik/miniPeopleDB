@@ -37,6 +37,7 @@ export function createDailyAnalyticsJobs({
   sleepImpl = (duration) => new Promise((resolve) => setTimeoutImpl(resolve, duration)),
   leaseSeconds = LEASE_SECONDS,
   heartbeatMs = HEARTBEAT_MS,
+  claimRetryMs = HEARTBEAT_MS,
   pageSize = PAGE_SIZE,
   sourceRetries = SOURCE_RETRIES,
   storageRetryDelaysMs = [250, 500, 1000],
@@ -68,7 +69,7 @@ export function createDailyAnalyticsJobs({
   function schedule(run) {
     if (!run?.jobId || workers.has(run.jobId) || closed) return workers.get(run?.jobId);
     const worker = process(run)
-      .catch(() => logger.error('[daily-analytics] No se pudo reclamar el trabajo persistido'))
+      .catch(() => logger.error('[daily-analytics] No se pudo recuperar el trabajo persistido'))
       .finally(() => workers.delete(run.jobId));
     workers.set(run.jobId, worker);
     return worker;
@@ -78,8 +79,16 @@ export function createDailyAnalyticsJobs({
     const leaseOwner = randomUUID();
     let leaseLost = false;
     let heartbeatPending = false;
-    const claimed = await retryStorage(() => repository.claim(run.jobId, leaseOwner, leaseSeconds));
-    if (!claimed) return;
+    let claimed = false;
+    while (!closed && !claimed) {
+      claimed = await retryStorage(() => repository.claim(run.jobId, leaseOwner, leaseSeconds));
+      if (claimed) break;
+
+      const current = await retryStorage(() => repository.status(run.jobId));
+      if (!current || !['pending', 'running'].includes(current.status)) return;
+      await sleepImpl(claimRetryMs);
+    }
+    if (!claimed || closed) return;
 
     const heartbeat = setIntervalImpl(async () => {
       if (heartbeatPending || leaseLost || closed) return;
