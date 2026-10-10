@@ -196,7 +196,7 @@ Las peticiones a Brickset se serializan y respetan un intervalo mínimo global d
 
 El cambio de esquema es aditivo. Antes de desplegar código, aplica `supabase/schema.sql` en el Supabase autorizado y verifica las tablas, RLS, grants y RPC con sus pruebas SQL. Mantén desactivado el proveedor cron durante esa migración. Configura `SUPABASE_SERVICE_ROLE_KEY` y `CRON_SECRET` en el gestor de secretos del backend; `sup.env.example` contiene solo nombres y placeholders. No guardes el bearer en Git, navegador, parámetros de URL ni logs.
 
-El worker requiere un backend Node residente y una sola instancia, ya que comparte el limitador serial de Brickset con la sincronización ordinaria. No despliegues este worker como función efímera ni escales a varias instancias sin un limitador distribuido. El backend recupera trabajos pendientes al arrancar y deja que un lease caduque al cerrar; no borres tablas para reiniciarlo.
+El worker requiere un backend Node residente y una sola instancia, ya que comparte el limitador serial de Brickset con la sincronización ordinaria. No despliegues este worker como función efímera ni escales a varias instancias sin un limitador distribuido. El backend recupera trabajos pendientes al arrancar; si el lease del worker anterior sigue vigente, espera e intenta reclamarlo de nuevo hasta que venza o el trabajo deje de estar activo. Al cerrar, deja que el lease caduque; no borres tablas para reiniciarlo.
 
 Antes de activar el horario:
 
