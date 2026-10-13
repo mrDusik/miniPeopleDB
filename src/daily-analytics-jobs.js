@@ -25,6 +25,15 @@ function withTimeout(promise, timeoutMs, setTimeoutImpl, clearTimeoutImpl, onTim
   return Promise.race([promise, timeout]).finally(() => clearTimeoutImpl(timer));
 }
 
+function formatDuration(durationMs) {
+  const totalMs = Math.max(0, Math.trunc(durationMs));
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const seconds = Math.floor((totalMs % 60000) / 1000);
+  const milliseconds = totalMs % 1000;
+  return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}s`;
+}
+
 export function createDailyAnalyticsJobs({
   repository,
   brickset,
@@ -257,17 +266,17 @@ export function createDailyAnalyticsJobs({
         errorCode,
         startedAt: new Date(startedAtMs).toISOString(),
         finishedAt: new Date(finishedAtMs).toISOString(),
-        durationMs,
-        claimWaitMs: metrics.claimWaitMs,
-        pricePhaseMs: metrics.pricePhaseMs,
-        snapshotPhaseMs: metrics.snapshotPhaseMs,
+        duration: formatDuration(durationMs),
+        claimWait: formatDuration(metrics.claimWaitMs),
+        pricePhase: formatDuration(metrics.pricePhaseMs),
+        snapshotPhase: formatDuration(metrics.snapshotPhaseMs),
         distinctPriceIds: metrics.distinctPriceIds,
         bricksetRequests: metrics.bricksetRequests,
         bricksetSuccesses: metrics.bricksetSuccesses,
         bricksetFailures: metrics.bricksetFailures,
         failedPrices: metrics.failedPrices,
-        averageBricksetMs: metrics.bricksetRequests
-          ? Math.round(metrics.bricksetDurationMs / metrics.bricksetRequests)
+        averageBricksetTime: metrics.bricksetRequests
+          ? formatDuration(metrics.bricksetDurationMs / metrics.bricksetRequests)
           : null,
         totalUsers: metrics.totalUsers,
         processedUsers: metrics.processedUsers,
