@@ -244,6 +244,9 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
   const page = {
     notifications: [
       gift,
+      createNotification('weekly-gift-1', 'Grace', false, {
+        type: 'gift_received', canThank: true, data: { user: 'Grace', amount: 5 },
+      }),
       createNotification('thanks-1', 'Ada', false, { type: 'gift_thanks', data: { user: 'Ada', amount: 5 } }),
       createNotification('entered-1', 'Ada', false, {
         type: 'ranking_entered', data: { ranking: 'global', position: 8, message: 'Has entrado en el Top 10 del Ranking Global en el puesto 8.' },
@@ -252,7 +255,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
       createNotification('exited-1', 'Ada', false, { type: 'ranking_exited', data: { ranking: 'weekly' } }),
       daily,
     ],
-    unreadCount: 6,
+    unreadCount: 7,
     nextCursor: null,
   };
   const { dom, window, holdThank, releaseThank, thankRequests } = startApp({ initialPage: page });
@@ -260,17 +263,20 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     await tick();
     await tick();
     const list = window.document.querySelector('#notifications-list');
-    assert.equal(list.querySelectorAll('.notification-item').length, 6);
+    assert.equal(list.querySelectorAll('.notification-item').length, 7);
     const giftMessage = list.querySelector('[data-notification-id="gift-1"] .notification-message');
     assert.equal(giftMessage.querySelector('strong').textContent, 'Grace');
     assert.equal(giftMessage.textContent.includes('El usuario'), false);
     assert.equal(giftMessage.textContent.includes('Bricks'), false);
     assert.equal(giftMessage.textContent, 'Grace vio tus tops en el Ranking Global y te regaló 50.');
     assert.equal(giftMessage.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    const weeklyGiftMessage = list.querySelector('[data-notification-id="weekly-gift-1"] .notification-message');
+    assert.equal(weeklyGiftMessage.textContent, 'Grace vio tus tops en el Ranking Semanal y te regaló 5.');
     const thankMessage = list.querySelector('[data-notification-id="thanks-1"] .notification-message');
     assert.equal(thankMessage.querySelector('strong').textContent, 'Ada');
-    assert.equal(thankMessage.textContent, 'Ada agradeció tu regalo con 5');
+    assert.equal(thankMessage.textContent, 'Ada agradeció tu regalo con 5.');
     assert.equal(thankMessage.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    assert.equal(thankMessage.querySelector('img').nextSibling.textContent, '.');
     const giftThankButton = list.querySelector('.notification-thank');
     assert.ok(giftThankButton.classList.contains('ranking-gift'));
     assert.equal(giftThankButton.parentElement.className, 'notification-actions');

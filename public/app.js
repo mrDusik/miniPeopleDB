@@ -1953,12 +1953,14 @@ function renderNotificationMessage(notification) {
     const amount = document.createElement('span');
     amount.textContent = String(Number.isFinite(data.amount) ? data.amount : notification.type === 'gift_received' ? 50 : 5);
     if (notification.type === 'gift_received') {
-      message.append(userName, document.createTextNode(' vio tus tops en el Ranking Global y te regaló '), amount);
+      const rankingName = data.amount === 5 ? 'Ranking Semanal' : 'Ranking Global';
+      message.append(userName, document.createTextNode(` vio tus tops en el ${rankingName} y te regaló `), amount);
       appendNotificationBrick(message);
       message.append(document.createTextNode('.'));
     } else {
       message.append(userName, document.createTextNode(' agradeció tu regalo con '), amount);
       appendNotificationBrick(message);
+      message.append(document.createTextNode('.'));
     }
     return message;
   }
