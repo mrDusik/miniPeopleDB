@@ -6,7 +6,7 @@ const PRIMARY_KEYS = {
   minifiguras: ['user_id', 'id'],
   gamificacion: ['user_id'],
   perfiles_publicos: ['user_id'],
-  regalos_enviados: ['donante_id', 'receptor_id'],
+  regalos_enviados: ['donante_id', 'receptor_id', 'semana'],
   user_daily_snapshots: ['user_id', 'snapshot_date'],
   notificaciones: ['id'],
   agradecimientos_regalo: ['gift_notification_id'],
@@ -17,7 +17,7 @@ const COLUMN_DEFAULTS = {
   minifiguras: () => ({ estado_coleccion: 'COLECCIÓN', observada: false, fecha_registro: new Date().toISOString() }),
   gamificacion: () => ({ bricks: 0, nivel: {}, siguiente_nivel: null, progreso: {}, logros: [] }),
   perfiles_publicos: () => ({ avatar_url: null, updated_at: new Date().toISOString() }),
-  regalos_enviados: () => ({ fecha: new Date().toISOString() }),
+  regalos_enviados: () => ({ fecha: new Date().toISOString(), semana: '0001-01-01' }),
   user_daily_snapshots: () => ({ created_at: new Date().toISOString() }),
   notificaciones: () => ({ is_read: false, created_at: new Date().toISOString(), payload: {}, gift_thanked_at: null }),
   agradecimientos_regalo: () => ({ created_at: new Date().toISOString() }),
@@ -258,7 +258,10 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     if (!uid) return { data: null, error: { code: '42501', message: 'NO_AUTENTICADO' } };
 
     if (name === 'regalos_recibidos_count') {
-      return { data: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === uid).length, error: null };
+      return { data: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === uid && semana === '0001-01-01').length, error: null };
+    }
+    if (name === 'regalos_semanales_recibidos_count') {
+      return { data: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === uid && semana !== '0001-01-01').length, error: null };
     }
 
     if (name === 'agradecimientos_regalo_count') {
@@ -274,9 +277,13 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     }
 
     if (name === 'ranking_logros') {
-      const target = [...tables.gamificacion]
+      const globalUsers = [...tables.gamificacion]
         .sort((left, right) => right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
-        .slice(0, 10).find(({ user_id }) => user_id === parameters.p_usuario_id);
+        .slice(0, 10);
+      const weeklyUsers = rpc('ranking_semanal', {}, uid).data?.entries ?? [];
+      const eligible = globalUsers.some(({ user_id }) => user_id === parameters.p_usuario_id)
+        || weeklyUsers.some(({ userId }) => userId === parameters.p_usuario_id);
+      const target = eligible ? tables.gamificacion.find(({ user_id }) => user_id === parameters.p_usuario_id) : null;
       if (!target) return { data: null, error: null };
       const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === target.user_id);
       const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
@@ -358,7 +365,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
           totalColeccion: collection.length,
           top5Precio: withMetadata(highlights.top5Precio),
           top5Antiguedad: withMetadata(highlights.top5Antiguedad),
-          regaloEnviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
+          regaloEnviado: tables.regalos_enviados.some(({ donante_id, receptor_id, semana }) => donante_id === uid && receptor_id === gamification.user_id && semana === weekStart),
           dnaPrincipal: dna.principal,
           dnaRasgos: dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
           bricksSemanales: delta,
@@ -434,7 +441,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
             total_coleccion: collection.length,
             top5_precio: withMetadata(highlights.top5Precio),
             top5_antiguedad: withMetadata(highlights.top5Antiguedad),
-            regalo_enviado: tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === gamification.user_id),
+            regalo_enviado: tables.regalos_enviados.some(({ donante_id, receptor_id, semana }) => donante_id === uid && receptor_id === gamification.user_id && semana === '0001-01-01'),
             dna_principal: dna.principal,
             dna_rasgos: selectedTraitName ? [{ nombre: selectedTraitName, porcentaje: dna.porcentajes[criterio] }]
               : dna.principal === 'Newbie' ? [] : dnaTraits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
@@ -443,12 +450,20 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       return { data: clone(data), error: null };
     }
 
-    if (name === 'regalar_bricks') {
+    if (name === 'regalar_bricks' || name === 'regalar_bricks_semanal') {
+      const weekly = name === 'regalar_bricks_semanal';
+      const ranking = weekly ? rpc('ranking_semanal', {}, uid).data : null;
+      const week = weekly ? ranking?.weekStart : '0001-01-01';
+      const amount = weekly ? 5 : 50;
+      const achievementId = weekly ? 'youre-on-fire-this-week' : 'someone-liked-your-collection';
       const receiverId = parameters?.p_receptor_id;
       if (receiverId === uid) return { data: null, error: { code: 'P0001', message: 'AUTORREGALO_NO_PERMITIDO' } };
+      if (weekly && !ranking?.entries.some(({ userId }) => userId === receiverId)) {
+        return { data: null, error: { code: 'P0001', message: 'RECEPTOR_NO_ENCONTRADO' } };
+      }
       const receiver = tables.gamificacion.find(({ user_id }) => user_id === receiverId);
       if (!receiver) return { data: null, error: { code: 'P0001', message: 'RECEPTOR_NO_ENCONTRADO' } };
-      if (tables.regalos_enviados.some(({ donante_id, receptor_id }) => donante_id === uid && receptor_id === receiverId)) {
+      if (tables.regalos_enviados.some(({ donante_id, receptor_id, semana }) => donante_id === uid && receptor_id === receiverId && semana === week)) {
         return { data: null, error: { code: 'P0001', message: 'REGALO_YA_ENVIADO' } };
       }
       const giftFailure = takeFailure('regalos_enviados', 'insert');
@@ -457,20 +472,20 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       const giftsSnapshot = clone(tables.regalos_enviados);
       const notificationsSnapshot = clone(tables.notificaciones);
       try {
-        tables.regalos_enviados.push(withDefaults('regalos_enviados', { donante_id: uid, receptor_id: receiverId }));
+        tables.regalos_enviados.push(withDefaults('regalos_enviados', { donante_id: uid, receptor_id: receiverId, semana: week }));
         const updateFailure = takeFailure('gamificacion', 'update');
         if (updateFailure) throw updateFailure;
-        const count = tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === receiverId).length;
-        receiver.bricks += 50;
+        const count = tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === receiverId && (semana !== '0001-01-01') === weekly).length;
+        receiver.bricks += amount;
         const { nivel, siguienteNivel, progreso } = selectLevel(receiver.bricks);
         receiver.nivel = nivel;
         receiver.siguiente_nivel = siguienteNivel;
         receiver.progreso = progreso;
-        receiver.logros = receiver.logros.filter(({ id }) => id !== 'someone-liked-your-collection');
+        receiver.logros = receiver.logros.filter(({ id }) => id !== achievementId);
         receiver.logros.push({
-          id: 'someone-liked-your-collection', type: 'regalo', nombre: 'Someone liked your collection',
-          descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.', bricks: 50,
-          repetible: true, cantidad: count, total: count * 50,
+          id: achievementId, type: 'regalo', nombre: weekly ? "You're on fire this week!" : 'Your collection is top!',
+          descripcion: `Has aparecido en el ranking ${weekly ? 'semanal' : 'global'} y te han hecho un regalo.`, bricks: amount,
+          repetible: true, cantidad: count, total: count * amount,
         });
         const notificationFailure = takeFailure('notificaciones', 'insert');
         if (notificationFailure) throw notificationFailure;
@@ -479,10 +494,11 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
           user_id: receiverId,
           type: 'gift_received',
           gift_donante_id: uid,
+          gift_semana: week,
           payload: {
             user: donorName,
-            amount: 50,
-            message: `El usuario ${donorName} vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱`,
+            amount,
+            message: `El usuario ${donorName} vio tus tops en el Ranking ${weekly ? 'Semanal' : 'Global'} y te regaló ${amount} Bricks 🧱`,
           },
         });
         return { data: { ok: true }, error: null };
@@ -693,7 +709,8 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         thanker_id === parameters.p_user_id || donor_id === parameters.p_user_id);
       return { data: {
         revision: sourceRevision(parameters.p_user_id), figures,
-        giftsReceived: tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === parameters.p_user_id).length,
+        giftsReceived: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === parameters.p_user_id && semana === '0001-01-01').length,
+        weeklyGiftsReceived: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === parameters.p_user_id && semana !== '0001-01-01').length,
         thanksSent: thankRows.filter(({ thanker_id }) => thanker_id === parameters.p_user_id).length,
         thanksReceived: thankRows.filter(({ donor_id }) => donor_id === parameters.p_user_id).length,
         fingerprint: dailySync.fingerprint ?? '',

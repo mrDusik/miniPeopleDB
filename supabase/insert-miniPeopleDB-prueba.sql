@@ -310,7 +310,7 @@ with collection as (
 ), with_gifts as (
   select achievements.user_id, achievements.logros || jsonb_build_array(jsonb_build_object(
     'id', 'someone-liked-your-collection', 'type', 'regalo',
-    'nombre', 'Someone liked your collection',
+    'nombre', 'Your collection is top!',
     'descripcion', 'Has aparecido en el ranking global y te han hecho un regalo.',
     'bricks', 50, 'repetible', true, 'cantidad', received.cantidad, 'total', 50 * received.cantidad
   )) as logros

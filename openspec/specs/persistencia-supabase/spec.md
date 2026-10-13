@@ -115,7 +115,7 @@ La persistencia SHALL imponer unicidad sobre `(donante_id, receptor_id)` y SHALL
 
 ### Requirement: Conservar regalos durante el recálculo de gamificación
 
-El recálculo de gamificación SHALL combinar los Bricks y logros derivados de la colección con los regalos persistidos, de modo que crear, editar o eliminar minifiguras no elimine ni duplique los 50 Bricks y logros recibidos.
+El recálculo de gamificación SHALL combinar los Bricks y logros derivados de la colección con los regalos persistidos, de modo que crear, editar o eliminar minifiguras no elimine ni duplique los 50 Bricks por regalo global ni los 5 Bricks por regalo semanal y sus logros recibidos. Los regalos semanales SHALL conservar su semana y sus notificaciones agradecibles de forma independiente del global.
 
 #### Scenario: Recalcular tras recibir un regalo
 - **WHEN** un receptor modifica su colección después de recibir regalos

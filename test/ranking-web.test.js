@@ -38,11 +38,11 @@ function installFetch(window, ranking, orderedRankings = {}, weeklyResult = { av
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, status: 200, json: async () => [] };
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] }) };
-    if (url === '/api/ranking/regalar') {
+    if (url === '/api/ranking/regalar' || url === '/api/ranking/semanal/regalar') {
       const receiverId = JSON.parse(options.body).receptorId;
-      ranking.find(({ userId }) => userId === receiverId).regaloEnviado = true;
-      const weeklyReceiver = weeklyResult.entries?.find(({ userId }) => userId === receiverId);
-      if (weeklyReceiver) weeklyReceiver.regaloEnviado = true;
+      const receiver = (url === '/api/ranking/regalar' ? ranking : weeklyResult.entries)
+        .find(({ userId }) => userId === receiverId);
+      receiver.regaloEnviado = true;
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
     if (url === '/api/ranking/semanal') return { ok: true, status: 200, json: async () => structuredClone(weeklyResult) };
@@ -262,13 +262,18 @@ test('el modal semanal reutiliza destacados y buscadas, y los regalos no alteran
   document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   assert.equal(document.activeElement, wanted);
 
+  assert.equal(row.querySelector('.ranking-gift').textContent, '+5');
+  assert.equal(row.querySelector('.ranking-gift').getAttribute('aria-label'), 'Enviar 5 Bricks');
+  row.querySelector('.ranking-gift').click();
   row.querySelector('.ranking-gift').click();
   await new Promise((resolve) => setTimeout(resolve, 30));
   const refreshedRow = document.querySelector('#weekly-ranking-list [data-user-id="user-b"]');
   assert.equal(refreshedRow.querySelector('.ranking-gift').disabled, true);
   assert.equal(refreshedRow.querySelector('.ranking-bricks strong').textContent, '+80');
   assert.equal(weekly.find(({ userId }) => userId === 'user-b').bricks, 200);
-  assert.equal(calls.filter(({ url, options }) => url === '/api/ranking/regalar' && options.method === 'POST').length, 1);
+  assert.equal(calls.filter(({ url, options }) => url === '/api/ranking/semanal/regalar' && options.method === 'POST').length, 1);
+  assert.equal(calls.filter(({ url }) => url === '/api/ranking/regalar').length, 0);
+  assert.equal(global.find(({ userId }) => userId === 'user-b').regaloEnviado, false);
   assert.ok(calls.some(({ url }) => url === '/api/ranking'));
   assert.ok(calls.filter(({ url }) => url === '/api/ranking/semanal').length >= 2);
   dom.window.close();

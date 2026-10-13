@@ -108,7 +108,7 @@ El sistema SHALL exponer `POST /api/ranking/regalar` para usuarios autenticados 
 
 ### Requirement: Registrar el logro de regalo
 
-Cada regalo válido SHALL añadir o incrementar en la gamificación del receptor un logro de tipo `regalo`, con título `Someone liked your collection`, descripción `Has aparecido en el ranking global y te han hecho un regalo.` y una contribución de 50 Bricks por regalo. El logro y sus Bricks SHALL conservarse tras posteriores recálculos de gamificación.
+Cada regalo válido SHALL añadir o incrementar en la gamificación del receptor un logro de tipo `regalo`, con título `Your collection is top!`, descripción `Has aparecido en el ranking global y te han hecho un regalo.` y una contribución de 50 Bricks por regalo. El logro y sus Bricks SHALL conservarse tras posteriores recálculos de gamificación. El titulo actualizado SHALL aplicarse tambien a regalos existentes, conservando su identificador, cantidad y Bricks.
 
 #### Scenario: Primer regalo recibido
 - **WHEN** un usuario recibe su primer regalo válido

@@ -78,6 +78,21 @@ El desplegable de nivel SHALL tener los botones `Ranking Global` y `Ranking Sema
 - **WHEN** se despliega una fila semanal y se envia un regalo valido
 - **THEN** se mantienen destacados y controles del global, el regalo no se duplica y los Bricks semanales no cambian hasta que una nueva medicion lo refleje
 
+### Requirement: Regalar 5 Bricks una vez por semana
+
+Cada fila ajena del modal semanal SHALL ofrecer un boton `+5`, con etiqueta accesible `Enviar 5 Bricks`. SHALL usar `POST /api/ranking/semanal/regalar` con unicamente `receptorId`, JWT ordinario y sin service_role. El backend SHALL comprobar que el destinatario pertenece al Top 10 semanal actual y derivar el donante y la semana de Europe/Madrid. SHALL permitir una concesion por pareja donante-destinatario y semana, independiente del regalo global de 50 Bricks. SHALL rechazar autorregalos, destinatarios no clasificados y duplicados, incluso concurrentes, sin efectos parciales. `regaloEnviado` del semanal SHALL referirse solo a esa semana; al comenzar una nueva semana SHALL volver a habilitarse para los destinatarios clasificados sin borrar el historial ni sus Bricks.
+
+Cada regalo semanal SHALL conceder 5 Bricks y añadir o incrementar el logro de tipo `regalo` `You're on fire this week!`, con descripcion `Has aparecido en el ranking semanal y te han hecho un regalo.`. El modal de logros SHALL mostrarlo y permitir consultar participantes semanales aunque no pertenezcan al Top 10 global. Los recalculos personales, de categorias y diarios SHALL conservar separadamente regalos globales y semanales, sin contribucion al DNA. SHALL crear una notificacion `gift_received` con importe 5 y permitir agradecer cada regalo una vez con las mismas recompensas vigentes del global.
+
+#### Scenario: Regalo semanal y global independientes
+- **WHEN** un coleccionista regala a un participante semanal que ya recibio su regalo global
+- **THEN** el receptor recibe 5 Bricks, el logro semanal y una notificacion agradecible
+- **AND** otro regalo semanal de ese donante en la misma semana responde 409 con `REGALO_YA_ENVIADO`
+
+#### Scenario: Renovacion semanal
+- **WHEN** empieza el lunes en Madrid y el destinatario aparece en la nueva clasificacion
+- **THEN** el mismo donante puede volver a regalar 5 Bricks y se conservan los regalos y agradecimientos anteriores
+
 ### Requirement: Aislar estados, peticiones y foco del modal semanal
 
 El semanal SHALL mostrar carga, no disponibilidad o error segun la respuesta de su propia consulta. SHALL cargar nuevamente al abrir, ignorar respuestas obsoletas tras cierre, reapertura o cambio de cuenta y borrar datos al cerrar sesion. Cerrar mediante boton o Escape SHALL devolver el foco al acceso semanal. La seleccion, expansion, peticiones y estado del global SHALL permanecer independientes y no SHALL poblarse desde respuestas del semanal.

@@ -164,7 +164,7 @@ export function createDailyAnalyticsJobs({
               estadoColeccion: figure.estadoColeccion,
               precio: figure.precio ?? undefined,
               precioCompra: figure.precioCompra ?? undefined,
-            })), categorias, sources.giftsReceived, sources.thanksReceived ?? 0);
+            })), categorias, sources.giftsReceived, sources.thanksReceived ?? 0, sources.weeklyGiftsReceived ?? 0);
             ensureLease();
             captured = await retryStorage(() => repository.captureUser(run.jobId, leaseOwner, userId, sources.revision, {
               bricks: state.bricks,

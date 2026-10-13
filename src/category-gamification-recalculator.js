@@ -70,7 +70,7 @@ export class CategoryGamificationRecalculator {
     const [gamificationRows, figureRows, gifts] = await Promise.all([
       readAll(this.client, 'gamificacion', 'user_id'),
       readAll(this.client, 'minifiguras', 'user_id,id,categoria,subcategoria,anio,estado_coleccion,precio,precio_compra'),
-      readAll(this.client, 'regalos_enviados', 'receptor_id'),
+      readAll(this.client, 'regalos_enviados', 'receptor_id,semana'),
     ]);
 
     const userIds = new Set([
@@ -93,8 +93,10 @@ export class CategoryGamificationRecalculator {
       });
     }
     const giftsByUser = new Map();
-    for (const { receptor_id: userId } of gifts) {
-      giftsByUser.set(userId, (giftsByUser.get(userId) || 0) + 1);
+    const weeklyGiftsByUser = new Map();
+    for (const { receptor_id: userId, semana } of gifts) {
+      const counts = semana && semana !== '0001-01-01' ? weeklyGiftsByUser : giftsByUser;
+      counts.set(userId, (counts.get(userId) || 0) + 1);
     }
 
     const states = [...userIds].sort().map((userId) => {
@@ -102,6 +104,7 @@ export class CategoryGamificationRecalculator {
       const state = calcularGamificacion(
         figuresByUser.get(userId) || [], categorias, giftsByUser.get(userId) || 0,
         thanks?.received_count ?? 0,
+        weeklyGiftsByUser.get(userId) || 0,
       );
       return {
         user_id: userId,

@@ -73,9 +73,18 @@ export const OBJETIVOS = [
 export const LOGRO_REGALO = {
   id: 'someone-liked-your-collection',
   type: 'regalo',
-  nombre: 'Someone liked your collection',
+  nombre: 'Your collection is top!',
   descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.',
   bricks: 50,
+  repetible: true,
+};
+
+export const LOGRO_REGALO_SEMANAL = {
+  id: 'youre-on-fire-this-week',
+  type: 'regalo',
+  nombre: "You're on fire this week!",
+  descripcion: 'Has aparecido en el ranking semanal y te han hecho un regalo.',
+  bricks: 5,
   repetible: true,
 };
 
@@ -311,7 +320,7 @@ export function selectLevel(bricks) {
   };
 }
 
-export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos = 0, agradecimientosRecibidos = 0) {
+export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos = 0, agradecimientosRecibidos = 0, regalosSemanalesRecibidos = 0) {
   const catalogoColeccion = catalogo.filter((minifigura) => minifigura.estadoColeccion === 'COLECCIÓN');
   const logros = OBJETIVOS.map((objective) => {
     const cantidad = achievementCount(objective, catalogoColeccion, categorias);
@@ -330,6 +339,9 @@ export function calcularGamificacion(catalogo, categorias = [], regalosRecibidos
   }
   if (Number.isInteger(agradecimientosRecibidos) && agradecimientosRecibidos > 0) {
     logros.push({ ...LOGRO_AGRADECIMIENTO, cantidad: agradecimientosRecibidos, total: agradecimientosRecibidos * LOGRO_AGRADECIMIENTO.bricks });
+  }
+  if (Number.isInteger(regalosSemanalesRecibidos) && regalosSemanalesRecibidos > 0) {
+    logros.push({ ...LOGRO_REGALO_SEMANAL, cantidad: regalosSemanalesRecibidos, total: regalosSemanalesRecibidos * LOGRO_REGALO_SEMANAL.bricks });
   }
   const bricks = logros.reduce((total, logro) => total + logro.total, 0)
     + (Number.isInteger(agradecimientosRecibidos) && agradecimientosRecibidos > 0 ? agradecimientosRecibidos * 5 : 0);

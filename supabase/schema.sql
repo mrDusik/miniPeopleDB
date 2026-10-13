@@ -305,6 +305,15 @@ create table if not exists public.notificaciones (
 create index if not exists notificaciones_user_created_idx
   on public.notificaciones (user_id, created_at desc, id desc);
 
+alter table public.regalos_enviados add column if not exists semana date not null default '0001-01-01';
+alter table public.notificaciones add column if not exists gift_semana date not null default '0001-01-01';
+alter table public.notificaciones drop constraint if exists notificaciones_regalo_fk;
+alter table public.regalos_enviados drop constraint if exists regalos_enviados_pkey;
+alter table public.regalos_enviados add primary key (donante_id, receptor_id, semana);
+alter table public.notificaciones add constraint notificaciones_regalo_fk
+  foreign key (gift_donante_id, user_id, gift_semana)
+  references public.regalos_enviados (donante_id, receptor_id, semana) on delete cascade;
+
 create index if not exists notificaciones_user_unread_idx
   on public.notificaciones (user_id)
   where is_read = false;
@@ -313,8 +322,9 @@ create unique index if not exists notificaciones_daily_snapshot_key
   on public.notificaciones (user_id, snapshot_date)
   where type = 'daily_summary';
 
-create unique index if not exists notificaciones_gift_received_key
-  on public.notificaciones (user_id, gift_donante_id)
+drop index if exists public.notificaciones_gift_received_key;
+create unique index notificaciones_gift_received_key
+  on public.notificaciones (user_id, gift_donante_id, gift_semana)
   where type = 'gift_received';
 
 create table if not exists public.agradecimientos_regalo (
@@ -772,6 +782,7 @@ as $$
 declare
   v_figures jsonb;
   v_gifts_received integer;
+  v_weekly_gifts_received integer;
   v_thanks_sent integer;
   v_thanks_received integer;
   v_fingerprint text;
@@ -803,7 +814,9 @@ begin
   from public.minifiguras figures
   where figures.user_id = p_user_id;
 
-  select count(*)::integer into v_gifts_received
+  select count(*) filter (where gifts.semana = '0001-01-01')::integer,
+    count(*) filter (where gifts.semana <> '0001-01-01')::integer
+  into v_gifts_received, v_weekly_gifts_received
   from public.regalos_enviados gifts where gifts.receptor_id = p_user_id;
   select count(*) filter (where thanks.thanker_id = p_user_id)::integer,
     count(*) filter (where thanks.donor_id = p_user_id)::integer
@@ -817,6 +830,7 @@ begin
     'revision', private.daily_sync_user_revision(p_user_id),
     'figures', v_figures,
     'giftsReceived', coalesce(v_gifts_received, 0),
+    'weeklyGiftsReceived', coalesce(v_weekly_gifts_received, 0),
     'thanksSent', coalesce(v_thanks_sent, 0),
     'thanksReceived', coalesce(v_thanks_received, 0),
     'fingerprint', coalesce(v_fingerprint, '')
@@ -1670,6 +1684,7 @@ as $$
     exists (
       select 1 from public.regalos_enviados r
       where r.donante_id = auth.uid() and r.receptor_id = top_users.user_id
+        and r.semana = '0001-01-01'
     ) as regalo_enviado,
     dna.data->>'principal' as dna_principal,
     case when p_criterio in ('rarityHunter', 'collector', 'explorer', 'fan') then
@@ -1807,6 +1822,7 @@ begin
       'regaloEnviado', exists (
         select 1 from public.regalos_enviados gift
         where gift.donante_id = auth.uid() and gift.receptor_id = candidate.user_id
+          and gift.semana = v_context.week_start
       ),
       'dnaPrincipal', candidate.dna->>'principal',
       'dnaRasgos', case when candidate.dna->>'principal' = 'Newbie' then '[]'::jsonb else coalesce((
@@ -1869,6 +1885,11 @@ as $$
     from public.gamificacion g
     order by g.bricks desc, g.user_id asc
     limit 10
+  ), eligible_users as (
+    select user_id from top_users
+    union
+    select (entry->>'userId')::uuid
+    from jsonb_array_elements(public.ranking_semanal()->'entries') entry
   )
   select jsonb_build_object(
     'userId', g.user_id,
@@ -1884,12 +1905,13 @@ as $$
       from jsonb_array_elements(g.logros) with ordinality as achievements(item, position)
     ), '[]'::jsonb)
   )
-  from top_users g
+  from public.gamificacion g
   left join public.perfiles_publicos p on p.user_id = g.user_id
-  where g.user_id = p_usuario_id and auth.uid() is not null;
+  where g.user_id = p_usuario_id and auth.uid() is not null
+    and g.user_id in (select user_id from eligible_users);
 $$;
 
-create or replace function public.regalar_bricks(p_receptor_id uuid)
+create or replace function private.regalar_bricks(p_receptor_id uuid, p_semana date)
 returns jsonb
 language plpgsql
 security definer
@@ -1907,6 +1929,8 @@ declare
   v_hasta integer;
   v_logros jsonb;
   v_nombre_donante text;
+  v_amount integer := case when p_semana = '0001-01-01' then 50 else 5 end;
+  v_achievement_id text := case when p_semana = '0001-01-01' then 'someone-liked-your-collection' else 'youre-on-fire-this-week' end;
 begin
   if v_donante_id is null then
     raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
@@ -1924,16 +1948,17 @@ begin
   end if;
 
   begin
-    insert into public.regalos_enviados (donante_id, receptor_id)
-    values (v_donante_id, p_receptor_id);
+    insert into public.regalos_enviados (donante_id, receptor_id, semana)
+    values (v_donante_id, p_receptor_id, p_semana);
   exception when unique_violation then
     raise exception using errcode = 'P0001', message = 'REGALO_YA_ENVIADO';
   end;
 
   select count(*)::integer into v_cantidad
   from public.regalos_enviados
-  where receptor_id = p_receptor_id;
-  v_bricks := v_bricks + 50;
+  where receptor_id = p_receptor_id
+    and (semana = '0001-01-01') = (p_semana = '0001-01-01');
+  v_bricks := v_bricks + v_amount;
 
   select level.id, level.nombre, level.umbral, next_level.id, next_level.nombre, coalesce(next_level.umbral, level.umbral)
   into v_nivel_id, v_nivel_nombre, v_desde, v_siguiente_id, v_siguiente_nombre, v_hasta
@@ -1957,16 +1982,16 @@ begin
 
   select coalesce(jsonb_agg(item), '[]'::jsonb) into v_logros
   from jsonb_array_elements(v_logros) item
-  where item->>'id' <> 'someone-liked-your-collection';
+  where item->>'id' <> v_achievement_id;
   v_logros := v_logros || jsonb_build_array(jsonb_build_object(
-    'id', 'someone-liked-your-collection',
+    'id', v_achievement_id,
     'type', 'regalo',
-    'nombre', 'Someone liked your collection',
-    'descripcion', 'Has aparecido en el ranking global y te han hecho un regalo.',
-    'bricks', 50,
+    'nombre', case when v_amount = 50 then 'Your collection is top!' else 'You''re on fire this week!' end,
+    'descripcion', case when v_amount = 50 then 'Has aparecido en el ranking global y te han hecho un regalo.' else 'Has aparecido en el ranking semanal y te han hecho un regalo.' end,
+    'bricks', v_amount,
     'repetible', true,
     'cantidad', v_cantidad,
-    'total', v_cantidad * 50
+    'total', v_cantidad * v_amount
   ));
 
   update public.gamificacion
@@ -1988,21 +2013,59 @@ begin
   where profile.user_id = v_donante_id;
   v_nombre_donante := coalesce(v_nombre_donante, 'Coleccionista');
 
-  insert into public.notificaciones (user_id, type, payload, gift_donante_id)
+  insert into public.notificaciones (user_id, type, payload, gift_donante_id, gift_semana)
   values (
     p_receptor_id,
     'gift_received',
     jsonb_build_object(
       'user', v_nombre_donante,
-      'amount', 50,
-      'message', 'El usuario ' || v_nombre_donante || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
+      'amount', v_amount,
+      'message', case when v_amount = 50
+        then 'El usuario ' || v_nombre_donante || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
+        else 'El usuario ' || v_nombre_donante || ' vio tus tops en el Ranking Semanal y te regaló 5 Bricks 🧱' end
     ),
-    v_donante_id
+    v_donante_id,
+    p_semana
   );
 
   return jsonb_build_object('ok', true);
 end;
 $$;
+
+create or replace function public.regalar_bricks(p_receptor_id uuid)
+returns jsonb language sql security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$ select private.regalar_bricks(p_receptor_id, '0001-01-01'::date); $$;
+
+create or replace function private.regalar_bricks_semanal(p_receptor_id uuid, p_instante timestamptz)
+returns jsonb language plpgsql security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_ranking jsonb := private.ranking_semanal_calcular(p_instante);
+begin
+  if p_receptor_id = auth.uid() then
+    raise exception using errcode = 'P0001', message = 'AUTORREGALO_NO_PERMITIDO';
+  end if;
+  if not exists (
+    select 1 from jsonb_array_elements(v_ranking->'entries') entry
+    where entry->>'userId' = p_receptor_id::text
+  ) then
+    raise exception using errcode = 'P0001', message = 'RECEPTOR_NO_ENCONTRADO';
+  end if;
+  return private.regalar_bricks(p_receptor_id, (v_ranking->>'weekStart')::date);
+end;
+$$;
+
+create or replace function public.regalar_bricks_semanal(p_receptor_id uuid)
+returns jsonb language sql security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$ select private.regalar_bricks_semanal(p_receptor_id, clock_timestamp()); $$;
+
+revoke all on function private.regalar_bricks(uuid, date) from public, anon, authenticated, service_role;
+revoke all on function private.regalar_bricks_semanal(uuid, timestamptz) from public, anon, authenticated, service_role;
+revoke all on function public.regalar_bricks_semanal(uuid) from public, anon, service_role;
+grant execute on function public.regalar_bricks_semanal(uuid) to authenticated;
 
 create or replace function private.gamificacion_ajustar_bricks(p_user_id uuid, p_delta integer)
 returns void
@@ -2247,8 +2310,29 @@ set search_path = public, pg_temp
 as $$
   select count(*)::integer
   from public.regalos_enviados
-  where receptor_id = auth.uid() and auth.uid() is not null;
+  where receptor_id = auth.uid() and auth.uid() is not null and semana = '0001-01-01';
 $$;
+
+create or replace function public.regalos_semanales_recibidos_count()
+returns integer language sql security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select count(*)::integer from public.regalos_enviados
+  where receptor_id = auth.uid() and auth.uid() is not null and semana <> '0001-01-01';
+$$;
+revoke all on function public.regalos_semanales_recibidos_count() from public, anon, service_role;
+grant execute on function public.regalos_semanales_recibidos_count() to authenticated;
+
+update public.gamificacion gamification
+set logros = (
+  select jsonb_agg(case when item->>'id' = 'someone-liked-your-collection'
+    then jsonb_set(item, '{nombre}', to_jsonb('Your collection is top!'::text)) else item end order by position)
+  from jsonb_array_elements(gamification.logros) with ordinality as achievements(item, position)
+)
+where exists (
+  select 1 from jsonb_array_elements(gamification.logros) item
+  where item->>'id' = 'someone-liked-your-collection' and item->>'nombre' <> 'Your collection is top!'
+);
 
 create or replace function public.agradecimientos_regalo_count()
 returns jsonb

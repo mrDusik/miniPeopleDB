@@ -22,6 +22,56 @@ function rankingSupabase({ now } = {}) {
   return supabase;
 }
 
+test('el regalo semanal concede 5, notifica, admite gracias y se renueva independientemente del global', async () => {
+  let instant = '2026-10-12T12:00:00Z';
+  const supabase = createSupabaseMock({ now: () => instant, users: {
+    [TEST_TOKEN]: RANKING_USER, [OTHER_TOKEN]: OTHER_RANKING_USER,
+  } });
+  for (const user of [RANKING_USER, OTHER_RANKING_USER]) supabase.seed('gamificacion', user.id, [{ bricks: 0, nivel: { id: 0 }, logros: [] }]);
+  supabase.seed('user_daily_snapshots', OTHER_RANKING_USER.id,
+    ['2026-10-11', '2026-10-12', '2026-10-18', '2026-10-19'].map((snapshot_date) => ({ snapshot_date, bricks: 10 })));
+  const context = await startTestServer({ supabase });
+  const donor = authFetch(TEST_TOKEN);
+  const receiver = authFetch(OTHER_TOKEN);
+  const url = `${context.baseUrl}/api/ranking/semanal/regalar`;
+  const send = (payload = { receptorId: OTHER_RANKING_USER.id }) => donor(url, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  try {
+    assert.equal((await fetch(url, { method: 'POST' })).status, 401);
+    assert.equal((await donor(url)).status, 405);
+    assert.equal((await send({ receptorId: OTHER_RANKING_USER.id, semana: '2026-10-19' })).status, 400);
+    assert.equal((await send({ receptorId: RANKING_USER.id })).status, 400);
+    assert.equal((await send({ receptorId: '00000000-0000-4000-8000-000000000099' })).status, 404);
+    assert.equal((await send()).status, 200);
+    assert.equal((await send()).status, 409);
+    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 5);
+    const notification = supabase.rows('notificaciones', OTHER_RANKING_USER.id).find(({ type }) => type === 'gift_received');
+    assert.equal(notification.payload.amount, 5);
+    assert.match(notification.payload.message, /Ranking Semanal/);
+    const thanksUrl = `${context.baseUrl}/api/notificaciones/${notification.id}/agradecer`;
+    assert.equal((await receiver(thanksUrl, { method: 'POST' })).status, 200);
+    assert.equal((await receiver(thanksUrl, { method: 'POST' })).status, 409);
+    const recalculated = await (await receiver(`${context.baseUrl}/gamificacion`)).json();
+    assert.equal(recalculated.logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 5);
+    for (let index = 100; index < 110; index += 1) supabase.seed('gamificacion', `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, [{ bricks: 1000, nivel: { id: 9 }, logros: [] }]);
+    const achievements = await (await donor(`${context.baseUrl}/api/ranking/${OTHER_RANKING_USER.id}/logros`)).json();
+    assert.equal(achievements.logros.find(({ id }) => id === 'youre-on-fire-this-week').nombre, "You're on fire this week!");
+    const globalGift = await donor(`${context.baseUrl}/api/ranking/regalar`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receptorId: OTHER_RANKING_USER.id }),
+    });
+    assert.equal(globalGift.status, 200);
+    instant = '2026-10-18T22:00:00Z';
+    const ranking = await (await donor(`${context.baseUrl}/api/ranking/semanal`)).json();
+    assert.equal(ranking.weekStart, '2026-10-19');
+    assert.equal(ranking.entries[0].regaloEnviado, false);
+    assert.equal((await send()).status, 200);
+    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 10);
+  } finally {
+    await context.close();
+  }
+});
+
 test('el ranking valida los seis criterios y selecciona el Top 10 antes de proyectar datos publicos', async () => {
   const supabase = rankingSupabase();
   const ids = Array.from({ length: 12 }, (_, index) => `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`);
