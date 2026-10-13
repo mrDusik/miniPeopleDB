@@ -42,8 +42,12 @@ function normalizeHtmlText(html) {
 
 export function parseBricksetPrice(html) {
   const text = normalizeHtmlText(html);
-  const priceMatch = text.match(/Current\s*Value\s*[-–—]?\s*New[\s\S]{0,250}?[~≈]?\s*(?:€\s*)?([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)\s*€?/i);
-  const value = priceMatch ? parseAmount(priceMatch[1]) : null;
+  const amount = '[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?';
+  const priceMatch = text.match(new RegExp(
+    `Current\\s*Value\\s*[-–—]?\\s*New\\s*[:\\-–—]?\\s*(?:[~≈]\\s*)?(?:€\\s*(${amount})|(${amount})\\s*€)`,
+    'i',
+  ));
+  const value = priceMatch ? parseAmount(priceMatch[1] ?? priceMatch[2]) : null;
   if (value === null) {
     throw new BricksetPriceError();
   }
