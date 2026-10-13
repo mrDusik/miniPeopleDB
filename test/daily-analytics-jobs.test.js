@@ -50,6 +50,45 @@ test('procesa usuarios vacios y captura una vez; IDs repetidos se refrescan una 
   assert.ok(snapshots.some(({ user_id, total_figures, total_value, level }) => user_id === USER_B && total_figures === 0 && total_value === 0 && level === 0));
 });
 
+test('registra resumenes diarios con tiempos, usuarios, cache y media de Brickset', async () => {
+  const logs = [];
+  let clock = Date.now();
+  const { jobs } = analyticsHarness({
+    users: [USER_A, USER_B],
+    figures: [{ user_id: USER_A, id: 'FIG-LOG', nombre: 'Logged', categoria: 'Test', estado_coleccion: 'COLECCIÓN', precio: 8 }],
+    brickset: { async getPrice() { clock += 120; return 12; } },
+    coordinatorOptions: {
+      now: () => clock,
+      logger: { info(...args) { logs.push(args); }, error() {} },
+    },
+  });
+
+  const firstRun = await jobs.start();
+  await jobs.waitForIdle();
+  const secondRun = await jobs.start();
+  await jobs.waitForIdle();
+
+  const summaries = logs
+    .filter(([message]) => message === '[daily-analytics] resumen')
+    .map(([, json]) => JSON.parse(json));
+  assert.equal(summaries.length, 2);
+  assert.equal(summaries[0].jobId, firstRun.jobId);
+  assert.equal(summaries[0].status, 'completed');
+  assert.equal(summaries[0].totalUsers, 2);
+  assert.equal(summaries[0].processedUsers, 2);
+  assert.equal(summaries[0].failedUsers, 0);
+  assert.equal(summaries[0].distinctPriceIds, 1);
+  assert.equal(summaries[0].bricksetRequests, 1);
+  assert.equal(summaries[0].bricksetFailures, 0);
+  assert.equal(summaries[0].averageBricksetMs, 120);
+  assert.ok(summaries[0].startedAt);
+  assert.ok(summaries[0].finishedAt);
+  assert.ok(summaries[0].durationMs > 0);
+  assert.equal(summaries[1].jobId, secondRun.jobId);
+  assert.equal(summaries[1].bricksetRequests, 0);
+  assert.equal(summaries[1].distinctPriceIds, 0);
+});
+
 test('daily-sync conserva regalos semanales sin multiplicarlos por 50', async () => {
   const { jobs, mock } = analyticsHarness({ users: [USER_A, USER_B] });
   mock.seed('regalos_enviados', USER_A, [
@@ -459,6 +498,7 @@ test('un precio actualizado cambia logro y DNA, y la recalculacion conserva rega
 
 test('agota reintentos de fuentes y marca el trabajo fallido sin resultado exitoso', async () => {
   const run = { jobId: 'run-terminal', status: 'pending', snapshotDate: '2026-10-07' };
+  const logs = [];
   let sourceReads = 0;
   const repository = {
     async start() { return run; },
@@ -482,6 +522,7 @@ test('agota reintentos de fuentes y marca el trabajo fallido sin resultado exito
     brickset: { async getPrice() { return 1; } },
     categoriasRepository: { async read() { return []; } },
     sourceRetries: 3,
+    logger: { info(...args) { logs.push(args); }, error() {} },
   });
   await jobs.start();
   await jobs.waitForIdle();
@@ -491,6 +532,9 @@ test('agota reintentos de fuentes y marca el trabajo fallido sin resultado exito
   assert.equal(status.status, 'failed');
   assert.equal(status.result, null);
   assert.equal(status.errorCode, 'USERS_FAILED');
+  const summary = JSON.parse(logs.find(([message]) => message === '[daily-analytics] resumen')[1]);
+  assert.equal(summary.status, 'failed');
+  assert.equal(summary.errorCode, 'USERS_FAILED');
 });
 
 test('329 IDs no generan fetch en el segundo job y solo se refrescan al caducar 24 horas', async () => {
