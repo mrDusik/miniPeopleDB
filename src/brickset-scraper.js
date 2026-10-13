@@ -40,6 +40,12 @@ function normalizeHtmlText(html) {
     .trim();
 }
 
+function bricksetPriceContext(html) {
+  const text = normalizeHtmlText(html);
+  const priceStart = text.search(/Current\s*Value/i);
+  return priceStart < 0 ? 'Current Value not found' : text.slice(priceStart, priceStart + 240);
+}
+
 export function parseBricksetPrice(html) {
   const text = normalizeHtmlText(html);
   const amount = '[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?';
@@ -227,7 +233,7 @@ export class BricksetScraper {
     try {
       return parseBricksetPrice(html);
     } catch (error) {
-      console.error(`[BricksetScraper] No se extrajo 'Current Value - New' de ${url}. Respuesta: ${html.slice(0, 500)}`);
+      console.error(`[BricksetScraper] No se extrajo 'Current Value - New' de ${url}. Current Value: ${bricksetPriceContext(html)}`);
       throw error;
     }
   }
@@ -237,7 +243,7 @@ export class BricksetScraper {
     try {
       return parseBricksetDetails(html);
     } catch (error) {
-      console.error(`[BricksetScraper] No se extrajeron los detalles de ${url}. Respuesta: ${html.slice(0, 500)}`);
+      console.error(`[BricksetScraper] No se extrajeron los detalles de ${url}. Current Value: ${bricksetPriceContext(html)}`);
       throw error;
     }
   }

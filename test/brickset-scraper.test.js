@@ -73,7 +73,10 @@ test('registra errores HTTP, de extracción y de red con contexto de Brickset', 
 
     const extractionScraper = new BricksetScraper({
       retries: 0,
-      fetchImpl: async () => new Response('<html>sin precio</html>', { status: 200 }),
+      fetchImpl: async () => new Response(
+        '<dt>Current value</dt><dd>New: $1.90 Used: €1.70</dd>',
+        { status: 200 },
+      ),
     });
     await assert.rejects(() => extractionScraper.getPrice('without-price'), BricksetPriceError);
 
@@ -87,7 +90,9 @@ test('registra errores HTTP, de extracción y de red con contexto de Brickset', 
   }
 
   assert.ok(messages.some((message) => message.includes('HTTP 403') && message.includes('/blocked')));
-  assert.ok(messages.some((message) => message.includes('No se extrajo') && message.includes('/without-price')));
+  assert.ok(messages.some((message) => message.includes('No se extrajo')
+    && message.includes('/without-price')
+    && message.includes('Current Value: Current value New: $1.90 Used: €1.70')));
   assert.ok(messages.some((message) => message.includes('Error de red') && message.includes('/offline')));
 });
 
