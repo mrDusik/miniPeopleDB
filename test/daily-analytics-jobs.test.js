@@ -56,7 +56,7 @@ test('registra resumenes diarios con tiempos, usuarios, cache y media de Brickse
   const { jobs } = analyticsHarness({
     users: [USER_A, USER_B],
     figures: [{ user_id: USER_A, id: 'FIG-LOG', nombre: 'Logged', categoria: 'Test', estado_coleccion: 'COLECCIÓN', precio: 8 }],
-    brickset: { async getPrice() { clock += 120; return 12; } },
+    brickset: { async getPrice() { clock += 3723004; return 12; } },
     coordinatorOptions: {
       now: () => clock,
       logger: { info(...args) { logs.push(args); }, error() {} },
@@ -80,10 +80,11 @@ test('registra resumenes diarios con tiempos, usuarios, cache y media de Brickse
   assert.equal(summaries[0].distinctPriceIds, 1);
   assert.equal(summaries[0].bricksetRequests, 1);
   assert.equal(summaries[0].bricksetFailures, 0);
-  assert.equal(summaries[0].averageBricksetMs, 120);
+  assert.equal(summaries[0].averageBricksetTime, '01h 02m 03.004s');
   assert.ok(summaries[0].startedAt);
   assert.ok(summaries[0].finishedAt);
-  assert.ok(summaries[0].durationMs > 0);
+  assert.equal(summaries[0].duration, '01h 02m 03.004s');
+  assert.equal(summaries[0].pricePhase, '01h 02m 03.004s');
   assert.equal(summaries[1].jobId, secondRun.jobId);
   assert.equal(summaries[1].bricksetRequests, 0);
   assert.equal(summaries[1].distinctPriceIds, 0);
