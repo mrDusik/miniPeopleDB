@@ -38,6 +38,41 @@ test('rechaza precios en otras monedas y no salta al precio usado en euros', () 
   );
 });
 
+test('convierte New en USD a EUR con el tipo del BCE y reutiliza la cotizacion', async () => {
+  let exchangeRateRequests = 0;
+  const html = "<dl><dt>Category</dt><dd>Super Heroes</dd><dt>Year released</dt><dd>2021</dd></dl><p>Current Value - New</p><span>~$2.17</span>";
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => new Response(html, { status: 200 }),
+    exchangeRateFetchImpl: async () => {
+      exchangeRateRequests += 1;
+      return new Response('<Cube time="2026-10-12"><Cube currency="USD" rate="1.1181"/></Cube>', { status: 200 });
+    },
+  });
+
+  assert.equal(await scraper.getPrice('SH0684'), 1.94);
+  assert.deepEqual(await scraper.getDetails('SH0684'), {
+    categoria: 'Super Heroes',
+    subcategoria: undefined,
+    anio: 2021,
+    precio: 1.94,
+  });
+  assert.equal(exchangeRateRequests, 1);
+});
+
+test('no devuelve USD como EUR si el tipo de cambio del BCE no esta disponible', async () => {
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => new Response('<p>Current Value - New: ~$2.17</p>', { status: 200 }),
+    exchangeRateFetchImpl: async () => new Response('<Cube/>', { status: 200 }),
+  });
+
+  await assert.rejects(
+    () => scraper.getPrice('SH0684'),
+    (error) => error.code === 'BRICKSET_TIPO_CAMBIO_NO_DISPONIBLE',
+  );
+});
+
 test('reintenta un timeout y devuelve un error controlado si no hay precio', async () => {
   let attempts = 0;
   const scraper = new BricksetScraper({
@@ -74,7 +109,7 @@ test('registra errores HTTP, de extracción y de red con contexto de Brickset', 
     const extractionScraper = new BricksetScraper({
       retries: 0,
       fetchImpl: async () => new Response(
-        '<dt>Current value</dt><dd>New: $1.90 Used: €1.70</dd>',
+        '<dt>Current value</dt><dd>New: £1.90 Used: €1.70</dd>',
         { status: 200 },
       ),
     });
@@ -92,7 +127,7 @@ test('registra errores HTTP, de extracción y de red con contexto de Brickset', 
   assert.ok(messages.some((message) => message.includes('HTTP 403') && message.includes('/blocked')));
   assert.ok(messages.some((message) => message.includes('No se extrajo')
     && message.includes('/without-price')
-    && message.includes('Current Value: Current value New: $1.90 Used: €1.70')));
+    && message.includes('Current Value: Current value New: £1.90 Used: €1.70')));
   assert.ok(messages.some((message) => message.includes('Error de red') && message.includes('/offline')));
 });
 
