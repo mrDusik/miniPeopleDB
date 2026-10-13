@@ -1066,7 +1066,7 @@ test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cac
     `);
     await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
 
-    await assert.rejects(db.query('select public.iniciar_daily_sync(0)'), /DAILY_SYNC_TTL_INVALIDO/);
+    await assert.rejects(db.query('select public.iniciar_daily_sync(-1)'), /DAILY_SYNC_TTL_INVALIDO/);
     const started = (await db.query('select public.iniciar_daily_sync(1) as data')).rows[0].data;
     const priceRows = (await db.query(
       'select figure_id, status, attempts, price from private.daily_sync_prices where run_id = $1 order by figure_id',
@@ -1098,6 +1098,15 @@ test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cac
     assert.ok(preservedCache.fetched_at.getTime() < Date.now() - 24 * 60 * 60 * 1000);
     assert.equal(Number((await db.query("select precio from public.minifiguras where user_id = $1 and id = 'FIG-FAIL'", [userId])).rows[0].precio), 3);
     assert.equal((await db.query('select failed_prices from private.daily_sync_runs where id = $1', [started.jobId])).rows[0].failed_prices, 1);
+
+    await db.query("select public.fallar_daily_sync($1, $2, 'WORKER_ERROR')", [started.jobId, leaseOwner]);
+    const uncachedRun = (await db.query('select public.iniciar_daily_sync(0) as data')).rows[0].data;
+    const uncachedRows = (await db.query(
+      'select status, price from private.daily_sync_prices where run_id = $1 order by figure_id',
+      [uncachedRun.jobId],
+    )).rows;
+    assert.equal(uncachedRows.length, 4);
+    assert.ok(uncachedRows.every(({ status, price }) => status === 'pending' && price === null));
   } finally {
     await db.close();
   }

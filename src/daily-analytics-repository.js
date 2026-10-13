@@ -15,8 +15,8 @@ function configuredPriceCacheTtlHours(value = process.env.DAILY_SYNC_PRICE_CACHE
   const hours = typeof value === 'number'
     ? value
     : typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : NaN;
-  if (!Number.isSafeInteger(hours) || hours < 1 || hours > MAX_PRICE_CACHE_TTL_HOURS) {
-    throw new RangeError('DAILY_SYNC_PRICE_CACHE_TTL_HOURS debe ser un entero entre 1 y 8760');
+  if (!Number.isSafeInteger(hours) || hours < 0 || hours > MAX_PRICE_CACHE_TTL_HOURS) {
+    throw new RangeError('DAILY_SYNC_PRICE_CACHE_TTL_HOURS debe ser un entero entre 0 y 8760');
   }
   return hours;
 }

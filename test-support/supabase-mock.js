@@ -610,7 +610,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
 
     if (name === 'iniciar_daily_sync') {
       const cacheTtlHours = parameters.p_price_cache_ttl_hours ?? DEFAULT_DAILY_PRICE_CACHE_TTL_HOURS;
-      if (!Number.isInteger(cacheTtlHours) || cacheTtlHours < 1 || cacheTtlHours > 8760) {
+      if (!Number.isInteger(cacheTtlHours) || cacheTtlHours < 0 || cacheTtlHours > 8760) {
         return { data: null, error: { code: '22023', message: 'DAILY_SYNC_TTL_INVALIDO' } };
       }
       const active = dailySync.runs.find(({ status }) => ['pending', 'running'].includes(status));
@@ -627,7 +627,9 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
       const figureIds = [...new Set(tables.minifiguras.filter(({ user_id }) => userIds.includes(user_id)).map(({ id }) => id))].sort();
       for (const figureId of figureIds) {
         const cached = dailySync.priceCache.get(figureId);
-        const isFresh = cached && now.getTime() - cached.fetched_at.getTime() <= cacheTtlHours * 60 * 60 * 1000;
+        const isFresh = cacheTtlHours > 0
+          && cached
+          && now.getTime() - cached.fetched_at.getTime() <= cacheTtlHours * 60 * 60 * 1000;
         dailySync.prices.push({
           run_id: run.id,
           figure_id: figureId,
