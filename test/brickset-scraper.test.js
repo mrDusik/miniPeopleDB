@@ -29,6 +29,15 @@ test('tolera HTML, saltos de linea y el prefijo ~€ alrededor del precio', () =
   assert.equal(parseBricksetPrice('<p>Current Value - New</p><span>12.34 €</span>'), 12.34);
 });
 
+test('rechaza precios en otras monedas y no salta al precio usado en euros', () => {
+  assert.throws(() => parseBricksetPrice('<p>Current Value - New</p><span>$1.90</span>'), BricksetPriceError);
+  assert.throws(() => parseBricksetPrice('<p>Current Value - New</p><span>£1.90</span>'), BricksetPriceError);
+  assert.throws(
+    () => parseBricksetPrice('<p>Current Value - New $1.90 Used €1.70</p>'),
+    BricksetPriceError,
+  );
+});
+
 test('reintenta un timeout y devuelve un error controlado si no hay precio', async () => {
   let attempts = 0;
   const scraper = new BricksetScraper({
