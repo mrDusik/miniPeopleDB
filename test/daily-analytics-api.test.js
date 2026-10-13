@@ -10,6 +10,36 @@ const CRON_SECRET = 'cron-test-secret';
 const JOB_ID = '90000000-0000-4000-8000-000000000001';
 const SNAPSHOT_DATE = '2026-10-07';
 
+test('startup aplica BRICKSET_MIN_INTERVAL_MS al scraper del worker', async () => {
+  const originalInterval = process.env.BRICKSET_MIN_INTERVAL_MS;
+  process.env.BRICKSET_MIN_INTERVAL_MS = '5000';
+  const mock = createSupabaseMock({ users: {} });
+  const scraperOptions = [];
+  const server = await startApplication({
+    adminConfig: { url: 'https://supabase.invalid', serviceRoleKey: 'startup-only-test-key' },
+    supabaseConfig: TEST_SUPABASE_CONFIG,
+    cronSecret: CRON_SECRET,
+    createSupabaseClient: () => mock.createAdminClient(),
+    categoriesRepository: { async read() { return []; } },
+    recalculator: { async start() {}, close() {} },
+    analyticsJobs: { async recover() {}, close() {}, async start() {}, async status() {} },
+    createBricksetScraperImpl(options) {
+      scraperOptions.push(options);
+      return { async getPrice() { return 1; }, async getDetails() { return {}; } };
+    },
+    port: 0,
+  });
+
+  try {
+    assert.equal(scraperOptions.length, 1);
+    assert.equal(scraperOptions[0].minIntervalMs, 5000);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    if (originalInterval === undefined) delete process.env.BRICKSET_MIN_INTERVAL_MS;
+    else process.env.BRICKSET_MIN_INTERVAL_MS = originalInterval;
+  }
+});
+
 function createJobs() {
   const calls = [];
   return {

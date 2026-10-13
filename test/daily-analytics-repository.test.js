@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createDailyAnalyticsRepository,
+  DailyAnalyticsRepository,
   DailyAnalyticsRepositoryError,
 } from '../src/daily-analytics-repository.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
@@ -57,4 +58,39 @@ test('repositorio oculta errores y no imprime claves administrativas', async () 
     assert.equal(error.code, 'ANALITICA_NO_DISPONIBLE');
     return true;
   });
+});
+
+test('repositorio lee DAILY_SYNC_PRICE_CACHE_TTL_HOURS y lo pasa al RPC', async () => {
+  const previousTtl = process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS;
+  process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS = '5';
+  const calls = [];
+  const repository = new DailyAnalyticsRepository({
+    client: {
+      async rpc(name, parameters) {
+        calls.push({ name, parameters });
+        return { data: { jobId: 'run-1' }, error: null };
+      },
+    },
+  });
+
+  try {
+    await repository.start();
+    assert.deepEqual(calls, [{
+      name: 'iniciar_daily_sync',
+      parameters: { p_price_cache_ttl_hours: 5 },
+    }]);
+  } finally {
+    if (previousTtl === undefined) delete process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS;
+    else process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS = previousTtl;
+  }
+});
+
+test('repositorio rechaza TTL de caché fuera del rango permitido', () => {
+  const client = { async rpc() { return { data: null, error: null }; } };
+  for (const priceCacheTtlHours of [0, 1.5, 8761, Number.NaN]) {
+    assert.throws(
+      () => new DailyAnalyticsRepository({ client, priceCacheTtlHours }),
+      { name: 'RangeError' },
+    );
+  }
 });

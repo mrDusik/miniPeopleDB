@@ -7,6 +7,20 @@ const RPC_OPTIONS = {
   detectSessionInUrl: false,
 };
 
+const DEFAULT_PRICE_CACHE_TTL_HOURS = 24;
+const MAX_PRICE_CACHE_TTL_HOURS = 8760;
+
+function configuredPriceCacheTtlHours(value = process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS) {
+  if (value === undefined) return DEFAULT_PRICE_CACHE_TTL_HOURS;
+  const hours = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(hours) || hours < 1 || hours > MAX_PRICE_CACHE_TTL_HOURS) {
+    throw new RangeError('DAILY_SYNC_PRICE_CACHE_TTL_HOURS debe ser un entero entre 1 y 8760');
+  }
+  return hours;
+}
+
 export class DailyAnalyticsRepositoryError extends Error {
   constructor() {
     super('El almacenamiento de analitica diaria no esta disponible');
@@ -16,9 +30,10 @@ export class DailyAnalyticsRepositoryError extends Error {
 }
 
 export class DailyAnalyticsRepository {
-  constructor({ client } = {}) {
+  constructor({ client, priceCacheTtlHours = configuredPriceCacheTtlHours() } = {}) {
     if (!client || typeof client.rpc !== 'function') throw new DailyAnalyticsRepositoryError();
     this.client = client;
+    this.priceCacheTtlHours = configuredPriceCacheTtlHours(priceCacheTtlHours);
   }
 
   async call(name, parameters = {}) {
@@ -32,7 +47,9 @@ export class DailyAnalyticsRepository {
   }
 
   start() {
-    return this.call('iniciar_daily_sync');
+    return this.call('iniciar_daily_sync', {
+      p_price_cache_ttl_hours: this.priceCacheTtlHours,
+    });
   }
 
   recover() {

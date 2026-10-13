@@ -947,7 +947,7 @@ test('el mock separa RPC administrativas del cliente de usuario y rechaza .from(
   assert.equal(mock.analyticsRows('runs').length, 1);
 });
 
-test('la cache global se siembra solo con checkpoints recientes e impide acceso de clientes', async () => {
+test('la cache global se siembra con el checkpoint mas reciente e impide acceso de clientes', async () => {
   const db = new PGlite();
   const userId = '00000000-0000-4000-8000-00000000000a';
   const recentRun = '80000000-0000-4000-8000-000000000001';
@@ -989,10 +989,11 @@ test('la cache global se siembra solo con checkpoints recientes e impide acceso 
     const seeded = (await db.query(
       'select figure_id, price, fetched_at from private.daily_sync_figure_prices order by figure_id',
     )).rows;
-    assert.equal(seeded.length, 1);
-    assert.equal(seeded[0].figure_id, 'FIG-RECENT');
-    assert.equal(Number(seeded[0].price), 12.5);
-    const originalFetchedAt = seeded[0].fetched_at.toISOString();
+    assert.deepEqual(seeded.map(({ figure_id, price }) => ({ figure_id, price: Number(price) })), [
+      { figure_id: 'FIG-OLD', price: 9 },
+      { figure_id: 'FIG-RECENT', price: 12.5 },
+    ]);
+    const originalFetchedAt = seeded.find(({ figure_id }) => figure_id === 'FIG-RECENT').fetched_at.toISOString();
 
     await db.query(`
       insert into private.daily_sync_runs(id, snapshot_date, status, phase)
@@ -1053,17 +1054,20 @@ test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cac
       insert into public.minifiguras(user_id, id, nombre, categoria, precio)
       values ($1, 'FIG-FAIL', 'Failure', 'Test', 3),
              ($1, 'FIG-FRESH', 'Fresh', 'Test', 10),
+             ($1, 'FIG-HOT', 'Hot', 'Test', 4),
              ($1, 'FIG-STALE', 'Stale', 'Test', 5)
     `, [userId]);
     await db.query(`
       insert into private.daily_sync_figure_prices(figure_id, price, fetched_at)
       values ('FIG-FRESH', 50, clock_timestamp() - interval '2 hours'),
+             ('FIG-HOT', 40, clock_timestamp() - interval '30 minutes'),
              ('FIG-FAIL', 4, clock_timestamp() - interval '25 hours'),
              ('FIG-STALE', 6, clock_timestamp() - interval '25 hours')
     `);
     await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
 
-    const started = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
+    await assert.rejects(db.query('select public.iniciar_daily_sync(0)'), /DAILY_SYNC_TTL_INVALIDO/);
+    const started = (await db.query('select public.iniciar_daily_sync(1) as data')).rows[0].data;
     const priceRows = (await db.query(
       'select figure_id, status, attempts, price from private.daily_sync_prices where run_id = $1 order by figure_id',
       [started.jobId],
@@ -1072,16 +1076,17 @@ test('inicio reutiliza precios frescos y solo el refresco exitoso renueva la cac
       figure_id, status, attempts, price: price === null ? null : Number(price),
     })), [
       { figure_id: 'FIG-FAIL', status: 'pending', attempts: 0, price: null },
-      { figure_id: 'FIG-FRESH', status: 'completed', attempts: 0, price: 50 },
+      { figure_id: 'FIG-FRESH', status: 'pending', attempts: 0, price: null },
+      { figure_id: 'FIG-HOT', status: 'completed', attempts: 0, price: 40 },
       { figure_id: 'FIG-STALE', status: 'pending', attempts: 0, price: null },
     ]);
-    assert.equal(Number((await db.query("select precio from public.minifiguras where user_id = $1 and id = 'FIG-FRESH'", [userId])).rows[0].precio), 50);
+    assert.equal(Number((await db.query("select precio from public.minifiguras where user_id = $1 and id = 'FIG-HOT'", [userId])).rows[0].precio), 40);
 
     await db.query('select public.reclamar_daily_sync($1, $2, 120)', [started.jobId, leaseOwner]);
     const pending = (await db.query('select figure_id from public.leer_daily_sync_precios($1, $2, null, 1000) order by figure_id', [
       started.jobId, leaseOwner,
     ])).rows;
-    assert.deepEqual(pending.map(({ figure_id }) => figure_id), ['FIG-FAIL', 'FIG-STALE']);
+    assert.deepEqual(pending.map(({ figure_id }) => figure_id), ['FIG-FAIL', 'FIG-FRESH', 'FIG-STALE']);
 
     await db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-STALE', true, 8.75, null)", [started.jobId, leaseOwner]);
     const refreshed = (await db.query("select price, fetched_at from private.daily_sync_figure_prices where figure_id = 'FIG-STALE'")).rows[0];
