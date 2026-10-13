@@ -76,10 +76,27 @@ export function createDailyAnalyticsJobs({
   }
 
   async function process(run) {
+    const startedAtMs = now();
+    const metrics = {
+      claimWaitMs: 0,
+      distinctPriceIds: 0,
+      bricksetRequests: 0,
+      bricksetSuccesses: 0,
+      bricksetFailures: 0,
+      bricksetDurationMs: 0,
+      failedPrices: 0,
+      totalUsers: 0,
+      processedUsers: 0,
+      failedUsers: 0,
+      pricePhaseMs: 0,
+      snapshotPhaseMs: 0,
+    };
     const leaseOwner = randomUUID();
     let leaseLost = false;
     let heartbeatPending = false;
     let claimed = false;
+    let outcome = 'failed';
+    let errorCode = 'WORKER_ERROR';
     while (!closed && !claimed) {
       claimed = await retryStorage(() => repository.claim(run.jobId, leaseOwner, leaseSeconds));
       if (claimed) break;
@@ -89,6 +106,12 @@ export function createDailyAnalyticsJobs({
       await sleepImpl(claimRetryMs);
     }
     if (!claimed || closed) return;
+    metrics.claimWaitMs = Math.max(0, now() - startedAtMs);
+    logger.info('[daily-analytics] inicio', JSON.stringify({
+      jobId: run.jobId,
+      snapshotDate: run.snapshotDate,
+      startedAt: new Date(startedAtMs).toISOString(),
+    }));
 
     const heartbeat = setIntervalImpl(async () => {
       if (heartbeatPending || leaseLost || closed) return;
@@ -109,16 +132,20 @@ export function createDailyAnalyticsJobs({
     };
 
     try {
+      const pricePhaseStartedAtMs = now();
       let afterFigureId = null;
       while (true) {
         ensureLease();
         const page = await retryStorage(() => repository.pricesPage(run.jobId, leaseOwner, afterFigureId, pageSize));
         if (!Array.isArray(page)) throw new Error('Invalid price page');
+        metrics.distinctPriceIds += page.length;
         for (const { figure_id: figureId } of page) {
           ensureLease();
           let result;
           const controller = new AbortController();
           activeRequests.add(controller);
+          metrics.bricksetRequests += 1;
+          const requestStartedAtMs = now();
           try {
             const price = await withTimeout(
               brickset.getPrice(figureId, { signal: controller.signal }),
@@ -133,20 +160,26 @@ export function createDailyAnalyticsJobs({
           } catch (error) {
             result = { success: false, failureCode: scraperFailureCode(error) };
           } finally {
+            metrics.bricksetDurationMs += Math.max(0, now() - requestStartedAtMs);
             activeRequests.delete(controller);
           }
+          if (result.success) metrics.bricksetSuccesses += 1;
+          else metrics.bricksetFailures += 1;
           ensureLease();
           await retryStorage(() => repository.applyPrice(run.jobId, leaseOwner, figureId, result));
         }
         if (page.length < pageSize) break;
         afterFigureId = page.at(-1).figure_id;
       }
+      metrics.pricePhaseMs = Math.max(0, now() - pricePhaseStartedAtMs);
 
+      const snapshotPhaseStartedAtMs = now();
       let afterUserId = null;
       while (true) {
         ensureLease();
         const page = await retryStorage(() => repository.usersPage(run.jobId, leaseOwner, afterUserId, pageSize));
         if (!Array.isArray(page)) throw new Error('Invalid user page');
+        metrics.totalUsers += page.length;
         for (const { user_id: userId } of page) {
           ensureLease();
           let captured = false;
@@ -174,7 +207,10 @@ export function createDailyAnalyticsJobs({
               logros: state.logros,
             }));
           }
-          if (!captured) {
+          if (captured) {
+            metrics.processedUsers += 1;
+          } else {
+            metrics.failedUsers += 1;
             ensureLease();
             await retryStorage(() => repository.failUser(run.jobId, leaseOwner, userId, 'MAX_RETRIES'));
           }
@@ -182,10 +218,23 @@ export function createDailyAnalyticsJobs({
         if (page.length < pageSize) break;
         afterUserId = page.at(-1).user_id;
       }
+      metrics.snapshotPhaseMs = Math.max(0, now() - snapshotPhaseStartedAtMs);
 
       ensureLease();
-      await retryStorage(() => repository.finalize(run.jobId, leaseOwner));
+      const finalStatus = await retryStorage(() => repository.finalize(run.jobId, leaseOwner));
+      outcome = finalStatus?.status ?? 'completed';
+      errorCode = finalStatus?.errorCode ?? null;
+      metrics.failedPrices = Number.isFinite(finalStatus?.failedPrices)
+        ? finalStatus.failedPrices
+        : metrics.bricksetFailures;
     } catch (error) {
+      if (error?.code === 'DAILY_SYNC_LEASE_CADUCADO') {
+        outcome = 'lease_lost';
+        errorCode = error.code;
+      } else if (closed) {
+        outcome = 'interrupted';
+        errorCode = 'WORKER_INTERRUPTED';
+      }
       if (error?.code !== 'DAILY_SYNC_LEASE_CADUCADO' && !closed) {
         try {
           await repository.fail(run.jobId, leaseOwner, 'WORKER_ERROR');
@@ -199,6 +248,31 @@ export function createDailyAnalyticsJobs({
     } finally {
       clearIntervalImpl(heartbeat);
       heartbeats.delete(heartbeat);
+      const finishedAtMs = now();
+      const durationMs = Math.max(0, finishedAtMs - startedAtMs);
+      logger.info('[daily-analytics] resumen', JSON.stringify({
+        jobId: run.jobId,
+        snapshotDate: run.snapshotDate,
+        status: outcome,
+        errorCode,
+        startedAt: new Date(startedAtMs).toISOString(),
+        finishedAt: new Date(finishedAtMs).toISOString(),
+        durationMs,
+        claimWaitMs: metrics.claimWaitMs,
+        pricePhaseMs: metrics.pricePhaseMs,
+        snapshotPhaseMs: metrics.snapshotPhaseMs,
+        distinctPriceIds: metrics.distinctPriceIds,
+        bricksetRequests: metrics.bricksetRequests,
+        bricksetSuccesses: metrics.bricksetSuccesses,
+        bricksetFailures: metrics.bricksetFailures,
+        failedPrices: metrics.failedPrices,
+        averageBricksetMs: metrics.bricksetRequests
+          ? Math.round(metrics.bricksetDurationMs / metrics.bricksetRequests)
+          : null,
+        totalUsers: metrics.totalUsers,
+        processedUsers: metrics.processedUsers,
+        failedUsers: metrics.failedUsers,
+      }));
     }
   }
 
