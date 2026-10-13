@@ -31,6 +31,12 @@ El trigger externo SHALL programarse cada dia a las 04:00 en `Europe/Madrid`, re
 - **THEN** recupera checkpoints y conserva la fecha de Madrid fijada al inicio
 - **AND** un trabajador cuyo permiso de ejecucion ha caducado no puede modificar el trabajo
 
+#### Scenario: Reinicio mientras sigue vigente el lease anterior
+- **WHEN** el backend se reinicia antes de que venza el lease de un trabajo activo
+- **THEN** el nuevo worker espera y vuelve a intentar reclamar el trabajo mientras siga activo
+- **AND** reanuda sus checkpoints cuando el lease anterior vence
+- **AND** deja de esperar si el trabajo ya no esta pendiente ni en ejecucion
+
 #### Scenario: Repeticion tras completar
 - **WHEN** un trigger inicia un nuevo trabajo el mismo dia tras completar el anterior
 - **THEN** los datos actuales sustituyen el snapshot de ese dia sin crear una segunda fila por usuario
