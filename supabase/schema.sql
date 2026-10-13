@@ -262,7 +262,6 @@ join private.daily_sync_runs runs on runs.id = prices.run_id
 where runs.status = 'completed'
   and prices.status = 'completed'
   and prices.price is not null
-  and prices.checkpoint_at >= clock_timestamp() - interval '24 hours'
 order by prices.figure_id, prices.checkpoint_at desc
 on conflict (figure_id) do nothing;
 
@@ -370,7 +369,7 @@ insert into private.ranking_top10_reconciliation_state (singleton, initialized)
 values (true, false)
 on conflict (singleton) do nothing;
 
-create or replace function public.iniciar_daily_sync()
+create or replace function public.iniciar_daily_sync(p_price_cache_ttl_hours integer)
 returns jsonb
 language plpgsql
 security definer
@@ -384,6 +383,9 @@ declare
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
+  end if;
+  if p_price_cache_ttl_hours not between 1 and 8760 then
+    raise exception using errcode = '22023', message = 'DAILY_SYNC_TTL_INVALIDO';
   end if;
 
   select id, snapshot_date, status
@@ -426,9 +428,9 @@ begin
   select distinct
     v_run_id,
     figures.id,
-    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then 'completed' else 'pending' end,
-    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then cache.price else null end,
-    case when cache.fetched_at >= clock_timestamp() - interval '24 hours' then cache.fetched_at else null end
+    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then 'completed' else 'pending' end,
+    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.price else null end,
+    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.fetched_at else null end
   from public.minifiguras figures
   join private.daily_sync_users work_users
     on work_users.run_id = v_run_id and work_users.user_id = figures.user_id
@@ -497,6 +499,15 @@ begin
     'errorCode', v_run.error_code
   );
 end;
+$$;
+
+create or replace function public.iniciar_daily_sync()
+returns jsonb
+language sql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+  select public.iniciar_daily_sync(24);
 $$;
 
 create or replace function public.recuperar_daily_sync()
@@ -1271,6 +1282,7 @@ begin
 end;
 $$;
 
+revoke all on function public.iniciar_daily_sync(integer) from public, anon, authenticated;
 revoke all on function public.iniciar_daily_sync() from public, anon, authenticated;
 revoke all on function public.consultar_daily_sync(uuid) from public, anon, authenticated;
 revoke all on function public.recuperar_daily_sync() from public, anon, authenticated;
@@ -1286,6 +1298,7 @@ revoke all on function public.fallar_daily_sync_usuario(uuid, uuid, uuid, text) 
 revoke all on function public.finalizar_daily_sync(uuid, uuid) from public, anon, authenticated;
 revoke all on function private.daily_sync_weekly_membership(date) from public, anon, authenticated;
 revoke all on function public.fallar_daily_sync(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.iniciar_daily_sync(integer) to service_role;
 grant execute on function public.iniciar_daily_sync() to service_role;
 grant execute on function public.consultar_daily_sync(uuid) to service_role;
 grant execute on function public.recuperar_daily_sync() to service_role;

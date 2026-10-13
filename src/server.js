@@ -974,6 +974,7 @@ export async function startApplication({
   analyticsRepository: injectedAnalyticsRepository,
   analyticsJobs: injectedAnalyticsJobs,
   scraper: injectedScraper,
+  createBricksetScraperImpl = (options) => new BricksetScraper(options),
   fetchImpl,
   port = Number(process.env.PORT || 3000),
 } = {}) {
@@ -989,7 +990,11 @@ export async function startApplication({
     client: adminClient,
     categoriasRepository,
   });
-  const brickset = injectedScraper ?? new BricksetScraper({ fetchImpl });
+  const configuredInterval = Number(process.env.BRICKSET_MIN_INTERVAL_MS);
+  const brickset = injectedScraper ?? createBricksetScraperImpl({
+    fetchImpl,
+    ...(Number.isFinite(configuredInterval) ? { minIntervalMs: configuredInterval } : {}),
+  });
   const analyticsRepository = injectedAnalyticsRepository ?? createDailyAnalyticsRepository({
     adminConfig,
     createSupabaseClient,
