@@ -2107,10 +2107,10 @@ function renderDailyNotification(notification) {
     metric.append(name, amount);
     target.append(metric);
   };
-  addMetric('Figuras', formatSignedNumber(deltas.figures), '/status_images/caja.png');
+  addMetric('Colección', formatSignedNumber(deltas.figures), '/status_images/caja.png');
   addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
   addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
-  addMetric('👉 Nivel', formatSignedNumber(deltas.level));
+  addMetric('Nivel', formatSignedNumber(deltas.level), '/toast_images/75206.png');
   details.append(metrics);
   if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);
   if (Number.isFinite(deltas.weeklyPosition)) addMetric('🗓️ Ranking Semanal', `${formatSignedNumber(deltas.weeklyPosition)} puestos`, null, rankingMetrics);
