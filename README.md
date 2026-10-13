@@ -85,7 +85,7 @@ La bandeja carga hasta 15 avisos por página y usa el cursor devuelto para conti
 
 ### Analítica histórica diaria
 
-La vigencia de la caché global de precios se configura con `DAILY_SYNC_PRICE_CACHE_TTL_HOURS`: entero entre 1 y 8760 horas, con valor predeterminado de 24. Configúrala como variable de entorno del Web Service en Render; cada nuevo trabajo aplicará ese umbral. El esquema actualizado debe estar aplicado en Supabase para que la RPC acepte el parámetro.
+La vigencia de la caché global de precios se configura con `DAILY_SYNC_PRICE_CACHE_TTL_HOURS`: entero entre 0 y 8760 horas, con valor predeterminado de 24. Un valor de `0` desactiva la reutilización y hace que cada ID se consulte en Brickset en cada nuevo trabajo. Configúrala como variable de entorno del Web Service en Render; cada nuevo trabajo aplicará ese umbral. El esquema actualizado debe estar aplicado en Supabase para que la RPC acepte el parámetro.
 
 El worker escribe eventos JSON `[daily-analytics] inicio` y `[daily-analytics] resumen` en stdout. El resumen incluye inicio y fin UTC, duración total y por fase, espera de lease, IDs de precio que requirieron trabajo, número y duración media de llamadas a Brickset, fallos, usuarios procesados y estado final persistido. En local se ven en la terminal de `npm.cmd start`; en producción, en los logs de ejecución del proveedor que mantiene el servidor. Se correlacionan con el `jobId` devuelto por el cron. La aplicación no los persiste ni envía por email: para alertas por correo hay que configurar una regla del proveedor de hosting o integrar un servicio de correo.
 

@@ -384,7 +384,7 @@ begin
   if auth.role() is distinct from 'service_role' then
     raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
   end if;
-  if p_price_cache_ttl_hours not between 1 and 8760 then
+  if p_price_cache_ttl_hours not between 0 and 8760 then
     raise exception using errcode = '22023', message = 'DAILY_SYNC_TTL_INVALIDO';
   end if;
 
@@ -428,9 +428,9 @@ begin
   select distinct
     v_run_id,
     figures.id,
-    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then 'completed' else 'pending' end,
-    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.price else null end,
-    case when cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.fetched_at else null end
+    case when p_price_cache_ttl_hours > 0 and cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then 'completed' else 'pending' end,
+    case when p_price_cache_ttl_hours > 0 and cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.price else null end,
+    case when p_price_cache_ttl_hours > 0 and cache.fetched_at >= clock_timestamp() - make_interval(hours => p_price_cache_ttl_hours) then cache.fetched_at else null end
   from public.minifiguras figures
   join private.daily_sync_users work_users
     on work_users.run_id = v_run_id and work_users.user_id = figures.user_id

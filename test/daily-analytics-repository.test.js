@@ -62,7 +62,7 @@ test('repositorio oculta errores y no imprime claves administrativas', async () 
 
 test('repositorio lee DAILY_SYNC_PRICE_CACHE_TTL_HOURS y lo pasa al RPC', async () => {
   const previousTtl = process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS;
-  process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS = '5';
+  process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS = '0';
   const calls = [];
   const repository = new DailyAnalyticsRepository({
     client: {
@@ -77,7 +77,7 @@ test('repositorio lee DAILY_SYNC_PRICE_CACHE_TTL_HOURS y lo pasa al RPC', async 
     await repository.start();
     assert.deepEqual(calls, [{
       name: 'iniciar_daily_sync',
-      parameters: { p_price_cache_ttl_hours: 5 },
+      parameters: { p_price_cache_ttl_hours: 0 },
     }]);
   } finally {
     if (previousTtl === undefined) delete process.env.DAILY_SYNC_PRICE_CACHE_TTL_HOURS;
@@ -87,7 +87,7 @@ test('repositorio lee DAILY_SYNC_PRICE_CACHE_TTL_HOURS y lo pasa al RPC', async 
 
 test('repositorio rechaza TTL de caché fuera del rango permitido', () => {
   const client = { async rpc() { return { data: null, error: null }; } };
-  for (const priceCacheTtlHours of [0, 1.5, 8761, Number.NaN]) {
+  for (const priceCacheTtlHours of [-1, 1.5, 8761, Number.NaN]) {
     assert.throws(
       () => new DailyAnalyticsRepository({ client, priceCacheTtlHours }),
       { name: 'RangeError' },
