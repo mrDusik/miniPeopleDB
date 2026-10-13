@@ -63,6 +63,8 @@ El trabajo SHALL considerar los IDs presentes en inventarios de usuarios incluid
 
 La antiguedad maxima SHALL configurarse con `DAILY_SYNC_PRICE_CACHE_TTL_HOURS`, un entero de 0 a 8760 horas con valor predeterminado de 24. Un valor de cero SHALL desactivar la reutilizacion de cache y marcar todos los IDs para consulta en cada trabajo. Todas las referencias a 24 horas en este requisito y sus escenarios SHALL entenderse como el TTL configurado. El backend SHALL pasar este valor a la RPC administrativa de inicio, que SHALL validarlo y aplicarlo al reutilizar precios; la llamada heredada sin parametro SHALL conservar el valor de 24 horas.
 
+El scraper SHALL tratar los importes de `Current Value - New` como EUR solo cuando incluyan el simbolo EUR. Los importes USD SHALL convertirse a EUR con la tasa diaria de referencia USD/EUR publicada por el Banco Central Europeo, cacheada hasta 24 horas. Una moneda desconocida, una tasa ausente o una respuesta invalida SHALL producir un fallo de scraping, nunca almacenar el importe sin convertirlo como EUR.
+
 #### Scenario: ID compartido y fallo parcial
 - **WHEN** dos usuarios tienen el mismo ID y otro ID falla en Brickset
 - **THEN** se comparte el resultado del ID comun, se conserva el precio anterior del fallido y se capturan ambos usuarios
