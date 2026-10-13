@@ -67,6 +67,7 @@ test('el acceso y el dialogo semanal tienen semantica propia y reutilizan la est
   assert.ok(dialog.querySelector('#weekly-ranking-close'));
   assert.equal(dialog.querySelector('#weekly-ranking-status').getAttribute('aria-live'), 'polite');
   assert.equal(dialog.querySelector('#weekly-ranking-list').className, 'global-ranking-list');
+  assert.equal(dialog.querySelector('.weekly-ranking-order-spacer'), null);
   assert.equal(dialog.querySelectorAll('[data-ranking-criterion]').length, 0);
   assert.ok(dialog.classList.contains('modal-ranking'));
   dom.window.close();
@@ -296,8 +297,8 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   const collectionButton = criteriaButtons.find(({ dataset }) => dataset.rankingCriterion === 'coleccion');
   assert.equal(collectionButton.getAttribute('aria-label'), 'Colección');
   assert.equal(collectionButton.title, 'Colección');
-  assert.equal(collectionButton.querySelector('.ranking-criterion-label-compact').textContent, 'Colec.');
-  assert.match(styles, /@media \(max-width: 480px\) and \(orientation: portrait\) \{[^}]*#ranking-order \[data-ranking-criterion="coleccion"\] \{ padding: 0 1px; font-size: 0\.68rem; white-space: nowrap; overflow-wrap: normal; \}/);
+  assert.equal(collectionButton.querySelector('.ranking-criterion-icon').getAttribute('src'), '/status_images/caja.png');
+  assert.match(styles, /\.ranking-criterion-icon \{ width: 1\.25rem; height: 1\.25rem; \}/);
   assert.deepEqual(criteriaButtons.map((button) => button.getAttribute('aria-pressed')), ['true', 'false', 'false', 'false', 'false', 'false']);
   assert.equal(criteriaGroup.parentElement.nextElementSibling.id, 'global-ranking-list');
   assert.match(styles, /\.ranking-order-toolbar \{[^}]*justify-content: flex-start;/);

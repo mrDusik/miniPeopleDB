@@ -172,7 +172,7 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     assert.equal(rule?.style.display, 'none');
     for (const [dialogId, statusId, contentSelectors] of [
       ['ranking-dialog', 'ranking-status', ['.ranking-order-toolbar', '#global-ranking-list']],
-      ['weekly-ranking-dialog', 'weekly-ranking-status', ['.weekly-ranking-order-spacer', '#weekly-ranking-list']],
+      ['weekly-ranking-dialog', 'weekly-ranking-status', ['#weekly-ranking-list']],
       ['notifications-dialog', 'notifications-status', ['.notifications-toolbar', '#notifications-list']],
       ['analytics-history-dialog', 'analytics-history-status', ['.analytics-history-controls', '.analytics-history-charts', '#analytics-history-retry']],
       ['gamification-dialog', 'achievements-status', ['#gamification-achievements']],
