@@ -50,6 +50,19 @@ test('procesa usuarios vacios y captura una vez; IDs repetidos se refrescan una 
   assert.ok(snapshots.some(({ user_id, total_figures, total_value, level }) => user_id === USER_B && total_figures === 0 && total_value === 0 && level === 0));
 });
 
+test('daily-sync conserva regalos semanales sin multiplicarlos por 50', async () => {
+  const { jobs, mock } = analyticsHarness({ users: [USER_A, USER_B] });
+  mock.seed('regalos_enviados', USER_A, [
+    { donante_id: USER_B, receptor_id: USER_A },
+    { donante_id: USER_B, receptor_id: USER_A, semana: '2026-10-12' },
+  ]);
+  await jobs.start();
+  await jobs.waitForIdle();
+  const state = mock.rows('gamificacion', USER_A)[0];
+  assert.equal(state.bricks, 55);
+  assert.equal(state.logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 5);
+});
+
 test('daily-sync conserva logros y Bricks derivados del ledger de agradecimientos', async () => {
   const { jobs, mock } = analyticsHarness({ users: [USER_A, USER_B] });
   mock.seed('agradecimientos_regalo', USER_A, [{

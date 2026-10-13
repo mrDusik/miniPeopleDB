@@ -198,8 +198,8 @@ export class RankingRepository {
     };
   }
 
-  async gift(receiverId) {
-    await this.run(this.client.rpc('regalar_bricks', { p_receptor_id: receiverId }), giftError);
+  async gift(receiverId, weekly = false) {
+    await this.run(this.client.rpc(weekly ? 'regalar_bricks_semanal' : 'regalar_bricks', { p_receptor_id: receiverId }), giftError);
     return { ok: true };
   }
 }

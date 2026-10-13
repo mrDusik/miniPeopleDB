@@ -217,7 +217,7 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
       insert into public.minifiguras(user_id, id, nombre, categoria, precio, precio_compra, fecha_compra, anio)
       values ($1, 'WEEK-1', 'Weekly figure', 'Test', 200, 50, '2020-01-01', 2020)
     `, [userId(2)]);
-    await db.query('insert into public.regalos_enviados(donante_id, receptor_id) values ($1, $2)', [userId(1), userId(2)]);
+    await db.query("insert into public.regalos_enviados(donante_id, receptor_id, semana) values ($1, $2, '2026-10-12')", [userId(1), userId(2)]);
 
     const result = (await db.query(
       "select private.ranking_semanal_calcular('2026-10-14T12:00:00Z'::timestamptz) as result",

@@ -45,7 +45,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -521,7 +521,7 @@ export function createServer({
       return;
     }
 
-    if (requestUrl.pathname === '/api/ranking/regalar') {
+    if (['/api/ranking/regalar', '/api/ranking/semanal/regalar'].includes(requestUrl.pathname)) {
       if (request.method !== 'POST') {
         response.setHeader('allow', 'POST');
         sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
@@ -539,7 +539,7 @@ export function createServer({
         return;
       }
       try {
-        sendJson(response, 200, await rankingRepository.gift(payload.receptorId));
+        sendJson(response, 200, await rankingRepository.gift(payload.receptorId, requestUrl.pathname === '/api/ranking/semanal/regalar'));
       } catch (error) {
         if (error instanceof AutorregaloNoPermitidoError) {
           sendJson(response, 400, { error: error.code });

@@ -49,6 +49,17 @@ function createAdminClient({ version = null, gamificacion = [], minifiguras = []
   return { client, applications };
 }
 
+test('el recalculo de categorias conserva regalos globales y semanales separados', async () => {
+  const { client, applications } = createAdminClient({
+    regalos: [{ receptor_id: 'user-a' }, { receptor_id: 'user-a', semana: '2026-10-12' }],
+  });
+  const recalculator = new CategoryGamificationRecalculator({ client, categoriasRepository: { read: async () => [] } });
+  await recalculator.reconcile();
+  const state = applications[0].parameters.p_estados[0];
+  assert.equal(state.bricks, 55);
+  assert.equal(state.logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 5);
+});
+
 test('recalcula todos los usuarios existentes, conservando regalos y usando el total de subcategoría', async () => {
   const { client, applications } = createAdminClient({
     gamificacion: [{ user_id: 'user-a' }, { user_id: 'user-b' }],

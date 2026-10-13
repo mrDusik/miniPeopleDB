@@ -1377,10 +1377,10 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
       gift.className = 'button button-secondary ranking-gift';
       gift.dataset.giftUser = entry.userId;
       gift.disabled = entry.regaloEnviado;
-      gift.setAttribute('aria-label', entry.regaloEnviado ? 'Regalo ya enviado' : 'Enviar 50 Bricks');
-      gift.title = entry.regaloEnviado ? 'Regalo ya enviado' : 'Enviar 50 Bricks';
+      gift.setAttribute('aria-label', entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`);
+      gift.title = entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`;
       const giftAmount = document.createElement('span');
-      giftAmount.textContent = '+50';
+      giftAmount.textContent = weekly ? '+5' : '+50';
       const giftIcon = document.createElement('img');
       giftIcon.className = 'ranking-gift-icon';
       giftIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
@@ -2912,7 +2912,8 @@ async function handleRankingListClick(event) {
   if (!gift || gift.disabled) return;
   gift.disabled = true;
   try {
-    const response = await apiFetch('/api/ranking/regalar', {
+    const weekly = list === weeklyRankingList;
+    const response = await apiFetch(weekly ? '/api/ranking/semanal/regalar' : '/api/ranking/regalar', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ receptorId: gift.dataset.giftUser }),
@@ -2931,7 +2932,7 @@ async function handleRankingListClick(event) {
       loadGamification(),
     ]);
     await loadGamificationDna();
-    showToast('Regalo de 50 Bricks enviado.', 'success');
+    showToast(`Regalo de ${weekly ? 5 : 50} Bricks enviado.`, 'success');
   } catch {
     gift.disabled = false;
     showToast('No se pudo enviar el regalo.', 'error');

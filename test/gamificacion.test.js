@@ -236,7 +236,7 @@ test('combina regalos persistidos con logros de colección', () => {
   const state = calcularGamificacion([minifigura()], [], 2);
   const gift = state.logros.find(({ type }) => type === 'regalo');
   assert.deepEqual(gift, {
-    id: 'someone-liked-your-collection', type: 'regalo', nombre: 'Someone liked your collection',
+    id: 'someone-liked-your-collection', type: 'regalo', nombre: 'Your collection is top!',
     descripcion: 'Has aparecido en el ranking global y te han hecho un regalo.', bricks: 50,
     repetible: true, cantidad: 2, total: 100,
   });
