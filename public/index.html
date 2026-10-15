@@ -11,14 +11,155 @@
   <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
+  <svg class="auth-icon-definitions" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="auth-eye-icon" viewBox="0 0 24 24">
+        <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="auth-eye-off-icon" viewBox="0 0 24 24">
+        <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+        <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+        <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+        <path d="m2 2 20 20" />
+      </symbol>
+    </defs>
+  </svg>
   <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title" hidden>
     <div class="auth-card">
       <h1 id="auth-title"><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
-      <p>Inicia sesión para gestionar tu colección</p>
-      <button type="button" id="login-google" class="button button-primary">Iniciar sesión con Google</button>
+      <div id="auth-access-panel" class="auth-access-panel">
+        <p>¡Empieza a gestionar tu colección y consigue Bricks para ganar a tus amigos!</p>
+        <button type="button" id="login-google" class="button button-primary"><img src="/logo_images/google-2.png" alt="" width="20" height="20" aria-hidden="true"><span id="auth-google-label">Inicia sesión con Google</span></button>
+        <p id="auth-divider" class="auth-divider" aria-hidden="true">o con tu usuario de MiniPeopleDB</p>
+        <div class="auth-mode-toggle" role="group" aria-label="Tipo de acceso">
+          <button type="button" id="auth-mode-login" aria-pressed="true">Iniciar sesión</button>
+          <button type="button" id="auth-mode-register" aria-pressed="false">Crear cuenta</button>
+        </div>
+        <form id="classic-auth-form" class="auth-form">
+          <label id="auth-username-field">
+            Username
+            <input id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" required>
+          </label>
+          <label id="auth-email-field" hidden>
+            Email
+            <input id="auth-email" name="email" type="email" autocomplete="email" disabled>
+          </label>
+          <div class="auth-password-field">
+            <label for="auth-password">Contraseña</label>
+            <div class="auth-password-control">
+              <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
+              <button type="button" id="auth-show-password" class="auth-password-visibility" aria-label="Mostrar contraseña" title="Mostrar contraseña" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+            </div>
+          </div>
+          <div id="auth-password-repeat-field" class="auth-password-field" hidden>
+            <label for="auth-password-repeat">Repetir Contraseña</label>
+            <div class="auth-password-control">
+              <input id="auth-password-repeat" name="password-repeat" type="password" autocomplete="new-password" disabled>
+              <button type="button" id="auth-show-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+            </div>
+          </div>
+          <ul id="auth-password-rules" class="auth-password-rules" aria-live="polite" hidden>
+            <li data-rule="length">Al menos 5 caracteres</li>
+            <li data-rule="uppercase">Al menos una letra mayúscula</li>
+            <li data-rule="lowercase">Al menos una letra minúscula</li>
+            <li data-rule="number">Al menos un número</li>
+          </ul>
+          <button type="submit" id="classic-auth-submit" class="button button-secondary">Iniciar sesión</button>
+        </form>
+        <button type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
+      </div>
+      <form id="password-recovery-form" class="auth-form" hidden>
+        <label>
+          Email
+          <input id="recovery-email" name="email" type="email" autocomplete="email" required>
+        </label>
+        <button type="submit" class="button button-secondary">Enviar enlace de recuperación</button>
+        <button type="button" id="cancel-password-recovery" class="auth-text-button">Volver al acceso</button>
+      </form>
+      <form id="password-update-form" class="auth-form" hidden>
+        <label>
+          Nueva contraseña
+          <input id="new-password" name="password" type="password" autocomplete="new-password" required>
+        </label>
+        <button type="submit" class="button button-secondary">Cambiar contraseña</button>
+      </form>
+      <button type="button" id="profile-check-retry" class="button button-secondary" hidden>Reintentar</button>
       <p id="auth-message" class="status error" role="alert"></p>
     </div>
   </section>
+  <dialog id="user-profile-dialog" class="modal user-profile-dialog" aria-labelledby="user-profile-dialog-title">
+    <div class="form-dialog-heading profile-dialog-heading">
+      <h2 id="user-profile-dialog-title" tabindex="-1">Completa tu perfil</h2>
+      <button type="button" id="user-profile-close" class="button button-secondary" hidden>Cerrar</button>
+    </div>
+    <form id="user-profile-form" class="user-profile-form" novalidate>
+      <div class="profile-two-column-row">
+        <div class="profile-field">
+          <label for="profile-username">Username</label>
+          <input id="profile-username" name="username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" required>
+        </div>
+        <div class="profile-field">
+          <label for="profile-avatar-file">Avatar</label>
+          <div class="profile-avatar-controls">
+            <div class="profile-avatar-preview">
+              <img id="profile-avatar-preview" alt="Vista previa del avatar" hidden>
+              <span id="profile-avatar-placeholder" aria-hidden="true">👤</span>
+            </div>
+            <button type="button" id="profile-avatar-load" class="logout-link">Cargar</button>
+            <button type="button" id="profile-avatar-remove" class="profile-remove-button" aria-label="Quitar avatar" title="Quitar avatar">×</button>
+          </div>
+          <input id="profile-avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+          <input id="profile-avatar-url" name="avatarUrl" type="hidden">
+        </div>
+      </div>
+      <div class="profile-two-column-row">
+        <div class="profile-field">
+          <label for="profile-language">Idioma</label>
+          <select id="profile-language" name="language">
+            <option value="es">Español</option>
+            <option value="en" disabled>Inglés, próximamente</option>
+            <option value="it" disabled>Italiano, próximamente</option>
+            <option value="fr" disabled>Francés, próximamente</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="profile-currency">Moneda</label>
+          <select id="profile-currency" name="currency">
+            <option value="EUR">Euro (€)</option>
+            <option value="USD" disabled>Dólar ($), próximamente</option>
+          </select>
+        </div>
+      </div>
+      <fieldset class="profile-favorites-fieldset">
+        <legend>Categorías favoritas</legend>
+        <div class="profile-favorite-toolbar">
+          <input id="profile-favorite-search" type="search" autocomplete="off" aria-label="Buscar categoría" placeholder="Buscar categoría">
+          <span id="profile-favorites-count" class="profile-favorites-count" role="status">0/3</span>
+        </div>
+        <div id="profile-selected-categories" class="profile-selected-categories" aria-label="Categorías seleccionadas"></div>
+        <div id="profile-favorite-categories" class="profile-favorite-categories" role="group" aria-label="Categorías favoritas"></div>
+      </fieldset>
+      <p id="profile-form-message" class="status error" role="alert"></p>
+      <div class="profile-form-actions">
+        <button type="submit" id="user-profile-save" class="button button-primary">Guardar perfil</button>
+      </div>
+    </form>
+    <div class="profile-account-actions">
+      <button type="button" id="open-delete-account" class="logout-link" hidden>Eliminar cuenta</button>
+    </div>
+  </dialog>
+  <dialog id="delete-account-dialog" class="modal" aria-labelledby="delete-account-title" aria-describedby="delete-account-message">
+    <h2 id="delete-account-title">Eliminar cuenta</h2>
+    <p id="delete-account-message">Se eliminarán tu cuenta y todos sus datos de colección, preferencias e histórico.
+
+Esta acción no se puede deshacer.</p>
+    <p id="delete-account-error" class="status error" role="alert"></p>
+    <div class="form-actions">
+      <button type="button" id="delete-account-confirm" class="button button-danger">Eliminar cuenta</button>
+      <button type="button" id="delete-account-cancel" class="button button-secondary">Cancelar</button>
+    </div>
+  </dialog>
   <main class="page-shell" hidden>
     <header class="page-header">
       <div class="header-top">
@@ -27,20 +168,11 @@
         </div>
         <section class="gamification-summary" aria-labelledby="gamification-title">
           <div class="gamification-main">
-            <div class="user-session">
+            <div class="ranking-session">
               <button type="button" id="ranking-main-globe" class="ranking-main-globe" aria-label="En Top Global" aria-haspopup="dialog" aria-controls="ranking-dialog" title="En Top Global" hidden>
                 <span aria-hidden="true">🌐</span>
                 <span id="ranking-main-position" class="ranking-main-position" aria-hidden="true"></span>
               </button>
-              <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
-                <img id="user-avatar" class="user-avatar" alt="" hidden>
-                <span class="user-avatar-fallback" aria-hidden="true">👤</span>
-                <span class="user-menu-chevron" aria-hidden="true">▾</span>
-              </button>
-              <div id="user-profile" class="user-profile" hidden>
-                <span id="user-name" class="user-name"></span>
-                <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
-              </div>
             </div>
             <span class="gamification-bricks-value">
               <strong id="gamification-bricks">0</strong>
@@ -91,6 +223,22 @@
     </header>
 
     <div class="notifications-entry-row">
+      <div class="user-session">
+        <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
+          <img id="user-avatar" class="user-avatar" alt="" hidden>
+          <span class="user-avatar-fallback" aria-hidden="true">👤</span>
+          <span class="user-menu-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="user-profile" class="user-profile" hidden>
+          <span id="user-name" class="user-name"></span>
+          <div class="user-profile-actions">
+            <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> Preferencias</button>
+          </div>
+          <div class="user-profile-logout">
+            <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
       <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
         <img src="/status_images/sobre.png" alt="">
         <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>

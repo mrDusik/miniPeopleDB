@@ -1405,6 +1405,83 @@ create table if not exists public.perfiles_publicos (
   constraint perfiles_publicos_display_name_check check (length(btrim(display_name)) between 1 and 120)
 );
 
+create table if not exists public.user_profiles (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  username text not null,
+  avatar_url text,
+  currency text not null default 'EUR',
+  language text not null default 'es',
+  onboarding_completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint user_profiles_username_check check (username ~ '^[A-Za-z0-9_]{3,20}$'),
+  constraint user_profiles_avatar_url_check check (avatar_url is null or avatar_url ~* '^https?://[^[:space:]]+$'),
+  constraint user_profiles_currency_check check (currency in ('EUR')),
+  constraint user_profiles_language_check check (language in ('es'))
+);
+
+create unique index if not exists user_profiles_username_lower_uidx
+  on public.user_profiles (lower(username));
+
+create table if not exists public.user_profile_favorite_categories (
+  user_id uuid not null references public.user_profiles (user_id) on delete cascade,
+  category_name text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, category_name),
+  constraint user_profile_favorite_categories_name_check check (length(btrim(category_name)) > 0)
+);
+
+create or replace function private.limit_profile_favorite_categories()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  previous_category text;
+begin
+  if tg_op = 'UPDATE' and old.user_id = new.user_id then
+    previous_category := old.category_name;
+  end if;
+  perform 1 from public.user_profiles where user_id = new.user_id for update;
+  if (select count(*) from public.user_profile_favorite_categories
+    where user_id = new.user_id and category_name <> new.category_name
+      and category_name is distinct from previous_category) >= 3 then
+    raise exception using errcode = '23514', message = 'LIMITE_CATEGORIAS_FAVORITAS';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profile_favorites_limit on public.user_profile_favorite_categories;
+create trigger profile_favorites_limit
+  before insert or update on public.user_profile_favorite_categories
+  for each row execute function private.limit_profile_favorite_categories();
+revoke all on function private.limit_profile_favorite_categories() from public, anon, authenticated;
+
+create or replace function private.protect_completed_user_profile()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+begin
+  if old.onboarding_completed and (
+    new.username is distinct from old.username
+    or not new.onboarding_completed
+  ) then
+    raise exception using errcode = '23514', message = 'USERNAME_INMUTABLE';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists user_profiles_protect_completed on public.user_profiles;
+create trigger user_profiles_protect_completed
+  before update on public.user_profiles
+  for each row execute function private.protect_completed_user_profile();
+
+revoke all on function private.protect_completed_user_profile() from public, anon, authenticated;
+
 create index if not exists gamificacion_ranking_idx
   on public.gamificacion (bricks desc, user_id asc);
 
@@ -1418,6 +1495,8 @@ alter table public.minifiguras enable row level security;
 alter table public.gamificacion enable row level security;
 alter table public.dna_ponderaciones enable row level security;
 alter table public.perfiles_publicos enable row level security;
+alter table public.user_profiles enable row level security;
+alter table public.user_profile_favorite_categories enable row level security;
 alter table public.regalos_enviados enable row level security;
 alter table public.user_daily_snapshots enable row level security;
 alter table public.notificaciones enable row level security;
@@ -1431,6 +1510,12 @@ alter table private.daily_sync_figure_prices enable row level security;
 
 revoke all on table public.user_daily_snapshots from public, anon, authenticated;
 grant select on table public.user_daily_snapshots to authenticated;
+revoke all on table public.user_profiles from public, anon, authenticated;
+grant select, insert, update on table public.user_profiles to authenticated;
+revoke all on table public.user_profile_favorite_categories from public, anon, authenticated;
+grant select, insert, update, delete on table public.user_profile_favorite_categories to authenticated;
+revoke all on table public.perfiles_publicos from public, anon, authenticated;
+grant select, insert, update on table public.perfiles_publicos to authenticated;
 revoke all on table public.notificaciones from public, anon, authenticated, service_role;
 grant select on table public.notificaciones to authenticated;
 grant update (is_read) on table public.notificaciones to authenticated;
@@ -1529,6 +1614,162 @@ create policy "Users can update their public profile"
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can view their user profile" on public.user_profiles;
+create policy "Users can view their user profile"
+  on public.user_profiles for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert their user profile" on public.user_profiles;
+create policy "Users can insert their user profile"
+  on public.user_profiles for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update their user profile" on public.user_profiles;
+create policy "Users can update their user profile"
+  on public.user_profiles for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their user profile" on public.user_profiles;
+create policy "Users can delete their user profile"
+  on public.user_profiles for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can view their favorite categories" on public.user_profile_favorite_categories;
+create policy "Users can view their favorite categories"
+  on public.user_profile_favorite_categories for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert their favorite categories" on public.user_profile_favorite_categories;
+create policy "Users can insert their favorite categories"
+  on public.user_profile_favorite_categories for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update their favorite categories" on public.user_profile_favorite_categories;
+create policy "Users can update their favorite categories"
+  on public.user_profile_favorite_categories for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their favorite categories" on public.user_profile_favorite_categories;
+create policy "Users can delete their favorite categories"
+  on public.user_profile_favorite_categories for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create or replace function public.guardar_perfil_usuario(
+  p_username text,
+  p_avatar_url text,
+  p_currency text,
+  p_language text,
+  p_favorite_categories text[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_username text;
+  v_onboarding_completed boolean;
+  v_avatar_url text := nullif(btrim(p_avatar_url), '');
+begin
+  if v_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+
+  if coalesce(cardinality(p_favorite_categories), 0) > 3 then
+    raise exception using errcode = '23514', message = 'PERFIL_INVALIDO';
+  end if;
+
+  if exists (
+    select 1
+    from unnest(coalesce(p_favorite_categories, array[]::text[])) as selected(category_name)
+    where length(btrim(selected.category_name)) = 0
+  ) then
+    raise exception using errcode = '22023', message = 'CATEGORIA_INVALIDA';
+  end if;
+
+  select username, onboarding_completed
+  into v_username, v_onboarding_completed
+  from public.user_profiles
+  where user_id = v_user_id
+  for update;
+
+  if found and v_onboarding_completed and v_username is distinct from p_username then
+    raise exception using errcode = '23514', message = 'USERNAME_INMUTABLE';
+  end if;
+
+  insert into public.user_profiles (
+    user_id, username, avatar_url, currency, language, onboarding_completed, updated_at
+  ) values (
+    v_user_id, p_username, v_avatar_url, p_currency, p_language, true, now()
+  )
+  on conflict (user_id) do update set
+    avatar_url = excluded.avatar_url,
+    currency = excluded.currency,
+    language = excluded.language,
+    onboarding_completed = true,
+    updated_at = excluded.updated_at;
+
+  delete from public.user_profile_favorite_categories
+  where user_id = v_user_id;
+
+  insert into public.user_profile_favorite_categories (user_id, category_name)
+  select v_user_id, favorites.category_name
+  from (
+    select distinct btrim(selected.category_name) as category_name
+    from unnest(coalesce(p_favorite_categories, array[]::text[])) as selected(category_name)
+  ) as favorites;
+
+  insert into public.perfiles_publicos (user_id, display_name, avatar_url, updated_at)
+  values (v_user_id, p_username, v_avatar_url, now())
+  on conflict (user_id) do update set
+    display_name = excluded.display_name,
+    avatar_url = excluded.avatar_url,
+    updated_at = excluded.updated_at;
+end;
+$$;
+
+revoke all on function public.guardar_perfil_usuario(text, text, text, text, text[]) from public, anon, authenticated;
+grant execute on function public.guardar_perfil_usuario(text, text, text, text, text[]) to authenticated;
+
+create or replace function public.eliminar_cuenta_usuario()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  delete from auth.users where id = current_user_id;
+  if not found then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+end;
+$$;
+
+revoke all on function public.eliminar_cuenta_usuario() from public, anon, authenticated;
+grant execute on function public.eliminar_cuenta_usuario() to authenticated;
+
+update public.perfiles_publicos as public_profile
+set display_name = profile.username
+from public.user_profiles as profile
+where public_profile.user_id = profile.user_id
+  and public_profile.display_name is distinct from profile.username;
 
 do $$
 begin
@@ -1651,7 +1892,7 @@ as $$
   select
     top_users.user_id,
     p.avatar_url,
-    coalesce(p.display_name, 'Coleccionista') as display_name,
+    coalesce(user_profile.username, 'Coleccionista') as display_name,
     top_users.bricks,
     coalesce((top_users.nivel->>'id')::integer, 0) as nivel,
     coalesce(top_users.nivel->>'nombre', 'Duplo') as nombre_nivel,
@@ -1729,6 +1970,7 @@ as $$
   from top_users
   cross join lateral (select top_users.dna as data) dna
   left join public.perfiles_publicos p on p.user_id = top_users.user_id
+  left join public.user_profiles user_profile on user_profile.user_id = top_users.user_id
   where auth.uid() is not null
   order by top_users.criterio_valor desc, coalesce((top_users.nivel->>'id')::integer, 0) desc, top_users.bricks desc, top_users.user_id asc;
 $$;
@@ -1781,7 +2023,7 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object(
       'userId', candidate.user_id,
       'avatarUrl', profile.avatar_url,
-      'displayName', coalesce(profile.display_name, 'Coleccionista'),
+      'displayName', coalesce(user_profile.username, 'Coleccionista'),
       'bricks', candidate.bricks,
       'nivel', coalesce((candidate.nivel->>'id')::integer, 0),
       'nombreNivel', coalesce(candidate.nivel->>'nombre', 'Duplo'),
@@ -1859,7 +2101,8 @@ begin
     ) order by candidate.bricks_semanales desc, candidate.user_id asc), '[]'::jsonb)
     into v_entries
     from candidates candidate
-    left join public.perfiles_publicos profile on profile.user_id = candidate.user_id;
+    left join public.perfiles_publicos profile on profile.user_id = candidate.user_id
+    left join public.user_profiles user_profile on user_profile.user_id = candidate.user_id;
   end if;
 
   return jsonb_build_object(
@@ -1906,7 +2149,7 @@ as $$
   )
   select jsonb_build_object(
     'userId', g.user_id,
-    'displayName', coalesce(p.display_name, 'Coleccionista'),
+    'displayName', coalesce(user_profile.username, 'Coleccionista'),
     'bricks', g.bricks,
     'nivel', jsonb_build_object('id', coalesce((g.nivel->>'id')::integer, 0), 'nombre', coalesce(g.nivel->>'nombre', 'Duplo')),
     'logros', coalesce((
@@ -1920,6 +2163,7 @@ as $$
   )
   from public.gamificacion g
   left join public.perfiles_publicos p on p.user_id = g.user_id
+  left join public.user_profiles user_profile on user_profile.user_id = g.user_id
   where g.user_id = p_usuario_id and auth.uid() is not null
     and g.user_id in (select user_id from eligible_users);
 $$;
@@ -2021,8 +2265,8 @@ begin
       updated_at = now()
   where user_id = p_receptor_id;
 
-  select coalesce(profile.display_name, 'Coleccionista') into v_nombre_donante
-  from public.perfiles_publicos profile
+  select coalesce(profile.username, 'Coleccionista') into v_nombre_donante
+  from public.user_profiles profile
   where profile.user_id = v_donante_id;
   v_nombre_donante := coalesce(v_nombre_donante, 'Coleccionista');
 
@@ -2032,6 +2276,7 @@ begin
     'gift_received',
     jsonb_build_object(
       'user', v_nombre_donante,
+      'actorUserId', v_donante_id,
       'amount', v_amount,
       'message', case when v_amount = 50
         then 'El usuario ' || v_nombre_donante || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
@@ -2236,6 +2481,44 @@ where gamification.logros @> '[{"id":"thanks-for-the-gift"}]'::jsonb
       )
   );
 
+with notification_actors as (
+  select notification.id, notification.type, notification.gift_semana,
+    case when notification.type = 'gift_received' then notification.gift_donante_id
+      else coalesce(
+        case when notification.payload->>'actorUserId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          then (notification.payload->>'actorUserId')::uuid end,
+        acknowledgment.user_id
+      ) end as actor_id
+  from public.notificaciones notification
+  left join lateral (
+    select case when count(distinct thanks.thanker_id) = 1
+      then (array_agg(distinct thanks.thanker_id))[1] end as user_id
+    from public.agradecimientos_regalo thanks
+    where notification.type = 'gift_thanks'
+      and thanks.donor_id = notification.user_id
+      and thanks.created_at = notification.created_at
+  ) acknowledgment on true
+  where notification.type in ('gift_received', 'gift_thanks')
+), updated_identity as (
+  select actor.id, jsonb_build_object(
+    'user', coalesce(profile.username, 'Coleccionista'),
+    'actorUserId', actor.actor_id,
+    'message', case when actor.type = 'gift_thanks'
+      then coalesce(profile.username, 'Coleccionista') || ' te dio las gracias por tu regalo.'
+      when actor.gift_semana = '0001-01-01'::date
+      then 'El usuario ' || coalesce(profile.username, 'Coleccionista') || ' vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱'
+      else 'El usuario ' || coalesce(profile.username, 'Coleccionista') || ' vio tus tops en el Ranking Semanal y te regaló 5 Bricks 🧱'
+    end
+  ) as identity_payload
+  from notification_actors actor
+  left join public.user_profiles profile on profile.user_id = actor.actor_id
+)
+update public.notificaciones notification
+set payload = notification.payload || identity.identity_payload
+from updated_identity identity
+where notification.id = identity.id
+  and notification.payload is distinct from notification.payload || identity.identity_payload;
+
 create or replace function public.agradecer_regalo(p_notification_id uuid)
 returns jsonb
 language plpgsql
@@ -2278,8 +2561,8 @@ begin
 
   perform private.gamificacion_ajustar_bricks(v_notification.gift_donante_id, 10);
 
-  select coalesce(profile.display_name, 'Coleccionista') into v_thanker_name
-  from public.perfiles_publicos profile where profile.user_id = v_thanker_id;
+  select coalesce(profile.username, 'Coleccionista') into v_thanker_name
+  from public.user_profiles profile where profile.user_id = v_thanker_id;
   v_thanker_name := coalesce(v_thanker_name, 'Coleccionista');
   insert into public.notificaciones (user_id, type, payload)
   values (
@@ -2287,6 +2570,7 @@ begin
     'gift_thanks',
     jsonb_build_object(
       'user', v_thanker_name,
+      'actorUserId', v_thanker_id,
       'amount', 5,
       'message', v_thanker_name || ' te dio las gracias por tu regalo.'
     )

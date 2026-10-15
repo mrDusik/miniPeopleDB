@@ -38,6 +38,8 @@ truncate table
   public.notificaciones,
   public.agradecimientos_regalo,
   public.ranking_top10_membership,
+  public.user_profile_favorite_categories,
+  public.user_profiles,
   public.perfiles_publicos,
   private.daily_sync_users,
   private.daily_sync_prices,
@@ -46,7 +48,7 @@ truncate table
   private.thanks_reward_ownership_migration,
   private.ranking_top10_reconciliation_state,
   auth.users
-restart identity cascade;
+ cascade;
 
 commit;
 

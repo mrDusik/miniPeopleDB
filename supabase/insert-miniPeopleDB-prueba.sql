@@ -101,6 +101,23 @@ select
   now(), now(), '', '', '', ''
 from generate_series(1, 20) as positions(position);
 
+insert into public.user_profiles (
+  user_id, username, avatar_url, currency, language, onboarding_completed
+)
+select
+  id,
+  'Prueba_' || right(id::text, 2),
+  null,
+  'EUR',
+  'es',
+  true
+from auth.users
+where raw_user_meta_data->>'minipeopledb_seed' = 'lego-13-prueba-v1'
+  and id in (
+    select ('13000000-0000-4000-8000-' || lpad(position::text, 12, '0'))::uuid
+    from generate_series(1, 20) as positions(position)
+  );
+
 insert into public.perfiles_publicos (user_id, display_name, avatar_url)
 select id, raw_user_meta_data->>'full_name', null
 from auth.users

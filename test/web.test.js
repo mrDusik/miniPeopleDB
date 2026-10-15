@@ -77,6 +77,21 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     assert.equal(chart.status, 200);
     assert.match(chart.headers.get('content-type'), /javascript/);
     assert.match(await chart.text(), /Chart\.js/i);
+    const iconDocument = new JSDOM(html);
+    try {
+      const icons = iconDocument.window.document.querySelectorAll('.auth-password-visibility svg');
+      assert.equal(icons.length, 2);
+      for (const icon of icons) {
+        const reference = icon.querySelector('use').getAttribute('href');
+        const symbol = iconDocument.window.document.querySelector(reference);
+        assert.equal(reference, '#auth-eye-off-icon');
+        assert.equal(symbol.querySelectorAll('path').length, 4);
+      }
+      assert.ok(iconDocument.window.document.querySelector('#auth-eye-icon circle'));
+      assert.doesNotMatch(`${html}\n${scriptText}`, /\/vendor\/lucide\//);
+    } finally {
+      iconDocument.window.close();
+    }
     const clientAssets = `${html}\n${await styles.text()}\n${scriptText}`;
     assert.doesNotMatch(clientAssets, /dna_ponderaciones|rarity_hunter|new-mini-person/);
 
@@ -375,7 +390,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.gamification-summary\s*\{ flex: 1 1 800px; min-width: 0; \}/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1024px\) and \(orientation: portrait\) \{\s*\.header-top \{ flex-wrap: wrap; \}\s*\.gamification-summary \{ flex: 1 1 100%; width: 100%; min-width: 0; \}/);
   assert.match(css, /\.gamification-details\s*\{[^}]*right:\s*-1px[^}]*width:\s*min\(381px, 100%\)/s);
-  assert.match(css, /\.user-profile\s*\{[^}]*left:\s*50%[^}]*justify-items:\s*center[^}]*text-align:\s*center[^}]*transform:\s*translateX\(-50%\)/s);
+  assert.match(css, /\.user-profile\s*\{[^}]*left:\s*0[^}]*grid-template-columns:\s*minmax\(0, 1fr\)[^}]*width:\s*min\(190\.5px, calc\(100vw - 32px\)\)[^}]*text-align:\s*center/s);
   assert.match(css, /\.user-menu-chevron\s*\{[^}]*color:\s*var\(--ink\)/s);
   assert.match(css, /\.gamification-details\s*\{[^}]*position:\s*absolute/s);
   assert.match(css, /\.gamification-details\[hidden\]\s*\{[^}]*display:\s*none/s);
@@ -460,7 +475,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(document.querySelector('.notifications-entry-row #open-notifications')?.getAttribute('aria-controls'), 'notifications-dialog');
     assert.equal(document.querySelector('.notifications-entry-row').nextElementSibling.classList.contains('rankings-panel'), true);
     assert.match(css, /\.notifications-entry-row \{ display: flex; justify-content: flex-start;/);
-    assert.match(css, /@media \(max-width: 600px\) and \(orientation: portrait\), \(max-width: 600px\) and \(max-height: 500px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.page-shell \{ position: relative; \}\s*\.notifications-entry-row \{ position: absolute; top: 48px; left: 0; z-index: 2; margin: 0; \}/);
+    assert.match(css, /@media \(max-width: 600px\) and \(orientation: portrait\), \(max-width: 600px\) and \(max-height: 500px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.page-shell \{ position: relative; \}\s*\.notifications-entry-row \{ position: relative; z-index: 30; margin: 0 0 12px; \}/);
     assert.match(css, /\.notifications-toolbar \{ display: flex; justify-content: flex-start;/);
     assert.match(css, /\.toast-notification \{ color: white; background: #2e7d32;/);
     assert.equal(document.querySelector('#open-notifications img').getAttribute('src'), '/status_images/sobre.png');
@@ -468,9 +483,11 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(document.querySelector('#notifications-unread-badge').hidden, true);
     assert.equal(document.querySelector('#notifications-dialog').getAttribute('aria-labelledby'), 'notifications-dialog-title');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['user-session', 'gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['ranking-session', 'gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
     assert.deepEqual([...main.querySelector('.gamification-level-stack').children].map((element) => element.className), ['gamification-level', 'gamification-dna-row']);
-    assert.equal(main.querySelector('#user-avatar').parentElement.id, 'user-menu-toggle');
+    assert.equal(document.querySelector('.notifications-entry-row #user-avatar').parentElement.id, 'user-menu-toggle');
+    assert.equal(main.querySelector('#user-menu-toggle'), null);
+    assert.equal(document.querySelector('.user-session').nextElementSibling.id, 'open-notifications');
     assert.equal(main.querySelector('#open-dna-inline').className, 'gamification-dna-name');
     assert.equal(main.querySelector('#open-dna-inline').tagName, 'BUTTON');
     assert.equal(main.querySelector('#gamification-dna-principal').textContent, 'Newbie');
@@ -483,7 +500,8 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.match(css, /\.dna-chart \{[^}]*max-width: 240px; aspect-ratio: 1;/);
     assert.match(css, /\.dna-chart \{ width: min\(220px, 64vw\); \}/);
     assert.equal(document.querySelector('#dna-canvas').tagName, 'CANVAS');
-    assert.equal(main.querySelector('#logout').parentElement.id, 'user-profile');
+    assert.ok(document.querySelector('#user-profile #logout'));
+    assert.equal(document.querySelector('#open-user-settings').textContent.trim(), '⚙️ Preferencias');
     const details = document.querySelector('#gamification-details');
     assert.ok(details.hidden);
     assert.equal(details.querySelector('#gamification-achievements-button'), null);
@@ -552,7 +570,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(identityRow.querySelector('.description-field #form-descripcion').tagName, 'TEXTAREA');
   assert.equal(identityRow.parentElement.className, 'modal-form-column');
   assert.equal(identityRow.getAttribute('style'), null);
-  const heading = dom.window.document.querySelector('.form-dialog-heading');
+  const heading = dom.window.document.querySelector('#form-dialog .form-dialog-heading');
   assert.equal(heading.parentElement, form.parentElement);
   assert.equal(heading.nextElementSibling, form);
   assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
@@ -716,7 +734,7 @@ test('los indicadores requeridos son rojos sin colorear etiquetas ni campos opci
   const dom = new JSDOM(html);
   assert.match(css, /\.required-label > span::after, span\.required-label::after \{ content: ' \*'; color: var\(--accent\); \}/);
   assert.match(css, /#form-dialog\.view-mode .*required-label.*content: ''/);
-  for (const input of dom.window.document.querySelectorAll('input[required]')) {
+  for (const input of dom.window.document.querySelectorAll('#minifigura-form input[required]')) {
     assert.ok(input.closest('.required-label') || input.closest('label').querySelector('.required-label'));
   }
   assert.equal(dom.window.document.querySelector('#form-descripcion').closest('.required-label'), null);

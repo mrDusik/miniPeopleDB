@@ -15,6 +15,66 @@ test('los regalos semanales conservan su importe separado de regalos globales y 
   assert.equal(weekly.type, 'regalo');
 });
 
+test('avisos de regalos y gracias usan usernames y migran nombres Google históricos sin cambiar lectura', async () => {
+  const db = new PGlite();
+  const donor = '00000000-0000-4000-8000-000000000001';
+  const receiver = '00000000-0000-4000-8000-000000000002';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+    await db.exec(schema);
+    await db.query('insert into auth.users(id) values ($1), ($2)', [donor, receiver]);
+    await db.query('insert into public.user_profiles(user_id, username) values ($1, $2), ($3, $4)', [donor, 'Donor_1', receiver, 'Receiver_2']);
+    await db.query('insert into public.perfiles_publicos(user_id, display_name) values ($1, $2), ($3, $4)', [donor, 'Google Donor', receiver, 'Google Receiver']);
+    await db.exec("insert into public.gamificacion(user_id, bricks) select id, 100 from auth.users");
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [donor]);
+    await db.query('select public.regalar_bricks($1)', [receiver]);
+    const gift = (await db.query("select id, payload from public.notificaciones where type = 'gift_received'")).rows[0];
+    assert.equal(gift.payload.user, 'Donor_1');
+    assert.doesNotMatch(gift.payload.message, /Google Donor/);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [receiver]);
+    await db.query('select public.agradecer_regalo($1)', [gift.id]);
+    const thanks = (await db.query("select id, payload from public.notificaciones where type = 'gift_thanks'")).rows[0];
+    assert.equal(thanks.payload.user, 'Receiver_2');
+    assert.doesNotMatch(thanks.payload.message, /Google Receiver/);
+    await db.exec(`update public.notificaciones set is_read = true, payload = payload - 'actorUserId' || jsonb_build_object(
+      'user', case type when 'gift_received' then 'Google Donor' else 'Google Receiver' end,
+      'message', 'Texto antiguo de Google'
+    ) where type in ('gift_received', 'gift_thanks')`);
+    const before = (await db.query('select id, created_at, is_read, gift_thanked_at from public.notificaciones order by id')).rows;
+    await db.exec(schema);
+    await db.exec(schema);
+    const rows = (await db.query('select id, created_at, is_read, gift_thanked_at, type, payload from public.notificaciones order by id')).rows;
+    assert.deepEqual(rows.map(({ type, payload, ...row }) => row), before);
+    for (const row of rows.filter((notification) => ['gift_received', 'gift_thanks'].includes(notification.type))) {
+      assert.equal(row.payload.user, row.type === 'gift_received' ? 'Donor_1' : 'Receiver_2');
+      assert.doesNotMatch(row.payload.message, /Google/);
+    }
+    const unmatched = (await db.query(`insert into public.notificaciones(user_id, type, payload, created_at)
+      values ($1, 'gift_thanks', '{"user":"Nombre Google","actorUserId":"invalid","message":"Nombre Google te dio las gracias"}', '2000-01-01')
+      returning id`, [donor])).rows[0].id;
+    await db.exec(schema);
+    const anonymous = (await db.query('select payload, is_read from public.notificaciones where id = $1', [unmatched])).rows[0];
+    assert.equal(anonymous.payload.user, 'Coleccionista');
+    assert.doesNotMatch(anonymous.payload.message, /Google/);
+    assert.equal(anonymous.is_read, false);
+  } finally {
+    await db.close();
+  }
+});
+
 test('SQL limita por semana Madrid, conserva el global y permite agradecer cada regalo semanal una vez', async () => {
   const db = new PGlite();
   const donor = '00000000-0000-4000-8000-000000000001';
