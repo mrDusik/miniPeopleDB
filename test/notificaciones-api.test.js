@@ -12,6 +12,8 @@ function notificationsMock() {
     [TEST_TOKEN]: { id: DONOR_ID, user_metadata: { full_name: 'Ada' } },
     [OTHER_TOKEN]: { id: RECEIVER_ID, user_metadata: { full_name: 'Grace' } },
   } });
+  mock.seed('user_profiles', DONOR_ID, [{ username: 'AdaCollector' }]);
+  mock.seed('user_profiles', RECEIVER_ID, [{ username: 'GraceCollector' }]);
   mock.seed('gamificacion', DONOR_ID, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
   mock.seed('gamificacion', RECEIVER_ID, [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   return mock;
@@ -60,7 +62,8 @@ test('el regalo confirmado crea un evento propio, agradecer no limpia lectura y 
     const notification = receiverInbox.notifications[0];
     assert.equal(notification.type, 'gift_received');
     assert.equal(notification.canThank, true);
-    assert.equal(notification.data.user, 'Ada');
+    assert.equal(notification.data.user, 'AdaCollector');
+    assert.equal('actorUserId' in notification.data, false);
     assert.equal(notification.data.amount, 50);
     assert.equal('user_id' in notification, false);
 
@@ -80,7 +83,8 @@ test('el regalo confirmado crea un evento propio, agradecer no limpia lectura y 
 
     const thankNotifications = await (await donor(inboxUrl)).json();
     assert.equal(thankNotifications.notifications[0].type, 'gift_thanks');
-    assert.equal(thankNotifications.notifications[0].data.user, 'Grace');
+    assert.equal(thankNotifications.notifications[0].data.user, 'GraceCollector');
+    assert.equal('actorUserId' in thankNotifications.notifications[0].data, false);
     assert.equal(mock.rows('gamificacion', DONOR_ID)[0].bricks, 110);
     assert.equal(mock.rows('gamificacion', DONOR_ID)[0].logros.find(({ id }) => id === 'thanks-for-the-gift').nombre, 'Gratitude is the sign of noble souls');
     assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].bricks, 50);

@@ -36,7 +36,7 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 ## Arquitectura e integraciones
 
 * **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. Supabase JS y Chart.js se sirven como recursos locales en `/vendor/supabase.js` y `/vendor/chart.js`.
-* **Identidad:** Supabase Auth delega el inicio de sesión en Google OAuth con flujo PKCE. La API valida el bearer token con Supabase Auth.
+* **Identidad:** Supabase Auth admite Google OAuth con PKCE y cuentas clásicas. El acceso clásico pide Username y contraseña; el registro también pide email y repetir contraseña. La API valida el bearer token con Supabase Auth.
 * **Persistencia:** Supabase Postgres almacena minifiguras, gamificación, perfiles públicos, ponderaciones DNA y regalos. RLS limita las operaciones ordinarias a la identidad autenticada.
 * **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa exclusivamente desde el proceso backend para las RPC allowlisted del recálculo de categorías y del worker de analítica diaria. No se entrega al navegador ni se usa en rutas ordinarias; estas conservan `anon` + JWT y RLS.
 * **Brickset:** el backend lee páginas públicas de `brickset.com` mediante `fetch` y extrae campos de minifigura; no utiliza una API key. Normaliza a EUR los precios publicados en USD con el último tipo de referencia diario del BCE, cacheado 24 horas; si no obtiene una tasa válida, falla de forma segura. Las peticiones se serializan globalmente y el intervalo mínimo se configura con `BRICKSET_MIN_INTERVAL_MS`.
@@ -48,15 +48,37 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 
 ### Seguridad y privacidad
 
-Las rutas de colección, gamificación e histórico propio requieren `Authorization: Bearer <token>` y operan con el cliente `anon` más el JWT del usuario. Las tablas privadas tienen RLS por usuario. El ranking y los logros públicos usan proyecciones limitadas; no publican correos, compras ni la distribución DNA completa. Las únicas excepciones privilegiadas son el reconciliador backend de categorías y el worker diario autenticado por `CRON_SECRET`; ambos se limitan a sus RPC allowlisted y no se exponen en rutas ordinarias ni en el navegador.
+Las rutas de colección, gamificación e histórico propio requieren `Authorization: Bearer <token>` y operan con el cliente `anon` más el JWT del usuario. Las tablas privadas tienen RLS por usuario. El ranking y los logros públicos usan proyecciones limitadas; no publican correos, compras ni la distribución DNA completa. Las excepciones con `service_role` son el reconciliador backend de categorías y el worker diario autenticado por `CRON_SECRET`; ambos se limitan a sus RPC allowlisted y no se exponen en rutas ordinarias ni en el navegador. El acceso clásico tiene una excepción sin `service_role`: la RPC `resolver_acceso_username` valida la contraseña antes de resolver el email y limita los intentos a cinco por cuenta/minuto. No permite consultar emails sin conocer la contraseña ni leer las tablas privadas; solo Supabase Auth emite la sesión definitiva.
+
+### Acceso clásico por Username
+
+Antes de desplegar esta versión, aplicar en el SQL Editor de Supabase primero `supabase/schema.sql` y después `supabase/username-login.sql`. El segundo archivo es una migración idempotente que requiere `pgcrypto` en el esquema `extensions` y crea la RPC de acceso y el contador privado de intentos. Los archivos locales no actualizan automáticamente la base de datos remota. El acceso por Username requiere que la cuenta tenga su Username guardado mediante el onboarding; Google y la confirmación/recuperación por email siguen disponibles.
+
+El registro comprueba al menos cinco caracteres, una mayúscula, una minúscula y un número, además de la coincidencia de ambas contraseñas. Las directrices cambian de rojo a verde y el interruptor muestra u oculta ambos campos. Supabase puede imponer una longitud mínima mayor: revisar su configuración de Auth si se quieren admitir contraseñas de exactamente cinco caracteres. Las contraseñas no se guardan en tablas de la aplicación ni se registran en logs del servidor.
+
+### Identidad y eliminación de cuenta
+
+El username guardado sustituye al nombre de Google y al email como identidad visible de la aplicación y nombre público en rankings y avisos de regalos/agradecimientos, por autorización expresa. Los emails y las preferencias siguen siendo privados. Aplicar el `supabase/schema.sql` actualizado antes de desplegar: migra los nombres públicos y corrige también el autor/mensaje de los avisos sociales ya emitidos, conservando IDs, fechas, lectura, importes y recompensas. Las funciones de ranking y la generación de avisos leen el username directamente del perfil, sin depender de una proyección pública actualizada ni de que el propietario vuelva a iniciar sesión. Los autores históricos se resuelven por referencias de regalo/agradecimiento o una referencia interna guardada, nunca por semejanza de nombres Google; cuando no hay una identidad o perfil fiables se muestra Coleccionista. Esa referencia interna no se devuelve por la API. Hay que volver a aplicar el esquema para activar estos cambios en funciones y datos ya desplegados; los archivos locales no modifican Supabase remoto.
+
+Preferencias incluye al final "Eliminar cuenta", con el estilo de Cerrar sesión. Abre una confirmación separada, irreversible, con Cancelar enfocado por defecto; abrir o cancelar no borra nada. Solo confirmar envía `DELETE /api/profile`, sin cuerpo ni selector, mediante el JWT de la cuenta. La RPC SQL solo elimina `auth.uid()` y sus datos asociados por cascada, en una transacción y sin `service_role`; no concede lectura ni borrado directo sobre Auth. Un fallo conserva cuenta, sesión y preferencias; tras éxito se limpia la aplicación y se cierra la sesión local. La migración no se ha aplicado automáticamente a Supabase remoto. Reiniciar el backend tras desplegar el código para activar el nuevo método DELETE.
 
 ## API principal
+
+### Avatar y favoritas
+
+Preferencias tiene tres filas: Username y avatar con Cargar/vista previa; Idioma y Moneda; favoritas. Las seleccionadas se muestran incluso al buscar, con contador `0/3` a `3/3`. Navegador, API y SQL impiden guardar más de tres. No se borran automáticamente favoritas antiguas: el formulario parte de hasta tres y solo Guardar actualiza el conjunto.
+
+Antes de activar la carga, aplicar `supabase/schema.sql` actualizado y `supabase/profile-avatars.sql` en Supabase. El segundo configura el bucket público `profile-avatars` y sus políticas JWT por carpeta. Admite PNG/JPEG/WebP de hasta 2 MiB; previsualizar no sube el archivo. Solo Guardar crea una ruta única de la cuenta y persiste su URL, sin service_role. Las migraciones remotas no se aplican automáticamente.
+
+El guardado intenta limpiar subidas descartadas y avatares administrados anteriores. La eliminación de cuenta limpia primero sus archivos mediante Storage; si Storage falla no se elimina Auth. Los archivos físicos no participan en la transacción SQL: si el borrado SQL posterior falla, las filas se conservan pero puede ser necesario cargar de nuevo el avatar. Reiniciar el backend tras desplegar para activar esa limpieza.
 
 | Ruta | Métodos | Acceso | Uso |
 | --- | --- | --- | --- |
 | `/` y recursos de `public/` | `GET` | Público | Dashboard y activos estáticos |
 | `/health` | `GET` | Público | Health check para hosting/monitorización |
 | `/config/supabase` | `GET` | Público | URL y clave pública `anon` del proyecto |
+| `/api/auth/login` | `POST` | Username y contraseña | Establecer sesión clásica; devuelve solo access/refresh tokens, sin caché |
+| `/api/profile` | `GET`, `PUT`, `DELETE` | JWT propio | Consultar/guardar preferencias o eliminar la cuenta propia sin parámetros de identidad |
 | `/categorias` | `GET` | Público | Catálogo local validado de categorías |
 | `/minifiguras` | `GET`, `POST` | Autenticado | Listar/filtrar la colección propia y crear registros |
 | `/minifiguras/:id` | `PUT`, `DELETE` | Autenticado | Editar o borrar una figura propia |

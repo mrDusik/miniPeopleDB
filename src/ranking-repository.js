@@ -61,10 +61,19 @@ function giftError(error) {
   return new RankingNoDisponibleError();
 }
 
-function publicName(user) {
+function providerAvatarUrl(user) {
   const metadata = user?.user_metadata ?? {};
-  const name = metadata.full_name || metadata.name;
-  return typeof name === 'string' && name.trim() ? name.trim() : 'Coleccionista';
+  const identity = user?.identities?.find((item) => item.provider === 'google')?.identity_data ?? {};
+  for (const value of [metadata.avatar_url, metadata.picture, identity.avatar_url, identity.picture]) {
+    if (typeof value !== 'string' || !value.trim()) continue;
+    try {
+      const avatar = new URL(value.trim());
+      if (avatar.protocol === 'https:' || avatar.protocol === 'http:') return value.trim();
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 function isCalendarDate(value) {
@@ -97,10 +106,18 @@ export class RankingRepository {
   }
 
   async syncProfile(user) {
-    const avatar = user?.user_metadata?.avatar_url;
+    const profile = await this.run(this.client.from('user_profiles')
+      .select('username, avatar_url')
+      .eq('user_id', this.userId)
+      .maybeSingle());
+    const customAvatar = profile?.avatar_url;
+    const providerAvatar = providerAvatarUrl(user);
+    const avatar = typeof customAvatar === 'string' && customAvatar.trim()
+      ? customAvatar.trim()
+      : providerAvatar;
     await this.run(this.client.from(PROFILE_TABLE).upsert({
       user_id: this.userId,
-      display_name: publicName(user),
+      display_name: profile?.username || 'Coleccionista',
       avatar_url: typeof avatar === 'string' && avatar.trim() ? avatar.trim() : null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' }));

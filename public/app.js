@@ -154,16 +154,60 @@ const pageShell = document.querySelector('.page-shell');
 const authScreen = document.querySelector('#auth-screen');
 const authMessage = document.querySelector('#auth-message');
 const loginButton = document.querySelector('#login-google');
+const authAccessPanel = document.querySelector('#auth-access-panel');
+const authModeLoginButton = document.querySelector('#auth-mode-login');
+const authModeRegisterButton = document.querySelector('#auth-mode-register');
+const classicAuthForm = document.querySelector('#classic-auth-form');
+const authUsernameField = document.querySelector('#auth-username-field');
+const authUsernameInput = document.querySelector('#auth-username');
+const authEmailInput = document.querySelector('#auth-email');
+const authPasswordInput = document.querySelector('#auth-password');
+const authPasswordRepeatInput = document.querySelector('#auth-password-repeat');
+const authShowPasswordButtons = [...document.querySelectorAll('.auth-password-visibility')];
+const classicAuthSubmit = document.querySelector('#classic-auth-submit');
+const openPasswordRecoveryButton = document.querySelector('#open-password-recovery');
+const passwordRecoveryForm = document.querySelector('#password-recovery-form');
+const recoveryEmailInput = document.querySelector('#recovery-email');
+const cancelPasswordRecoveryButton = document.querySelector('#cancel-password-recovery');
+const passwordUpdateForm = document.querySelector('#password-update-form');
+const newPasswordInput = document.querySelector('#new-password');
+const profileCheckRetryButton = document.querySelector('#profile-check-retry');
 const logoutButton = document.querySelector('#logout');
 const userName = document.querySelector('#user-name');
 const userProfile = document.querySelector('#user-profile');
 const userMenuToggle = document.querySelector('#user-menu-toggle');
 const userSession = document.querySelector('.user-session');
 const userAvatar = document.querySelector('#user-avatar');
+const openUserSettingsButton = document.querySelector('#open-user-settings');
+const profileDialog = document.querySelector('#user-profile-dialog');
+const profileDialogTitle = document.querySelector('#user-profile-dialog-title');
+const profileDialogCloseButton = document.querySelector('#user-profile-close');
+const profileForm = document.querySelector('#user-profile-form');
+const openDeleteAccountButton = document.querySelector('#open-delete-account');
+const deleteAccountDialog = document.querySelector('#delete-account-dialog');
+const deleteAccountConfirmButton = document.querySelector('#delete-account-confirm');
+const deleteAccountCancelButton = document.querySelector('#delete-account-cancel');
+const deleteAccountError = document.querySelector('#delete-account-error');
+const profileUsernameInput = document.querySelector('#profile-username');
+const profileAvatarInput = document.querySelector('#profile-avatar-url');
+const profileAvatarFileInput = document.querySelector('#profile-avatar-file');
+const profileAvatarLoadButton = document.querySelector('#profile-avatar-load');
+const profileAvatarRemoveButton = document.querySelector('#profile-avatar-remove');
+const profileAvatarPreview = document.querySelector('#profile-avatar-preview');
+const profileAvatarPlaceholder = document.querySelector('#profile-avatar-placeholder');
+const profileCurrencyInput = document.querySelector('#profile-currency');
+const profileLanguageInput = document.querySelector('#profile-language');
+const profileFavoriteSearch = document.querySelector('#profile-favorite-search');
+const profileFavoriteCategories = document.querySelector('#profile-favorite-categories');
+const profileSelectedCategories = document.querySelector('#profile-selected-categories');
+const profileFavoritesCount = document.querySelector('#profile-favorites-count');
+const profileFormMessage = document.querySelector('#profile-form-message');
+const profileSaveButton = document.querySelector('#user-profile-save');
 userAvatar.addEventListener('error', () => {
   userAvatar.hidden = true;
 });
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión ha caducado. Inicia sesión de nuevo.';
+const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
@@ -177,6 +221,8 @@ const ERROR_MESSAGES = {
 };
 
 let requestSequence = 0;
+let authMode = 'login';
+let pendingRegistrationUsername = '';
 let activeFilters = {};
 let catalogCache = [];
 let currentCatalog = [];
@@ -201,6 +247,16 @@ let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
 let appStarted = false;
+let profileRequestSequence = 0;
+let profileReadyUserId = null;
+let currentUserProfile = null;
+let profileDialogMode = 'settings';
+let profileDialogTrigger = null;
+let accountDeletionUserId = null;
+let accountDeletionInFlight = false;
+let selectedProfileFavorites = new Set();
+let pendingProfileAvatarFile = null;
+let profileAvatarReadSequence = 0;
 let syncPollTimer = null;
 let syncPausedByModal = false;
 let rankingEntries = [];
@@ -2950,6 +3006,17 @@ userMenuToggle.addEventListener('click', () => {
   userProfile.hidden = !expanded;
 });
 
+openUserSettingsButton.addEventListener('click', async () => {
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
+  if (!currentUserProfile || !currentSession) return;
+  if (!categoriasReady && !await loadCategorias()) {
+    showToast('No se pudieron cargar las categorías favoritas.', 'error');
+    return;
+  }
+  openProfileDialog(currentUserProfile, false);
+});
+
 document.addEventListener('click', (event) => {
   if (!userSession.contains(event.target)) {
     userProfile.hidden = true;
@@ -3072,7 +3139,13 @@ imageModal.addEventListener('click', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  if (imageModal.open) {
+  if (deleteAccountDialog.open) {
+    event.preventDefault();
+    if (!accountDeletionInFlight) deleteAccountDialog.close();
+  } else if (profileDialog.open) {
+    event.preventDefault();
+    closeProfileDialog();
+  } else if (imageModal.open) {
     event.preventDefault();
     closeImageModal();
   } else if (dnaDialog.open) {
@@ -3331,17 +3404,24 @@ async function initialize() {
 }
 
 async function apiFetch(url, init = {}) {
+  const requestSession = currentSession;
   const response = await fetch(url, {
     ...init,
-    headers: { ...init.headers, Authorization: `Bearer ${currentSession?.access_token ?? ''}` },
+    headers: { ...init.headers, Authorization: `Bearer ${requestSession?.access_token ?? ''}` },
   });
-  if (response.status === 401 && currentSession) {
+  if (response.status === 401 && currentSession && currentSession.access_token === requestSession?.access_token) {
     await endSession(SESSION_EXPIRED_MESSAGE);
   }
   return response;
 }
 
 function clearUserData() {
+  profileRequestSequence += 1;
+  profileReadyUserId = null;
+  currentUserProfile = null;
+  selectedProfileFavorites.clear();
+  profileDialogTrigger = null;
+  if (profileDialog.open) profileDialog.close();
   requestSequence += 1;
   clearNotifications();
   dnaRequestSequence += 1;
@@ -3397,15 +3477,30 @@ function clearUserData() {
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
     setPanelCollapsed(button, false);
   }
-  for (const dialog of [firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, notificationsDialog, dnaDialog, rankingDialog, weeklyRankingDialog, analyticsHistoryDialog]) {
+  for (const dialog of [deleteAccountDialog, profileDialog, firstMinifiguraDialog, formDialog, deleteDialog, gamificationDialog, notificationsDialog, dnaDialog, rankingDialog, weeklyRankingDialog, analyticsHistoryDialog]) {
     if (dialog.open) dialog.close();
   }
+}
+
+function setAuthMessage(message, { loading = false, error = false } = {}) {
+  authMessage.textContent = message;
+  authMessage.className = loading ? 'status loading-message' : error && message ? 'status error' : 'status';
+  authMessage.setAttribute('role', loading ? 'status' : 'alert');
+  authMessage.setAttribute('aria-live', loading ? 'polite' : 'assertive');
+  authMessage.setAttribute('aria-busy', String(loading));
 }
 
 function showAuthScreen(message = '') {
   pageShell.hidden = true;
   authScreen.hidden = false;
-  authMessage.textContent = message;
+  authAccessPanel.hidden = false;
+  passwordRecoveryForm.hidden = true;
+  passwordUpdateForm.hidden = true;
+  profileCheckRetryButton.hidden = true;
+  if (deleteAccountDialog.open) deleteAccountDialog.close();
+  if (profileDialog.open) profileDialog.close();
+  currentUserProfile = null;
+  setAuthMessage(message, { error: Boolean(message) });
   loginButton.disabled = supabaseClient === null;
   userName.textContent = '';
   userProfile.removeAttribute('title');
@@ -3413,6 +3508,334 @@ function showAuthScreen(message = '') {
   userAvatar.removeAttribute('src');
   userProfile.hidden = true;
   userMenuToggle.setAttribute('aria-expanded', 'false');
+}
+
+function showProfileGate(message, canRetry = false, loading = false) {
+  authScreen.hidden = false;
+  pageShell.hidden = true;
+  authAccessPanel.hidden = true;
+  passwordRecoveryForm.hidden = true;
+  passwordUpdateForm.hidden = true;
+  profileCheckRetryButton.hidden = !canRetry;
+  setAuthMessage(message, { loading, error: canRetry });
+}
+
+async function loadUserProfile(session, requestId) {
+  try {
+    const response = await apiFetch('/api/profile');
+    if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
+    if (!response.ok) throw new Error('PERFIL_NO_DISPONIBLE');
+    const profile = await response.json();
+    if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
+    currentUserProfile = profile;
+    if (profile?.onboardingCompleted !== true || !USERNAME_PATTERN.test(profile.username ?? '')) {
+      profileReadyUserId = null;
+      showProfileGate('Completa tu perfil para continuar a tu colección.');
+      if (!categoriasReady) {
+        setAuthMessage('Cargando categorías...', { loading: true });
+        if (!await loadCategorias()) throw new Error('CATEGORIAS_NO_DISPONIBLES');
+      }
+      if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
+      setAuthMessage('Completa tu perfil para continuar a tu colección.');
+      openProfileDialog(profile, true);
+      return;
+    }
+
+    applyProfileAvatar(profile);
+    startApplicationForCurrentProfile();
+  } catch {
+    if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
+    profileReadyUserId = null;
+    showProfileGate('No se pudo comprobar tu perfil. Reintenta para continuar.', true);
+  }
+}
+
+function startApplicationForCurrentProfile() {
+  if (!currentSession?.user?.id) return;
+  setAuthMessage('');
+  profileReadyUserId = currentSession.user.id;
+  authScreen.hidden = true;
+  pageShell.hidden = false;
+  profileCheckRetryButton.hidden = true;
+  if (!appStarted) {
+    appStarted = true;
+    startNotificationsRealtime();
+    initialize();
+  }
+}
+
+function providerAvatarUrl(user) {
+  const metadata = user?.user_metadata ?? {};
+  const identity = user?.identities?.find((item) => item.provider === 'google')?.identity_data ?? {};
+  for (const value of [metadata.avatar_url, metadata.picture, identity.avatar_url, identity.picture]) {
+    if (typeof value !== 'string' || !value.trim()) continue;
+    try {
+      const avatar = new URL(value.trim());
+      if (avatar.protocol === 'https:' || avatar.protocol === 'http:') return value.trim();
+    } catch {
+      continue;
+    }
+  }
+  return '';
+}
+
+function applyProfileAvatar(profile) {
+  userName.textContent = profile?.username || '';
+  if (profile?.username) userProfile.title = profile.username;
+  else userProfile.removeAttribute('title');
+  const avatarUrl = profile?.avatarUrl || providerAvatarUrl(currentSession?.user);
+  userAvatar.hidden = !avatarUrl;
+  if (avatarUrl) userAvatar.src = avatarUrl;
+  else userAvatar.removeAttribute('src');
+}
+
+function renderProfileFavoriteOptions() {
+  const query = profileFavoriteSearch.value.trim().normalize('NFKC').toLocaleLowerCase();
+  const visibleCategories = officialCategorias.filter(({ categoria }) => categoria.normalize('NFKC').toLocaleLowerCase().includes(query));
+  profileFavoriteCategories.replaceChildren();
+  for (const { categoria } of visibleCategories) {
+    const label = document.createElement('label');
+    label.className = 'profile-favorite-option';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = categoria;
+    checkbox.checked = selectedProfileFavorites.has(categoria);
+    checkbox.disabled = !checkbox.checked && selectedProfileFavorites.size >= 3;
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        if (selectedProfileFavorites.size < 3) selectedProfileFavorites.add(categoria);
+      } else selectedProfileFavorites.delete(categoria);
+      renderProfileFavoriteOptions();
+      profileFavoriteCategories.querySelectorAll('input').forEach((input) => {
+        if (input.value === categoria) input.focus({ preventScroll: true });
+      });
+    });
+    const name = document.createElement('span');
+    name.textContent = categoria;
+    label.append(checkbox, name);
+    profileFavoriteCategories.append(label);
+  }
+  profileFavoritesCount.textContent = `${selectedProfileFavorites.size}/3`;
+  profileSelectedCategories.replaceChildren();
+  for (const category of selectedProfileFavorites) {
+    const item = document.createElement('span');
+    item.className = 'profile-selected-category';
+    const name = document.createElement('span');
+    name.textContent = category;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'profile-remove-button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `Quitar ${category}`);
+    remove.title = `Quitar ${category}`;
+    remove.addEventListener('click', () => {
+      selectedProfileFavorites.delete(category);
+      renderProfileFavoriteOptions();
+      profileFavoriteSearch.focus();
+    });
+    item.append(name, remove);
+    profileSelectedCategories.append(item);
+  }
+}
+
+function renderProfileAvatarPreview(source) {
+  profileAvatarPreview.hidden = !source;
+  profileAvatarPlaceholder.hidden = Boolean(source);
+  if (source) profileAvatarPreview.src = source;
+  else profileAvatarPreview.removeAttribute('src');
+}
+
+profileAvatarLoadButton.addEventListener('click', () => profileAvatarFileInput.click());
+profileAvatarFileInput.addEventListener('change', () => {
+  const file = profileAvatarFileInput.files?.[0];
+  if (!file || profileSaveButton.disabled) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size === 0 || file.size > 2 * 1024 * 1024) {
+    profileFormMessage.textContent = 'Elige una imagen PNG, JPEG o WebP de hasta 2 MB.';
+    profileAvatarFileInput.value = '';
+    return;
+  }
+  const requestId = ++profileAvatarReadSequence;
+  const userId = currentSession?.user?.id;
+  const reader = new FileReader();
+  profileSaveButton.disabled = true;
+  reader.onload = () => {
+    if (requestId !== profileAvatarReadSequence || currentSession?.user?.id !== userId || !profileDialog.open) return;
+    pendingProfileAvatarFile = file;
+    renderProfileAvatarPreview(reader.result);
+    profileFormMessage.textContent = '';
+    profileSaveButton.disabled = false;
+  };
+  reader.onerror = () => {
+    if (requestId !== profileAvatarReadSequence) return;
+    profileFormMessage.textContent = 'No se pudo leer la imagen. Inténtalo de nuevo.';
+    profileSaveButton.disabled = false;
+  };
+  reader.readAsDataURL(file);
+});
+profileAvatarRemoveButton.addEventListener('click', () => {
+  profileAvatarReadSequence += 1;
+  pendingProfileAvatarFile = null;
+  profileAvatarFileInput.value = '';
+  profileAvatarInput.value = '';
+  profileSaveButton.disabled = false;
+  renderProfileAvatarPreview(providerAvatarUrl(currentSession?.user));
+});
+profileAvatarPreview.addEventListener('error', () => {
+  if (pendingProfileAvatarFile) {
+    pendingProfileAvatarFile = null;
+    profileFormMessage.textContent = 'No se pudo previsualizar la imagen. Elige otra.';
+  }
+  renderProfileAvatarPreview('');
+});
+
+function ownedProfileAvatarPath(url, userId) {
+  if (!url) return null;
+  try {
+    const sample = supabaseClient.storage.from('profile-avatars').getPublicUrl(`${userId}/avatar.png`).data.publicUrl;
+    const root = new URL('.', sample);
+    const candidate = new URL(url);
+    if (candidate.origin !== root.origin || !candidate.pathname.startsWith(root.pathname)) return null;
+    const filename = decodeURIComponent(candidate.pathname.slice(root.pathname.length));
+    return filename && !filename.includes('/') ? `${userId}/${filename}` : null;
+  } catch {
+    return null;
+  }
+}
+
+async function removeProfileAvatar(path) {
+  if (!path) return;
+  try {
+    await supabaseClient.storage.from('profile-avatars').remove([path]);
+  } catch {
+    return;
+  }
+}
+
+function openProfileDialog(profile, onboarding) {
+  profileDialogMode = onboarding ? 'onboarding' : 'settings';
+  profileDialogTrigger = onboarding ? null : document.activeElement;
+  profileDialogTitle.textContent = onboarding ? 'Completa tu perfil' : 'Preferencias';
+  profileDialogCloseButton.hidden = onboarding;
+  openDeleteAccountButton.hidden = onboarding;
+  profileUsernameInput.disabled = !onboarding;
+  profileUsernameInput.value = profile?.username || pendingRegistrationUsername || currentSession?.user?.user_metadata?.username || '';
+  profileAvatarInput.value = profile?.avatarUrl || '';
+  profileAvatarReadSequence += 1;
+  pendingProfileAvatarFile = null;
+  profileAvatarFileInput.value = '';
+  renderProfileAvatarPreview(profile?.avatarUrl || providerAvatarUrl(currentSession?.user));
+  profileCurrencyInput.value = profile?.currency || 'EUR';
+  profileLanguageInput.value = profile?.language || 'es';
+  selectedProfileFavorites = new Set((profile?.favoriteCategories ?? []).slice(0, 3));
+  profileFavoriteSearch.value = '';
+  profileFormMessage.textContent = '';
+  profileSaveButton.textContent = onboarding ? 'Completar perfil' : 'Guardar cambios';
+  renderProfileFavoriteOptions();
+  if (!profileDialog.open) profileDialog.showModal();
+  (onboarding ? profileUsernameInput : profileAvatarLoadButton).focus();
+}
+
+function closeProfileDialog() {
+  if (profileDialogMode === 'onboarding') return;
+  profileDialog.close();
+}
+
+function validProfileAvatarUrl(value) {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+async function saveUserProfile(event) {
+  event.preventDefault();
+  if (!currentSession || profileSaveButton.disabled) return;
+  const username = profileUsernameInput.value;
+  const avatarUrl = profileAvatarInput.value.trim();
+  if (!USERNAME_PATTERN.test(username)) {
+    profileFormMessage.textContent = 'El username debe tener entre 3 y 20 letras, números o guiones bajos.';
+    profileUsernameInput.focus();
+    return;
+  }
+  if (!validProfileAvatarUrl(avatarUrl)) {
+    profileFormMessage.textContent = 'Introduce una URL de avatar HTTP o HTTPS válida.';
+    profileAvatarInput.focus();
+    return;
+  }
+
+  const savingUserId = currentSession.user.id;
+  const avatarFile = pendingProfileAvatarFile;
+  const previousAvatarUrl = currentUserProfile?.avatarUrl;
+  let uploadedAvatarPath = null;
+  let profileSaved = false;
+  const profile = {
+    username,
+    avatarUrl: avatarUrl || null,
+    currency: profileCurrencyInput.value,
+    language: profileLanguageInput.value,
+    favoriteCategories: [...selectedProfileFavorites],
+  };
+  profileSaveButton.disabled = true;
+  profileAvatarLoadButton.disabled = true;
+  profileAvatarRemoveButton.disabled = true;
+  profileFormMessage.textContent = '';
+  try {
+    if (avatarFile) {
+      const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[avatarFile.type];
+      const path = `${savingUserId}/${crypto.randomUUID()}.${extension}`;
+      const bucket = supabaseClient.storage.from('profile-avatars');
+      const { error } = await bucket.upload(path, avatarFile, { contentType: avatarFile.type, cacheControl: '3600', upsert: false });
+      if (error) throw new Error('AVATAR_NO_DISPONIBLE');
+      uploadedAvatarPath = path;
+      profile.avatarUrl = bucket.getPublicUrl(path).data.publicUrl;
+      if (currentSession?.user?.id !== savingUserId) return;
+    }
+    const response = await apiFetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+    const result = await response.json();
+    if (currentSession?.user?.id !== savingUserId) return;
+    if (!response.ok) {
+      const errors = {
+        PERFIL_INVALIDO: 'Revisa los datos del perfil.',
+        CATEGORIA_FAVORITA_INVALIDA: 'Una categoría seleccionada ya no está disponible.',
+        USERNAME_OCUPADO: 'Ese username ya está ocupado. Elige otro.',
+        USERNAME_INMUTABLE: 'El username no se puede cambiar.',
+      };
+      profileFormMessage.textContent = errors[result.error] ?? 'No se pudo guardar el perfil. Inténtalo de nuevo.';
+      return;
+    }
+
+    profileSaved = true;
+    currentUserProfile = result;
+    pendingRegistrationUsername = '';
+    applyProfileAvatar(result);
+    profileDialog.close();
+    if (profileDialogMode === 'onboarding') startApplicationForCurrentProfile();
+    if (previousAvatarUrl !== result.avatarUrl) {
+      await removeProfileAvatar(ownedProfileAvatarPath(previousAvatarUrl, savingUserId));
+    }
+  } catch {
+    if (currentSession?.user?.id === savingUserId) profileFormMessage.textContent = 'No se pudo guardar el perfil. Inténtalo de nuevo.';
+  } finally {
+    if (uploadedAvatarPath && !profileSaved && currentSession?.user?.id === savingUserId) {
+      await removeProfileAvatar(uploadedAvatarPath);
+    }
+    profileSaveButton.disabled = false;
+    profileAvatarLoadButton.disabled = false;
+    profileAvatarRemoveButton.disabled = false;
+  }
+}
+
+function checkUserProfile(session) {
+  const requestId = ++profileRequestSequence;
+  showProfileGate('Comprobando tu perfil…', false, true);
+  void loadUserProfile(session, requestId);
 }
 
 function handleSession(session, message = '') {
@@ -3428,22 +3851,21 @@ function handleSession(session, message = '') {
     return;
   }
 
-  const name = session.user?.user_metadata?.full_name || session.user?.email || '';
-  const avatarUrl = session.user?.user_metadata?.avatar_url;
-  userName.textContent = name;
-  userProfile.title = name;
+  if (profileReadyUserId === session.user?.id && appStarted) {
+    authScreen.hidden = true;
+    pageShell.hidden = false;
+    return;
+  }
+
+  const avatarUrl = providerAvatarUrl(session.user);
+  userName.textContent = '';
+  userProfile.removeAttribute('title');
   userAvatar.hidden = !avatarUrl;
   userProfile.hidden = true;
   userMenuToggle.setAttribute('aria-expanded', 'false');
   if (avatarUrl) userAvatar.src = avatarUrl;
   else userAvatar.removeAttribute('src');
-  authScreen.hidden = true;
-  pageShell.hidden = false;
-  if (!appStarted) {
-    appStarted = true;
-    startNotificationsRealtime();
-    initialize();
-  }
+  checkUserProfile(session);
 }
 
 async function endSession(message = '') {
@@ -3458,6 +3880,7 @@ async function endSession(message = '') {
 
 async function initializeAuth() {
   showAuthScreen();
+  setAuthMessage('Preparando el acceso...', { loading: true });
   try {
     const response = await fetch('/config/supabase');
     if (!response.ok) {
@@ -3474,7 +3897,11 @@ async function initializeAuth() {
   }
 
   // Supabase warns against calling its API inside this callback, so it only updates local state.
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY' && session) {
+      showPasswordUpdate(session);
+      return;
+    }
     if (session || currentSession) handleSession(session);
   });
   try {
@@ -3487,7 +3914,7 @@ async function initializeAuth() {
 
 loginButton.addEventListener('click', async () => {
   if (!supabaseClient) return;
-  authMessage.textContent = '';
+  setAuthMessage('Conectando con Google...', { loading: true });
   loginButton.disabled = true;
   try {
     const { error } = await supabaseClient.auth.signInWithOAuth({
@@ -3500,9 +3927,257 @@ loginButton.addEventListener('click', async () => {
     });
     if (error) throw error;
   } catch {
-    authMessage.textContent = 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.';
+    setAuthMessage('No se pudo iniciar sesión con Google. Inténtalo de nuevo.', { error: true });
     loginButton.disabled = false;
   }
+});
+
+let passwordRepeatBlurred = false;
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const registering = mode === 'register';
+  document.querySelector('#auth-google-label').textContent = registering ? 'Usa tu cuenta de Google' : 'Inicia sesión con Google';
+  document.querySelector('#auth-divider').textContent = registering ? 'o crea una nueva cuenta en MiniPeopleDB' : 'o con tu usuario de MiniPeopleDB';
+  passwordRepeatBlurred = false;
+  openPasswordRecoveryButton.hidden = registering;
+  authUsernameField.hidden = false;
+  authUsernameInput.required = true;
+  document.querySelector('#auth-email-field').hidden = !registering;
+  authEmailInput.disabled = !registering;
+  authEmailInput.required = registering;
+  authUsernameInput.setCustomValidity('');
+  document.querySelector('#auth-password-repeat-field').hidden = !registering;
+  authPasswordRepeatInput.disabled = !registering;
+  authPasswordRepeatInput.required = registering;
+  document.querySelector('#auth-password-rules').hidden = !registering;
+  setPasswordVisibility(false);
+  authPasswordRepeatInput.value = '';
+  authPasswordInput.autocomplete = registering ? 'new-password' : 'current-password';
+  validateRegistrationPassword();
+  classicAuthSubmit.textContent = registering ? 'Crear cuenta' : 'Iniciar sesión';
+  authModeLoginButton.setAttribute('aria-pressed', String(!registering));
+  authModeRegisterButton.setAttribute('aria-pressed', String(registering));
+  setAuthMessage('');
+}
+
+function showPasswordRecovery(show) {
+  authAccessPanel.hidden = show;
+  passwordRecoveryForm.hidden = !show;
+  passwordUpdateForm.hidden = true;
+  setAuthMessage('');
+  if (show) recoveryEmailInput.value = authEmailInput.value;
+}
+
+function showPasswordUpdate(session) {
+  currentSession = session;
+  pageShell.hidden = true;
+  authScreen.hidden = false;
+  authAccessPanel.hidden = true;
+  passwordRecoveryForm.hidden = true;
+  passwordUpdateForm.hidden = false;
+  newPasswordInput.value = '';
+  setAuthMessage('');
+  newPasswordInput.focus();
+}
+
+authModeLoginButton.addEventListener('click', () => setAuthMode('login'));
+authModeRegisterButton.addEventListener('click', () => setAuthMode('register'));
+
+function validateRegistrationPassword() {
+  const password = authPasswordInput.value;
+  const rules = {
+    length: password.length >= 5,
+    uppercase: /\p{Lu}/u.test(password),
+    lowercase: /\p{Ll}/u.test(password),
+    number: /[0-9]/.test(password),
+  };
+  for (const [rule, met] of Object.entries(rules)) {
+    document.querySelector(`[data-rule="${rule}"]`).classList.toggle('is-met', met);
+  }
+  authPasswordInput.setCustomValidity(authMode === 'register' && !Object.values(rules).every(Boolean)
+    ? 'La contraseña debe cumplir todas las directrices de seguridad.' : '');
+  authPasswordRepeatInput.setCustomValidity(authMode === 'register' && authPasswordRepeatInput.value !== password
+    ? 'Las contraseñas no coinciden.' : '');
+  authPasswordRepeatInput.setAttribute('aria-invalid', String(passwordRepeatBlurred && authPasswordRepeatInput.validity.customError));
+}
+
+authPasswordInput.addEventListener('input', validateRegistrationPassword);
+authPasswordRepeatInput.addEventListener('input', validateRegistrationPassword);
+authPasswordRepeatInput.addEventListener('blur', () => {
+  passwordRepeatBlurred = true;
+  validateRegistrationPassword();
+});
+function setPasswordVisibility(visible) {
+  const type = visible ? 'text' : 'password';
+  authPasswordInput.type = type;
+  authPasswordRepeatInput.type = type;
+  const label = visible
+    ? (authMode === 'register' ? 'Ocultar contraseñas' : 'Ocultar contraseña')
+    : (authMode === 'register' ? 'Mostrar contraseñas' : 'Mostrar contraseña');
+  for (const button of authShowPasswordButtons) {
+    button.setAttribute('aria-pressed', String(visible));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.querySelector('use').setAttribute('href', visible ? '#auth-eye-icon' : '#auth-eye-off-icon');
+  }
+}
+
+for (const button of authShowPasswordButtons) {
+  button.addEventListener('click', () => setPasswordVisibility(authPasswordInput.type === 'password'));
+}
+authUsernameInput.addEventListener('input', () => authUsernameInput.setCustomValidity(''));
+
+classicAuthForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!supabaseClient) return;
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
+  const username = authUsernameInput.value;
+  setAuthMessage('');
+  authUsernameInput.setCustomValidity(USERNAME_PATTERN.test(username) ? '' : 'Usa entre 3 y 20 letras, números o guiones bajos.');
+  validateRegistrationPassword();
+  if (!classicAuthForm.reportValidity()) return;
+  classicAuthSubmit.disabled = true;
+  setAuthMessage(authMode === 'register' ? 'Creando tu cuenta...' : 'Iniciando sesión...', { loading: true });
+  try {
+    if (authMode === 'register') {
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: { data: { username } },
+      });
+      if (error) throw error;
+      pendingRegistrationUsername = username;
+      setAuthMessage(data?.session
+        ? 'Cuenta creada. Completa tu perfil para continuar.'
+        : 'Si el email puede registrarse, recibirás instrucciones para confirmar la cuenta.');
+    } else {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!response.ok) throw new Error('Acceso rechazado');
+      const tokens = await response.json();
+      const { error } = await supabaseClient.auth.setSession(tokens);
+      if (error) throw error;
+    }
+    authPasswordInput.value = '';
+    authPasswordRepeatInput.value = '';
+    setPasswordVisibility(false);
+    validateRegistrationPassword();
+  } catch {
+    setAuthMessage(authMode === 'register'
+      ? 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.'
+      : 'No se pudo iniciar sesión. Revisa el username y la contraseña.', { error: true });
+  } finally {
+    classicAuthSubmit.disabled = false;
+  }
+});
+
+openPasswordRecoveryButton.addEventListener('click', () => showPasswordRecovery(true));
+cancelPasswordRecoveryButton.addEventListener('click', () => showPasswordRecovery(false));
+
+passwordRecoveryForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!supabaseClient) return;
+  const submitButton = passwordRecoveryForm.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  setAuthMessage('Enviando enlace de recuperación...', { loading: true });
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(recoveryEmailInput.value.trim(), {
+      redirectTo: `${window.location.origin}${window.location.pathname}`,
+    });
+    if (error) throw error;
+    setAuthMessage('Si el email puede recuperarse, recibirás un enlace para cambiar la contraseña.');
+  } catch {
+    setAuthMessage('No se pudo solicitar la recuperación. Inténtalo de nuevo.', { error: true });
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+passwordUpdateForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!supabaseClient) return;
+  const submitButton = passwordUpdateForm.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  setAuthMessage('Actualizando contraseña...', { loading: true });
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: newPasswordInput.value });
+    if (error) throw error;
+    newPasswordInput.value = '';
+    passwordUpdateForm.hidden = true;
+    handleSession(currentSession, 'La contraseña se actualizó correctamente.');
+  } catch {
+    setAuthMessage('No se pudo cambiar la contraseña. Inténtalo de nuevo.', { error: true });
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+profileCheckRetryButton.addEventListener('click', () => {
+  if (currentSession) checkUserProfile(currentSession);
+});
+
+profileFavoriteSearch.addEventListener('input', renderProfileFavoriteOptions);
+openDeleteAccountButton.addEventListener('click', () => {
+  if (!currentSession || profileDialogMode !== 'settings' || !currentUserProfile?.onboardingCompleted
+    || profileSaveButton.disabled || accountDeletionInFlight) return;
+  accountDeletionUserId = currentSession.user.id;
+  deleteAccountError.textContent = '';
+  deleteAccountDialog.showModal();
+  deleteAccountCancelButton.focus();
+});
+
+deleteAccountCancelButton.addEventListener('click', () => {
+  if (!accountDeletionInFlight) deleteAccountDialog.close();
+});
+deleteAccountDialog.addEventListener('cancel', (event) => {
+  if (accountDeletionInFlight) event.preventDefault();
+});
+deleteAccountDialog.addEventListener('close', () => {
+  accountDeletionUserId = null;
+  if (profileDialog.open && currentSession) openDeleteAccountButton.focus();
+});
+deleteAccountConfirmButton.addEventListener('click', async () => {
+  if (accountDeletionInFlight || !accountDeletionUserId || currentSession?.user?.id !== accountDeletionUserId) return;
+  const deletingUserId = accountDeletionUserId;
+  accountDeletionInFlight = true;
+  deleteAccountConfirmButton.disabled = true;
+  deleteAccountCancelButton.disabled = true;
+  openDeleteAccountButton.disabled = true;
+  deleteAccountError.textContent = '';
+  try {
+    const response = await apiFetch('/api/profile', { method: 'DELETE' });
+    if (currentSession?.user?.id !== deletingUserId) return;
+    if (response.status !== 204) throw new Error('CUENTA_NO_ELIMINADA');
+    await endSession('Tu cuenta se ha eliminado correctamente.');
+  } catch {
+    if (currentSession?.user?.id === deletingUserId) {
+      deleteAccountError.textContent = 'No se pudo eliminar la cuenta. Inténtalo de nuevo.';
+    }
+  } finally {
+    accountDeletionInFlight = false;
+    deleteAccountConfirmButton.disabled = false;
+    deleteAccountCancelButton.disabled = false;
+    openDeleteAccountButton.disabled = false;
+  }
+});
+
+profileForm.addEventListener('submit', saveUserProfile);
+profileDialogCloseButton.addEventListener('click', closeProfileDialog);
+profileDialog.addEventListener('cancel', (event) => {
+  if (profileDialogMode === 'onboarding') event.preventDefault();
+});
+profileDialog.addEventListener('close', () => {
+  profileAvatarReadSequence += 1;
+  pendingProfileAvatarFile = null;
+  profileAvatarFileInput.value = '';
+  if (!profileAvatarLoadButton.disabled) profileSaveButton.disabled = false;
+  if (profileDialogMode !== 'onboarding' && profileDialogTrigger?.isConnected) profileDialogTrigger.focus();
+  profileDialogTrigger = null;
 });
 
 logoutButton.addEventListener('click', async () => {

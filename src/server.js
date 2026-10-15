@@ -39,13 +39,21 @@ import {
   RegaloYaEnviadoError,
   UsuarioNoEncontradoError,
 } from './ranking-repository.js';
+import {
+  CategoriaFavoritaInvalidaError,
+  PerfilInvalidoError,
+  PerfilNoDisponibleError,
+  UserProfileRepository,
+  UsernameInmutableError,
+  UsernameOcupadoError,
+} from './user-profile-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -186,6 +194,7 @@ export function createServer({
     }
 
     const rankingRepository = new RankingRepository({ client, userId });
+    const userProfileRepository = new UserProfileRepository({ client, userId, categoriasRepository });
       const historyRepository = new DailyAnalyticsHistoryRepository({ client });
     const notificationsRepository = new NotificacionesRepository({ client });
     try {
@@ -204,6 +213,7 @@ export function createServer({
       userId,
       repository,
       rankingRepository,
+      userProfileRepository,
       notificationsRepository,
         historyRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
@@ -220,6 +230,49 @@ export function createServer({
   // Endpoint de salud para UptimeRobot / Render Keep-Alive
   app.get('/health', (request, response) => {
     response.status(200).send('OK');
+  });
+  app.all('/api/auth/login', (request, response) => {
+    response.setHeader('cache-control', 'no-store');
+    const rejected = () => sendJson(response, 401, { error: 'CREDENCIALES_INVALIDAS' });
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+    express.json({ limit: '4kb' })(request, response, async (parseError) => {
+      const { username, password } = request.body ?? {};
+      if (parseError || request.url.includes('?') || typeof username !== 'string'
+        || !/^[A-Za-z0-9_]{3,20}$/.test(username)
+        || typeof password !== 'string' || password.length === 0 || password.length > 1024) {
+        rejected();
+        return;
+      }
+      if (!supabaseConfig) {
+        sendJson(response, 503, { error: 'ACCESO_NO_DISPONIBLE' });
+        return;
+      }
+      try {
+        const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        });
+        const resolved = await client.rpc('resolver_acceso_username', { p_username: username, p_password: password });
+        if (resolved.error || !resolved.data) {
+          rejected();
+          return;
+        }
+        const { data, error } = await client.auth.signInWithPassword({ email: resolved.data, password });
+        if (error || !data?.session?.access_token || !data.session.refresh_token) {
+          rejected();
+          return;
+        }
+        sendJson(response, 200, {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      } catch {
+        rejected();
+      }
+    });
   });
   app.use(express.static(publicDirectory));
   app.use(async (request, response) => {
@@ -309,13 +362,74 @@ export function createServer({
     let notificationsRepository;
     let historyRepository;
     let readGamificationDna;
+    let userProfileRepository;
     if (protectedPath.test(requestUrl.pathname)) {
       const context = await authenticate(request);
       if (context.error) {
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository, notificationsRepository, historyRepository, readGamificationDna } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, notificationsRepository, historyRepository, readGamificationDna, userProfileRepository } = context);
+    }
+
+    if (requestUrl.pathname === '/api/profile') {
+      response.setHeader('cache-control', 'no-store');
+      if (!['GET', 'PUT', 'DELETE'].includes(request.method)) {
+        response.setHeader('allow', 'GET, PUT, DELETE');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      if (request.method === 'DELETE') {
+        if (await hasRequestBody(request)) {
+          sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+          return;
+        }
+        try {
+          await userProfileRepository.deleteAccount();
+          sendEmpty(response, 204);
+        } catch {
+          sendJson(response, 500, { error: 'CUENTA_NO_ELIMINADA' });
+        }
+        return;
+      }
+      if (request.method === 'GET') {
+        try {
+          sendJson(response, 200, await userProfileRepository.read());
+        } catch {
+          sendJson(response, 500, { error: 'PERFIL_NO_DISPONIBLE' });
+        }
+        return;
+      }
+
+      let profile;
+      try {
+        profile = await readJsonBody(request);
+      } catch {
+        sendJson(response, 400, { error: 'PERFIL_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await userProfileRepository.save(profile));
+      } catch (error) {
+        if (error instanceof PerfilInvalidoError) {
+          sendJson(response, 400, { error: error.code });
+        } else if (error instanceof CategoriaFavoritaInvalidaError) {
+          sendJson(response, 400, { error: error.code });
+        } else if (error instanceof UsernameOcupadoError || error instanceof UsernameInmutableError) {
+          sendJson(response, 409, { error: error.code });
+        } else if (isCategoriasError(error)) {
+          sendJson(response, 503, { error: 'CATEGORIAS_NO_DISPONIBLES' });
+        } else if (error instanceof PerfilNoDisponibleError) {
+          sendJson(response, 500, { error: error.code });
+        } else {
+          sendJson(response, 500, { error: 'PERFIL_NO_DISPONIBLE' });
+        }
+      }
+      return;
     }
 
     if (requestUrl.pathname === '/api/notificaciones') {

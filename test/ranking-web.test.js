@@ -350,7 +350,7 @@ test('cambios rapidos de criterio ignoran respuestas anteriores y el cierre de s
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
-  assert.match(styles, /\.gamification-details \.button \{ min-height: 36px; padding: 0 12px; \}/);
+  assert.match(styles, /\.gamification-details \.button, \.user-profile \.button \{ min-height: 36px; padding: 0 12px; \}/);
   assert.match(styles, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
   assert.match(styles, /\.summary-ranking-row \.summary-ranking-link \{ flex: 1 1 0; min-width: 0; white-space: normal; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);

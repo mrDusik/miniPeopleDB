@@ -19,10 +19,40 @@ test('sincroniza perfil validado y mapea el contrato público del ranking', asyn
   supabase.seed('gamificacion', TEST_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' } }]);
   const [entry] = await repository.list();
   assert.deepEqual(entry, {
-    userId: TEST_USER.id, avatarUrl: 'https://example.com/a.png', displayName: 'Ada', bricks: 100,
+    userId: TEST_USER.id, avatarUrl: 'https://example.com/a.png', displayName: 'Coleccionista', bricks: 100,
     nivel: 3, nombreNivel: 'Three-Seven-Five', imagenNivel: '/level_images/3_threesevenfive.png', totalColeccion: 0,
     top5Precio: [], top5Antiguedad: [], regaloEnviado: false, dnaPrincipal: 'Newbie', dnaRasgos: [],
   });
+});
+
+test('el perfil público usa username y avatar personalizado en lugar de la identidad OAuth', async () => {
+  const supabase = createTestSupabase();
+  const client = createTestClient(supabase);
+  const repository = new RankingRepository({ client, userId: TEST_USER.id });
+  supabase.seed('user_profiles', TEST_USER.id, [{ username: 'SpaceFan', avatar_url: 'https://example.com/custom.png', onboarding_completed: true }]);
+
+  await repository.syncProfile({ user_metadata: { full_name: 'Ada', avatar_url: 'https://example.com/google.png' } });
+  const publicProfile = supabase.rows('perfiles_publicos', TEST_USER.id)[0];
+  assert.equal(publicProfile.display_name, 'SpaceFan');
+  assert.equal(publicProfile.avatar_url, 'https://example.com/custom.png');
+  assert.equal('username' in publicProfile, false);
+
+  await client.from('user_profiles').update({ avatar_url: null }).eq('user_id', TEST_USER.id);
+  await repository.syncProfile({ user_metadata: { full_name: 'Ada', avatar_url: 'https://example.com/google.png' } });
+  assert.equal(supabase.rows('perfiles_publicos', TEST_USER.id)[0].avatar_url, 'https://example.com/google.png');
+});
+
+test('el perfil público recupera picture de Google cuando no hay avatar personalizado', async () => {
+  const supabase = createTestSupabase();
+  const repository = new RankingRepository({ client: createTestClient(supabase), userId: TEST_USER.id });
+  supabase.seed('user_profiles', TEST_USER.id, [{ username: 'SpaceFan', avatar_url: null }]);
+  for (const user of [
+    { user_metadata: { picture: 'https://google.example/avatar.png' } },
+    { user_metadata: {}, identities: [{ provider: 'google', identity_data: { picture: 'https://google.example/avatar.png' } }] },
+  ]) {
+    await repository.syncProfile(user);
+    assert.equal(supabase.rows('perfiles_publicos', TEST_USER.id)[0].avatar_url, 'https://google.example/avatar.png');
+  }
 });
 
 test('proyecta solo los dos rasgos DNA publicos del ranking sin ponderaciones', async () => {

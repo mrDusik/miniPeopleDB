@@ -4,11 +4,211 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
+
+test('resolver username exige contraseña, limita intentos y no concede lectura global a anon', async () => {
+  const db = new PGlite({ extensions: { pgcrypto } });
+  const userId = '00000000-0000-4000-8000-0000000000a1';
+  try {
+    await db.exec(`
+      create schema auth;
+      create schema private;
+      create role anon;
+      create role authenticated;
+      create table auth.users (id uuid primary key, email text, encrypted_password text);
+      create table public.user_profiles (user_id uuid primary key references auth.users(id), username text);
+      revoke all on auth.users, public.user_profiles from public, anon, authenticated;
+    `);
+    const migration = await readFile(new URL('../supabase/username-login.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+    await db.query("insert into auth.users values ($1, $2, extensions.crypt($3, extensions.gen_salt('bf', 6)))", [userId, 'private@example.invalid', 'Abcd1']);
+    await db.query('insert into public.user_profiles values ($1, $2)', [userId, 'SpaceFan']);
+    await db.exec('set role anon');
+    const resolveUsername = async (username, password) => (await db.query('select public.resolver_acceso_username($1, $2) as email', [username, password])).rows[0].email;
+    assert.equal(await resolveUsername('Unknown', 'Abcd1'), null);
+    assert.equal(await resolveUsername('SpaceFan', 'wrong'), null);
+    assert.equal(await resolveUsername('SPACEFAN', 'Abcd1'), 'private@example.invalid');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      assert.equal(await resolveUsername('spacefan', 'wrong'), null);
+    }
+    assert.equal(await resolveUsername('SpaceFan', 'Abcd1'), null);
+    assert.equal(await resolveUsername(null, 'Abcd1'), null);
+    assert.equal(await resolveUsername('SpaceFan', null), null);
+    await assert.rejects(db.query('select * from auth.users'), /permission denied/);
+    await assert.rejects(db.query('select * from public.user_profiles'), /permission denied/);
+    await assert.rejects(db.query('select * from private.username_login_attempts'), /permission denied/);
+    await db.exec('reset role');
+    assert.equal((await db.query("select has_function_privilege('authenticated', 'public.resolver_acceso_username(text,text)', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    await db.exec("update private.username_login_attempts set window_start = clock_timestamp() - interval '2 minutes'");
+    await db.exec('set role anon');
+    assert.equal(await resolveUsername('SpaceFan', 'Abcd1'), 'private@example.invalid');
+    await db.exec('reset role');
+    await db.exec("update auth.users set encrypted_password = ''");
+    await db.exec('set role anon');
+    assert.equal(await resolveUsername('SpaceFan', 'Abcd1'), null);
+  } finally {
+    await db.close();
+  }
+});
+
+test('el bucket de avatares limita formatos y escritura y borrado a la carpeta del JWT', async () => {
+  const db = new PGlite();
+  const userId = '00000000-0000-4000-8000-0000000000a1';
+  const otherId = '00000000-0000-4000-8000-0000000000b1';
+  const filename = '00000000-0000-4000-8000-000000000001.png';
+  try {
+    await db.exec(`
+      create schema auth;
+      create schema storage;
+      create role anon;
+      create role authenticated;
+      grant usage on schema auth, storage to anon, authenticated;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+      create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets(id), name text);
+      create function storage.foldername(name text) returns text[] language sql as $$
+        select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1)-1]
+      $$;
+      alter table storage.objects enable row level security;
+      grant select, insert, delete on storage.objects to authenticated;
+      grant select on storage.objects to anon;
+    `);
+    const migration = await readFile(new URL('../supabase/profile-avatars.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+    const bucket = (await db.query("select * from storage.buckets where id = 'profile-avatars'")).rows[0];
+    assert.equal(bucket.public, true);
+    assert.equal(Number(bucket.file_size_limit), 2097152);
+    assert.deepEqual(bucket.allowed_mime_types, ['image/png', 'image/jpeg', 'image/webp']);
+    await db.query("insert into storage.objects(bucket_id, name) values ('profile-avatars', $1)", [`${otherId}/${filename}`]);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+    await db.exec('set role authenticated');
+    await db.query("insert into storage.objects(bucket_id, name) values ('profile-avatars', $1)", [`${userId}/${filename}`]);
+    assert.deepEqual((await db.query('select name from storage.objects')).rows, [{ name: `${userId}/${filename}` }]);
+    for (const path of [`${otherId}/${filename}`, `${userId}/avatar.svg`, `${userId}/nested/${filename}`]) {
+      await assert.rejects(db.query("insert into storage.objects(bucket_id, name) values ('profile-avatars', $1)", [path]), /row-level security/);
+    }
+    assert.equal((await db.query('delete from storage.objects where name = $1 returning name', [`${otherId}/${filename}`])).rows.length, 0);
+    assert.equal((await db.query('delete from storage.objects where name = $1 returning name', [`${userId}/${filename}`])).rows.length, 1);
+    await db.exec('reset role; set role anon');
+    assert.deepEqual((await db.query('select name from storage.objects')).rows, []);
+    await assert.rejects(db.query("insert into storage.objects(bucket_id, name) values ('profile-avatars', $1)", [`${userId}/${filename}`]), /permission denied/);
+  } finally {
+    await db.close();
+  }
+});
+
+test('los rankings leen username aunque el nombre público de Google siga desactualizado', async () => {
+  const db = new PGlite();
+  const viewerId = '00000000-0000-4000-8000-0000000000a1';
+  const rankedId = '00000000-0000-4000-8000-0000000000b1';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users values ($1, $2), ($3, $4)', [viewerId, 'viewer@example.invalid', rankedId, 'ranked@example.invalid']);
+    await db.query('insert into public.user_profiles(user_id, username) values ($1, $2), ($3, $4)', [viewerId, 'Viewer_1', rankedId, 'SpaceFan_2']);
+    await db.query('insert into public.perfiles_publicos(user_id, display_name) values ($1, $2)', [rankedId, 'Nombre Google antiguo']);
+    await db.query("insert into public.gamificacion(user_id, bricks, nivel) values ($1, 100, '{\"id\":1,\"nombre\":\"Stud\"}')", [rankedId]);
+    await db.query(`insert into public.user_daily_snapshots (
+      user_id, snapshot_date, total_figures, total_value, bricks, level,
+      pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+    ) values ($1, '2026-10-11', 0, 0, 50, 1, 0, 0, 0, 0),
+      ($1, '2026-10-12', 0, 0, 100, 1, 0, 0, 0, 0)`, [rankedId]);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [viewerId]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select username from public.user_profiles where user_id = $1', [rankedId])).rows, []);
+    assert.equal((await db.query('select display_name from public.ranking_global() where user_id = $1', [rankedId])).rows[0].display_name, 'SpaceFan_2');
+    assert.equal((await db.query('select public.ranking_logros($1) as result', [rankedId])).rows[0].result.displayName, 'SpaceFan_2');
+    await db.exec('reset role');
+    const weekly = (await db.query("select private.ranking_semanal_calcular('2026-10-15T12:00:00Z'::timestamptz) as result")).rows[0].result;
+    assert.equal(weekly.entries[0].displayName, 'SpaceFan_2');
+    assert.equal((await db.query('select display_name from public.perfiles_publicos where user_id = $1', [rankedId])).rows[0].display_name, 'Nombre Google antiguo');
+  } finally {
+    await db.close();
+  }
+});
+
+test('eliminar_cuenta_usuario limita el borrado a auth.uid, aplica cascada y revierte fallos', async () => {
+  const db = new PGlite();
+  const userA = '00000000-0000-4000-8000-0000000000a1';
+  const userB = '00000000-0000-4000-8000-0000000000b1';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users values ($1, $2), ($3, $4)', [userA, 'a@example.invalid', userB, 'b@example.invalid']);
+    for (const [userId, username] of [[userA, 'SpaceFan'], [userB, 'OtherFan']]) {
+      await db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [userId, username]);
+      await db.query('insert into public.perfiles_publicos(user_id, display_name) values ($1, $2)', [userId, username]);
+      await db.query("insert into public.minifiguras(user_id, id, nombre, categoria) values ($1, 'A-1', 'Astronauta', 'Space')", [userId]);
+      await db.query('insert into public.gamificacion(user_id) values ($1)', [userId]);
+      await db.query("insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, 'Space')", [userId]);
+    }
+    await db.exec('set role anon');
+    await assert.rejects(db.query('select public.eliminar_cuenta_usuario()'), /permission denied/);
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userA]);
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select public.eliminar_cuenta_usuario()'), /NO_AUTENTICADO/);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await assert.rejects(db.query('delete from auth.users where id = $1', [userB]), /permission denied/);
+    await db.exec('reset role');
+    await db.exec(`
+      create function private.test_refuse_deletion() returns trigger language plpgsql as $$
+      begin raise exception 'SIMULATED_FAILURE'; end; $$;
+      create trigger zz_test_refuse_deletion after delete on auth.users
+      for each row execute function private.test_refuse_deletion();
+    `);
+    await db.exec('set role authenticated');
+    await assert.rejects(db.query('select public.eliminar_cuenta_usuario()'), /SIMULATED_FAILURE/);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from auth.users')).rows[0].total, 2);
+    assert.equal((await db.query('select count(*)::integer as total from public.minifiguras')).rows[0].total, 2);
+    await db.exec('drop trigger zz_test_refuse_deletion on auth.users');
+    await db.exec('set role authenticated');
+    await db.query('select public.eliminar_cuenta_usuario()');
+    await db.exec('reset role');
+    assert.deepEqual((await db.query('select id from auth.users')).rows, [{ id: userB }]);
+    for (const table of ['user_profiles', 'perfiles_publicos', 'minifiguras', 'gamificacion', 'user_profile_favorite_categories']) {
+      assert.equal((await db.query(`select count(*)::integer as total from public.${table} where user_id = $1`, [userA])).rows[0].total, 0);
+      assert.equal((await db.query(`select count(*)::integer as total from public.${table} where user_id = $1`, [userB])).rows[0].total, 1);
+    }
+  } finally {
+    await db.close();
+  }
+});
 
 test('schema migra la constraint heredada de DNA antes de insertar el logro de agradecimiento', async () => {
   const db = new PGlite();
@@ -41,6 +241,139 @@ test('schema migra la constraint heredada de DNA antes de insertar el logro de a
     assert.deepEqual((await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'thanks-for-the-gift'")).rows[0], {
       rarity_hunter: 0, collector: 0, explorer: 0, fan: 0,
     });
+  } finally {
+    await db.close();
+  }
+});
+
+test('schema persiste perfiles y favoritos con unicidad, RLS y borrado en cascada', async () => {
+  const db = new PGlite();
+  const userA = '00000000-0000-4000-8000-0000000000a1';
+  const userB = '00000000-0000-4000-8000-0000000000b1';
+  const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(schema);
+    await db.exec(schema);
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
+      userA, 'profile-a@example.invalid', userB, 'profile-b@example.invalid',
+    ]);
+    await db.query('insert into public.user_profiles(user_id, username, onboarding_completed) values ($1, $2, true), ($3, $4, true)', [
+      userA, 'Collector_1', userB, 'OtherUser',
+    ]);
+    await db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userA, 'Space']);
+
+    await assert.rejects(
+      db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [userB, 'collector_1']),
+      /duplicate key value violates unique constraint/,
+    );
+    await assert.rejects(
+      db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [userB, 'bad name']),
+      /user_profiles_username_check/,
+    );
+    assert.equal((await db.query("select has_table_privilege('anon', 'public.user_profiles', 'SELECT') as allowed")).rows[0].allowed, false);
+
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userA]);
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select username from public.user_profiles')).rows, [{ username: 'Collector_1' }]);
+    assert.equal((await db.query('select category_name from public.user_profile_favorite_categories')).rows[0].category_name, 'Space');
+    assert.equal((await db.query('update public.user_profiles set username = $1 where user_id = $2 returning user_id', ['Hijack', userB])).rows.length, 0);
+    await assert.rejects(
+      db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userB, 'Castle']),
+      /row-level security/,
+    );
+    await db.exec('reset role');
+
+    await db.query('delete from auth.users where id = $1', [userA]);
+    assert.equal((await db.query('select count(*)::integer as total from public.user_profiles where user_id = $1', [userA])).rows[0].total, 0);
+    assert.equal((await db.query('select count(*)::integer as total from public.user_profile_favorite_categories where user_id = $1', [userA])).rows[0].total, 0);
+  } finally {
+    await db.close();
+  }
+});
+
+test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y rollback atomico', async () => {
+  const db = new PGlite();
+  const userId = '00000000-0000-4000-8000-0000000000c1';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      grant usage on schema auth to authenticated;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [userId, 'profile-rpc@example.invalid']);
+    await db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [userId, 'Collector_1']);
+    await db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userId, 'Space']);
+    await db.query('insert into public.perfiles_publicos(user_id, display_name, avatar_url) values ($1, $2, $3)', [userId, 'Ada', 'https://google.example/avatar.png']);
+
+    assert.equal((await db.query("select has_function_privilege('anon', 'public.guardar_perfil_usuario(text,text,text,text,text[])', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+    await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', 'https://custom.example/avatar.png', 'EUR', 'es', ['Castle', 'Space'],
+    ]);
+
+    assert.deepEqual((await db.query('select username, avatar_url, currency, language, onboarding_completed from public.user_profiles')).rows[0], {
+      username: 'Collector_1', avatar_url: 'https://custom.example/avatar.png', currency: 'EUR', language: 'es', onboarding_completed: true,
+    });
+    assert.deepEqual((await db.query('select category_name from public.user_profile_favorite_categories order by category_name')).rows, [
+      { category_name: 'Castle' }, { category_name: 'Space' },
+    ]);
+    assert.equal((await db.query('select display_name, avatar_url from public.perfiles_publicos')).rows[0].avatar_url, 'https://custom.example/avatar.png');
+    await assert.rejects(db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', null, 'EUR', 'es', ['Castle', 'Space', 'City', 'Star Wars'],
+    ]), /PERFIL_INVALIDO/);
+    await db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userId, 'City']);
+    await db.query('update public.user_profile_favorite_categories set category_name = $2 where user_id = $1 and category_name = $3', [userId, 'Town', 'City']);
+    await db.query('update public.user_profile_favorite_categories set category_name = $2 where user_id = $1 and category_name = $3', [userId, 'City', 'Town']);
+    await assert.rejects(db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userId, 'Star Wars']), /LIMITE_CATEGORIAS_FAVORITAS/);
+    await db.query('delete from public.user_profile_favorite_categories where user_id = $1 and category_name = $2', [userId, 'City']);
+    await assert.rejects(
+      db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', ['ChangedName', null, 'EUR', 'es', []]),
+      /USERNAME_INMUTABLE/,
+    );
+    await assert.rejects(
+      db.query('update public.user_profiles set username = $1', ['ChangedName']),
+      /USERNAME_INMUTABLE/,
+    );
+
+    await db.exec('reset role');
+    await db.exec('revoke update on table public.perfiles_publicos from authenticated');
+    await db.exec('set role authenticated');
+    await assert.rejects(
+      db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+        'Collector_1', 'https://changed.example/avatar.png', 'EUR', 'es', ['Pirates'],
+      ]),
+      /permission denied/,
+    );
+    await db.exec('reset role');
+    assert.equal((await db.query('select avatar_url from public.user_profiles where user_id = $1', [userId])).rows[0].avatar_url, 'https://custom.example/avatar.png');
+    assert.deepEqual((await db.query('select category_name from public.user_profile_favorite_categories order by category_name')).rows, [
+      { category_name: 'Castle' }, { category_name: 'Space' },
+    ]);
   } finally {
     await db.close();
   }
@@ -114,6 +447,9 @@ test('reset de miniPeopleDB_prueba vacía todas las tablas de datos de aplicaci�
       create role anon;
       create role authenticated;
       create role service_role;
+      create role reset_runner;
+      create role supabase_auth_admin;
+      grant usage, create on schema auth to reset_runner, supabase_auth_admin;
       create function auth.uid() returns uuid language sql as $$
         select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
@@ -126,19 +462,47 @@ test('reset de miniPeopleDB_prueba vacía todas las tablas de datos de aplicaci�
         raw_app_meta_data jsonb, raw_user_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
         confirmation_token text, recovery_token text, email_change_token_new text, email_change text
       );
+      alter table auth.users owner to reset_runner;
+      grant references on auth.users to supabase_auth_admin;
+    `);
+    await db.exec(`
+      set role supabase_auth_admin;
+      create table auth.refresh_tokens (
+        id bigserial primary key,
+        user_id uuid references auth.users(id) on delete cascade
+      );
+      reset role;
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/insert-miniPeopleDB-prueba.sql', import.meta.url), 'utf8'));
+    assert.equal((await db.query(`
+      select count(*)::integer as total
+      from public.user_profiles profiles
+      join auth.users users on users.id = profiles.user_id
+      where users.raw_user_meta_data->>'minipeopledb_seed' = 'lego-13-prueba-v1'
+        and profiles.onboarding_completed
+    `)).rows[0].total, 20);
     await db.query('insert into auth.users(id, email, raw_user_meta_data) values ($1, $2, $3)', [
       '00000000-0000-4000-8000-0000000000e1', 'outside@example.invalid', '{}',
     ]);
+    await db.query('insert into auth.refresh_tokens(user_id) select id from auth.users limit 1');
+    await db.exec(`
+      grant usage on schema public, private to reset_runner;
+      grant select on auth.users to reset_runner;
+      grant truncate on auth.refresh_tokens to reset_runner;
+      grant truncate on all tables in schema public to reset_runner;
+      grant truncate on all tables in schema private to reset_runner;
+      set role reset_runner;
+    `);
     await db.exec(resetSql);
+    await db.exec('reset role');
 
     for (const table of [
-      'auth.users', 'public.minifiguras', 'public.gamificacion', 'public.user_daily_snapshots',
+      'auth.users', 'auth.refresh_tokens', 'public.minifiguras', 'public.gamificacion', 'public.user_daily_snapshots',
       'public.gamificacion_categoria_version', 'public.dna_ponderaciones', 'public.regalos_enviados',
       'public.notificaciones', 'public.agradecimientos_regalo', 'public.ranking_top10_membership',
-      'public.perfiles_publicos', 'private.daily_sync_users', 'private.daily_sync_prices',
+      'public.user_profiles', 'public.user_profile_favorite_categories', 'public.perfiles_publicos',
+      'private.daily_sync_users', 'private.daily_sync_prices',
       'private.daily_sync_runs', 'private.daily_sync_figure_prices',
       'private.thanks_reward_ownership_migration', 'private.ranking_top10_reconciliation_state',
     ]) {
@@ -215,6 +579,36 @@ test('el mock de Supabase aísla filas por usuario, detecta duplicados e inyecta
   assert.equal((await clientA.from('minifiguras').select('*')).error, null);
 });
 
+test('el mock guarda perfiles y favoritos aislados y revierte fallos de la proyeccion publica', async () => {
+  const mock = createSupabaseMock({ users: { 'token-a': { id: 'user-a' }, 'token-b': { id: 'user-b' } } });
+  const clientA = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-a' } } });
+  const clientB = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-b' } } });
+  mock.seed('user_profiles', 'user-b', [{ username: 'BrickFan', onboarding_completed: true }]);
+  const profile = {
+    p_username: 'SpaceFan',
+    p_avatar_url: 'https://example.invalid/avatar.png',
+    p_currency: 'EUR',
+    p_language: 'es',
+    p_favorite_categories: ['Space', 'Castle'],
+  };
+
+  assert.equal((await clientA.rpc('guardar_perfil_usuario', profile)).error, null);
+  assert.equal(mock.rows('user_profiles', 'user-a')[0].username, 'SpaceFan');
+  assert.equal(mock.rows('user_profiles', 'user-a')[0].onboarding_completed, true);
+  assert.deepEqual(mock.rows('user_profile_favorite_categories', 'user-a').map(({ category_name }) => category_name), ['Space', 'Castle']);
+  assert.equal(mock.rows('perfiles_publicos', 'user-a')[0].avatar_url, profile.p_avatar_url);
+  assert.deepEqual((await clientB.from('user_profiles').select('*')).data.map(({ username }) => username), ['BrickFan']);
+
+  assert.equal((await clientA.rpc('guardar_perfil_usuario', { ...profile, p_username: 'brickfan' })).error.code, '23505');
+  assert.equal((await clientA.rpc('guardar_perfil_usuario', { ...profile, p_username: 'OtherName' })).error.message, 'USERNAME_INMUTABLE');
+  mock.failNext('perfiles_publicos', { code: 'PGRST000', message: 'connection refused' }, 'upsert');
+  const failed = await clientA.rpc('guardar_perfil_usuario', { ...profile, p_avatar_url: 'https://example.invalid/new.png', p_favorite_categories: ['Pirates'] });
+  assert.equal(failed.error.message, 'connection refused');
+  assert.equal(mock.rows('user_profiles', 'user-a')[0].avatar_url, profile.p_avatar_url);
+  assert.deepEqual(mock.rows('user_profile_favorite_categories', 'user-a').map(({ category_name }) => category_name), ['Space', 'Castle']);
+  assert.equal(mock.rows('perfiles_publicos', 'user-a')[0].avatar_url, profile.p_avatar_url);
+});
+
 test('el mock protege perfiles y expone solo la proyección global mediante RPC', async () => {
   const mock = createSupabaseMock({ users: { 'token-a': { id: 'user-a' }, 'token-b': { id: 'user-b' } } });
   const clientA = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-a' } } });
@@ -267,7 +661,8 @@ test('ranking_logros proyecta solo datos publicos del Top 10 sin escrituras ni a
       logros: [{ id: 'logro', nombre: 'Logro', bricks: 10, repetible: false, cantidad: 1, total: 10, donante: 'secret' }],
     }]);
   }
-  mock.seed('perfiles_publicos', 'user-00', [{ display_name: 'Ada', email: 'privado' }]);
+  mock.seed('perfiles_publicos', 'user-00', [{ display_name: 'Nombre Google antiguo', email: 'privado' }]);
+  mock.seed('user_profiles', 'user-00', [{ username: 'Ada' }]);
   const before = mock.rows('gamificacion');
   const client = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token' } } });
   const result = await client.rpc('ranking_logros', { p_usuario_id: 'user-00' });
@@ -278,6 +673,7 @@ test('ranking_logros proyecta solo datos publicos del Top 10 sin escrituras ni a
   assert.equal((await client.rpc('ranking_logros', { p_usuario_id: 'user-10' })).data, null);
   assert.equal((await client.rpc('ranking_logros', { p_usuario_id: 'missing' })).data, null);
   assert.deepEqual((await client.from('gamificacion').select('*')).data, []);
+  assert.deepEqual((await client.from('user_profiles').select('*')).data, []);
   assert.equal((await mock.createClient('url', 'key').rpc('ranking_logros', { p_usuario_id: 'user-00' })).error.code, '42501');
   assert.deepEqual(mock.rows('gamificacion'), before);
   assert.deepEqual(mock.rows('minifiguras'), []);
@@ -313,13 +709,15 @@ test('el mock aísla la bandeja y procesa agradecimientos con recompensa única 
   const receiver = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-receiver' } } });
   mock.seed('gamificacion', 'sender', [{ bricks: 10, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   mock.seed('gamificacion', 'receiver', [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
-  mock.seed('perfiles_publicos', 'sender', [{ display_name: 'Ada' }]);
-  mock.seed('perfiles_publicos', 'receiver', [{ display_name: 'Grace' }]);
+  mock.seed('perfiles_publicos', 'sender', [{ display_name: 'Google Ada' }]);
+  mock.seed('perfiles_publicos', 'receiver', [{ display_name: 'Google Grace' }]);
+  mock.seed('user_profiles', 'sender', [{ username: 'AdaCollector' }]);
+  mock.seed('user_profiles', 'receiver', [{ username: 'GraceCollector' }]);
 
   assert.deepEqual((await sender.rpc('regalar_bricks', { p_receptor_id: 'receiver' })).data, { ok: true });
   const gift = mock.rows('notificaciones', 'receiver')[0];
   assert.equal(gift.type, 'gift_received');
-  assert.equal(gift.payload.user, 'Ada');
+  assert.equal(gift.payload.user, 'AdaCollector');
   assert.equal(gift.payload.amount, 50);
   assert.deepEqual((await receiver.from('notificaciones').select('*')).data.map(({ id }) => id), [gift.id]);
   assert.deepEqual((await sender.from('notificaciones').select('*')).data, []);
@@ -340,6 +738,7 @@ test('el mock aísla la bandeja y procesa agradecimientos con recompensa única 
   assert.equal(mock.rows('gamificacion', 'receiver')[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
   assert.equal(mock.rows('notificaciones', 'receiver')[0].is_read, false);
   assert.equal(mock.rows('notificaciones', 'sender')[0].type, 'gift_thanks');
+  assert.equal(mock.rows('notificaciones', 'sender')[0].payload.user, 'GraceCollector');
   assert.equal((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).error.message, 'REGALO_YA_AGRADECIDO');
   assert.deepEqual((await receiver.rpc('agradecimientos_regalo_count')).data, { sent: 1, received: 0 });
   assert.deepEqual((await sender.rpc('agradecimientos_regalo_count')).data, { sent: 0, received: 1 });
@@ -376,7 +775,10 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
   const insertSql = await readFile(new URL('../supabase/insert-miniPeopleDB-prueba.sql', import.meta.url), 'utf8');
   const rollbackSql = await readFile(new URL('../supabase/rollback-miniPeopleDB-prueba.sql', import.meta.url), 'utf8');
   const categories = JSON.parse(await readFile(new URL('../data/categorias-brickset.json', import.meta.url), 'utf8'));
-  const tables = ['auth.users', 'public.minifiguras', 'public.gamificacion', 'public.perfiles_publicos', 'public.regalos_enviados'];
+  const tables = [
+    'auth.users', 'public.minifiguras', 'public.gamificacion', 'public.perfiles_publicos',
+    'public.user_profiles', 'public.user_profile_favorite_categories', 'public.regalos_enviados',
+  ];
   const snapshot = async () => {
     const result = {};
     for (const table of tables) {
@@ -623,8 +1025,8 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     const giftNotification = (await db.query("select * from public.notificaciones where user_id = $1 and type = 'gift_received'", [originalA])).rows[0];
     assert.equal(giftNotification.gift_donante_id, originalB);
     assert.equal(giftNotification.payload.amount, 50);
-    assert.equal(giftNotification.payload.user, 'Original B');
-    assert.equal(giftNotification.payload.message, 'El usuario Original B vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱');
+    assert.equal(giftNotification.payload.user, 'Coleccionista');
+    assert.equal(giftNotification.payload.message, 'El usuario Coleccionista vio tus tops en el Ranking Global y te regaló 50 Bricks 🧱');
     await db.exec('set role authenticated');
     await assert.rejects(db.query('select public.regalar_bricks($1)', [originalA]), /REGALO_YA_ENVIADO/);
     await db.exec('reset role');

@@ -14,6 +14,8 @@ function rankingSupabase({ now } = {}) {
   supabase.seed('gamificacion', RANKING_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
   supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] }]);
   supabase.seed('perfiles_publicos', OTHER_RANKING_USER.id, [{ display_name: 'Grace', avatar_url: 'https://example.com/grace.png' }]);
+  supabase.seed('user_profiles', OTHER_RANKING_USER.id, [{ username: 'Grace' }]);
+  supabase.seed('user_profiles', RANKING_USER.id, [{ username: 'AdaCollector' }]);
   supabase.seed('minifiguras', OTHER_RANKING_USER.id, [
     { id: 'HIGH', nombre: 'High', estado_coleccion: 'COLECCIÓN', precio: 50, anio: 2020 },
     { id: 'OLD', nombre: 'Old', estado_coleccion: 'COLECCIÓN', precio: 5, anio: 1980 },
@@ -138,7 +140,7 @@ test('GET /api/ranking exige autenticación y devuelve solo el contrato público
     assert.deepEqual(ranking[0].top5Precio.map(({ id }) => id), ['HIGH', 'OLD']);
     assert.equal('email' in ranking[0], false);
     assert.deepEqual(context.supabase.rows('perfiles_publicos', RANKING_USER.id).map(({ display_name, avatar_url }) => ({ display_name, avatar_url })), [
-      { display_name: 'Ada Google', avatar_url: 'https://example.com/ada.png' },
+      { display_name: 'AdaCollector', avatar_url: 'https://example.com/ada.png' },
     ]);
   } finally {
     await context.close();

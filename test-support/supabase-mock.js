@@ -6,6 +6,8 @@ const PRIMARY_KEYS = {
   minifiguras: ['user_id', 'id'],
   gamificacion: ['user_id'],
   perfiles_publicos: ['user_id'],
+  user_profiles: ['user_id'],
+  user_profile_favorite_categories: ['user_id', 'category_name'],
   regalos_enviados: ['donante_id', 'receptor_id', 'semana'],
   user_daily_snapshots: ['user_id', 'snapshot_date'],
   notificaciones: ['id'],
@@ -17,6 +19,8 @@ const COLUMN_DEFAULTS = {
   minifiguras: () => ({ estado_coleccion: 'COLECCIÓN', observada: false, fecha_registro: new Date().toISOString() }),
   gamificacion: () => ({ bricks: 0, nivel: {}, siguiente_nivel: null, progreso: {}, logros: [] }),
   perfiles_publicos: () => ({ avatar_url: null, updated_at: new Date().toISOString() }),
+  user_profiles: () => ({ avatar_url: null, currency: 'EUR', language: 'es', onboarding_completed: false, updated_at: new Date().toISOString() }),
+  user_profile_favorite_categories: () => ({ created_at: new Date().toISOString() }),
   regalos_enviados: () => ({ fecha: new Date().toISOString(), semana: '0001-01-01' }),
   user_daily_snapshots: () => ({ created_at: new Date().toISOString() }),
   notificaciones: () => ({ is_read: false, created_at: new Date().toISOString(), payload: {}, gift_thanked_at: null }),
@@ -80,9 +84,10 @@ function rlsError() {
 }
 
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
-export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) {
+export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInError = null, now = () => new Date() } = {}) {
   const tables = {
-    minifiguras: [], gamificacion: [], perfiles_publicos: [], regalos_enviados: [], user_daily_snapshots: [],
+    minifiguras: [], gamificacion: [], perfiles_publicos: [], user_profiles: [], user_profile_favorite_categories: [],
+    regalos_enviados: [], user_daily_snapshots: [],
     notificaciones: [], agradecimientos_regalo: [], ranking_top10_membership: [],
   };
   const failures = [];
@@ -91,6 +96,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     authUsers: new Set(Object.values(users).map(({ id }) => id)),
   };
   const adminCalls = [];
+  const avatarObjects = new Map();
   let sequence = 0;
 
   function userForToken(token) {
@@ -128,6 +134,76 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     };
     tables.notificaciones.push(notification);
     return notification;
+  }
+
+  function saveUserProfile(parameters, uid) {
+    const username = parameters?.p_username;
+    const avatarUrl = typeof parameters?.p_avatar_url === 'string' && parameters.p_avatar_url.trim()
+      ? parameters.p_avatar_url.trim() : null;
+    const currency = parameters?.p_currency;
+    const language = parameters?.p_language;
+    const favorites = parameters?.p_favorite_categories ?? [];
+    const existing = tables.user_profiles.find(({ user_id }) => user_id === uid);
+
+    if (typeof username !== 'string' || !/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+      return { data: null, error: { code: '23514', message: 'USERNAME_INVALIDO' } };
+    }
+    if (tables.user_profiles.some((profile) => profile.user_id !== uid && profile.username.toLowerCase() === username.toLowerCase())) {
+      return { data: null, error: { code: '23505', message: 'USERNAME_OCUPADO' } };
+    }
+    if (existing?.onboarding_completed && existing.username !== username) {
+      return { data: null, error: { code: '23514', message: 'USERNAME_INMUTABLE' } };
+    }
+    if (avatarUrl && !/^https?:\/\//i.test(avatarUrl)) {
+      return { data: null, error: { code: '23514', message: 'AVATAR_URL_INVALIDA' } };
+    }
+    if (currency !== 'EUR' || language !== 'es' || !Array.isArray(favorites) || favorites.length > 3) {
+      return { data: null, error: { code: '23514', message: 'PERFIL_INVALIDO' } };
+    }
+
+    const normalizedFavorites = [...new Set(favorites.map((name) => typeof name === 'string' ? name.trim() : ''))];
+    if (normalizedFavorites.some((name) => !name)) {
+      return { data: null, error: { code: '22023', message: 'CATEGORIA_INVALIDA' } };
+    }
+
+    const profileSnapshot = clone(tables.user_profiles);
+    const favoritesSnapshot = clone(tables.user_profile_favorite_categories);
+    const publicProfilesSnapshot = clone(tables.perfiles_publicos);
+    try {
+      const profileFailure = takeFailure('user_profiles', 'upsert');
+      if (profileFailure) throw profileFailure;
+      const updatedAt = timestamp();
+      const row = {
+        user_id: uid, username, avatar_url: avatarUrl, currency, language,
+        onboarding_completed: true, updated_at: updatedAt,
+      };
+      if (existing) Object.assign(existing, row);
+      else tables.user_profiles.push(withDefaults('user_profiles', row));
+
+      const categoryFailure = takeFailure('user_profile_favorite_categories', 'replace');
+      if (categoryFailure) throw categoryFailure;
+      tables.user_profile_favorite_categories = tables.user_profile_favorite_categories
+        .filter(({ user_id }) => user_id !== uid);
+      for (const categoryName of normalizedFavorites) {
+        tables.user_profile_favorite_categories.push(withDefaults('user_profile_favorite_categories', {
+          user_id: uid, category_name: categoryName,
+        }));
+      }
+
+      const publicProfileFailure = takeFailure('perfiles_publicos', 'upsert');
+      if (publicProfileFailure) throw publicProfileFailure;
+      const publicProfile = tables.perfiles_publicos.find(({ user_id }) => user_id === uid);
+      if (publicProfile) Object.assign(publicProfile, { display_name: username, avatar_url: avatarUrl, updated_at: updatedAt });
+      else tables.perfiles_publicos.push(withDefaults('perfiles_publicos', {
+        user_id: uid, display_name: username, avatar_url: avatarUrl, updated_at: updatedAt,
+      }));
+      return { data: null, error: null };
+    } catch (error) {
+      tables.user_profiles = profileSnapshot;
+      tables.user_profile_favorite_categories = favoritesSnapshot;
+      tables.perfiles_publicos = publicProfilesSnapshot;
+      return { data: null, error };
+    }
   }
 
   function addBricks(gamification, amount) {
@@ -257,6 +333,21 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     if (failure) return { data: null, error: failure };
     if (!uid) return { data: null, error: { code: '42501', message: 'NO_AUTENTICADO' } };
 
+    if (name === 'guardar_perfil_usuario') return saveUserProfile(parameters, uid);
+
+    if (name === 'eliminar_cuenta_usuario') {
+      for (const table of Object.keys(tables)) {
+        tables[table] = tables[table].filter((row) => row.user_id !== uid
+          && row.donante_id !== uid && row.receptor_id !== uid
+          && row.thanker_id !== uid && row.donor_id !== uid);
+      }
+      for (const [token, user] of Object.entries(users)) {
+        if (user.id === uid) delete users[token];
+      }
+      dailySync.authUsers.delete(uid);
+      return { data: null, error: null };
+    }
+
     if (name === 'regalos_recibidos_count') {
       return { data: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === uid && semana === '0001-01-01').length, error: null };
     }
@@ -285,10 +376,10 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         || weeklyUsers.some(({ userId }) => userId === parameters.p_usuario_id);
       const target = eligible ? tables.gamificacion.find(({ user_id }) => user_id === parameters.p_usuario_id) : null;
       if (!target) return { data: null, error: null };
-      const profile = tables.perfiles_publicos.find(({ user_id }) => user_id === target.user_id);
+      const profile = tables.user_profiles.find(({ user_id }) => user_id === target.user_id);
       const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
       return { data: clone({
-        userId: target.user_id, displayName: profile?.display_name ?? 'Coleccionista', bricks: target.bricks,
+        userId: target.user_id, displayName: profile?.username ?? 'Coleccionista', bricks: target.bricks,
         nivel: { id: target.nivel?.id ?? 0, nombre: target.nivel?.nombre ?? 'Duplo' },
         logros: target.logros.map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
       }), error: null };
@@ -348,7 +439,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         return {
           userId: gamification.user_id,
           avatarUrl: profile?.avatar_url ?? null,
-          displayName: profile?.display_name ?? 'Coleccionista',
+          displayName: tables.user_profiles.find(({ user_id }) => user_id === gamification.user_id)?.username ?? 'Coleccionista',
           bricks: gamification.bricks,
           nivel: levelId,
           nombreNivel: gamification.nivel?.nombre ?? 'Duplo',
@@ -417,7 +508,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
           return {
             user_id: gamification.user_id,
             avatar_url: profile?.avatar_url ?? null,
-            display_name: profile?.display_name ?? 'Coleccionista',
+            display_name: tables.user_profiles.find(({ user_id }) => user_id === gamification.user_id)?.username ?? 'Coleccionista',
             bricks: gamification.bricks,
             nivel: levelId,
             nombre_nivel: gamification.nivel?.nombre ?? 'Duplo',
@@ -489,7 +580,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         });
         const notificationFailure = takeFailure('notificaciones', 'insert');
         if (notificationFailure) throw notificationFailure;
-        const donorName = tables.perfiles_publicos.find(({ user_id }) => user_id === uid)?.display_name ?? 'Coleccionista';
+        const donorName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
         insertNotification({
           user_id: receiverId,
           type: 'gift_received',
@@ -497,6 +588,7 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
           gift_semana: week,
           payload: {
             user: donorName,
+            actorUserId: uid,
             amount,
             message: `El usuario ${donorName} vio tus tops en el Ranking ${weekly ? 'Semanal' : 'Global'} y te regaló ${amount} Bricks 🧱`,
           },
@@ -543,11 +635,11 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         });
         const notificationFailure = takeFailure('notificaciones', 'insert');
         if (notificationFailure) throw notificationFailure;
-        const thankerName = tables.perfiles_publicos.find(({ user_id }) => user_id === uid)?.display_name ?? 'Coleccionista';
+        const thankerName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
         insertNotification({
           user_id: donor.user_id,
           type: 'gift_thanks',
-          payload: { user: thankerName, amount: 5, message: `${thankerName} te dio las gracias por tu regalo.` },
+          payload: { user: thankerName, actorUserId: uid, amount: 5, message: `${thankerName} te dio las gracias por tu regalo.` },
         });
         return { data: { ok: true }, error: null };
       } catch (error) {
@@ -834,7 +926,35 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
     const token = authorization.replace(/^Bearer\s+/i, '');
     const uid = userForToken(token)?.id ?? null;
     return {
+      storage: {
+        from(bucket) {
+          return {
+            async list(prefix, { limit = 100 } = {}) {
+              if (!uid || prefix !== uid || bucket !== 'profile-avatars') return { data: null, error: rlsError() };
+              const error = takeFailure(bucket, 'list');
+              const data = [...avatarObjects.keys()].filter((path) => path.startsWith(`${uid}/`)).slice(0, limit)
+                .map((path) => ({ id: path, name: path.slice(uid.length + 1) }));
+              return { data: error ? null : data, error };
+            },
+            async remove(paths) {
+              if (!uid || bucket !== 'profile-avatars' || paths.some((path) => !path.startsWith(`${uid}/`))) {
+                return { data: null, error: rlsError() };
+              }
+              const error = takeFailure(bucket, 'remove');
+              if (error) return { data: null, error };
+              for (const path of paths) avatarObjects.delete(path);
+              return { data: [], error: null };
+            },
+          };
+        },
+      },
       auth: {
+        async signInWithPassword({ email, password }) {
+          const entry = Object.entries(users).find(([, user]) => user.email === email && passwords[user.id] === password);
+          return entry && !passwordSignInError
+            ? { data: { session: { access_token: entry[0], refresh_token: `refresh-${entry[0]}` } }, error: null }
+            : { data: null, error: { message: 'invalid credentials' } };
+        },
         async getUser(jwt = token) {
           const user = userForToken(jwt);
           return user
@@ -846,6 +966,15 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
         return queryBuilder(table, uid);
       },
       rpc(name, parameters = {}) {
+        if (name === 'resolver_acceso_username') {
+          const failure = takeFailure(name, 'rpc');
+          const profile = tables.user_profiles.find(({ username }) => username.toLowerCase() === parameters.p_username?.toLowerCase());
+          const user = Object.values(users).find(({ id }) => id === profile?.user_id);
+          return Promise.resolve({
+            data: !failure && user && passwords[user.id] === parameters.p_password ? user.email : null,
+            error: failure,
+          });
+        }
         return Promise.resolve().then(() => rpc(name, parameters, uid));
       },
     };
@@ -853,6 +982,12 @@ export function createSupabaseMock({ users = {}, now = () => new Date() } = {}) 
 
   return {
     createClient,
+    seedAvatar(userId, filename) {
+      avatarObjects.set(`${userId}/${filename}`, true);
+    },
+    avatarPaths() {
+      return [...avatarObjects.keys()];
+    },
     createAdminClient() {
       return {
         from() {
