@@ -478,7 +478,7 @@ test('las filas del ranking no ofrecen logros y conservan la expansion al clicar
   dom.window.close();
 });
 
-test('el modal limita los destacados a tres en smartphone y landscape, y conserva cinco en tablet portrait', async () => {
+test('el modal muestra dos Top 3 en una fila en ambas orientaciones de tablet y conserva smartphone', async () => {
   const dom = createDom();
   const top5Precio = Array.from({ length: 5 }, (_, index) => ({
     id: `PRICE-${index}`, nombre: `Price ${index}`, precio: 50 - index,
@@ -494,6 +494,12 @@ test('el modal limita los destacados a tres en smartphone y landscape, y conserv
   dom.window.document.querySelector('.ranking-expand').click();
 
   const groups = [...dom.window.document.querySelectorAll('.ranking-highlight-group')];
+  const details = dom.window.document.querySelector('.ranking-user-details');
+  assert.equal(details.parentElement.className, 'global-ranking-row');
+  assert.ok(details.parentElement.querySelector(':scope > .ranking-summary'));
+  assert.match(styles, /\.ranking-user-details \{[^}]*grid-column: 1; grid-row: 2;[^}]*width: 100%; margin-right: 0;/);
+  assert.match(styles, /\.global-ranking-row > \.ranking-summary \{ grid-column: 1; grid-row: 1; \}/);
+  assert.match(styles, /\.global-ranking-entry > \.global-ranking-row \{ row-gap: 0; \}/);
   assert.deepEqual(groups.map((group) => [
     group.querySelector('.ranking-highlight-title-portrait').textContent,
     group.querySelector('.ranking-highlight-title-landscape').textContent,
@@ -505,9 +511,20 @@ test('el modal limita los destacados a tres en smartphone y landscape, y conserv
     assert.equal(cards.length, 5);
     assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.map(({ nombre }) => nombre));
   }
-  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 6\) \{ display: none; \}/);
+  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
   assert.match(styles, /@media \(max-width: 600px\) and \(orientation: portrait\) \{\s*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}\s*\.ranking-highlight-title-portrait \{ display: none; \}\s*\.ranking-highlight-title-landscape \{ display: inline; \}/);
   assert.match(styles, /@media \(orientation: landscape\) \{[^}]*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}[^}]*\.ranking-highlight-title-portrait \{ display: none; \}/s);
+  const styleDom = new JSDOM('<style></style>');
+  styleDom.window.document.querySelector('style').textContent = styles;
+  const tablet = [...styleDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
+  const declarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(declarations.get('.ranking-highlight-group .ranking-card-static:nth-child(n + 4)').getPropertyValue('display'), 'none');
+  assert.equal(declarations.get('.ranking-highlight-title-portrait').getPropertyValue('display'), 'none');
+  assert.equal(declarations.get('.ranking-highlight-title-landscape').getPropertyValue('display'), 'inline');
+  assert.equal(declarations.get('#ranking-dialog .ranking-user-details, #weekly-ranking-dialog .ranking-user-details').getPropertyValue('grid-template-columns'), 'repeat(2, minmax(0, 1fr))');
+  assert.equal(declarations.get('.ranking-user-details .ranking-highlight-group .ranking-row').getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
+  assert.equal(declarations.get('.ranking-user-details .ranking-highlight-group .ranking-row').getPropertyValue('min-width'), '0');
+  styleDom.window.close();
   assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
   dom.window.close();
 });

@@ -166,14 +166,39 @@ Esta acción no se puede deshacer.</p>
         <div class="brand-heading">
           <h1><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
         </div>
-        <section class="gamification-summary" aria-labelledby="gamification-title">
-          <div class="gamification-main">
+        <div class="notifications-entry-row">
             <div class="ranking-session">
               <button type="button" id="ranking-main-globe" class="ranking-main-globe" aria-label="En Top Global" aria-haspopup="dialog" aria-controls="ranking-dialog" title="En Top Global" hidden>
                 <span aria-hidden="true">🌐</span>
                 <span id="ranking-main-position" class="ranking-main-position" aria-hidden="true"></span>
               </button>
             </div>
+            <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
+              <img src="/status_images/sobre.png" alt="">
+              <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
+            </button>
+            <button type="button" id="open-friends" class="notifications-trigger friends-trigger" aria-label="Amigos: 375" title="Amigos: 375">
+              <img src="/status_images/friends.png" alt="">
+              <span id="friends-count" class="friends-count" aria-hidden="true">375</span>
+            </button>
+            <div class="user-session">
+              <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
+                <img id="user-avatar" class="user-avatar" alt="" hidden>
+                <span class="user-avatar-fallback" aria-hidden="true">👤</span>
+                <span class="user-menu-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div id="user-profile" class="user-profile" hidden>
+                <span id="user-name" class="user-name"></span>
+                <div class="user-profile-actions">
+                  <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> Preferencias</button>
+                </div>
+                <div class="user-profile-logout">
+                  <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
+                </div>
+              </div>
+            </div>
+        <section class="gamification-summary" aria-labelledby="gamification-title">
+          <div class="gamification-main">
             <span class="gamification-bricks-value">
               <strong id="gamification-bricks">0</strong>
               <img class="gamification-brick-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="Bricks">
@@ -219,31 +244,9 @@ Esta acción no se puede deshacer.</p>
             </div>
           </div>
         </section>
-      </div>
-    </header>
-
-    <div class="notifications-entry-row">
-      <div class="user-session">
-        <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
-          <img id="user-avatar" class="user-avatar" alt="" hidden>
-          <span class="user-avatar-fallback" aria-hidden="true">👤</span>
-          <span class="user-menu-chevron" aria-hidden="true">▾</span>
-        </button>
-        <div id="user-profile" class="user-profile" hidden>
-          <span id="user-name" class="user-name"></span>
-          <div class="user-profile-actions">
-            <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> Preferencias</button>
-          </div>
-          <div class="user-profile-logout">
-            <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
-          </div>
         </div>
       </div>
-      <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
-        <img src="/status_images/sobre.png" alt="">
-        <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
-      </button>
-    </div>
+    </header>
 
     <section class="rankings-panel" aria-labelledby="rankings-title">
       <div class="section-heading">

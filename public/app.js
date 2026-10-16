@@ -1458,7 +1458,8 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
       highlightGroup('por precio', (entry.top5Precio ?? []).slice(0, 5), 'precio', entry.userId),
       highlightGroup('por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 5), 'antiguedad', entry.userId),
     );
-    article.append(row, details);
+    row.append(details);
+    article.append(row);
     fragment.append(article);
   }
   list.replaceChildren(fragment);
