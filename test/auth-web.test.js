@@ -399,8 +399,10 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#user-name').hidden, false);
   assert.equal($('#user-avatar').hidden, true);
   assert.equal($('#user-profile').hidden, true);
-  assert.equal($('.notifications-entry-row').firstElementChild, $('.user-session'));
-  assert.equal($('.user-session').nextElementSibling, $('#open-notifications'));
+  assert.equal($('.notifications-entry-row').firstElementChild, $('.ranking-session'));
+  assert.equal($('.ranking-session').nextElementSibling, $('#open-notifications'));
+  assert.equal($('#open-notifications').nextElementSibling, $('#open-friends'));
+  assert.equal($('#open-friends').nextElementSibling, $('.user-session'));
   assert.equal($('.gamification-summary #user-menu-toggle'), null);
   assert.equal($('#open-user-settings').className, $('#open-achievements').className);
   assert.equal($('#open-user-settings').textContent.trim(), '⚙️ Preferencias');
@@ -566,6 +568,15 @@ test('el avatar propio tiene prioridad y quitarlo recupera el de Google en la vi
     await waitFor(() => $('#user-profile-dialog').open);
     assert.equal($('#profile-avatar-preview').src, 'https://custom.example/avatar.png');
     assert.match(styles, /\.profile-avatar-preview \{[^}]*border: 2px solid var\(--blue\);/);
+    const avatarStyles = new JSDOM('<style></style>');
+    avatarStyles.window.document.querySelector('style').textContent = styles;
+    const avatarRule = [...avatarStyles.window.document.styleSheets[0].cssRules].find((rule) => rule.selectorText === '.user-avatar:not([hidden]), .user-avatar-fallback, .profile-avatar-preview');
+    assert.equal(avatarRule.style.getPropertyValue('transform'), 'scale(1.15)');
+    assert.equal(avatarRule.style.getPropertyValue('transform-origin'), 'right center');
+    for (const property of ['width', 'height', 'margin', 'padding', 'gap', 'flex-basis']) {
+      assert.equal(avatarRule.style.getPropertyValue(property), '');
+    }
+    avatarStyles.window.close();
     $('#profile-avatar-remove').click();
     assert.equal($('#profile-avatar-preview').src, 'https://google.example/avatar.png');
     $('#user-profile-form').dispatchEvent(new window.Event('submit', { cancelable: true }));

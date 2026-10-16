@@ -56,6 +56,9 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const envelopeImage = await fetch(`${baseUrl}/status_images/sobre.png`);
     assert.equal(envelopeImage.status, 200);
     assert.match(envelopeImage.headers.get('content-type'), /^image\/png/);
+    const friendsImage = await fetch(`${baseUrl}/status_images/friends.png`);
+    assert.equal(friendsImage.status, 200);
+    assert.match(friendsImage.headers.get('content-type'), /^image\/png/);
 
     const levelImage = await fetch(`${baseUrl}/level_images/9_forestman.png`);
     assert.equal(levelImage.status, 200);
@@ -173,6 +176,42 @@ test('los modales usan bordes neutros como los paneles principales', async () =>
   assert.match(css, /\.modal-content\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
 });
 
+test('cualquier modal bloquea el scroll del fondo hasta cerrar el ultimo dialogo', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.append(style);
+    const dialogs = [...document.querySelectorAll('dialog')];
+    assert.ok(dialogs.length > 1);
+    const dialogRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === 'dialog');
+    assert.equal(dialogRule.style.getPropertyValue('overscroll-behavior'), 'contain');
+    const assertLocked = (expected) => {
+      for (const element of [document.documentElement, document.body]) {
+        assert.equal(dom.window.getComputedStyle(element).overflow === 'hidden', expected);
+      }
+    };
+    assertLocked(false);
+    for (const dialog of dialogs) {
+      dialog.setAttribute('open', '');
+      assertLocked(true);
+      dialog.removeAttribute('open');
+      assertLocked(false);
+    }
+    dialogs[0].setAttribute('open', '');
+    dialogs[1].setAttribute('open', '');
+    dialogs[1].removeAttribute('open');
+    assertLocked(true);
+    dialogs[0].removeAttribute('open');
+    assertLocked(false);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a la izquierda', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
@@ -242,6 +281,34 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   dom.window.document.querySelector('style').textContent = css;
   const rules = [...dom.window.document.styleSheets[0].cssRules];
   const smartphone = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).at(-1);
+  const smartphoneHeader = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
+  const levelPanel = [...smartphoneHeader.cssRules].find((rule) => rule.selectorText === '.notifications-entry-row > .gamification-summary');
+  assert.equal(levelPanel.style.getPropertyValue('grid-column'), '1 / -1');
+  assert.equal(levelPanel.style.getPropertyValue('grid-row'), '2');
+  const headerDeclarations = new Map([...smartphoneHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(headerDeclarations.get('.page-header .header-top').getPropertyValue('display'), 'grid');
+  assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('grid-area'), '1 / 1');
+  assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('justify-self'), 'start');
+  assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('width'), 'min(160px, calc(100% - 220px))');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-area'), '1 / 1');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-rows'), '68px auto');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) 32px 44px 44px 64px');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
+  for (const [selector, column] of [['.ranking-session', '2'], ['.notifications-trigger', '3'], ['.friends-trigger', '4'], ['.user-session', '5']]) {
+    assert.equal(headerDeclarations.get(`.header-top > .notifications-entry-row > ${selector}`).getPropertyValue('grid-column'), column);
+  }
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-profile').getPropertyValue('right'), '0');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-menu-toggle').getPropertyValue('gap'), '2px');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-avatar:not([hidden]), .header-top > .notifications-entry-row .user-avatar-fallback').getPropertyValue('width'), '32px');
+  const bricks = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-bricks-value');
+  const counts = headerDeclarations.get('.header-top > .notifications-entry-row .collection-counts-panel');
+  assert.equal(bricks.getPropertyValue('grid-row'), '2');
+  assert.equal(bricks.getPropertyValue('grid-column'), '1');
+  assert.equal(bricks.getPropertyValue('justify-self'), 'start');
+  assert.equal(counts.getPropertyValue('grid-row'), '2');
+  assert.equal(counts.getPropertyValue('grid-column'), '2 / 4');
+  assert.equal(counts.getPropertyValue('justify-self'), 'end');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .gamification-level-stack').getPropertyValue('grid-column'), '1 / 3');
   const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(declarations.get(':root')?.getPropertyValue('font-size'), '14px');
   assert.equal(declarations.get('.watchlist-row, .top-five .ranking-row')?.getPropertyValue('grid-template-columns'), 'repeat(5, minmax(0, 1fr))');
@@ -360,8 +427,61 @@ test('seguimiento en smartphone se oculta tambien cuando supera cinco figuras', 
   }
 });
 
+test('tablet portrait conserva la cabecera horizontal y la distribucion de nivel de monitor', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style>');
+  try {
+    dom.window.document.querySelector('style').textContent = css;
+    const tablet = [...dom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 1366px) and (orientation: portrait)');
+    const declarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(declarations.get('.page-header .header-top').getPropertyValue('flex-direction'), 'row');
+    assert.equal(declarations.get('.page-header .header-top').getPropertyValue('flex-wrap'), 'nowrap');
+    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('margin'), '0');
+    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('flex'), '0 0 25%');
+    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('width'), '25%');
+    assert.equal(declarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
+    assert.equal(declarations.get('.header-top > .notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
+    const narrowTablet = [...dom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 700px) and (orientation: portrait)');
+    const narrowStyles = new Map([...narrowTablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('grid-template-columns'), 'auto minmax(0, 1fr) auto 28px');
+    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-summary').getPropertyValue('padding'), '8px');
+    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-bricks-value, .header-top > .notifications-entry-row .collection-counts-panel > span').getPropertyValue('display'), 'grid');
+    for (const [selector, column] of [['.ranking-session', '1'], ['.notifications-trigger', '2'], ['.friends-trigger', '3'], ['.user-session', '4']]) {
+      assert.equal(declarations.get(`.header-top > .notifications-entry-row > ${selector}`).getPropertyValue('grid-column'), column);
+    }
+    assert.equal(declarations.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('grid-template-columns'), 'auto minmax(0, 1fr) auto 36px');
+    for (const [selector, column] of [['.gamification-bricks-value', '1'], ['.gamification-level-stack', '2'], ['.collection-counts-panel', '3'], ['#gamification-toggle', '4']]) {
+      const style = declarations.get(`.header-top > .notifications-entry-row ${selector}`);
+      assert.equal(style.getPropertyValue('grid-column'), column);
+      assert.equal(style.getPropertyValue('grid-row'), '1');
+    }
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('la interfaz centra el contenido, iguala la tipografia del resumen y elimina la linea de rankings', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const monitorDom = new JSDOM('<style></style>');
+  monitorDom.window.document.querySelector('style').textContent = css;
+  const monitor = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine)');
+  const monitorStyles = new Map([...monitor.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(monitorStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .notifications-trigger').getPropertyValue('grid-column'), '2');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .friends-trigger').getPropertyValue('grid-column'), '3');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .user-session').getPropertyValue('grid-column'), '4');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
+  const wideHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: landscape) and (hover: hover) and (pointer: fine), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
+  const wideStyles = new Map([...wideHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(wideStyles.get('.header-top > .notifications-entry-row').getPropertyValue('max-width'), 'none');
+  assert.equal(wideStyles.get('.page-header .header-top').getPropertyValue('gap'), '16px');
+  assert.equal(wideStyles.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('column-gap'), '10px');
+  const monitorHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: landscape) and (hover: hover) and (pointer: fine)');
+  assert.equal(monitorHeader.cssRules[0].style.getPropertyValue('flex'), '0 0 clamp(100px, calc(100% - 960px), 320px)');
+  const landscapeTablet = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)').at(-1);
+  const landscapeStyles = new Map([...landscapeTablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(landscapeStyles.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
+  monitorDom.window.close();
   assert.doesNotMatch(css, /body\s*\{[^}]*text-align:\s*center/s);
   assert.match(css, /\.rankings\s*\{[^}]*text-align:\s*center/s);
   assert.match(css, /\.watchlist-panel\s*\{[^}]*text-align:\s*center/s);
@@ -376,10 +496,10 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
   assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 320px/s);
   assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
-  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(0, 1fr\) auto auto/s);
+  assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
   assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) Arial, sans-serif/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
-  assert.match(css, /\.gamification-summary\s*\{[^}]*flex:\s*0 0 840px[^}]*margin-left:\s*auto/s);
+  assert.match(css, /\.notifications-entry-row\s*\{[^}]*grid-template-columns: 36px 52px 52px 76px minmax\(0, 1fr\)[^}]*min-width: 0/s);
   assert.match(css, /\.gamification-level-stack \{[^}]*display: grid;[^}]*grid-template-columns: var\(--level-image-size\) minmax\(0, 1fr\);[^}]*min-height: var\(--level-image-size\);/);
   assert.match(css, /\.gamification-level-stack \{[^}]*row-gap: 4px;/);
   assert.match(css, /\.gamification-level-stack \.gamification-level \{[^}]*grid-row: 1 \/ 3; grid-template-rows: subgrid;/);
@@ -471,11 +591,18 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     const document = new JSDOM(html).window.document;
     const headerTop = document.querySelector('.header-top');
     assert.equal(headerTop.children[0].className, 'brand-heading');
-    assert.equal(headerTop.children[1].className, 'gamification-summary');
+    assert.equal(headerTop.children[1].className, 'notifications-entry-row');
     assert.equal(document.querySelector('.notifications-entry-row #open-notifications')?.getAttribute('aria-controls'), 'notifications-dialog');
-    assert.equal(document.querySelector('.notifications-entry-row').nextElementSibling.classList.contains('rankings-panel'), true);
-    assert.match(css, /\.notifications-entry-row \{ display: flex; justify-content: flex-start;/);
-    assert.match(css, /@media \(max-width: 600px\) and \(orientation: portrait\), \(max-width: 600px\) and \(max-height: 500px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.page-shell \{ position: relative; \}\s*\.notifications-entry-row \{ position: relative; z-index: 30; margin: 0 0 12px; \}/);
+    assert.equal(document.querySelector('.page-header').nextElementSibling.classList.contains('rankings-panel'), true);
+    assert.deepEqual([...document.querySelector('.notifications-entry-row').children].map((element) => element.className), ['ranking-session', 'notifications-trigger', 'notifications-trigger friends-trigger', 'user-session', 'gamification-summary']);
+    assert.equal(document.querySelector('#open-friends').getAttribute('aria-label'), 'Amigos: 375');
+    assert.equal(document.querySelector('#open-friends').title, 'Amigos: 375');
+    assert.equal(document.querySelector('#open-friends img').getAttribute('src'), '/status_images/friends.png');
+    assert.equal(document.querySelector('#open-friends #friends-count').textContent, '375');
+    assert.equal(document.querySelector('#friends-count').getAttribute('aria-hidden'), 'true');
+    assert.match(css, /\.friends-count \{[^}]*position: absolute;[^}]*background: var\(--blue\);/);
+    assert.match(css, /\.notifications-entry-row > \.ranking-session \{[^}]*width: 36px; min-height: 44px;/);
+    assert.match(css, /\.notifications-entry-row > \.gamification-summary \{ grid-column: 1 \/ -1; grid-row: 2; \}/);
     assert.match(css, /\.notifications-toolbar \{ display: flex; justify-content: flex-start;/);
     assert.match(css, /\.toast-notification \{ color: white; background: #2e7d32;/);
     assert.equal(document.querySelector('#open-notifications img').getAttribute('src'), '/status_images/sobre.png');
@@ -483,11 +610,11 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(document.querySelector('#notifications-unread-badge').hidden, true);
     assert.equal(document.querySelector('#notifications-dialog').getAttribute('aria-labelledby'), 'notifications-dialog-title');
     const main = document.querySelector('.gamification-main');
-    assert.deepEqual([...main.children].map((element) => element.className), ['ranking-session', 'gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
+    assert.deepEqual([...main.children].map((element) => element.className), ['gamification-bricks-value', 'gamification-level-stack', 'collection-counts-panel', 'gamification-toggle']);
     assert.deepEqual([...main.querySelector('.gamification-level-stack').children].map((element) => element.className), ['gamification-level', 'gamification-dna-row']);
     assert.equal(document.querySelector('.notifications-entry-row #user-avatar').parentElement.id, 'user-menu-toggle');
     assert.equal(main.querySelector('#user-menu-toggle'), null);
-    assert.equal(document.querySelector('.user-session').nextElementSibling.id, 'open-notifications');
+    assert.equal(document.querySelector('#open-friends').nextElementSibling, document.querySelector('.user-session'));
     assert.equal(main.querySelector('#open-dna-inline').className, 'gamification-dna-name');
     assert.equal(main.querySelector('#open-dna-inline').tagName, 'BUTTON');
     assert.equal(main.querySelector('#gamification-dna-principal').textContent, 'Newbie');
