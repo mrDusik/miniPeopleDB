@@ -421,7 +421,7 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#catalog-body').children.length, 1);
 
   const dataRequests = requests.filter(({ url }) => url !== '/categorias');
-  assert.deepEqual(dataRequests.map(({ url }) => url), ['/api/profile', '/api/notificaciones', '/minifiguras', '/valoracion', '/gamificacion', '/api/ranking', '/gamificacion/dna', '/sincronizacion/brickset']);
+  assert.deepEqual(dataRequests.map(({ url }) => url), ['/api/profile', '/api/amigos/contadores', '/api/notificaciones', '/minifiguras', '/valoracion', '/gamificacion', '/api/ranking', '/gamificacion/dna', '/sincronizacion/brickset']);
   for (const { init } of dataRequests) {
     assert.equal(init.headers.Authorization, 'Bearer token-navegador');
   }
@@ -660,6 +660,28 @@ test('Preferencias agrupa tres filas y mantiene visibles hasta tres categorías 
     $('#profile-selected-categories button').click();
     assert.equal($('#profile-favorites-count').textContent, '2/3');
     assert.equal($('#profile-selected-categories').children.length, 2);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('preferencias mantiene altura fija al buscar categorias y desplaza los controles del avatar', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const scoped = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine), (max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
+    const declaration = (selector) => [...scoped.cssRules].find((rule) => rule.selectorText === selector).style;
+    assert.equal(declaration('.user-profile-dialog').getPropertyValue('height'), 'min(640px, calc(100dvh - 32px))');
+    const baseDialog = rules.find((rule) => rule.selectorText === '.user-profile-dialog').style;
+    assert.equal(baseDialog.getPropertyValue('overflow-y'), 'auto');
+    assert.equal(baseDialog.getPropertyValue('height'), '');
+    assert.equal(declaration('.profile-favorite-categories').getPropertyValue('height'), '108px');
+    assert.equal(declaration('.profile-favorite-categories').getPropertyValue('align-content'), 'start');
+    assert.equal(declaration('.profile-avatar-controls').getPropertyValue('padding-left'), '12px');
+    const tablet = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)' && [...rule.cssRules].some((nestedRule) => nestedRule.selectorText === '.user-profile-dialog'));
+    const tabletDeclarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(tabletDeclarations.get('.user-profile-dialog').getPropertyValue('height'), 'min(640px, calc(100dvh - 32px))');
+    assert.equal(tabletDeclarations.get('.profile-favorite-categories').getPropertyValue('height'), '108px');
   } finally {
     dom.window.close();
   }

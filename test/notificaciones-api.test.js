@@ -119,3 +119,57 @@ test('fallos de persistencia de bandeja devuelven errores controlados', async ()
     await context.close();
   }
 });
+
+test('la notificación de amistad acepta sin leer, persiste el estado y no duplica eventos', async () => {
+  const mock = notificationsMock();
+  const senderClient = mock.createClient('url', 'key', { global: { headers: { Authorization: `Bearer ${TEST_TOKEN}` } } });
+  const request = await senderClient.rpc('amigos_enviar', { p_receptor_id: RECEIVER_ID });
+  assert.equal(request.error, null);
+  const requestNotification = mock.rows('notificaciones', RECEIVER_ID).find(({ type }) => type === 'friend_request');
+  assert.ok(requestNotification);
+
+  const context = await startTestServer({ supabase: mock });
+  const sender = authFetch(TEST_TOKEN);
+  const receiver = authFetch(OTHER_TOKEN);
+  const inboxUrl = `${context.baseUrl}/api/notificaciones`;
+  const acceptUrl = `${inboxUrl}/${requestNotification.id}/aceptar`;
+  try {
+    const initial = await (await receiver(inboxUrl)).json();
+    const notification = initial.notifications.find(({ type }) => type === 'friend_request');
+    assert.equal(notification.data.message, 'AdaCollector quiere ser tu amigo.');
+    assert.equal(notification.data.user, 'AdaCollector');
+    assert.equal(notification.canAccept, true);
+    assert.equal(notification.accepted, false);
+    assert.equal(notification.isRead, false);
+    assert.equal(initial.unreadCount, 1);
+    assert.equal((await sender(`${inboxUrl}/${requestNotification.id}/aceptar`, { method: 'POST' })).status, 404);
+
+    mock.failNext('amigos_aceptar', { code: 'XX000', message: 'private SQL detail' }, 'rpc');
+    const failed = await receiver(acceptUrl, { method: 'POST' });
+    const failedBody = await failed.json();
+    assert.equal(failed.status, 500, JSON.stringify(failedBody));
+    assert.deepEqual(failedBody, { error: 'NOTIFICACIONES_NO_DISPONIBLES' });
+    assert.equal(mock.rows('friend_requests')[0].status, 'pending');
+    assert.equal(mock.rows('notificaciones', RECEIVER_ID)[0].is_read, false);
+
+    const accepted = await receiver(acceptUrl, { method: 'POST' });
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), { ok: true, accepted: true, alreadyAccepted: false });
+    const retry = await receiver(acceptUrl, { method: 'POST' });
+    assert.deepEqual(await retry.json(), { ok: true, accepted: true, alreadyAccepted: true });
+    const updatedInbox = await (await receiver(inboxUrl)).json();
+    const acceptedRequest = updatedInbox.notifications.find(({ type }) => type === 'friend_request');
+    assert.equal(acceptedRequest.accepted, true);
+    assert.equal(acceptedRequest.canAccept, false);
+    assert.equal(acceptedRequest.isRead, false);
+    assert.equal(updatedInbox.unreadCount, 1);
+    assert.equal(mock.rows('friendships').length, 1);
+    assert.equal(mock.rows('notificaciones', DONOR_ID).filter(({ type }) => type === 'friend_request_accepted').length, 1);
+    const senderInbox = await (await sender(inboxUrl)).json();
+    const acceptance = senderInbox.notifications.find(({ type }) => type === 'friend_request_accepted');
+    assert.equal(acceptance.data.message, 'GraceCollector ha aceptado tu solicitud de amistad.');
+    assert.equal(acceptance.isRead, false);
+  } finally {
+    await context.close();
+  }
+});

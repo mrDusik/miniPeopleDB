@@ -122,7 +122,7 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
     const modalDocument = new JSDOM(html);
-    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 7);
+    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 9);
     modalDocument.window.close();
 
     for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
@@ -326,6 +326,20 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(declarations.get('.results-panel .table-thumb')?.getPropertyValue('width'), '36px');
   assert.equal(declarations.get('.results-panel .actions-buttons')?.getPropertyValue('width'), '100%');
   assert.equal(declarations.get('.results-panel .button-icon.button-small')?.getPropertyValue('flex'), '1 1 0');
+  const smartphoneProfileRules = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).flatMap((rule) => [...rule.cssRules]);
+  assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-tops')?.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
+  const profileHeading = smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading');
+  assert.equal(profileHeading?.style.getPropertyValue('grid-template-columns'), '42px minmax(0, 1fr) auto');
+  assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading h2')?.style.getPropertyValue('grid-column'), '2');
+  assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading h2')?.style.getPropertyValue('grid-row'), '1');
+  const profileFigures = rules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures');
+  assert.equal(profileFigures?.style.getPropertyValue('display'), 'flex');
+  assert.equal(profileFigures?.style.getPropertyValue('flex-wrap'), 'nowrap');
+  assert.equal(profileFigures?.style.getPropertyValue('overflow-x'), 'auto');
+  assert.equal(rules.find((rule) => rule.selectorText === '.public-profile-figures > li')?.style.getPropertyValue('flex'), '0 0 80px');
+  const profileCaption = rules.find((rule) => rule.selectorText === '.public-profile-figures .ranking-caption');
+  assert.equal(profileCaption?.style.getPropertyValue('white-space'), 'nowrap');
+  assert.equal(profileCaption?.style.getPropertyValue('text-overflow'), 'ellipsis');
   assert.deepEqual([1, 3, 8, 9, 11].map((column) => Number.parseInt(declarations.get(`.results-panel th:nth-child(${column})`)?.getPropertyValue('width'), 10)).reduce((total, width) => total + width, 0), 100);
   const watchlistScroller = [...smartphone.cssRules].find((rule) => rule.selectorText?.includes('.watchlist-row:has(> .watchlist-card:nth-child(6))'));
   assert.equal(watchlistScroller?.style.getPropertyValue('overflow-x'), 'auto');
@@ -355,9 +369,22 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const tabletDom = new JSDOM('<style></style>');
   tabletDom.window.document.querySelector('style').textContent = css;
   const tabletRules = [...tabletDom.window.document.styleSheets[0].cssRules];
+  const friendsTabs = tabletRules.find((rule) => rule.selectorText === '.friends-tabs');
+  const friendsTabButton = tabletRules.find((rule) => rule.selectorText === '.friends-tabs .button');
+  const friendsIcon = tabletRules.find((rule) => rule.selectorText === '.friends-dialog-heading img');
+  const friendsClose = tabletRules.find((rule) => rule.selectorText === '.friends-dialog-heading .button');
+  assert.equal(friendsTabs?.style.getPropertyValue('display'), 'flex');
+  assert.equal(friendsTabs?.style.getPropertyValue('flex-wrap'), 'nowrap');
+  assert.equal(friendsTabs?.style.getPropertyValue('overflow-x'), 'auto');
+  assert.equal(friendsTabButton?.style.getPropertyValue('height'), '36px');
+  assert.equal(friendsTabButton?.style.getPropertyValue('white-space'), 'nowrap');
+  assert.equal(friendsIcon?.style.getPropertyValue('width'), '3rem');
+  assert.equal(friendsIcon?.style.getPropertyValue('height'), '3rem');
+  assert.equal(friendsClose?.style.getPropertyValue('height'), '36px');
   const tabletPortrait = tabletRules.find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait) and (hover: none) and (pointer: coarse)');
   assert.ok(tabletPortrait);
   const tabletDeclarations = new Map([...tabletPortrait.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(tabletDeclarations.get('.modal-public-profile .public-profile-tops'), undefined);
   const restoredColumns = tabletDeclarations.get('.results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6)');
   assert.equal(restoredColumns?.getPropertyValue('display'), 'table-cell');
   assert.equal(tabletDeclarations.get('.results-panel th:nth-child(4)')?.getPropertyValue('width'), '21%');
@@ -374,22 +401,52 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   tabletDom.window.close();
 });
 
+test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(`<style>${css}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const smartphone = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
+    const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(declarations.get('#form-dialog .description-field textarea').getPropertyValue('height'), '100%');
+    assert.equal(declarations.get('#dna-dialog #dna-chart').getPropertyValue('transform'), 'translateY(-8px)');
+    assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('overflow'), 'visible');
+    assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('grid-template-columns'), 'repeat(4, minmax(0, 1fr))');
+    assert.equal(declarations.get('.modal-friends .friends-tabs .button').getPropertyValue('height'), '44px');
+    assert.equal(declarations.get('.friends-tabs .friends-tab-label-full').getPropertyValue('display'), 'none');
+    assert.equal(declarations.get('.friends-tabs .friends-tab-label-short').getPropertyValue('display'), 'inline');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-stats').getPropertyValue('grid-template-columns'), 'max-content minmax(0, 1fr) max-content max-content');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-stats > div').getPropertyValue('grid-template-columns'), '20px minmax(0, 1fr)');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-stat-icon').getPropertyValue('width'), '20px');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-stats strong').getPropertyValue('white-space'), 'nowrap');
+    assert.equal(declarations.get('.modal-public-profile #public-profile-level').getPropertyValue('white-space'), 'normal');
+    assert.equal(declarations.get('.modal-ranking .ranking-highlight-group .ranking-card-static').getPropertyValue('flex-basis'), '112px');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-figures > li:not(.public-profile-empty)').getPropertyValue('flex-basis'), '112px');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-figures .ranking-card, .modal-ranking .ranking-highlight-group .ranking-card-static').getPropertyValue('padding-top'), '52px');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('las cabeceras de modales en smartphone comparten altura y cierre sin separar los bricks', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM('<style></style>');
   dom.window.document.querySelector('style').textContent = css;
   const rules = [...dom.window.document.styleSheets[0].cssRules];
   const smartphoneRules = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).flatMap((rule) => [...rule.cssRules]);
-  const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading');
+  const headings = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading, .friends-dialog-heading');
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
   assert.equal(headings.style.getPropertyValue('margin-bottom'), '12px');
   const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty');
   assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
-  const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button');
+  const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button, .friends-dialog-heading .button');
   assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');
   assert.equal(buttons.style.getPropertyValue('height'), '36px');
   assert.equal(buttons.style.getPropertyValue('min-height'), '36px');
+  const friendsIcon = smartphoneRules.find((rule) => rule.selectorText === '.achievements-heading-icon, .friends-dialog-heading img');
+  assert.equal(friendsIcon.style.getPropertyValue('width'), '32px');
+  assert.equal(friendsIcon.style.getPropertyValue('height'), '32px');
   const achievements = smartphoneRules.find((rule) => rule.selectorText === '.achievement-item');
   assert.equal(achievements.style.getPropertyValue('grid-template-columns'), '32px minmax(0, 1fr) auto auto');
   assert.doesNotMatch(css, /\.achievements-heading-bricks\s*\{[^}]*grid-row:\s*2/s);
@@ -427,34 +484,24 @@ test('seguimiento en smartphone se oculta tambien cuando supera cinco figuras', 
   }
 });
 
-test('tablet portrait conserva la cabecera horizontal y la distribucion de nivel de monitor', async () => {
+test('tablet hereda la presentacion de monitor y solo adapta las columnas de la tabla', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM('<style></style>');
   try {
     dom.window.document.querySelector('style').textContent = css;
-    const tablet = [...dom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 1366px) and (orientation: portrait)');
-    const declarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
-    assert.equal(declarations.get('.page-header .header-top').getPropertyValue('flex-direction'), 'row');
-    assert.equal(declarations.get('.page-header .header-top').getPropertyValue('flex-wrap'), 'nowrap');
-    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('margin'), '0');
-    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('flex'), '0 0 25%');
-    assert.equal(declarations.get('.header-top > .brand-heading').getPropertyValue('width'), '25%');
-    assert.equal(declarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
-    assert.equal(declarations.get('.header-top > .notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
-    const narrowTablet = [...dom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 700px) and (orientation: portrait)');
-    const narrowStyles = new Map([...narrowTablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
-    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('grid-template-columns'), 'auto minmax(0, 1fr) auto 28px');
-    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-summary').getPropertyValue('padding'), '8px');
-    assert.equal(narrowStyles.get('.header-top > .notifications-entry-row .gamification-bricks-value, .header-top > .notifications-entry-row .collection-counts-panel > span').getPropertyValue('display'), 'grid');
-    for (const [selector, column] of [['.ranking-session', '1'], ['.notifications-trigger', '2'], ['.friends-trigger', '3'], ['.user-session', '4']]) {
-      assert.equal(declarations.get(`.header-top > .notifications-entry-row > ${selector}`).getPropertyValue('grid-column'), column);
-    }
-    assert.equal(declarations.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('grid-template-columns'), 'auto minmax(0, 1fr) auto 36px');
-    for (const [selector, column] of [['.gamification-bricks-value', '1'], ['.gamification-level-stack', '2'], ['.collection-counts-panel', '3'], ['#gamification-toggle', '4']]) {
-      const style = declarations.get(`.header-top > .notifications-entry-row ${selector}`);
-      assert.equal(style.getPropertyValue('grid-column'), column);
-      assert.equal(style.getPropertyValue('grid-row'), '1');
-    }
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const monitorPresentation = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
+    const declarations = new Map([...monitorPresentation.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(declarations.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
+    assert.equal(declarations.get('.notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
+    const tabletColumns = rules.find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait) and (hover: none) and (pointer: coarse)');
+    const tableDeclarations = new Map([...tabletColumns.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(tableDeclarations.get('.results-panel th:nth-child(4), .results-panel td:nth-child(4), .results-panel th:nth-child(5), .results-panel td:nth-child(5), .results-panel th:nth-child(6), .results-panel td:nth-child(6)').getPropertyValue('display'), 'table-cell');
+    assert.equal(tableDeclarations.get('.modal-public-profile .public-profile-tops'), undefined);
+    const portraitPresentation = rules.find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 1366px) and (orientation: portrait)');
+    const portraitStyles = new Map([...portraitPresentation.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(portraitStyles.get('.header-top > .brand-heading').getPropertyValue('flex'), '0 0 25%');
+    assert.equal(portraitStyles.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
   } finally {
     dom.window.close();
   }
@@ -464,8 +511,11 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const monitorDom = new JSDOM('<style></style>');
   monitorDom.window.document.querySelector('style').textContent = css;
-  const monitor = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine)');
+  const monitorRules = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine)');
+  const monitor = monitorRules[0];
   const monitorStyles = new Map([...monitor.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  const modalMonitorStyles = new Map([...monitorRules.at(-1).cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(modalMonitorStyles.get('.modal-public-profile').getPropertyValue('width'), 'min(1280px, calc(100% - 24px))');
   assert.equal(monitorStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
   assert.equal(monitorStyles.get('.notifications-entry-row > .notifications-trigger').getPropertyValue('grid-column'), '2');
   assert.equal(monitorStyles.get('.notifications-entry-row > .friends-trigger').getPropertyValue('grid-column'), '3');
@@ -478,9 +528,14 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.equal(wideStyles.get('.header-top > .notifications-entry-row .gamification-main').getPropertyValue('column-gap'), '10px');
   const monitorHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: landscape) and (hover: hover) and (pointer: fine)');
   assert.equal(monitorHeader.cssRules[0].style.getPropertyValue('flex'), '0 0 clamp(100px, calc(100% - 960px), 320px)');
-  const landscapeTablet = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)').at(-1);
-  const landscapeStyles = new Map([...landscapeTablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
-  assert.equal(landscapeStyles.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
+  const tabletHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
+  const tabletHeaderStyles = new Map([...tabletHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(tabletHeaderStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
+  const tabletLandscapeHeader = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)').at(-1);
+  assert.equal(tabletLandscapeHeader.cssRules[0].style.getPropertyValue('flex'), '0 0 clamp(100px, calc(100% - 960px), 320px)');
+  const compactMonitor = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (max-width: 939px) and (hover: hover) and (pointer: fine)');
+  const compactMonitorStyles = new Map([...compactMonitor.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(compactMonitorStyles.get('.modal-public-profile .public-profile-tops').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
   monitorDom.window.close();
   assert.doesNotMatch(css, /body\s*\{[^}]*text-align:\s*center/s);
   assert.match(css, /\.rankings\s*\{[^}]*text-align:\s*center/s);
@@ -595,10 +650,11 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(document.querySelector('.notifications-entry-row #open-notifications')?.getAttribute('aria-controls'), 'notifications-dialog');
     assert.equal(document.querySelector('.page-header').nextElementSibling.classList.contains('rankings-panel'), true);
     assert.deepEqual([...document.querySelector('.notifications-entry-row').children].map((element) => element.className), ['ranking-session', 'notifications-trigger', 'notifications-trigger friends-trigger', 'user-session', 'gamification-summary']);
-    assert.equal(document.querySelector('#open-friends').getAttribute('aria-label'), 'Amigos: 375');
-    assert.equal(document.querySelector('#open-friends').title, 'Amigos: 375');
+    assert.equal(document.querySelector('#open-friends').getAttribute('aria-label'), 'Amigos');
+    assert.equal(document.querySelector('#open-friends').title, 'Amigos');
     assert.equal(document.querySelector('#open-friends img').getAttribute('src'), '/status_images/friends.png');
-    assert.equal(document.querySelector('#open-friends #friends-count').textContent, '375');
+    assert.equal(document.querySelector('#open-friends #friends-count').textContent, '');
+    assert.equal(document.querySelector('#friends-count').hidden, true);
     assert.equal(document.querySelector('#friends-count').getAttribute('aria-hidden'), 'true');
     assert.match(css, /\.friends-count \{[^}]*position: absolute;[^}]*background: var\(--blue\);/);
     assert.match(css, /\.notifications-entry-row > \.ranking-session \{[^}]*width: 36px; min-height: 44px;/);

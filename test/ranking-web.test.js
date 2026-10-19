@@ -46,6 +46,11 @@ function installFetch(window, ranking, orderedRankings = {}, weeklyResult = { av
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
     if (url === '/api/ranking/semanal') return { ok: true, status: 200, json: async () => structuredClone(weeklyResult) };
+    if (/^\/api\/amigos\/[^/]+\/perfil$/.test(url)) return { ok: true, status: 200, json: async () => ({
+      userId: 'user-b', username: 'Grace', avatarUrl: null, bricks: 200, level: { id: 4, name: 'Citizen' },
+      dna: { rarityHunter: 10, explorer: 60, collector: 20, fan: 10 },
+      top5Price: [], top5Age: [], collection: { total: 0, latest: [] }, wanted: { total: 0, latest: [] }, achievements: [],
+    }) };
     if (url === '/api/ranking') return { ok: true, status: 200, json: async () => structuredClone(ranking) };
     if (url.startsWith('/api/ranking?')) return { ok: true, status: 200, json: async () => structuredClone(orderedRankings[new URL(url, 'http://localhost').searchParams.get('criterio')] ?? ranking) };
     return { ok: false, status: 404, json: async () => ({}) };
@@ -360,7 +365,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty \{ display: none; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
   assert.doesNotMatch(styles, /\.modal-ranking \{[^}]*border-top:/);
-  assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ min-width: 252px; \}/);
+  assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ display: flex; flex-wrap: nowrap; min-width: 0; overflow-x: auto;/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-columns: 34px 42px minmax\(0, 1fr\) 100px 85px 18px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*grid-template-rows: 22px minmax\(30px, auto\);[^}]*min-height: 68px;/);
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
@@ -383,7 +388,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \.ranking-collection-count \{ grid-column: 3 \/ 5; grid-row: 3; justify-self: end; width: 70px; \}/);
   assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 0\.9rem; line-height: 1;/);
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
-    assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1232px\) and \(orientation: landscape\) and \(hover: none\) and \(pointer: coarse\) \{\s*\.brand-heading \{ flex: 0 0 270px; \}\s*\.gamification-summary \{ flex: 1 1 800px; min-width: 0; \}/);
+    assert.doesNotMatch(styles, /\.brand-heading \{ flex: 0 0 270px; \}/);
     assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1232px\) and \(hover: hover\), \(min-width: 761px\) and \(max-width: 1232px\) and \(orientation: portrait\)/);
 });
 
@@ -478,7 +483,7 @@ test('las filas del ranking no ofrecen logros y conservan la expansion al clicar
   dom.window.close();
 });
 
-test('el modal muestra dos Top 3 en una fila en ambas orientaciones de tablet y conserva smartphone', async () => {
+test('el modal mantiene Top 5 y permite desplazar horizontalmente cada ranking', async () => {
   const dom = createDom();
   const top5Precio = Array.from({ length: 5 }, (_, index) => ({
     id: `PRICE-${index}`, nombre: `Price ${index}`, precio: 50 - index,
@@ -500,30 +505,24 @@ test('el modal muestra dos Top 3 en una fila en ambas orientaciones de tablet y 
   assert.match(styles, /\.ranking-user-details \{[^}]*grid-column: 1; grid-row: 2;[^}]*width: 100%; margin-right: 0;/);
   assert.match(styles, /\.global-ranking-row > \.ranking-summary \{ grid-column: 1; grid-row: 1; \}/);
   assert.match(styles, /\.global-ranking-entry > \.global-ranking-row \{ row-gap: 0; \}/);
-  assert.deepEqual(groups.map((group) => [
-    group.querySelector('.ranking-highlight-title-portrait').textContent,
-    group.querySelector('.ranking-highlight-title-landscape').textContent,
-  ]), [
-    ['Top 5 por precio', 'Top 3 por precio'], ['Top 5 por antigüedad', 'Top 3 por antigüedad'],
+  assert.deepEqual(groups.map((group) => group.querySelector('h3').textContent), [
+    'Top 5 por precio', 'Top 5 por antigüedad',
   ]);
   for (const [index, items] of [top5Precio, top5Antiguedad].entries()) {
     const cards = [...groups[index].querySelectorAll('.ranking-card-static')];
     assert.equal(cards.length, 5);
     assert.deepEqual(cards.map((card) => card.querySelector('img').alt), items.map(({ nombre }) => nombre));
   }
-  assert.match(styles, /@media \(orientation: portrait\) \{[\s\S]*?\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}/);
-  assert.match(styles, /@media \(max-width: 600px\) and \(orientation: portrait\) \{\s*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}\s*\.ranking-highlight-title-portrait \{ display: none; \}\s*\.ranking-highlight-title-landscape \{ display: inline; \}/);
-  assert.match(styles, /@media \(orientation: landscape\) \{[^}]*\.ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\) \{ display: none; \}[^}]*\.ranking-highlight-title-portrait \{ display: none; \}/s);
+  assert.doesNotMatch(styles, /ranking-highlight-group \.ranking-card-static:nth-child\(n \+ 4\)/);
   const styleDom = new JSDOM('<style></style>');
   styleDom.window.document.querySelector('style').textContent = styles;
-  const tablet = [...styleDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
-  const declarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
-  assert.equal(declarations.get('.ranking-highlight-group .ranking-card-static:nth-child(n + 4)').getPropertyValue('display'), 'none');
-  assert.equal(declarations.get('.ranking-highlight-title-portrait').getPropertyValue('display'), 'none');
-  assert.equal(declarations.get('.ranking-highlight-title-landscape').getPropertyValue('display'), 'inline');
-  assert.equal(declarations.get('#ranking-dialog .ranking-user-details, #weekly-ranking-dialog .ranking-user-details').getPropertyValue('grid-template-columns'), 'repeat(2, minmax(0, 1fr))');
-  assert.equal(declarations.get('.ranking-user-details .ranking-highlight-group .ranking-row').getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
-  assert.equal(declarations.get('.ranking-user-details .ranking-highlight-group .ranking-row').getPropertyValue('min-width'), '0');
+  const allRules = [...styleDom.window.document.styleSheets[0].cssRules];
+  const highlightsRow = allRules.find((rule) => rule.selectorText === '.ranking-highlight-group .ranking-row');
+  const highlightCards = allRules.find((rule) => rule.selectorText === '.ranking-highlight-group .ranking-card-static');
+  assert.equal(highlightsRow.style.getPropertyValue('overflow-x'), 'auto');
+  assert.equal(highlightsRow.style.getPropertyValue('flex-wrap'), 'nowrap');
+  assert.equal(highlightCards.style.getPropertyValue('flex'), '0 0 64px');
+  assert.equal(allRules.some((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)'), false);
   styleDom.window.close();
   assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
   dom.window.close();
@@ -864,5 +863,30 @@ test('respeta regalos previos y rehabilita el botón si falla el envío', async 
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(failingGift.disabled, false);
   assert.ok([...dom.window.document.querySelectorAll('.toast-error')].some((toast) => toast.textContent.includes('No se pudo enviar el regalo')));
+  dom.window.close();
+});
+
+test('los rankings no incluyen controles de perfil y conservan el acordeón y regalo', async () => {
+  const dom = createDom();
+  const ranking = [entry({ userId: 'user-b', displayName: 'Grace' })];
+  const calls = installFetch(dom.window, ranking, {}, { available: true, entries: [entry({ bricksSemanales: 125 })] });
+  dom.window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const document = dom.window.document;
+  document.querySelector('#open-global-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('.ranking-profile-button, .ranking-profile-space, #global-ranking-list [data-profile-user]'), null);
+  const expand = document.querySelector('#global-ranking-list .ranking-expand');
+  expand.click();
+  assert.equal(expand.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.querySelector('#public-profile-dialog').open, false);
+  assert.ok(document.querySelector('#global-ranking-list .ranking-gift'));
+  assert.equal(calls.some(({ url }) => url === '/api/ranking/regalar'), false);
+  document.querySelector('#ranking-close').click();
+  document.querySelector('#open-weekly-ranking').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(document.querySelector('#weekly-ranking-list [data-profile-user], #weekly-ranking-list .ranking-profile-space'), null);
+  assert.ok(document.querySelector('#weekly-ranking-list .ranking-expand'));
+  assert.ok(document.querySelector('#weekly-ranking-list .ranking-gift'));
   dom.window.close();
 });

@@ -8,6 +8,8 @@ const DATA_FIELDS = {
   ranking_entered: ['ranking', 'position', 'message'],
   ranking_exited: ['ranking', 'message'],
   daily_summary: ['snapshotDate', 'hasPrevious', 'deltas'],
+  friend_request: ['user'],
+  friend_request_accepted: ['user'],
 };
 
 export class NotificacionesNoDisponiblesError extends Error {
@@ -70,8 +72,19 @@ function decodeCursor(value) {
 
 function publicData(type, payload) {
   const source = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  return Object.fromEntries((DATA_FIELDS[type] ?? []).filter((field) => Object.hasOwn(source, field)
+  const data = Object.fromEntries((DATA_FIELDS[type] ?? []).filter((field) => Object.hasOwn(source, field)
     && source[field] !== undefined).map((field) => [field, source[field]]));
+  if (type === 'friend_request' && typeof data.user === 'string') data.message = `${data.user} quiere ser tu amigo.`;
+  if (type === 'friend_request_accepted' && typeof data.user === 'string') data.message = `${data.user} ha aceptado tu solicitud de amistad.`;
+  return data;
+}
+
+export class SolicitudAmistadNotificacionNoEncontradaError extends Error {
+  constructor() {
+    super('La solicitud de amistad no existe');
+    this.name = 'SolicitudAmistadNotificacionNoEncontradaError';
+    this.code = 'SOLICITUD_NO_ENCONTRADA';
+  }
 }
 
 export class NotificacionesRepository {
@@ -101,7 +114,7 @@ export class NotificacionesRepository {
   async list({ cursor } = {}) {
     const decodedCursor = decodeCursor(cursor);
     let query = this.client.from(TABLE)
-      .select('id,type,payload,is_read,created_at,gift_thanked_at')
+      .select('id,type,payload,is_read,created_at,gift_thanked_at,social_request_id,social_request_accepted')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1);
@@ -121,6 +134,10 @@ export class NotificacionesRepository {
         isRead: row.is_read === true,
         data: publicData(row.type, row.payload),
         ...(row.type === 'gift_received' ? { canThank: row.gift_thanked_at == null } : {}),
+        ...(row.type === 'friend_request' ? {
+          accepted: row.social_request_accepted === true,
+          canAccept: row.social_request_accepted !== true,
+        } : {}),
       })),
       unreadCount,
       nextCursor: hasMore ? encodeCursor(rows.at(-1)) : null,
@@ -151,5 +168,28 @@ export class NotificacionesRepository {
     if (result.error?.message === 'REGALO_YA_AGRADECIDO') throw new RegaloYaAgradecidoError();
     if (result.error) throw new NotificacionesNoDisponiblesError();
     return { ok: true };
+  }
+
+  async acceptFriendRequest(notificationId) {
+    const notificationResult = await this.run(this.client.from(TABLE)
+      .select('type,social_request_id,social_request_accepted')
+      .eq('id', notificationId)
+      .maybeSingle());
+    const row = notificationResult.data;
+    if (!row || row.type !== 'friend_request' || typeof row.social_request_id !== 'string') {
+      throw new SolicitudAmistadNotificacionNoEncontradaError();
+    }
+    if (row.social_request_accepted === true) return { ok: true, accepted: true, alreadyAccepted: true };
+
+    let result;
+    try {
+      result = await this.client.rpc('amigos_aceptar', { p_solicitud_id: row.social_request_id });
+    } catch {
+      throw new NotificacionesNoDisponiblesError();
+    }
+    if (result.error?.message === 'SOLICITUD_NO_ENCONTRADA') throw new SolicitudAmistadNotificacionNoEncontradaError();
+    if (result.error) throw new NotificacionesNoDisponiblesError();
+    if (!result.data || result.data.ok !== true || result.data.status !== 'accepted') throw new NotificacionesNoDisponiblesError();
+    return { ok: true, accepted: true, alreadyAccepted: result.data.alreadyAccepted === true };
   }
 }

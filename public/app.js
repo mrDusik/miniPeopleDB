@@ -112,6 +112,33 @@ const achievementsHeadingImage = document.querySelector('.achievements-heading-i
 const gamificationAchievements = document.querySelector('#gamification-achievements');
 const gamificationCloseButton = document.querySelector('#gamification-close');
 const notificationsOpenButton = document.querySelector('#open-notifications');
+const friendsOpenButton = document.querySelector('#open-friends');
+const friendsDialog = document.querySelector('#friends-dialog');
+const friendsCloseButton = document.querySelector('#friends-close');
+const publicProfileDialog = document.querySelector('#public-profile-dialog');
+const publicProfileCloseButton = document.querySelector('#public-profile-close');
+const publicProfileRetryButton = document.querySelector('#public-profile-retry');
+const publicProfileTitle = document.querySelector('#public-profile-title');
+const publicProfileAvatar = document.querySelector('#public-profile-avatar');
+const publicProfileAvatarFallback = document.querySelector('#public-profile-avatar-fallback');
+const publicProfileStatus = document.querySelector('#public-profile-status');
+const publicProfileContent = document.querySelector('#public-profile-content');
+const friendsTabButtons = [...document.querySelectorAll('[data-friends-tab]')];
+const friendsSearchInput = document.querySelector('#friends-search');
+let friendsTrigger = null;
+let friendsActiveTab = 'friends';
+let friendsRequestSequence = 0;
+let friendsCountsSequence = 0;
+let friendsSearchSequence = 0;
+let friendsSearchTimer = null;
+let publicProfileTrigger = null;
+let publicProfileRequestSequence = 0;
+let publicProfileUserId = null;
+let publicProfileData = null;
+let publicProfileDnaInstance = null;
+const friendsActionRequests = new Set();
+const friendsActionErrors = new Map();
+const friendsRows = { friends: new Map(), sent: new Map(), received: new Map(), search: new Map() };
 const notificationsUnreadBadge = document.querySelector('#notifications-unread-badge');
 const notificationsDialog = document.querySelector('#notifications-dialog');
 const notificationsCloseButton = document.querySelector('#notifications-close');
@@ -283,6 +310,8 @@ let notificationsChannel = null;
 let notificationsChannelConnected = false;
 const notificationThankRequests = new Set();
 const notificationThankErrors = new Map();
+const notificationFriendAcceptRequests = new Set();
+const notificationFriendAcceptErrors = new Map();
 const notificationReadRequests = new Set();
 const notificationReadErrors = new Map();
 const notificationToastIds = new Set();
@@ -1064,24 +1093,33 @@ function renderDnaError() {
 
 function renderDnaDialog(state) {
   destroyDnaChart();
-  dnaDialogStatus.classList.remove('loading-message');
+  dnaChartInstance = renderDnaView(state, {
+    chart: dnaChart, status: dnaDialogStatus, legend: dnaLegend,
+    canvas: document.querySelector('#dna-canvas'), centerLabel: document.querySelector('#dna-chart .dna-chart-label'),
+    percentageLabel: document.querySelector('#dna-chart-percentage'), traitLabel: document.querySelector('#dna-chart-trait'),
+  });
+  dnaRetryButton.hidden = true;
+}
+
+function renderDnaView(state, { chart, status, legend, canvas, centerLabel, percentageLabel, traitLabel }) {
+  status?.classList.remove('loading-message');
   const isNewbie = state.principal === 'Newbie';
-  dnaChart.hidden = false;
-  dnaChart.classList.toggle('dna-chart-empty', isNewbie);
-  dnaChart.setAttribute('aria-label', isNewbie
+  chart.hidden = false;
+  chart.classList.toggle('dna-chart-empty', isNewbie);
+  chart.setAttribute('aria-label', isNewbie
     ? 'DNA Newbie: cuatro proporciones en cero'
     : `DNA de tu colección: ${DNA_TRAITS.map(({ key, name }) => `${name} ${state.porcentajes[key]}%`).join(', ')}`);
-  dnaDialogStatus.textContent = isNewbie ? 'Newbie' : '';
-  const centerLabel = document.querySelector('.dna-chart-label');
-  centerLabel.hidden = false;
+  if (status) status.textContent = isNewbie ? 'Newbie' : '';
+  if (centerLabel) centerLabel.hidden = false;
   const principal = DNA_TRAITS.find(({ name }) => name === state.principal);
-  document.querySelector('#dna-chart-percentage').textContent = isNewbie
+  if (percentageLabel) percentageLabel.textContent = isNewbie
     ? '0%'
     : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[principal?.key] ?? 0)}%`;
-  document.querySelector('#dna-chart-trait').textContent = state.principal;
+  if (traitLabel) traitLabel.textContent = state.principal;
+  let instance = null;
   if (!isNewbie && typeof Chart === 'function') {
     const styles = getComputedStyle(document.documentElement);
-    dnaChartInstance = new Chart(document.querySelector('#dna-canvas').getContext('2d'), {
+    instance = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: {
         labels: DNA_TRAITS.map(({ name }) => name),
@@ -1098,7 +1136,7 @@ function renderDnaDialog(state) {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#202124', padding: 12, cornerRadius: 6,
-            external({ tooltip }) { centerLabel.hidden = tooltip.opacity > 0; },
+            external({ tooltip }) { if (centerLabel) centerLabel.hidden = tooltip.opacity > 0; },
             callbacks: { label: (item) => `${item.label}: ${formatAnalyticsHistoryPercent(item.raw)}` },
           },
         },
@@ -1109,7 +1147,7 @@ function renderDnaDialog(state) {
     .map((trait, index) => ({ trait, index }))
     .sort((left, right) => state.porcentajes[right.trait.key] - state.porcentajes[left.trait.key] || left.index - right.index)
     .map(({ trait }) => trait);
-  dnaLegend.replaceChildren(...traitsByPercentage.map(({ key, name, description, color }) => {
+  legend?.replaceChildren(...traitsByPercentage.map(({ key, name, description, color }) => {
     const item = document.createElement('li');
     item.className = 'dna-legend-item';
     const swatch = document.createElement('span');
@@ -1126,8 +1164,8 @@ function renderDnaDialog(state) {
     item.append(swatch, label, percentage, detail);
     return item;
   }));
-  dnaLegend.hidden = false;
-  dnaRetryButton.hidden = true;
+  if (legend) legend.hidden = false;
+  return instance;
 }
 
 async function loadDnaDialog() {
@@ -1157,6 +1195,11 @@ function renderAchievements(state, title = 'Logros') {
     return (right.total ?? 0) - (left.total ?? 0);
   });
   for (const logro of achievements) {
+    gamificationAchievements.append(createAchievementItem(logro));
+  }
+}
+
+function createAchievementItem(logro) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
@@ -1182,7 +1225,7 @@ function renderAchievements(state, title = 'Logros') {
 
     const count = document.createElement('span');
     count.className = 'achievement-count';
-    count.textContent = `x${logro.cantidad}`;
+    count.textContent = `x${logro.cantidad ?? 0}`;
 
     const bricks = document.createElement('span');
     bricks.className = 'achievement-bricks';
@@ -1195,8 +1238,7 @@ function renderAchievements(state, title = 'Logros') {
     bricks.append(bricksValue, brickIcon);
 
     item.append(icon, info, count, bricks);
-    gamificationAchievements.append(item);
-  }
+    return item;
 }
 
 async function loadGamification() {
@@ -1244,8 +1286,10 @@ function ownsMinifigura(id) {
   return catalogCache.some((item) => String(item.id).trim().toUpperCase() === canonicalId);
 }
 
-function updateRankingWantedActions(list = globalRankingList) {
-  for (const card of list.querySelectorAll('[data-ranking-id]')) {
+function updateRankingWantedActions(list) {
+  const cards = (list ? [list] : [globalRankingList, weeklyRankingList, publicProfileContent])
+    .flatMap((root) => [...root.querySelectorAll('[data-ranking-id]')]);
+  for (const card of cards) {
     const eligible = hasLoadedFullCatalog && currentSession && card.dataset.ownerUser !== currentSession.user.id && !ownsMinifigura(card.dataset.rankingId);
     const existing = card.querySelector('.ranking-add-wanted');
     if (!eligible) {
@@ -1258,6 +1302,7 @@ function updateRankingWantedActions(list = globalRankingList) {
     button.className = 'ranking-add-wanted';
     button.dataset.wantedId = card.dataset.rankingId;
     button.dataset.ownerUser = card.dataset.ownerUser;
+    if (card.closest('#public-profile-content')) button.dataset.profileWanted = 'true';
     button.title = 'Añadir a buscadas';
     button.setAttribute('aria-label', 'Añadir a buscadas');
     const plus = document.createElement('span');
@@ -1275,13 +1320,7 @@ function highlightGroup(title, items, mode, ownerUserId) {
   const section = document.createElement('section');
   section.className = 'ranking-highlight-group';
   const heading = document.createElement('h3');
-  const portraitTitle = document.createElement('span');
-  portraitTitle.className = 'ranking-highlight-title-portrait';
-  portraitTitle.textContent = `Top 5 ${title}`;
-  const landscapeTitle = document.createElement('span');
-  landscapeTitle.className = 'ranking-highlight-title-landscape';
-  landscapeTitle.textContent = `Top 3 ${title}`;
-  heading.append(portraitTitle, landscapeTitle);
+  heading.textContent = `Top 5 ${title}`;
   const row = document.createElement('div');
   row.className = 'ranking-row';
   for (const [index, minifigura] of items.entries()) {
@@ -1336,6 +1375,71 @@ function renderWeeklyRanking() {
   });
 }
 
+function appendRankingSummary(container, entry, positionText, criterion = 'nivel', weekly = false) {
+  const position = document.createElement('strong');
+  position.className = 'ranking-position';
+  position.textContent = positionText;
+  const avatarWrap = document.createElement('span');
+  avatarWrap.className = 'ranking-avatar-wrap';
+  const avatar = document.createElement('img');
+  avatar.className = 'ranking-avatar';
+  avatar.alt = '';
+  const fallback = document.createElement('span');
+  fallback.className = 'ranking-avatar-fallback';
+  fallback.textContent = '👤';
+  fallback.hidden = Boolean(entry.avatarUrl);
+  avatar.hidden = !entry.avatarUrl;
+  if (entry.avatarUrl) avatar.src = entry.avatarUrl;
+  avatar.addEventListener('error', () => { avatar.hidden = true; fallback.hidden = false; });
+  avatarWrap.append(avatar, fallback);
+  const name = document.createElement('strong');
+  name.className = 'ranking-name';
+  name.textContent = formatRankingDisplayName(entry.displayName);
+  const level = document.createElement('span');
+  level.className = 'ranking-level-info';
+  const levelImage = document.createElement('img');
+  levelImage.className = 'gamification-level-image';
+  levelImage.src = levelImagePath(entry.nivel);
+  levelImage.alt = '';
+  const levelNumber = document.createElement('strong');
+  levelNumber.className = 'ranking-level-number';
+  levelNumber.textContent = entry.nivel;
+  const levelName = document.createElement('span');
+  levelName.className = 'ranking-level-name';
+  levelName.textContent = entry.nombreNivel;
+  const dna = document.createElement('span');
+  dna.className = 'ranking-dna-principal';
+  dna.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
+    ? entry.dnaPrincipal ?? 'Newbie'
+    : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
+      `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
+    )).join(' / ');
+  level.append(levelImage, levelNumber, levelName, dna);
+  const bricks = document.createElement('span');
+  bricks.className = 'gamification-bricks-value ranking-bricks';
+  const bricksValue = document.createElement('strong');
+  bricksValue.textContent = weekly && entry.bricksSemanales > 0 ? `+${entry.bricksSemanales}`
+    : weekly ? String(entry.bricksSemanales) : entry.bricks;
+  const brickIcon = document.createElement('img');
+  brickIcon.className = 'gamification-brick-icon';
+  brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+  brickIcon.alt = 'Bricks';
+  bricks.append(bricksValue, brickIcon);
+  const collection = document.createElement('span');
+  collection.className = 'ranking-collection-count';
+  collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
+  collection.title = `${entry.totalColeccion} en colección`;
+  const collectionIcon = document.createElement('img');
+  collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon';
+  collectionIcon.src = '/status_images/caja.png';
+  collectionIcon.alt = '';
+  collectionIcon.setAttribute('aria-hidden', 'true');
+  const collectionCount = document.createElement('strong');
+  collectionCount.textContent = entry.totalColeccion;
+  collection.append(collectionIcon, collectionCount);
+  container.append(position, avatarWrap, name, level, bricks, collection);
+}
+
 function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, closeButton, weekly = false }) {
   const currentUserId = currentSession?.user?.id;
   const focused = document.activeElement;
@@ -1354,74 +1458,12 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
     expand.className = `ranking-expand${entry.userId === currentUserId ? ' ranking-expand-current' : ''}`;
     expand.setAttribute('aria-expanded', 'false');
 
-    const position = document.createElement('strong');
-    position.className = 'ranking-position';
-    position.textContent = `#${index + 1}`;
-    const avatarWrap = document.createElement('span');
-    avatarWrap.className = 'ranking-avatar-wrap';
-    const avatar = document.createElement('img');
-    avatar.className = 'ranking-avatar';
-    avatar.alt = '';
-    const avatarFallback = document.createElement('span');
-    avatarFallback.className = 'ranking-avatar-fallback';
-    avatarFallback.textContent = '👤';
-    avatarFallback.hidden = Boolean(entry.avatarUrl);
-    if (entry.avatarUrl) avatar.src = entry.avatarUrl;
-    else avatar.hidden = true;
-    avatar.addEventListener('error', () => { avatar.hidden = true; avatarFallback.hidden = false; });
-    avatarWrap.append(avatar, avatarFallback);
-
-    const name = document.createElement('strong');
-    name.className = 'ranking-name';
-    name.textContent = formatRankingDisplayName(entry.displayName);
-    const bricks = document.createElement('span');
-    bricks.className = 'gamification-bricks-value ranking-bricks';
-    const bricksValue = document.createElement('strong');
-    bricksValue.textContent = weekly && entry.bricksSemanales > 0 ? `+${entry.bricksSemanales}`
-      : weekly ? String(entry.bricksSemanales) : entry.bricks;
-    const brickIcon = document.createElement('img');
-    brickIcon.className = 'gamification-brick-icon';
-    brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
-    brickIcon.alt = 'Bricks';
-    bricks.append(bricksValue, brickIcon);
-
-    const levelInfo = document.createElement('span');
-    levelInfo.className = 'ranking-level-info';
-    const levelImage = document.createElement('img');
-    levelImage.className = 'gamification-level-image';
-    levelImage.src = levelImagePath(entry.nivel);
-    levelImage.alt = '';
-    const levelNumber = document.createElement('strong');
-    levelNumber.className = 'ranking-level-number';
-    levelNumber.textContent = entry.nivel;
-    const levelName = document.createElement('span');
-    levelName.className = 'ranking-level-name';
-    levelName.textContent = entry.nombreNivel;
-    const dnaPrincipal = document.createElement('span');
-    dnaPrincipal.className = 'ranking-dna-principal';
-    dnaPrincipal.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
-      ? entry.dnaPrincipal ?? 'Newbie'
-      : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
-        `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
-      )).join(' / ');
-    levelInfo.append(levelImage, levelNumber, levelName, dnaPrincipal);
-    const collection = document.createElement('span');
-    collection.className = 'ranking-collection-count';
-    collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
-    collection.title = `${entry.totalColeccion} en colección`;
-    const collectionIcon = document.createElement('img');
-    collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon';
-    collectionIcon.src = '/status_images/caja.png';
-    collectionIcon.alt = '';
-    collectionIcon.setAttribute('aria-hidden', 'true');
-    const collectionCount = document.createElement('strong');
-    collectionCount.textContent = entry.totalColeccion;
-    collection.append(collectionIcon, collectionCount);
+    appendRankingSummary(expand, entry, `#${index + 1}`, criterion, weekly);
     const chevron = document.createElement('span');
     chevron.className = 'ranking-row-chevron';
     chevron.textContent = '▾';
     chevron.setAttribute('aria-hidden', 'true');
-    expand.append(position, avatarWrap, name, levelInfo, bricks, collection, chevron);
+    expand.append(chevron);
     const summary = document.createElement('div');
     summary.className = 'ranking-summary';
     summary.append(expand);
@@ -2004,6 +2046,13 @@ function renderNotificationMessage(notification) {
   const data = notification.data ?? {};
   const message = document.createElement('p');
   message.className = 'notification-message';
+  if (notification.type === 'friend_request' || notification.type === 'friend_request_accepted') {
+    const username = document.createElement('strong');
+    username.textContent = data.user ?? 'Coleccionista';
+    message.append(username, document.createTextNode(notification.type === 'friend_request'
+      ? ' quiere ser tu amigo.' : ' ha aceptado tu solicitud de amistad.'));
+    return message;
+  }
   if (notification.type === 'gift_received' || notification.type === 'gift_thanks') {
     const userName = document.createElement('strong');
     userName.textContent = data.user ?? 'Coleccionista';
@@ -2071,6 +2120,36 @@ function renderNotifications() {
     }
     const actions = document.createElement('div');
     actions.className = 'notification-actions';
+    if (notification.type === 'friend_request') {
+      const acceptButton = document.createElement('button');
+      const isPending = notificationFriendAcceptRequests.has(notification.id);
+      const isAccepted = notification.accepted === true || notification.canAccept === false;
+      acceptButton.type = 'button';
+      acceptButton.className = 'button button-secondary notification-accept-friend';
+      acceptButton.dataset.notificationId = notification.id;
+      acceptButton.setAttribute('aria-label', isAccepted ? 'Solicitud de amistad aceptada' : `Aceptar solicitud de amistad de ${notification.data?.user ?? 'Coleccionista'}`);
+      acceptButton.title = acceptButton.getAttribute('aria-label');
+      const plus = document.createElement('span');
+      plus.className = 'notification-friend-plus';
+      plus.setAttribute('aria-hidden', 'true');
+      plus.textContent = isAccepted ? 'Aceptada' : '+';
+      const icon = document.createElement('img');
+      icon.className = 'notification-friend-icon';
+      icon.src = '/status_images/friends.png';
+      icon.alt = '';
+      acceptButton.append(plus, icon);
+      acceptButton.disabled = isPending || isAccepted;
+      if (isPending) acceptButton.setAttribute('aria-busy', 'true');
+      actions.append(acceptButton);
+      const error = notificationFriendAcceptErrors.get(notification.id);
+      if (error) {
+        const errorMessage = document.createElement('p');
+        errorMessage.className = 'notification-error';
+        errorMessage.setAttribute('role', 'alert');
+        errorMessage.textContent = error;
+        actions.append(errorMessage);
+      }
+    }
     if (notification.type === 'gift_received') {
       const thankButton = document.createElement('button');
       const isPending = notificationThankRequests.has(notification.id);
@@ -2201,6 +2280,34 @@ function renderDailyNotification(notification) {
   return details;
 }
 
+async function acceptFriendNotification(notificationId) {
+  const notification = notificationsItems.find((item) => item.id === notificationId);
+  const sessionUserId = currentSession?.user?.id;
+  if (!notification || notification.type !== 'friend_request' || notification.accepted === true
+    || notification.canAccept === false || notificationFriendAcceptRequests.has(notificationId) || !sessionUserId) return;
+  notificationFriendAcceptRequests.add(notificationId);
+  notificationFriendAcceptErrors.delete(notificationId);
+  renderNotifications();
+  try {
+    const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/aceptar`, { method: 'POST' });
+    const result = await response.json();
+    if (sessionUserId !== currentSession?.user?.id) return;
+    if (!response.ok || result.accepted !== true) throw new Error('friend request unavailable');
+    notificationsItems = notificationsItems.map((item) => item.id === notificationId
+      ? { ...item, accepted: true, canAccept: false }
+      : item);
+    void loadFriendsCounts();
+    if (friendsDialog.open && friendsActiveTab !== 'search') void loadFriendsList();
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) {
+      notificationFriendAcceptErrors.set(notificationId, 'No se pudo aceptar la solicitud. Inténtalo de nuevo.');
+    }
+  } finally {
+    notificationFriendAcceptRequests.delete(notificationId);
+    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+  }
+}
+
 async function thankNotification(notificationId) {
   const notification = notificationsItems.find((item) => item.id === notificationId);
   const sessionUserId = currentSession?.user?.id;
@@ -2316,21 +2423,24 @@ function startNotificationsRealtime() {
   if (!sessionUserId || !supabaseClient?.channel) return;
   notificationsChannel = supabaseClient.channel(`notificaciones-${sessionUserId}`)
     .on('postgres_changes', {
-      event: 'INSERT', schema: 'public', table: 'notificaciones', filter: `user_id=eq.${sessionUserId}`,
+      event: '*', schema: 'public', table: 'notificaciones', filter: `user_id=eq.${sessionUserId}`,
     }, (payload) => {
       if (currentSession?.user?.id !== sessionUserId) return;
       const notificationId = payload?.new?.id;
-      if (notificationId && !notificationToastIds.has(notificationId)) {
+      if ((!payload?.eventType || payload.eventType === 'INSERT') && notificationId && !notificationToastIds.has(notificationId)) {
         notificationToastIds.add(notificationId);
         showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
       }
-      void loadNotifications({ reset: true, preserveItems: true });
+      void loadNotifications({ reset: true, preserveItems: payload?.eventType !== 'DELETE' });
+      void loadFriendsCounts();
+      if (friendsDialog.open && friendsActiveTab !== 'search') void loadFriendsList();
       if (['gift_received', 'gift_thanks'].includes(payload?.new?.type)) void loadGamification();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED' && currentSession?.user?.id === sessionUserId) {
         const isReconnect = notificationsChannelConnected;
         notificationsChannelConnected = true;
+        if (isReconnect) void loadFriendsCounts();
         void loadNotifications({ reset: true, preserveItems: true });
         if (isReconnect) void loadGamification();
       }
@@ -2346,6 +2456,8 @@ function clearNotifications() {
   notificationsLoading = false;
   notificationThankRequests.clear();
   notificationThankErrors.clear();
+  notificationFriendAcceptRequests.clear();
+  notificationFriendAcceptErrors.clear();
   notificationReadRequests.clear();
   notificationReadErrors.clear();
   notificationToastIds.clear();
@@ -2358,6 +2470,535 @@ function clearNotifications() {
   if (notificationsDialog.open) notificationsDialog.close();
 }
 
+function renderFriendRows(rows, type) {
+  const list = document.querySelector(`#friends-list-${type}`);
+  list.replaceChildren();
+  const uniqueRows = new Map(rows.map((row) => [row.userId, row]));
+  friendsRows[type] = uniqueRows;
+  for (const friend of uniqueRows.values()) {
+    const item = document.createElement('li');
+    item.className = 'friends-row global-ranking-row';
+    item.dataset.userId = friend.userId;
+    const profileButton = document.createElement('button');
+    profileButton.type = 'button';
+    profileButton.className = 'ranking-expand friends-user-button';
+    profileButton.dataset.profileUser = friend.userId;
+    profileButton.setAttribute('aria-label', `Ver perfil de ${friend.username}`);
+    appendRankingSummary(profileButton, {
+      displayName: friend.username, avatarUrl: friend.avatarUrl, bricks: friend.bricks ?? 0,
+      nivel: friend.level?.id ?? 0, nombreNivel: friend.level?.name ?? 'Duplo',
+      totalColeccion: friend.totalCollection ?? 0, dnaPrincipal: friend.dnaPrincipal ?? 'Newbie',
+      dnaRasgos: (friend.dnaTraits ?? []).map(({ name, percentage }) => ({ nombre: name, porcentaje: percentage })),
+    }, friend.globalPosition ? `#${friend.globalPosition}` : '-');
+    profileButton.querySelector('.ranking-name').classList.add('friends-username');
+    const summary = document.createElement('div');
+    summary.className = 'ranking-summary friends-summary';
+    summary.append(profileButton);
+    item.append(summary);
+    const isFriend = type === 'friends' || friend.relationshipStatus === 'friend' || (type === 'received' && friend.status === 'accepted');
+    if (isFriend) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'button button-secondary friends-remove';
+      remove.dataset.removeFriend = friend.userId;
+      remove.setAttribute('aria-label', `Eliminar amigo ${friend.username}`);
+      remove.title = `Eliminar amigo ${friend.username}`;
+      remove.disabled = friendsActionRequests.has(`remove:${friend.userId}`);
+      const icon = document.createElement('img');
+      icon.src = '/status_images/friends.png';
+      icon.alt = '';
+      remove.append(document.createTextNode('−'), icon);
+      if (type === 'received') {
+        const actions = document.createElement('div');
+        actions.className = 'friends-request-actions';
+        const accepted = document.createElement('button');
+        accepted.type = 'button';
+        accepted.className = 'button button-secondary notification-accept-friend friends-accepted-button';
+        accepted.textContent = 'Aceptada';
+        accepted.setAttribute('aria-label', 'Solicitud de amistad aceptada');
+        accepted.title = 'Solicitud de amistad aceptada';
+        const acceptedIcon = document.createElement('img');
+        acceptedIcon.className = 'notification-friend-icon';
+        acceptedIcon.src = '/status_images/friends.png';
+        acceptedIcon.alt = '';
+        accepted.append(acceptedIcon);
+        accepted.disabled = true;
+        actions.append(accepted, remove);
+        item.append(actions);
+      } else item.append(remove);
+    } else if (type === 'search' && friend.relationshipStatus === 'none') {
+      const sendButton = document.createElement('button');
+      sendButton.type = 'button';
+      sendButton.className = 'button button-secondary notification-accept-friend friends-send-request';
+      sendButton.dataset.friendSend = friend.userId;
+      sendButton.setAttribute('aria-label', `Solicitar amistad a ${friend.username}`);
+      sendButton.title = `Solicitar amistad a ${friend.username}`;
+      const plus = document.createElement('span');
+      plus.className = 'notification-friend-plus';
+      plus.setAttribute('aria-hidden', 'true');
+      plus.textContent = '+';
+      const icon = document.createElement('img');
+      icon.className = 'notification-friend-icon';
+      icon.src = '/status_images/friends.png';
+      icon.alt = '';
+      sendButton.append(plus, icon);
+      sendButton.disabled = friendsActionRequests.has(`send:${friend.userId}`);
+      if (sendButton.disabled) sendButton.setAttribute('aria-busy', 'true');
+      item.append(sendButton);
+    } else if (type === 'received' && friend.status === 'accepted') {
+      const acceptedButton = document.createElement('button');
+      acceptedButton.type = 'button';
+      acceptedButton.className = 'button button-secondary friends-accepted-button';
+      acceptedButton.textContent = 'Aceptada';
+      acceptedButton.disabled = true;
+      item.append(acceptedButton);
+    } else if (type === 'received' && ['pending', 'rejected'].includes(friend.status)) {
+      const actions = document.createElement('div');
+      actions.className = 'friends-request-actions friends-request-controls';
+      if (friend.status === 'rejected') {
+        const state = document.createElement('span');
+        state.className = 'friends-request-state state-rejected';
+        state.textContent = 'Rechazada';
+        actions.append(state);
+      }
+      const acceptButton = document.createElement('button');
+      acceptButton.type = 'button';
+      acceptButton.className = 'button button-secondary notification-accept-friend friends-accept-request';
+      acceptButton.dataset.requestId = friend.relationshipId;
+      acceptButton.dataset.requestAction = 'accept';
+      acceptButton.setAttribute('aria-label', `Aceptar solicitud de amistad de ${friend.username}`);
+      acceptButton.title = `Aceptar solicitud de amistad de ${friend.username}`;
+      const plus = document.createElement('span');
+      plus.className = 'notification-friend-plus';
+      plus.setAttribute('aria-hidden', 'true');
+      plus.textContent = '+';
+      const acceptIcon = document.createElement('img');
+      acceptIcon.className = 'notification-friend-icon';
+      acceptIcon.src = '/status_images/friends.png';
+      acceptIcon.alt = '';
+      acceptButton.append(plus, acceptIcon);
+      acceptButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
+      if (acceptButton.disabled) acceptButton.setAttribute('aria-busy', 'true');
+      actions.append(acceptButton);
+      if (friend.status === 'pending') {
+        const rejectButton = document.createElement('button');
+        rejectButton.type = 'button';
+        rejectButton.className = 'logout-link friends-reject-request';
+        rejectButton.dataset.requestId = friend.relationshipId;
+        rejectButton.dataset.requestAction = 'reject';
+        rejectButton.setAttribute('aria-label', `Rechazar solicitud de amistad de ${friend.username}`);
+        rejectButton.title = `Rechazar solicitud de amistad de ${friend.username}`;
+        rejectButton.textContent = 'Rechazar';
+        rejectButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
+        if (rejectButton.disabled) rejectButton.setAttribute('aria-busy', 'true');
+        actions.append(rejectButton);
+      }
+      item.append(actions);
+    } else if ((type === 'search' && friend.relationshipStatus !== 'none') || type === 'received') {
+      const status = document.createElement('span');
+      status.className = `friends-request-state state-${friend.status}`;
+      const state = type === 'search' ? friend.relationshipStatus : friend.status;
+      status.className = `friends-request-state state-${state}`;
+      status.textContent = ({
+        rejected: 'Rechazada', request_rejected: 'Rechazada', accepted: 'Aceptada', friend: 'Amigos',
+        request_sent: 'Enviada', request_received: 'Recibida', pending: 'Pendiente',
+      })[state] ?? 'Pendiente';
+      item.append(status);
+    }
+    const error = friendsActionErrors.get(isFriend ? `remove:${friend.userId}`
+      : type === 'search' ? `send:${friend.userId}` : `request:${friend.relationshipId}`);
+    if (error) {
+      const errorMessage = document.createElement('p');
+      errorMessage.className = 'friends-action-error';
+      errorMessage.setAttribute('role', 'alert');
+      errorMessage.textContent = error;
+      item.append(errorMessage);
+    }
+    list.append(item);
+  }
+}
+
+function setFriendsCounts(counts) {
+  const badge = document.querySelector('#friends-count');
+  badge.hidden = counts === null;
+  badge.textContent = counts === null ? '' : String(counts.friends);
+  const label = counts === null ? 'Amigos' : `Amigos: ${counts.friends}`;
+  friendsOpenButton.setAttribute('aria-label', label);
+  friendsOpenButton.title = label;
+  for (const [type, title] of [['friends', 'Amigos'], ['sent', 'Solicitudes Enviadas'], ['received', 'Solicitudes Recibidas']]) {
+    const button = document.querySelector(`#friends-tab-${type}`);
+    const count = counts === null ? '?' : counts[type];
+    const titleWithCount = `${title} (${count})`;
+    if (type === 'friends') {
+      button.textContent = titleWithCount;
+      continue;
+    }
+    button.setAttribute('aria-label', titleWithCount);
+    const fullLabel = document.createElement('span');
+    fullLabel.className = 'friends-tab-label-full';
+    fullLabel.textContent = titleWithCount;
+    const shortLabel = document.createElement('span');
+    shortLabel.className = 'friends-tab-label-short';
+    shortLabel.setAttribute('aria-hidden', 'true');
+    shortLabel.textContent = `${title.replace('Solicitudes', 'Sol.')} (${count})`;
+    button.replaceChildren(fullLabel, shortLabel);
+  }
+}
+
+async function loadFriendsCounts() {
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId) return;
+  const sequence = ++friendsCountsSequence;
+  try {
+    const response = await apiFetch('/api/amigos/contadores');
+    const data = await response.json();
+    if (!response.ok || !data || ['friends', 'sent', 'received'].some((key) => !Number.isInteger(data[key]) || data[key] < 0)) {
+      throw new Error('counts unavailable');
+    }
+    if (sequence !== friendsCountsSequence || sessionUserId !== currentSession?.user?.id) return;
+    setFriendsCounts(data);
+  } catch {
+    if (sequence === friendsCountsSequence && sessionUserId === currentSession?.user?.id) setFriendsCounts(null);
+  }
+}
+
+async function loadFriendsList(tab = friendsActiveTab) {
+  if (tab === 'search') return;
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId) return;
+  const requestId = ++friendsRequestSequence;
+  const status = document.querySelector(`#friends-status-${tab}`);
+  status.textContent = 'Cargando...';
+  status.className = 'status loading-message';
+  try {
+    const response = await apiFetch(`/api/amigos?tipo=${tab}`);
+    const result = await response.json();
+    if (!response.ok || !Array.isArray(result.users)) throw new Error('friends unavailable');
+    if (requestId !== friendsRequestSequence || sessionUserId !== currentSession?.user?.id) return;
+    renderFriendRows(result.users, tab);
+    status.textContent = result.users.length ? '' : tab === 'friends' ? 'Todavía no tienes amigos.' : 'No hay solicitudes.';
+    status.className = 'status';
+  } catch {
+    if (requestId === friendsRequestSequence && sessionUserId === currentSession?.user?.id) {
+      document.querySelector(`#friends-list-${tab}`).replaceChildren();
+      status.textContent = 'No se pudo cargar esta lista.';
+      status.className = 'status error';
+    }
+  }
+}
+
+async function searchFriends(query, sequence) {
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId || sequence !== friendsSearchSequence || friendsActiveTab !== 'search') return;
+  const status = document.querySelector('#friends-status-search');
+  status.textContent = 'Buscando...';
+  status.className = 'status loading-message';
+  try {
+    const response = await apiFetch(`/api/amigos/buscar?q=${encodeURIComponent(query)}`);
+    const result = await response.json();
+    if (!response.ok || !Array.isArray(result.users)) throw new Error('friends search unavailable');
+    if (sequence !== friendsSearchSequence || sessionUserId !== currentSession?.user?.id || !friendsDialog.open) return;
+    renderFriendRows(result.users, 'search');
+    status.textContent = result.users.length ? '' : 'No hay resultados.';
+    status.className = 'status';
+  } catch {
+    if (sequence === friendsSearchSequence && sessionUserId === currentSession?.user?.id) {
+      document.querySelector('#friends-list-search').replaceChildren();
+      friendsRows.search.clear();
+      status.textContent = 'No se pudo realizar la búsqueda.';
+      status.className = 'status error';
+    }
+  }
+}
+
+function scheduleFriendsSearch() {
+  if (friendsSearchTimer !== null) clearTimeout(friendsSearchTimer);
+  friendsSearchSequence += 1;
+  const sequence = friendsSearchSequence;
+  const query = friendsSearchInput.value.trim();
+  const status = document.querySelector('#friends-status-search');
+  document.querySelector('#friends-list-search').replaceChildren();
+  friendsRows.search.clear();
+  if (query.length < 3) {
+    status.textContent = '';
+    status.className = 'status';
+    return;
+  }
+  status.textContent = 'Preparando búsqueda...';
+  status.className = 'status';
+  friendsSearchTimer = setTimeout(() => {
+    friendsSearchTimer = null;
+    void searchFriends(query, sequence);
+  }, 250);
+}
+
+async function removeFriend(userId, type) {
+  const sessionUserId = currentSession?.user?.id;
+  const key = `remove:${userId}`;
+  if (!sessionUserId || friendsActionRequests.has(key)) return;
+  friendsActionRequests.add(key);
+  friendsActionErrors.delete(key);
+  renderFriendRows([...friendsRows[type].values()], type);
+  try {
+    const response = await apiFetch(`/api/amigos/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    const result = await response.json();
+    if (!response.ok || result.ok !== true) throw new Error('remove unavailable');
+    if (sessionUserId !== currentSession?.user?.id) return;
+    friendsRows.friends.delete(userId);
+    for (const [friendId, row] of friendsRows.received) {
+      if (friendId === userId && row.status === 'accepted') friendsRows.received.delete(friendId);
+    }
+    const searchRow = friendsRows.search.get(userId);
+    if (searchRow) searchRow.relationshipStatus = 'none';
+    renderFriendRows([...friendsRows.friends.values()], 'friends');
+    renderFriendRows([...friendsRows.search.values()], 'search');
+    document.querySelector('#friends-status-friends').textContent = friendsRows.friends.size ? '' : 'Todavía no tienes amigos.';
+    void loadFriendsCounts();
+    void loadNotifications({ reset: true });
+    friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo eliminar la amistad.');
+  } finally {
+    friendsActionRequests.delete(key);
+    if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows[type].values()], type);
+  }
+}
+
+async function sendFriendRequest(userId) {
+  const sessionUserId = currentSession?.user?.id;
+  const key = `send:${userId}`;
+  if (!sessionUserId || friendsActionRequests.has(key) || !friendsRows.search.has(userId)) return;
+  friendsActionRequests.add(key);
+  friendsActionErrors.delete(key);
+  renderFriendRows([...friendsRows.search.values()], 'search');
+  try {
+    const response = await apiFetch('/api/amigos/solicitudes', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receptorId: userId }),
+    });
+    if (!response.ok) throw new Error('request unavailable');
+    if (sessionUserId !== currentSession?.user?.id) return;
+    const friend = friendsRows.search.get(userId);
+    if (friend) friend.relationshipStatus = 'request_sent';
+    void loadFriendsCounts();
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo enviar la solicitud.');
+  } finally {
+    friendsActionRequests.delete(key);
+    if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.search.values()], 'search');
+  }
+}
+
+async function changeFriendRequest(requestId, action) {
+  const sessionUserId = currentSession?.user?.id;
+  const key = `request:${requestId}`;
+  const friend = friendsRows.received.get([...friendsRows.received.values()].find(({ relationshipId }) => relationshipId === requestId)?.userId);
+  if (!sessionUserId || !friend || friendsActionRequests.has(key) || friend.status === 'accepted') return;
+  friendsActionRequests.add(key);
+  friendsActionErrors.delete(key);
+  renderFriendRows([...friendsRows.received.values()], 'received');
+  try {
+    const response = await apiFetch(`/api/amigos/solicitudes/${encodeURIComponent(requestId)}/${action === 'accept' ? 'aceptar' : 'rechazar'}`, { method: 'POST' });
+    if (!response.ok) throw new Error('request unavailable');
+    if (sessionUserId !== currentSession?.user?.id) return;
+    friend.status = action === 'accept' ? 'accepted' : 'rejected';
+    void loadFriendsCounts();
+    if (action === 'accept') void loadNotifications({ reset: true });
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo actualizar la solicitud.');
+  } finally {
+    friendsActionRequests.delete(key);
+    if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.received.values()], 'received');
+  }
+}
+
+function selectFriendsTab(tab) {
+  friendsRequestSequence += 1;
+  if (tab !== 'search') {
+    friendsSearchSequence += 1;
+    if (friendsSearchTimer !== null) clearTimeout(friendsSearchTimer);
+    friendsSearchTimer = null;
+  }
+  friendsActiveTab = tab;
+  for (const button of friendsTabButtons) {
+    const selected = button.dataset.friendsTab === tab;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    document.querySelector(`#friends-panel-${button.dataset.friendsTab}`).hidden = !selected;
+  }
+  if (tab === 'search') {
+    friendsSearchInput.focus();
+    return;
+  }
+  void loadFriendsList(tab);
+}
+
+function openFriends(trigger) {
+  friendsTrigger = trigger;
+  void loadFriendsCounts();
+  friendsDialog.showModal();
+  friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
+  selectFriendsTab(friendsActiveTab);
+}
+
+function clearFriends() {
+  friendsRequestSequence += 1;
+  friendsCountsSequence += 1;
+  setFriendsCounts(null);
+  friendsSearchSequence += 1;
+  if (friendsSearchTimer !== null) clearTimeout(friendsSearchTimer);
+  friendsSearchTimer = null;
+  friendsActionRequests.clear();
+  friendsActionErrors.clear();
+  for (const rows of Object.values(friendsRows)) rows.clear();
+  friendsTrigger = null;
+  friendsActiveTab = 'friends';
+  friendsSearchInput.value = '';
+  for (const tab of ['friends', 'sent', 'received', 'search']) {
+    document.querySelector(`#friends-list-${tab}`).replaceChildren();
+    document.querySelector(`#friends-status-${tab}`).textContent = '';
+    document.querySelector(`#friends-status-${tab}`).className = 'status';
+  }
+  if (friendsDialog.open) friendsDialog.close();
+}
+
+function clearPublicProfile() {
+  publicProfileRequestSequence += 1;
+  publicProfileDnaInstance?.destroy();
+  publicProfileDnaInstance = null;
+  document.querySelector('#public-profile-dna-chart').hidden = true;
+  document.querySelector('#public-profile-dna-percentage').textContent = '';
+  document.querySelector('#public-profile-dna-trait').textContent = '';
+  document.querySelector('#public-profile-level').removeAttribute('title');
+  document.querySelector('#public-profile-level-image').removeAttribute('src');
+  publicProfileUserId = null;
+  publicProfileData = null;
+  publicProfileTitle.textContent = '';
+  publicProfileAvatar.removeAttribute('src');
+  publicProfileAvatar.hidden = true;
+  publicProfileAvatarFallback.hidden = false;
+  publicProfileContent.hidden = true;
+  publicProfileStatus.textContent = '';
+  publicProfileStatus.className = 'status';
+  publicProfileRetryButton.hidden = true;
+  for (const selector of [
+    '#public-profile-bricks', '#public-profile-level', '#public-profile-collection-count', '#public-profile-wanted-count',
+  ]) document.querySelector(selector).textContent = '';
+  for (const selector of [
+    '#public-profile-top-price', '#public-profile-top-age',
+    '#public-profile-latest-collection', '#public-profile-latest-wanted', '#public-profile-achievements',
+  ]) document.querySelector(selector).replaceChildren();
+}
+
+function renderPublicProfileFigures(selector, rows, mode = 'price') {
+  const list = document.querySelector(selector);
+  list.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('li');
+    empty.className = 'public-profile-empty';
+    empty.textContent = 'Sin elementos.';
+    list.append(empty);
+    return;
+  }
+  for (const [index, figure] of rows.slice(0, 5).entries()) {
+    const item = document.createElement('li');
+    const card = rankingCard({ id: figure.id, nombre: figure.name }, index + 1,
+      mode === 'age' ? figure.year ?? '—' : formatPrice(figure.price), false);
+    card.dataset.rankingId = figure.id;
+    card.dataset.ownerUser = publicProfileData.userId;
+    card.setAttribute('aria-label', `${figure.name}, ${figure.id}`);
+    const image = card.querySelector('img');
+    image.addEventListener('error', () => {
+      if (image.getAttribute('src') !== imageFallbackUrl) {
+        image.style.display = '';
+        image.src = imageFallbackUrl;
+      }
+    });
+    item.append(card);
+    list.append(item);
+  }
+}
+
+function renderPublicProfile(profile) {
+  publicProfileData = profile;
+  publicProfileTitle.textContent = profile.username;
+  publicProfileAvatar.hidden = !profile.avatarUrl;
+  publicProfileAvatarFallback.hidden = Boolean(profile.avatarUrl);
+  if (profile.avatarUrl) publicProfileAvatar.src = profile.avatarUrl;
+  document.querySelector('#public-profile-bricks').textContent = String(profile.bricks);
+  document.querySelector('#public-profile-level').textContent = `${profile.level.id} ${profile.level.name}`;
+  document.querySelector('#public-profile-level').title = `${profile.level.id} ${profile.level.name}`;
+  document.querySelector('#public-profile-level-image').src = levelImagePath(profile.level.id);
+  document.querySelector('#public-profile-collection-count').textContent = String(profile.collection.total);
+  document.querySelector('#public-profile-wanted-count').textContent = String(profile.wanted.total);
+  publicProfileContent.hidden = false;
+  publicProfileDnaInstance?.destroy();
+  const primaryKey = ['explorer', 'collector', 'fan', 'rarityHunter'].reduce((primary, key) => (
+    profile.dna[key] > profile.dna[primary] ? key : primary
+  ), 'explorer');
+  const principal = Object.values(profile.dna).some((value) => value > 0)
+    ? DNA_TRAITS.find(({ key }) => key === primaryKey).name : 'Newbie';
+  publicProfileDnaInstance = renderDnaView({ principal, porcentajes: profile.dna }, {
+    chart: document.querySelector('#public-profile-dna-chart'), canvas: document.querySelector('#public-profile-dna-canvas'),
+    centerLabel: document.querySelector('#public-profile-dna-chart .dna-chart-label'),
+    percentageLabel: document.querySelector('#public-profile-dna-percentage'), traitLabel: document.querySelector('#public-profile-dna-trait'),
+  });
+  document.querySelector('#public-profile-dna-chart').setAttribute('aria-label',
+    `DNA de ${profile.username}: ${DNA_TRAITS.map(({ key, name }) => `${name} ${profile.dna[key]}%`).join(', ')}`);
+  renderPublicProfileFigures('#public-profile-top-price', profile.top5Price);
+  renderPublicProfileFigures('#public-profile-top-age', profile.top5Age, 'age');
+  renderPublicProfileFigures('#public-profile-latest-collection', profile.collection.latest);
+  renderPublicProfileFigures('#public-profile-latest-wanted', profile.wanted.latest);
+  updateRankingWantedActions(publicProfileContent);
+  const achievements = document.querySelector('#public-profile-achievements');
+  achievements.replaceChildren(...profile.achievements.slice(0, 5).map((achievement) => createAchievementItem({
+    id: achievement.id, type: achievement.type, nombre: achievement.name, descripcion: achievement.description,
+    cantidad: achievement.quantity, total: achievement.total, bricks: achievement.bricks,
+  })));
+  if (!profile.achievements.length) {
+    const empty = document.createElement('li');
+    empty.className = 'public-profile-empty';
+    empty.textContent = 'No hay logros.';
+    achievements.append(empty);
+  }
+}
+
+async function loadPublicProfile(userId, requestId) {
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId || requestId !== publicProfileRequestSequence) return;
+  publicProfileStatus.textContent = 'Cargando perfil...';
+  publicProfileStatus.className = 'status loading-message';
+  publicProfileRetryButton.hidden = true;
+  try {
+    const response = await apiFetch(`/api/amigos/${encodeURIComponent(userId)}/perfil`);
+    const profile = await response.json();
+    if (!response.ok || !profile || profile.userId !== userId) throw new Error('profile unavailable');
+    if (requestId !== publicProfileRequestSequence || sessionUserId !== currentSession?.user?.id || !publicProfileDialog.open) return;
+    renderPublicProfile(profile);
+    publicProfileStatus.textContent = '';
+    publicProfileStatus.className = 'status';
+  } catch {
+    if (requestId === publicProfileRequestSequence && sessionUserId === currentSession?.user?.id) {
+      clearPublicProfile();
+      publicProfileUserId = userId;
+      publicProfileStatus.textContent = 'No se pudo cargar el perfil.';
+      publicProfileStatus.className = 'status error';
+      publicProfileRetryButton.hidden = false;
+    }
+  }
+}
+
+function openPublicProfile(userId, trigger) {
+  if (!currentSession || !userId || userId === currentSession.user.id) return;
+  publicProfileTrigger = trigger;
+  publicProfileUserId = userId;
+  clearPublicProfile();
+  publicProfileUserId = userId;
+  publicProfileDialog.showModal();
+  publicProfileCloseButton.focus();
+  const requestId = ++publicProfileRequestSequence;
+  void loadPublicProfile(userId, requestId);
+}
+
 function openNotifications(trigger) {
   notificationsTrigger = trigger;
   notificationsDialog.showModal();
@@ -2367,6 +3008,10 @@ function openNotifications(trigger) {
 
 function restoreRankingFocus(trigger) {
   if (!currentSession) return;
+  if (trigger?.dataset.profileWanted === 'true') {
+    if (publicProfileDialog.open) (trigger.isConnected ? trigger : publicProfileCloseButton).focus();
+    return;
+  }
   const weekly = Boolean(trigger?.closest('#weekly-ranking-list'));
   const dialog = weekly ? weeklyRankingDialog : rankingDialog;
   const list = weekly ? weeklyRankingList : globalRankingList;
@@ -2381,6 +3026,84 @@ function restoreRankingFocus(trigger) {
 gamificationLevelButton.addEventListener('click', () => openOwnAchievements(gamificationLevelButton));
 achievementsOpenButton.addEventListener('click', () => openOwnAchievements(achievementsOpenButton));
 notificationsOpenButton.addEventListener('click', () => openNotifications(notificationsOpenButton));
+friendsOpenButton.addEventListener('click', () => openFriends(friendsOpenButton));
+friendsCloseButton.addEventListener('click', () => friendsDialog.close());
+publicProfileCloseButton.addEventListener('click', () => publicProfileDialog.close());
+publicProfileContent.addEventListener('click', (event) => {
+  const wanted = event.target.closest('[data-wanted-id]');
+  if (!wanted || !publicProfileDialog.open || wanted.dataset.ownerUser !== publicProfileData?.userId) return;
+  const figure = [
+    ...publicProfileData.top5Price, ...publicProfileData.top5Age,
+    ...publicProfileData.collection.latest, ...publicProfileData.wanted.latest,
+  ].find((item) => item.id === wanted.dataset.wantedId);
+  if (figure) openWantedFigure(wanted, {
+    id: figure.id, nombre: figure.name, precio: figure.price, anio: figure.year,
+    categoria: figure.category, subcategoria: figure.subcategory,
+  });
+});
+publicProfileRetryButton.addEventListener('click', () => {
+  if (!publicProfileUserId) return;
+  const requestId = ++publicProfileRequestSequence;
+  void loadPublicProfile(publicProfileUserId, requestId);
+});
+publicProfileDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  publicProfileDialog.close();
+});
+publicProfileDialog.addEventListener('close', () => {
+  publicProfileRequestSequence += 1;
+  clearPublicProfile();
+  const trigger = publicProfileTrigger;
+  publicProfileTrigger = null;
+  if (trigger?.isConnected) trigger.focus();
+  else if (trigger?.closest('.global-ranking-entry')) restoreRankingFocus(trigger);
+  else if (friendsDialog.open) friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
+  else if (currentSession) friendsOpenButton.focus();
+});
+friendsSearchInput.addEventListener('input', scheduleFriendsSearch);
+for (const list of [document.querySelector('#friends-list-friends'), document.querySelector('#friends-list-search'), document.querySelector('#friends-list-sent'), document.querySelector('#friends-list-received')]) {
+  list.addEventListener('click', (event) => {
+    const remove = event.target.closest('[data-remove-friend]');
+    if (remove) {
+      void removeFriend(remove.dataset.removeFriend, list.id.replace('friends-list-', ''));
+      return;
+    }
+    const profile = event.target.closest('[data-profile-user]');
+    if (profile) {
+      openPublicProfile(profile.dataset.profileUser, profile);
+      return;
+    }
+    const sendButton = event.target.closest('.friends-send-request');
+    if (sendButton) {
+      void sendFriendRequest(sendButton.dataset.friendSend);
+      return;
+    }
+    const actionButton = event.target.closest('[data-request-action]');
+    if (actionButton) void changeFriendRequest(actionButton.dataset.requestId, actionButton.dataset.requestAction);
+  });
+}
+for (const button of friendsTabButtons) {
+  button.addEventListener('click', () => selectFriendsTab(button.dataset.friendsTab));
+  button.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = friendsTabButtons.indexOf(button);
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? friendsTabButtons.length - 1
+      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + friendsTabButtons.length) % friendsTabButtons.length;
+    const next = friendsTabButtons[nextIndex];
+    selectFriendsTab(next.dataset.friendsTab);
+    next.focus();
+  });
+}
+friendsDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  friendsDialog.close();
+});
+friendsDialog.addEventListener('close', () => {
+  friendsRequestSequence += 1;
+  if (currentSession && friendsTrigger?.isConnected) friendsTrigger.focus();
+  friendsTrigger = null;
+});
 
 for (const trigger of dnaOpenButtons) {
   trigger.addEventListener('click', () => openDnaDialog(trigger));
@@ -2426,6 +3149,11 @@ notificationsList.addEventListener('scroll', () => {
 });
 
 notificationsList.addEventListener('click', (event) => {
+  const acceptFriendButton = event.target.closest('.notification-accept-friend');
+  if (acceptFriendButton) {
+    void acceptFriendNotification(acceptFriendButton.dataset.notificationId);
+    return;
+  }
   const markReadButton = event.target.closest('.notification-mark-read');
   if (markReadButton) {
     void markNotificationRead(markReadButton.dataset.notificationId);
@@ -2946,20 +3674,29 @@ weeklyRankingDialog.addEventListener('close', () => {
   weeklyRankingTrigger = null;
 });
 
+function openWantedFigure(wanted, figure) {
+  if (!hasLoadedFullCatalog || !currentSession || wanted.dataset.ownerUser === currentSession.user.id) return;
+  if (ownsMinifigura(wanted.dataset.wantedId)) {
+    updateRankingWantedActions();
+    showToast(messageForErrorCode('ID_DUPLICADO'), 'error');
+    return;
+  }
+  if (figure) openFormDialog('ranking-create', figure, wanted);
+}
+
 async function handleRankingListClick(event) {
   const list = event.currentTarget;
   const entries = list === weeklyRankingList ? weeklyRankingEntries : rankingEntries;
+  const profile = event.target.closest('[data-profile-user]');
+  if (profile) {
+    openPublicProfile(profile.dataset.profileUser, profile);
+    return;
+  }
   const wanted = event.target.closest('[data-wanted-id]');
   if (wanted) {
-    if (!hasLoadedFullCatalog || !currentSession || wanted.dataset.ownerUser === currentSession.user.id) return;
-    if (ownsMinifigura(wanted.dataset.wantedId)) {
-      updateRankingWantedActions();
-      showToast(messageForErrorCode('ID_DUPLICADO'), 'error');
-      return;
-    }
     const entry = entries.find(({ userId }) => userId === wanted.dataset.ownerUser);
     const figure = [...(entry?.top5Precio ?? []), ...(entry?.top5Antiguedad ?? [])].find(({ id }) => id === wanted.dataset.wantedId);
-    if (figure) openFormDialog('ranking-create', figure, wanted);
+    openWantedFigure(wanted, figure);
     return;
   }
   const expand = event.target.closest('.ranking-expand');
@@ -3425,6 +4162,10 @@ function clearUserData() {
   if (profileDialog.open) profileDialog.close();
   requestSequence += 1;
   clearNotifications();
+  clearFriends();
+  clearPublicProfile();
+  publicProfileTrigger = null;
+  if (publicProfileDialog.open) publicProfileDialog.close();
   dnaRequestSequence += 1;
   analyticsHistoryRequestSequence += 1;
   clearAnalyticsHistoryData();
@@ -3560,6 +4301,8 @@ function startApplicationForCurrentProfile() {
   profileCheckRetryButton.hidden = true;
   if (!appStarted) {
     appStarted = true;
+    setFriendsCounts(null);
+    void loadFriendsCounts();
     startNotificationsRealtime();
     initialize();
   }

@@ -11,6 +11,385 @@ import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
+test('backfill de usernames ordena perfiles legados, salta colisiones y es idempotente', async () => {
+  const db = new PGlite();
+  const firstLegacyId = '00000000-0000-4000-8000-0000000000a1';
+  const secondLegacyId = '00000000-0000-4000-8000-0000000000b1';
+  const collisionId = '00000000-0000-4000-8000-0000000000c1';
+  const customId = '00000000-0000-4000-8000-0000000000d1';
+  const completedId = '00000000-0000-4000-8000-0000000000e1';
+  const lastLegacyId = '00000000-0000-4000-8000-0000000000f1';
+  const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(schema);
+    await db.exec('drop index public.user_profiles_username_lower_uidx');
+    await db.query(`
+      insert into auth.users(id, email) values
+        ($1, 'a@example.invalid'), ($2, 'b@example.invalid'), ($3, 'c@example.invalid'),
+        ($4, 'd@example.invalid'), ($5, 'e@example.invalid'), ($6, 'f@example.invalid')
+    `, [firstLegacyId, secondLegacyId, collisionId, customId, completedId, lastLegacyId]);
+    await db.query(`
+      insert into public.user_profiles(user_id, username, onboarding_completed, created_at) values
+        ($1, 'Coleccionista', false, '2020-01-01T00:00:00Z'),
+        ($2, 'Coleccionista', false, '2020-01-01T00:00:00Z'),
+        ($3, 'coLECCIONISTA1', false, '2019-01-01T00:00:00Z'),
+        ($4, 'CustomName', false, '2018-01-01T00:00:00Z'),
+        ($5, 'Coleccionista', true, '2017-01-01T00:00:00Z'),
+        ($6, 'Coleccionista', false, '2021-01-01T00:00:00Z')
+    `, [firstLegacyId, secondLegacyId, collisionId, customId, completedId, lastLegacyId]);
+    await db.query(`
+      insert into public.perfiles_publicos(user_id, display_name, avatar_url) values
+        ($1, 'Coleccionista', 'https://avatar.example/legacy.png'),
+        ($2, 'CustomName', null), ($3, 'Coleccionista', null)
+    `, [firstLegacyId, customId, completedId]);
+
+    await db.exec(schema);
+    const profiles = (await db.query(`
+      select profiles.user_id, profiles.username, profiles.onboarding_completed, public_profiles.display_name
+      from public.user_profiles profiles
+      left join public.perfiles_publicos public_profiles using (user_id)
+      order by profiles.user_id
+    `)).rows;
+    const byId = Object.fromEntries(profiles.map((profile) => [profile.user_id, profile]));
+    assert.equal(byId[firstLegacyId].username, 'Coleccionista2');
+    assert.equal(byId[firstLegacyId].display_name, 'Coleccionista2');
+    assert.equal(byId[secondLegacyId].username, 'Coleccionista3');
+    assert.equal(byId[secondLegacyId].display_name, 'Coleccionista3');
+    assert.equal(byId[lastLegacyId].username, 'Coleccionista4');
+    assert.equal(byId[collisionId].username, 'coLECCIONISTA1');
+    assert.equal(byId[customId].username, 'CustomName');
+    assert.equal(byId[completedId].username, 'Coleccionista');
+    assert.equal(byId[completedId].display_name, 'Coleccionista');
+    assert.equal((await db.query('select avatar_url from public.perfiles_publicos where user_id = $1', [firstLegacyId])).rows[0].avatar_url, 'https://avatar.example/legacy.png');
+
+    await db.exec(schema);
+    assert.deepEqual((await db.query('select user_id, username from public.user_profiles order by user_id')).rows,
+      profiles.map(({ user_id, username }) => ({ user_id, username })));
+  } finally {
+    await db.close();
+  }
+});
+
+test('RPC de perfil ajeno limita campos, ordena resumen y conserva RLS directo', async () => {
+  const db = new PGlite();
+  const viewerId = '00000000-0000-4000-8000-0000000000a1';
+  const profileId = '00000000-0000-4000-8000-0000000000b1';
+  const setActor = async (userId) => {
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+  };
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      grant usage on schema auth to authenticated;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
+      viewerId, 'viewer@example.invalid', profileId, 'private@example.invalid',
+    ]);
+    await db.query(`
+      insert into public.user_profiles(user_id, username, currency, language, avatar_url)
+      values ($1, 'BrickFan', 'EUR', 'es', 'https://avatar.example/profile.png')
+    `, [profileId]);
+    await db.query(`
+      insert into public.perfiles_publicos(user_id, display_name, avatar_url)
+      values ($1, 'OAuth private name', 'https://avatar.example/public.png')
+    `, [profileId]);
+    await db.query(`
+      insert into public.gamificacion(user_id, bricks, nivel, logros) values ($1, 123,
+        '{"id":4,"nombre":"Citizen","private":"hidden"}',
+        '[
+          {"id":"tie-first","type":"normal","nombre":"Tie first","total":25,"email":"hidden"},
+          {"id":"gift-first","type":"regalo","nombre":"Gift first","total":500},
+          {"id":"high","type":"normal","nombre":"High","total":50},
+          {"id":"tie-second","type":"normal","nombre":"Tie second","total":25},
+          {"id":"gift-second","type":"regalo","nombre":"Gift second","total":1}
+        ]')
+    `, [profileId]);
+    await db.query(`
+      insert into public.minifiguras(user_id, id, nombre, categoria, estado_coleccion, anio, precio,
+        precio_compra, fecha_compra, fecha_registro) values
+        ($1, 'A-1', 'Older', 'Space', 'COLECCIÓN', 1980, 20, 3, '2020-01-01', '2024-01-01'),
+        ($1, 'A-2', 'Newest', 'Castle', 'COLECCIÓN', 2000, 50, 4, '2021-01-01', '2026-01-01'),
+        ($1, 'A-3', 'Middle', 'City', 'COLECCIÓN', 1990, 35, 5, '2022-01-01', '2025-01-01'),
+        ($1, 'B-1', 'Wanted old', 'Space', 'BUSCADA', 1970, 10, 1, '2019-01-01', '2025-02-01'),
+        ($1, 'B-2', 'Wanted new', 'Castle', 'BUSCADA', 2020, 15, 2, '2020-01-01', '2026-02-01')
+    `, [profileId]);
+    await db.query(`
+      insert into public.gamificacion(user_id, logros) values ($1,
+        '[{"id":"collector","type":"normal","cantidad":1},{"id":"nerd","type":"normal","cantidad":1}]');
+    `, [viewerId]);
+
+    assert.equal((await db.query("select has_function_privilege('anon', 'public.amigos_perfil(uuid)', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    await setActor(viewerId);
+    await assert.rejects(db.query('select public.amigos_perfil($1)', [viewerId]), /PERFIL_NO_PERMITIDO/);
+    const result = (await db.query('select public.amigos_perfil($1) as result', [profileId])).rows[0].result;
+    assert.deepEqual(Object.keys(result).sort(), [
+      'achievements', 'avatarUrl', 'bricks', 'collection', 'dna', 'level', 'top5Age', 'top5Price', 'userId', 'username', 'wanted',
+    ]);
+    assert.equal(result.username, 'BrickFan');
+    assert.equal(result.avatarUrl, 'https://avatar.example/profile.png');
+    assert.equal(result.bricks, 123);
+    assert.deepEqual(result.level, { id: 4, name: 'Citizen' });
+    assert.deepEqual(Object.keys(result.dna).sort(), ['collector', 'explorer', 'fan', 'rarityHunter']);
+    assert.equal(result.collection.total, 3);
+    assert.deepEqual(result.collection.latest.map(({ id }) => id), ['A-2', 'A-3', 'A-1']);
+    assert.deepEqual(result.wanted.latest.map(({ id }) => id), ['B-2', 'B-1']);
+    assert.deepEqual(result.top5Price.map(({ id }) => id), ['A-2', 'A-3', 'A-1']);
+    assert.deepEqual(result.top5Age.map(({ id }) => id), ['A-1', 'A-3', 'A-2']);
+    assert.deepEqual(result.achievements.map(({ id }) => id), ['high', 'tie-first', 'tie-second', 'gift-first', 'gift-second']);
+    const serialized = JSON.stringify(result);
+    for (const privateField of ['email', 'currency', 'language', 'precio_compra', 'fecha_compra', 'private']) {
+      assert.equal(serialized.includes(privateField), false, privateField);
+    }
+    assert.equal((await db.query("select has_table_privilege('authenticated', 'public.minifiguras', 'SELECT') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_table_privilege('authenticated', 'public.gamificacion', 'SELECT') as allowed")).rows[0].allowed, false);
+    await assert.rejects(db.query('select user_id from public.minifiguras'), /permission denied/);
+    await assert.rejects(db.query('select user_id from public.gamificacion'), /permission denied/);
+    assert.equal((await db.query('select public.amigos_perfil($1) as result', ['00000000-0000-4000-8000-0000000000c1'])).rows[0].result, null);
+    await db.exec('reset role');
+  } finally {
+    await db.close();
+  }
+});
+
+test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómica e idempotente', async () => {
+  const db = new PGlite();
+  const userA = '00000000-0000-4000-8000-0000000000a1';
+  const userB = '00000000-0000-4000-8000-0000000000b1';
+  const userC = '00000000-0000-4000-8000-0000000000c1';
+  const setActor = async (userId) => {
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+  };
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      grant usage on schema auth to authenticated;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+    await db.exec(schema);
+    await db.exec(`
+      alter table public.notificaciones drop constraint notificaciones_type_check;
+      alter table public.notificaciones add constraint notificaciones_type_check check (
+        type in ('gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary')
+      );
+    `);
+    await db.exec(schema);
+    await db.exec(`
+      alter table public.notificaciones drop constraint notificaciones_type_check;
+      alter table public.notificaciones add constraint notificaciones_type_check check (
+        type in ('gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary')
+      );
+    `);
+    const notificationMigration = await readFile(new URL('../supabase/friend-notification-types.sql', import.meta.url), 'utf8');
+    await db.exec(notificationMigration);
+    await db.exec(notificationMigration);
+    const socialMigration = await readFile(new URL('../supabase/friends-social-upgrade.sql', import.meta.url), 'utf8');
+    await db.exec(socialMigration);
+    await db.exec(socialMigration);
+    await db.exec(`
+      drop policy "Recipients can view friend requests" on public.friend_requests;
+      create policy "Participants can view friend requests" on public.friend_requests for select
+      to authenticated using (auth.uid() in (sender_id, recipient_id));
+    `);
+    const privacyMigration = await readFile(new URL('../supabase/friend-request-privacy.sql', import.meta.url), 'utf8');
+    await db.exec(privacyMigration);
+    await db.exec(privacyMigration);
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4), ($5, $6)', [
+      userA, 'a@example.invalid', userB, 'b@example.invalid', userC, 'c@example.invalid',
+    ]);
+    await db.query('insert into public.user_profiles(user_id, username) values ($1, $2), ($3, $4), ($5, $6)', [
+      userA, 'SpaceFan', userB, 'BrickFan', userC, 'CastleFan',
+    ]);
+    await db.query('insert into public.gamificacion(user_id, bricks) values ($1, 20), ($2, 40)', [userA, userB]);
+
+    assert.equal((await db.query("select has_function_privilege('anon', 'public.amigos_enviar(uuid)', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    await setActor(userA);
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 0 });
+    const summaries = (await db.query("select public.amigos_resumen('search', 'FAN') as data")).rows[0].data;
+    assert.equal(summaries[0].total_coleccion, 0);
+    assert.equal(summaries[0].dna_principal, 'Newbie');
+    assert.deepEqual(summaries[0].dna_rasgos, []);
+    assert.equal(summaries[0].posicion_global, 1);
+    await assert.rejects(db.query('select public.amigos_buscar($1)', ['ab']), /CONSULTA_DEMASIADO_CORTA/);
+    const search = await db.query('select user_id, username, bricks, relationship_status from public.amigos_buscar($1)', ['FAN']);
+    assert.deepEqual(search.rows, [
+      { user_id: userB, username: 'BrickFan', bricks: 40, relationship_status: 'none' },
+      { user_id: userC, username: 'CastleFan', bricks: 0, relationship_status: 'none' },
+    ]);
+    await assert.rejects(
+      db.query('insert into public.friend_requests(sender_id, recipient_id) values ($1, $2)', [userA, userC]),
+      /permission denied/,
+    );
+    await assert.rejects(
+      db.query('insert into public.friendships(user_low_id, user_high_id) values ($1, $2)', [userA, userC]),
+      /permission denied/,
+    );
+    await assert.rejects(db.query('select public.amigos_enviar($1)', [userA]), /AUTORRELACION_NO_PERMITIDA/);
+    const sent = (await db.query('select public.amigos_enviar($1) as result', [userB])).rows[0].result;
+    const requestId = sent.requestId;
+    assert.equal(sent.status, 'pending');
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 1, received: 0 });
+    await assert.rejects(db.query('select public.amigos_enviar($1)', [userB]), /SOLICITUD_EXISTENTE/);
+    await setActor(userB);
+    await assert.rejects(db.query('select public.amigos_enviar($1)', [userA]), /SOLICITUD_EXISTENTE/);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request'")).rows[0].total, 1);
+    await setActor(userA);
+    assert.deepEqual((await db.query('select sender_id from public.friend_requests')).rows, []);
+    await db.exec('reset role');
+
+    await setActor(userC);
+    assert.deepEqual((await db.query('select id from public.friend_requests')).rows, []);
+    await assert.rejects(db.query('select public.amigos_aceptar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+    await db.exec('reset role');
+
+    await setActor(userB);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'pending' }]);
+    await db.query('select public.amigos_rechazar($1)', [requestId]);
+    await setActor(userA);
+    assert.deepEqual((await db.query('select status from public.friend_requests')).rows, []);
+    assert.deepEqual((await db.query("select status from public.amigos_listar('sent')")).rows, [{ status: 'pending' }]);
+    assert.equal((await db.query("select relationship_status from public.amigos_buscar('Brick')")).rows[0].relationship_status, 'request_sent');
+    assert.equal((await db.query("select public.amigos_resumen('sent') as data")).rows[0].data[0].status, 'pending');
+    await assert.rejects(db.query('select public.amigos_enviar($1)', [userB]), /SOLICITUD_EXISTENTE/);
+    await setActor(userB);
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 1 });
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'rejected' }]);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
+    await db.query('select public.amigos_aceptar($1)', [requestId]);
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 1, sent: 0, received: 0 });
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['friends'])).rows, [{ status: 'accepted' }]);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, []);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
+    assert.deepEqual((await db.query("select social_request_accepted, is_read from public.notificaciones where type = 'friend_request'")).rows, [
+      { social_request_accepted: true, is_read: false },
+    ]);
+    await setActor(userA);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 1);
+    await setActor(userB);
+    assert.equal((await db.query('select public.amigos_aceptar($1) as result', [requestId])).rows[0].result.alreadyAccepted, true);
+    await assert.rejects(db.query('select public.amigos_rechazar($1)', [requestId]), /SOLICITUD_YA_ACEPTADA/);
+    await db.exec('reset role');
+
+    await db.exec(`
+      create function public.refuse_social_notification() returns trigger language plpgsql as $$
+      begin raise exception 'NOTIFICATION_FAILURE'; end; $$;
+      create trigger refuse_social_notification before insert on public.notificaciones
+      for each row when (new.type = 'friend_request') execute function public.refuse_social_notification();
+    `);
+    await setActor(userC);
+    await assert.rejects(db.query('select public.amigos_enviar($1)', [userB]), /NOTIFICATION_FAILURE/);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from public.friend_requests')).rows[0].total, 1);
+    assert.equal((await db.query('select count(*)::integer as total from public.friendships')).rows[0].total, 1);
+    await db.exec('drop trigger refuse_social_notification on public.notificaciones; drop function public.refuse_social_notification();');
+
+    await setActor(userC);
+    const secondRequest = (await db.query('select public.amigos_enviar($1) as result', [userA])).rows[0].result;
+    await db.exec('reset role');
+    await db.exec(`
+      create function public.refuse_social_accept_notification() returns trigger language plpgsql as $$
+      begin raise exception 'ACCEPT_NOTIFICATION_FAILURE'; end; $$;
+      create trigger refuse_social_accept_notification before insert on public.notificaciones
+      for each row when (new.type = 'friend_request_accepted') execute function public.refuse_social_accept_notification();
+    `);
+    await setActor(userA);
+    await assert.rejects(db.query('select public.amigos_aceptar($1)', [secondRequest.requestId]), /ACCEPT_NOTIFICATION_FAILURE/);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'pending' }]);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from public.friendships')).rows[0].total, 1);
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 1);
+    await db.exec('drop trigger refuse_social_accept_notification on public.notificaciones; drop function public.refuse_social_accept_notification();');
+    await setActor(userA);
+    await db.query('select public.amigos_aceptar($1)', [secondRequest.requestId]);
+    assert.equal((await db.query('select status from public.amigos_listar($1)', ['friends'])).rows.length, 2);
+    await db.exec('reset role');
+    await db.query(`update public.gamificacion set nivel = '{"id":2,"private":"hidden"}',
+      logros = '[{"id":"collector","cantidad":1}]' where user_id = $1`, [userB]);
+    await db.query(`insert into public.gamificacion(user_id, nivel, bricks) values ($1, '{"id":3}', 1)`, [userC]);
+    await db.query("insert into public.minifiguras(user_id, id, nombre, categoria) values ($1, 'SOCIAL-1', 'Figure', 'Space')", [userB]);
+    await setActor(userA);
+    const enriched = (await db.query("select public.amigos_resumen('search', 'Brick') as data")).rows[0].data[0];
+    assert.equal(enriched.posicion_global, 2);
+    assert.equal(enriched.total_coleccion, 1);
+    assert.equal(enriched.dna_principal, 'Collector');
+    assert.deepEqual(Object.keys(enriched.nivel).sort(), ['id', 'nombre']);
+    assert.equal(enriched.dna_rasgos.length, 2);
+    assert.deepEqual(Object.keys(enriched.dna_rasgos[0]).sort(), ['nombre', 'porcentaje']);
+    assert.equal(enriched.dna_rasgos[0].nombre, 'Collector');
+    assert.equal('logros' in enriched, false);
+    await db.exec('reset role');
+    await db.exec(`
+      create function private.refuse_social_delete() returns trigger language plpgsql as $$
+      begin raise exception 'DELETE_FAILURE'; end; $$;
+      create trigger refuse_social_delete before delete on public.friend_requests
+      for each row execute function private.refuse_social_delete();
+    `);
+    await setActor(userA);
+    await assert.rejects(db.query('select public.amigos_eliminar($1)', [userB]), /DELETE_FAILURE/);
+    assert.equal((await db.query("select count(*)::integer as total from public.friendships")).rows[0].total, 2);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from public.notificaciones where social_request_id = $1', [requestId])).rows[0].total, 2);
+    await db.exec('drop trigger refuse_social_delete on public.friend_requests');
+    await setActor(userC);
+    assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userB])).rows[0].data.removed, false);
+    await setActor(userB);
+    assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userA])).rows[0].data.removed, true);
+    assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userA])).rows[0].data.removed, false);
+    await assert.rejects(db.query('select public.amigos_aceptar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+    await db.exec('reset role');
+    assert.equal((await db.query('select count(*)::integer as total from public.notificaciones where social_request_id = $1', [requestId])).rows[0].total, 0);
+    await setActor(userA);
+    assert.equal((await db.query('select public.amigos_enviar($1) as data', [userB])).rows[0].data.status, 'pending');
+    assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userB])).rows[0].data.removed, false);
+    assert.equal((await db.query("select status from public.amigos_listar('sent') where user_id = $1", [userB])).rows[0].status, 'pending');
+    await db.exec('reset role; set role anon');
+    await assert.rejects(db.query('select public.amigos_contadores()'), /permission denied/);
+    await assert.rejects(db.query('select public.amigos_eliminar($1)', [userB]), /permission denied/);
+    await db.exec('reset role');
+  } finally {
+    await db.close();
+  }
+});
+
 test('resolver username exige contraseña, limita intentos y no concede lectura global a anon', async () => {
   const db = new PGlite({ extensions: { pgcrypto } });
   const userId = '00000000-0000-4000-8000-0000000000a1';
@@ -475,6 +854,12 @@ test('reset de miniPeopleDB_prueba vacía todas las tablas de datos de aplicaci�
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/insert-miniPeopleDB-prueba.sql', import.meta.url), 'utf8'));
+    await db.exec(`
+      insert into public.friend_requests(sender_id, recipient_id, status)
+      values ('13000000-0000-4000-8000-000000000001', '13000000-0000-4000-8000-000000000002', 'pending');
+      insert into public.friendships(user_low_id, user_high_id)
+      values ('13000000-0000-4000-8000-000000000001', '13000000-0000-4000-8000-000000000002');
+    `);
     assert.equal((await db.query(`
       select count(*)::integer as total
       from public.user_profiles profiles
@@ -678,6 +1063,52 @@ test('ranking_logros proyecta solo datos publicos del Top 10 sin escrituras ni a
   assert.deepEqual(mock.rows('gamificacion'), before);
   assert.deepEqual(mock.rows('minifiguras'), []);
   assert.deepEqual(mock.rows('regalos_enviados'), []);
+});
+
+test('el mock social deriva identidad del JWT, limita lecturas y revierte aceptación fallida', async () => {
+  const mock = createSupabaseMock({ users: {
+    'token-a': { id: 'user-a' }, 'token-b': { id: 'user-b' }, 'token-c': { id: 'user-c' }, 'token-stranger': { id: 'stranger' },
+  } });
+  const clientA = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-a' } } });
+  const clientB = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-b' } } });
+  const clientC = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-c' } } });
+  const stranger = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-stranger' } } });
+  mock.seed('user_profiles', 'user-a', [{ username: 'SpaceFan' }]);
+  mock.seed('user_profiles', 'user-b', [{ username: 'BrickFan' }]);
+  mock.seed('user_profiles', 'user-c', [{ username: 'CastleFan' }]);
+  mock.seed('gamificacion', 'user-b', [{ bricks: 30, nivel: { id: 2, nombre: 'Level' }, logros: [] }]);
+  mock.seed('gamificacion', 'user-c', [{ bricks: 20, nivel: { id: 1, nombre: 'Level' }, logros: [] }]);
+  mock.seed('minifiguras', 'user-b', [{ id: 'A-1', nombre: 'Private figure', estado_coleccion: 'COLECCIÓN', fecha_registro: '2026-01-01T00:00:00.000Z' }]);
+
+  const search = await clientA.rpc('amigos_buscar', { p_query: 'fAn' });
+  assert.deepEqual(search.data.map(({ user_id, relationship_status }) => ({ user_id, relationship_status })), [
+    { user_id: 'user-b', relationship_status: 'none' },
+    { user_id: 'user-c', relationship_status: 'none' },
+  ]);
+  assert.equal('email' in search.data[0], false);
+  assert.equal((await clientA.from('friend_requests').insert({ sender_id: 'user-a', recipient_id: 'user-b' })).error.code, '42501');
+  assert.deepEqual((await stranger.from('friend_requests').select('*')).data, []);
+
+  const sent = await clientA.rpc('amigos_enviar', { p_receptor_id: 'user-b' });
+  assert.equal(sent.error, null);
+  const requestId = sent.data.requestId;
+  assert.equal(mock.rows('notificaciones', 'user-b')[0].type, 'friend_request');
+  assert.equal((await clientA.rpc('amigos_enviar', { p_receptor_id: 'user-b' })).error.message, 'SOLICITUD_EXISTENTE');
+  assert.equal((await clientB.rpc('amigos_rechazar', { p_solicitud_id: requestId })).data.status, 'rejected');
+  assert.deepEqual((await clientB.rpc('amigos_listar', { p_tipo: 'received' })).data.map(({ status }) => status), ['rejected']);
+  assert.equal((await clientB.rpc('amigos_aceptar', { p_solicitud_id: requestId })).data.status, 'accepted');
+  assert.equal((await clientA.rpc('amigos_listar', { p_tipo: 'friends' })).data[0].user_id, 'user-b');
+  assert.equal((await clientA.rpc('amigos_aceptar', { p_solicitud_id: requestId })).error.message, 'SOLICITUD_NO_ENCONTRADA');
+
+  const secondRequest = await clientC.rpc('amigos_enviar', { p_receptor_id: 'user-b' });
+  mock.failNext('notificaciones', { code: 'XX000', message: 'notification unavailable' }, 'insert');
+  assert.equal((await clientB.rpc('amigos_aceptar', { p_solicitud_id: secondRequest.data.requestId })).error.message, 'notification unavailable');
+  assert.equal(mock.rows('friend_requests').find(({ id }) => id === secondRequest.data.requestId).status, 'pending');
+  assert.equal(mock.rows('friendships').some(({ user_low_id, user_high_id }) => user_low_id === 'user-b' && user_high_id === 'user-c'), false);
+  assert.equal((await clientB.rpc('amigos_aceptar', { p_solicitud_id: secondRequest.data.requestId })).error, null);
+  assert.equal(mock.rows('friendships').filter(({ user_low_id, user_high_id }) => user_low_id === 'user-b' && user_high_id === 'user-c').length, 1);
+  assert.equal(mock.rows('notificaciones', 'user-c').filter(({ type }) => type === 'friend_request_accepted').length, 1);
+  assert.deepEqual((await stranger.from('friendships').select('*')).data, []);
 });
 
 test('el mock aplica regalos únicos y revierte la transacción si falla gamificación', async () => {
