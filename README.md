@@ -105,6 +105,14 @@ Los estados de colección aceptados son `COLECCIÓN` y `BUSCADA`. Los filtros de
 
 La bandeja carga hasta 15 avisos por página y usa el cursor devuelto para continuar. Supabase Realtime avisa de cambios de la sesión autenticada; recibir o abrir la bandeja no marca avisos como leídos. El badge cambia al marcar una notificación individualmente o usar `POST /api/notificaciones/leer-todas`. Los avisos de regalo incluyen la acción para agradecerlo; agradecer es independiente de marcarlo como leído.
 
+### Actualización de Amigos
+
+En una base que ya tiene las tablas y RPC de amistad, ejecutar `supabase/friends-social-upgrade.sql` en el SQL Editor antes de desplegar esta actualización y reiniciar el backend. Es transaccional e idempotente: añade el resumen limitado de ranking, contadores propios y eliminación recíproca con JWT; no modifica grants directos de tablas ni usa `service_role`. Las instalaciones nuevas incluyen estas funciones en `supabase/schema.sql`. Si la base conserva la restricción de notificaciones anterior a las amistades, ejecutar también `supabase/friend-notification-types.sql`.
+
+El botón Amigos y sus pestañas muestran totales confirmados por sesión; un error de lectura no se representa como cero. Eliminar una amistad desde Amigos o Buscador la retira de ambas cuentas, borra su solicitud aceptada y notificaciones sociales vinculadas, y permite solicitar amistad de nuevo. No cambia colecciones, Bricks ni regalos. Los SQL locales no se aplican automáticamente a Supabase remoto.
+
+Para mantener privado el rechazo, aplicar también `supabase/friend-request-privacy.sql` antes de probar contra una base existente. Es transaccional e idempotente: las solicitudes rechazadas siguen apareciendo como pendientes/enviadas al emisor, sin cambios de búsqueda, contadores ni fechas visibles; solo el destinatario conoce el rechazo y puede aceptarlas después. El emisor consulta sus solicitudes mediante RPC y no puede leer el estado real de la tabla por RLS. Las instalaciones nuevas ya incluyen esta protección en `supabase/schema.sql`.
+
 ### Analítica histórica diaria
 
 La vigencia de la caché global de precios se configura con `DAILY_SYNC_PRICE_CACHE_TTL_HOURS`: entero entre 0 y 8760 horas, con valor predeterminado de 24. Un valor de `0` desactiva la reutilización y hace que cada ID se consulte en Brickset en cada nuevo trabajo. Configúrala como variable de entorno del Web Service en Render; cada nuevo trabajo aplicará ese umbral. El esquema actualizado debe estar aplicado en Supabase para que la RPC acepte el parámetro.

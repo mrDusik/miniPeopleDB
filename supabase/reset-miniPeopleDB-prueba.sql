@@ -35,6 +35,8 @@ truncate table
   public.gamificacion_categoria_version,
   public.dna_ponderaciones,
   public.regalos_enviados,
+  public.friend_requests,
+  public.friendships,
   public.notificaciones,
   public.agradecimientos_regalo,
   public.ranking_top10_membership,

@@ -177,9 +177,9 @@ Esta acción no se puede deshacer.</p>
               <img src="/status_images/sobre.png" alt="">
               <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
             </button>
-            <button type="button" id="open-friends" class="notifications-trigger friends-trigger" aria-label="Amigos: 375" title="Amigos: 375">
+            <button type="button" id="open-friends" class="notifications-trigger friends-trigger" aria-label="Amigos" title="Amigos" aria-haspopup="dialog" aria-controls="friends-dialog">
               <img src="/status_images/friends.png" alt="">
-              <span id="friends-count" class="friends-count" aria-hidden="true">375</span>
+              <span id="friends-count" class="friends-count" aria-hidden="true" hidden></span>
             </button>
             <div class="user-session">
               <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
@@ -508,6 +508,91 @@ Esta acción no se puede deshacer.</p>
       </div>
       <p id="notifications-status" class="status loading-message" role="status" aria-live="polite">Cargando notificaciones...</p>
       <ul id="notifications-list" class="achievements-list notifications-list"></ul>
+    </dialog>
+
+    <dialog id="friends-dialog" class="modal modal-friends" aria-labelledby="friends-dialog-title">
+      <div class="friends-dialog-heading modal-dialog-heading">
+        <img src="/status_images/friends.png" alt="" aria-hidden="true">
+        <h2 id="friends-dialog-title">Amigos</h2>
+        <button type="button" id="friends-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <div class="friends-tabs" role="tablist" aria-label="Amigos y solicitudes">
+        <button type="button" id="friends-tab-friends" class="button button-secondary" role="tab" aria-selected="true" aria-controls="friends-panel-friends" data-friends-tab="friends">Amigos</button>
+        <button type="button" id="friends-tab-search" class="button button-secondary" role="tab" aria-selected="false" aria-controls="friends-panel-search" data-friends-tab="search" tabindex="-1">Buscador</button>
+        <button type="button" id="friends-tab-sent" class="button button-secondary" role="tab" aria-label="Solicitudes Enviadas" aria-selected="false" aria-controls="friends-panel-sent" data-friends-tab="sent" tabindex="-1"><span class="friends-tab-label-full">Solicitudes Enviadas</span><span class="friends-tab-label-short" aria-hidden="true">Sol. Enviadas</span></button>
+        <button type="button" id="friends-tab-received" class="button button-secondary" role="tab" aria-label="Solicitudes Recibidas" aria-selected="false" aria-controls="friends-panel-received" data-friends-tab="received" tabindex="-1"><span class="friends-tab-label-full">Solicitudes Recibidas</span><span class="friends-tab-label-short" aria-hidden="true">Sol. Recibidas</span></button>
+      </div>
+      <section id="friends-panel-friends" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-friends">
+        <p id="friends-status-friends" class="status" role="status" aria-live="polite"></p>
+        <ul id="friends-list-friends" class="friends-list"></ul>
+      </section>
+      <section id="friends-panel-search" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-search" hidden>
+        <label class="friends-search-label" for="friends-search">Buscar por username</label>
+        <input id="friends-search" type="search" minlength="3" autocomplete="off">
+        <p id="friends-status-search" class="status" role="status" aria-live="polite"></p>
+        <ul id="friends-list-search" class="friends-list"></ul>
+      </section>
+      <section id="friends-panel-sent" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-sent" hidden>
+        <p id="friends-status-sent" class="status" role="status" aria-live="polite"></p>
+        <ul id="friends-list-sent" class="friends-list"></ul>
+      </section>
+      <section id="friends-panel-received" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-received" hidden>
+        <p id="friends-status-received" class="status" role="status" aria-live="polite"></p>
+        <ul id="friends-list-received" class="friends-list"></ul>
+      </section>
+    </dialog>
+
+    <dialog id="public-profile-dialog" class="modal modal-public-profile" aria-labelledby="public-profile-title">
+      <div class="public-profile-heading modal-dialog-heading">
+        <img id="public-profile-avatar" class="public-profile-avatar" alt="" hidden>
+        <span id="public-profile-avatar-fallback" class="public-profile-avatar-fallback" aria-hidden="true">👤</span>
+        <h2 id="public-profile-title"></h2>
+        <button type="button" id="public-profile-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <p id="public-profile-status" class="status" role="status" aria-live="polite"></p>
+      <button type="button" id="public-profile-retry" class="button button-secondary" hidden>Reintentar</button>
+      <div id="public-profile-content" class="public-profile-content" hidden>
+        <section class="public-profile-stats" aria-label="Resumen">
+          <div role="group" aria-label="Bricks" title="Bricks"><img class="public-profile-stat-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt=""><strong id="public-profile-bricks"></strong></div>
+          <div role="group" aria-label="Nivel" title="Nivel"><img id="public-profile-level-image" class="public-profile-stat-icon" alt=""><strong id="public-profile-level"></strong></div>
+          <div role="group" aria-label="En colección" title="En colección"><img class="public-profile-stat-icon" src="/status_images/caja.png" alt=""><strong id="public-profile-collection-count"></strong></div>
+          <div role="group" aria-label="En búsqueda" title="En búsqueda"><img class="public-profile-stat-icon" src="/status_images/lupa.png" alt=""><strong id="public-profile-wanted-count"></strong></div>
+        </section>
+        <div class="public-profile-overview">
+        <section class="public-profile-section public-profile-dna-section" aria-label="DNA">
+          <div class="public-profile-dna-body">
+            <div id="public-profile-dna-chart" class="dna-chart" role="img" aria-label="DNA del coleccionista" hidden>
+              <canvas id="public-profile-dna-canvas" aria-hidden="true"></canvas>
+              <div class="dna-chart-label" aria-hidden="true"><strong id="public-profile-dna-percentage"></strong><span id="public-profile-dna-trait"></span></div>
+            </div>
+          </div>
+        </section>
+        <section class="public-profile-section public-profile-awards" aria-labelledby="public-profile-achievements-title">
+          <h3 id="public-profile-achievements-title">Logros más importantes</h3>
+          <ul id="public-profile-achievements" class="achievements-list public-profile-achievements"></ul>
+        </section>
+        </div>
+        <div class="public-profile-tops">
+          <section class="public-profile-section" aria-labelledby="public-profile-price-title">
+            <h3 id="public-profile-price-title">Top 5 por precio</h3>
+            <ul id="public-profile-top-price" class="ranking-row public-profile-figures"></ul>
+          </section>
+          <section class="public-profile-section" aria-labelledby="public-profile-age-title">
+            <h3 id="public-profile-age-title">Top 5 por antigüedad</h3>
+            <ul id="public-profile-top-age" class="ranking-row public-profile-figures"></ul>
+          </section>
+        </div>
+        <div class="public-profile-tops">
+          <section class="public-profile-section" aria-labelledby="public-profile-latest-title">
+            <h3 id="public-profile-latest-title">Últimas de colección</h3>
+            <ul id="public-profile-latest-collection" class="ranking-row public-profile-figures"></ul>
+          </section>
+          <section class="public-profile-section" aria-labelledby="public-profile-latest-wanted-title">
+            <h3 id="public-profile-latest-wanted-title">Últimas buscadas</h3>
+            <ul id="public-profile-latest-wanted" class="ranking-row public-profile-figures"></ul>
+          </section>
+        </div>
+      </div>
     </dialog>
 
     <dialog id="dna-dialog" class="modal modal-dna" aria-labelledby="dna-dialog-title">

@@ -284,7 +284,8 @@ create table if not exists public.notificaciones (
   gift_donante_id uuid,
   gift_thanked_at timestamptz,
   constraint notificaciones_type_check check (type in (
-    'gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary'
+    'gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary',
+    'friend_request', 'friend_request_accepted'
   )),
   constraint notificaciones_payload_object_check check (jsonb_typeof(payload) = 'object'),
   constraint notificaciones_gift_reference_check check (
@@ -300,6 +301,12 @@ create table if not exists public.notificaciones (
   constraint notificaciones_regalo_fk foreign key (gift_donante_id, user_id)
     references public.regalos_enviados (donante_id, receptor_id) on delete cascade
 );
+
+alter table public.notificaciones drop constraint if exists notificaciones_type_check;
+alter table public.notificaciones add constraint notificaciones_type_check check (type in (
+  'gift_received', 'gift_thanks', 'ranking_entered', 'ranking_exited', 'daily_summary',
+  'friend_request', 'friend_request_accepted'
+));
 
 create index if not exists notificaciones_user_created_idx
   on public.notificaciones (user_id, created_at desc, id desc);
@@ -1420,6 +1427,97 @@ create table if not exists public.user_profiles (
   constraint user_profiles_language_check check (language in ('es'))
 );
 
+create table if not exists public.friend_requests (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references auth.users (id) on delete cascade,
+  recipient_id uuid not null references auth.users (id) on delete cascade,
+  pair_low_id uuid generated always as (least(sender_id, recipient_id)) stored,
+  pair_high_id uuid generated always as (greatest(sender_id, recipient_id)) stored,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint friend_requests_distinct_users_check check (sender_id <> recipient_id),
+  constraint friend_requests_status_check check (status in ('pending', 'rejected', 'accepted')),
+  constraint friend_requests_pair_key unique (pair_low_id, pair_high_id)
+);
+
+create index if not exists friend_requests_sender_status_idx
+  on public.friend_requests (sender_id, status, created_at desc);
+create index if not exists friend_requests_recipient_status_idx
+  on public.friend_requests (recipient_id, status, created_at desc);
+
+create table if not exists public.friendships (
+  user_low_id uuid not null references auth.users (id) on delete cascade,
+  user_high_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_low_id, user_high_id),
+  constraint friendships_ordered_pair_check check (user_low_id < user_high_id)
+);
+
+create index if not exists friendships_high_user_idx on public.friendships (user_high_id, user_low_id);
+
+alter table public.notificaciones add column if not exists social_request_id uuid;
+alter table public.notificaciones add column if not exists social_request_accepted boolean not null default false;
+alter table public.notificaciones drop constraint if exists notificaciones_social_reference_check;
+alter table public.notificaciones add constraint notificaciones_social_reference_check check (
+  (type in ('friend_request', 'friend_request_accepted') and social_request_id is not null)
+  or (type not in ('friend_request', 'friend_request_accepted') and social_request_id is null)
+);
+alter table public.notificaciones drop constraint if exists notificaciones_social_payload_check;
+alter table public.notificaciones add constraint notificaciones_social_payload_check check (
+  type not in ('friend_request', 'friend_request_accepted')
+  or (payload ? 'user' and jsonb_typeof(payload->'user') = 'string'
+    and length(btrim(payload->>'user')) between 3 and 20 and payload - 'user' = '{}'::jsonb)
+);
+alter table public.notificaciones drop constraint if exists notificaciones_social_accepted_check;
+alter table public.notificaciones add constraint notificaciones_social_accepted_check check (
+  type = 'friend_request' or social_request_accepted = false
+);
+alter table public.notificaciones drop constraint if exists notificaciones_social_request_fk;
+alter table public.notificaciones add constraint notificaciones_social_request_fk
+  foreign key (social_request_id) references public.friend_requests (id) on delete cascade;
+create unique index if not exists notificaciones_social_event_key
+  on public.notificaciones (user_id, type, social_request_id)
+  where social_request_id is not null;
+
+do $$
+declare
+  legacy_profile record;
+  candidate_username text;
+  candidate_suffix integer;
+begin
+  lock table public.user_profiles in share row exclusive mode;
+  for legacy_profile in
+    select user_id, avatar_url
+    from public.user_profiles
+    where not onboarding_completed and username = 'Coleccionista'
+    order by created_at asc, user_id asc
+    for update
+  loop
+    candidate_suffix := 1;
+    loop
+      candidate_username := 'Coleccionista' || candidate_suffix::text;
+      exit when not exists (
+        select 1 from public.user_profiles profile
+        where lower(profile.username) = lower(candidate_username)
+      );
+      candidate_suffix := candidate_suffix + 1;
+    end loop;
+
+    update public.user_profiles
+    set username = candidate_username, updated_at = now()
+    where user_id = legacy_profile.user_id;
+
+    insert into public.perfiles_publicos(user_id, display_name, avatar_url, updated_at)
+    values (legacy_profile.user_id, candidate_username, legacy_profile.avatar_url, now())
+    on conflict (user_id) do update set
+      display_name = excluded.display_name,
+      avatar_url = coalesce(excluded.avatar_url, public.perfiles_publicos.avatar_url),
+      updated_at = excluded.updated_at;
+  end loop;
+end;
+$$;
+
 create unique index if not exists user_profiles_username_lower_uidx
   on public.user_profiles (lower(username));
 
@@ -1500,6 +1598,8 @@ alter table public.user_profile_favorite_categories enable row level security;
 alter table public.regalos_enviados enable row level security;
 alter table public.user_daily_snapshots enable row level security;
 alter table public.notificaciones enable row level security;
+alter table public.friend_requests enable row level security;
+alter table public.friendships enable row level security;
 alter table public.agradecimientos_regalo enable row level security;
 alter table public.ranking_top10_membership enable row level security;
 alter table private.ranking_top10_reconciliation_state enable row level security;
@@ -1519,6 +1619,8 @@ grant select, insert, update on table public.perfiles_publicos to authenticated;
 revoke all on table public.notificaciones from public, anon, authenticated, service_role;
 grant select on table public.notificaciones to authenticated;
 grant update (is_read) on table public.notificaciones to authenticated;
+revoke all on table public.friend_requests, public.friendships from public, anon, authenticated, service_role;
+grant select on table public.friend_requests, public.friendships to authenticated;
 revoke all on table public.agradecimientos_regalo from public, anon, authenticated, service_role;
 revoke all on table public.ranking_top10_membership from public, anon, authenticated, service_role;
 revoke all on table private.ranking_top10_reconciliation_state from public, anon, authenticated, service_role;
@@ -1551,6 +1653,19 @@ create policy "Users can mark their notifications read"
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Participants can view friend requests" on public.friend_requests;
+drop policy if exists "Recipients can view friend requests" on public.friend_requests;
+create policy "Recipients can view friend requests"
+  on public.friend_requests for select
+  to authenticated
+  using ((select auth.uid()) = recipient_id);
+
+drop policy if exists "Participants can view friendships" on public.friendships;
+create policy "Participants can view friendships"
+  on public.friendships for select
+  to authenticated
+  using ((select auth.uid()) in (user_low_id, user_high_id));
 
 drop policy if exists "Users can insert their minifiguras" on public.minifiguras;
 create policy "Users can insert their minifiguras"
@@ -1664,6 +1779,478 @@ create policy "Users can delete their favorite categories"
   on public.user_profile_favorite_categories for delete
   to authenticated
   using ((select auth.uid()) = user_id);
+
+create or replace function public.amigos_buscar(p_query text)
+returns table (
+  user_id uuid,
+  username text,
+  avatar_url text,
+  bricks integer,
+  nivel jsonb,
+  posicion_global bigint,
+  relationship_status text
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if length(btrim(coalesce(p_query, ''))) < 3 then
+    raise exception using errcode = '22023', message = 'CONSULTA_DEMASIADO_CORTA';
+  end if;
+
+  return query
+  with ranked as (
+    select game.user_id, game.bricks, game.nivel,
+      row_number() over (order by game.bricks desc, game.user_id asc) as global_position
+    from public.gamificacion game
+  )
+  select profile.user_id, profile.username,
+    coalesce(profile.avatar_url, public_profile.avatar_url),
+    coalesce(ranked.bricks, 0), coalesce(ranked.nivel, '{}'::jsonb), ranked.global_position,
+    case
+      when friendship.user_low_id is not null then 'friend'
+      when request.id is null then 'none'
+      when request.sender_id = current_user_id and request.status in ('pending', 'rejected') then 'request_sent'
+      when request.recipient_id = current_user_id and request.status = 'pending' then 'request_received'
+      when request.status = 'rejected' then 'request_rejected'
+      else 'none'
+    end
+  from public.user_profiles profile
+  left join public.perfiles_publicos public_profile on public_profile.user_id = profile.user_id
+  left join ranked on ranked.user_id = profile.user_id
+  left join public.friend_requests request
+    on request.pair_low_id = least(current_user_id, profile.user_id)
+    and request.pair_high_id = greatest(current_user_id, profile.user_id)
+  left join public.friendships friendship
+    on friendship.user_low_id = least(current_user_id, profile.user_id)
+    and friendship.user_high_id = greatest(current_user_id, profile.user_id)
+  where profile.user_id <> current_user_id
+    and lower(profile.username) like '%' || lower(btrim(p_query)) || '%'
+  order by lower(profile.username), profile.user_id
+  limit 50;
+end;
+$$;
+
+create or replace function public.amigos_listar(p_tipo text)
+returns table (
+  relationship_id uuid,
+  user_id uuid,
+  username text,
+  avatar_url text,
+  bricks integer,
+  nivel jsonb,
+  posicion_global bigint,
+  status text,
+  created_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if p_tipo is null or p_tipo not in ('friends', 'sent', 'received') then
+    raise exception using errcode = '22023', message = 'TIPO_DE_LISTA_INVALIDO';
+  end if;
+
+  return query
+  with ranked as (
+    select game.user_id, game.bricks, game.nivel,
+      row_number() over (order by game.bricks desc, game.user_id asc) as global_position
+    from public.gamificacion game
+  ), relations as (
+    select null::uuid as relation_id,
+      case when friendship.user_low_id = current_user_id then friendship.user_high_id else friendship.user_low_id end as other_user_id,
+      'accepted'::text as relation_status, friendship.created_at as relation_created_at
+    from public.friendships friendship
+    where p_tipo = 'friends'
+      and current_user_id in (friendship.user_low_id, friendship.user_high_id)
+    union all
+    select request.id,
+      case when p_tipo = 'sent' then request.recipient_id else request.sender_id end,
+      case when p_tipo = 'sent' then 'pending' else request.status end, request.created_at
+    from public.friend_requests request
+    where ((p_tipo = 'sent' and request.sender_id = current_user_id)
+      or (p_tipo = 'received' and request.recipient_id = current_user_id))
+      and request.status in ('pending', 'rejected')
+  )
+  select relations.relation_id, profile.user_id, profile.username,
+    coalesce(profile.avatar_url, public_profile.avatar_url),
+    coalesce(ranked.bricks, 0), coalesce(ranked.nivel, '{}'::jsonb), ranked.global_position,
+    relations.relation_status, relations.relation_created_at
+  from relations
+  join public.user_profiles profile on profile.user_id = relations.other_user_id
+  left join public.perfiles_publicos public_profile on public_profile.user_id = profile.user_id
+  left join ranked on ranked.user_id = profile.user_id
+  order by relations.relation_created_at desc, profile.user_id;
+end;
+$$;
+
+create or replace function public.amigos_enviar(p_receptor_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  request_id uuid;
+  sender_username text;
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if p_receptor_id is null or p_receptor_id = current_user_id then
+    raise exception using errcode = '22023', message = 'AUTORRELACION_NO_PERMITIDA';
+  end if;
+  if not exists (select 1 from public.user_profiles where user_id = p_receptor_id) then
+    raise exception using errcode = 'P0002', message = 'USUARIO_NO_ENCONTRADO';
+  end if;
+  if exists (
+    select 1 from public.friend_requests
+    where pair_low_id = least(current_user_id, p_receptor_id)
+      and pair_high_id = greatest(current_user_id, p_receptor_id)
+  ) or exists (
+    select 1 from public.friendships
+    where user_low_id = least(current_user_id, p_receptor_id)
+      and user_high_id = greatest(current_user_id, p_receptor_id)
+  ) then
+    raise exception using errcode = '23505', message = 'SOLICITUD_EXISTENTE';
+  end if;
+
+  select username into sender_username from public.user_profiles where user_id = current_user_id;
+  insert into public.friend_requests(sender_id, recipient_id)
+  values (current_user_id, p_receptor_id) returning id into request_id;
+  insert into public.notificaciones(user_id, type, payload, social_request_id)
+  values (p_receptor_id, 'friend_request', jsonb_build_object('user', sender_username), request_id);
+  return jsonb_build_object('ok', true, 'requestId', request_id, 'status', 'pending');
+exception
+  when unique_violation then
+    raise exception using errcode = '23505', message = 'SOLICITUD_EXISTENTE';
+end;
+$$;
+
+create or replace function public.amigos_rechazar(p_solicitud_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  request_status text;
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  select status into request_status from public.friend_requests
+  where id = p_solicitud_id and recipient_id = current_user_id for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'SOLICITUD_NO_ENCONTRADA';
+  end if;
+  if request_status = 'accepted' then
+    raise exception using errcode = '23514', message = 'SOLICITUD_YA_ACEPTADA';
+  end if;
+  if request_status = 'pending' then
+    update public.friend_requests set status = 'rejected', updated_at = now() where id = p_solicitud_id;
+  end if;
+  return jsonb_build_object('ok', true, 'status', 'rejected');
+end;
+$$;
+
+create or replace function public.amigos_aceptar(p_solicitud_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  request_sender_id uuid;
+  request_recipient_id uuid;
+  request_status text;
+  recipient_username text;
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  select sender_id, recipient_id, status
+  into request_sender_id, request_recipient_id, request_status
+  from public.friend_requests where id = p_solicitud_id for update;
+  if not found or request_recipient_id <> current_user_id then
+    raise exception using errcode = 'P0002', message = 'SOLICITUD_NO_ENCONTRADA';
+  end if;
+  if request_status = 'accepted' then
+    update public.notificaciones set social_request_accepted = true
+    where type = 'friend_request' and social_request_id = p_solicitud_id and user_id = current_user_id;
+    return jsonb_build_object('ok', true, 'status', 'accepted', 'alreadyAccepted', true);
+  end if;
+
+  update public.friend_requests set status = 'accepted', updated_at = now() where id = p_solicitud_id;
+  insert into public.friendships(user_low_id, user_high_id)
+  values (least(request_sender_id, request_recipient_id), greatest(request_sender_id, request_recipient_id))
+  on conflict (user_low_id, user_high_id) do nothing;
+  select username into recipient_username from public.user_profiles where user_id = current_user_id;
+  insert into public.notificaciones(user_id, type, payload, social_request_id)
+  values (request_sender_id, 'friend_request_accepted', jsonb_build_object('user', recipient_username), p_solicitud_id)
+  on conflict (user_id, type, social_request_id) where social_request_id is not null do nothing;
+  update public.notificaciones set social_request_accepted = true
+  where type = 'friend_request' and social_request_id = p_solicitud_id and user_id = current_user_id;
+  return jsonb_build_object('ok', true, 'status', 'accepted', 'alreadyAccepted', false);
+end;
+$$;
+
+revoke all on function public.amigos_buscar(text) from public, anon;
+revoke all on function public.amigos_listar(text) from public, anon;
+revoke all on function public.amigos_enviar(uuid) from public, anon;
+revoke all on function public.amigos_rechazar(uuid) from public, anon;
+revoke all on function public.amigos_aceptar(uuid) from public, anon;
+grant execute on function public.amigos_buscar(text) to authenticated;
+grant execute on function public.amigos_listar(text) to authenticated;
+grant execute on function public.amigos_enviar(uuid) to authenticated;
+grant execute on function public.amigos_rechazar(uuid) to authenticated;
+grant execute on function public.amigos_aceptar(uuid) to authenticated;
+
+create or replace function public.amigos_perfil(p_usuario_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  profile_result jsonb;
+begin
+  if current_user_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if p_usuario_id is null or p_usuario_id = current_user_id then
+    raise exception using errcode = '22023', message = 'PERFIL_NO_PERMITIDO';
+  end if;
+
+  select jsonb_build_object(
+    'userId', profile.user_id,
+    'username', profile.username,
+    'avatarUrl', coalesce(profile.avatar_url, public_profile.avatar_url),
+    'bricks', coalesce(game.bricks, 0),
+    'level', jsonb_build_object(
+      'id', coalesce((game.nivel->>'id')::integer, 0),
+      'name', coalesce(game.nivel->>'nombre', 'Duplo')
+    ),
+    'dna', private.dna_calcular(profile.user_id)->'porcentajes',
+    'top5Price', coalesce((
+      select jsonb_agg(entry.data order by entry.position)
+      from (
+        select jsonb_strip_nulls(jsonb_build_object(
+          'id', figure.id, 'name', figure.nombre, 'price', figure.precio,
+          'year', figure.anio, 'category', figure.categoria, 'subcategory', figure.subcategoria
+        )) as data,
+        row_number() over (order by figure.precio desc nulls last, figure.fecha_compra asc nulls last, figure.fecha_registro desc) as position
+        from public.minifiguras figure
+        where figure.user_id = profile.user_id and figure.estado_coleccion = 'COLECCIÓN'
+        order by figure.precio desc nulls last, figure.fecha_compra asc nulls last, figure.fecha_registro desc
+        limit 5
+      ) entry
+    ), '[]'::jsonb),
+    'top5Age', coalesce((
+      select jsonb_agg(entry.data order by entry.position)
+      from (
+        select jsonb_strip_nulls(jsonb_build_object(
+          'id', figure.id, 'name', figure.nombre, 'year', figure.anio,
+          'price', figure.precio, 'category', figure.categoria, 'subcategory', figure.subcategoria
+        )) as data,
+        row_number() over (order by figure.anio asc nulls last, figure.precio desc nulls last, figure.fecha_registro desc) as position
+        from public.minifiguras figure
+        where figure.user_id = profile.user_id and figure.estado_coleccion = 'COLECCIÓN'
+        order by figure.anio asc nulls last, figure.precio desc nulls last, figure.fecha_registro desc
+        limit 5
+      ) entry
+    ), '[]'::jsonb),
+    'collection', jsonb_build_object(
+      'total', (select count(*) from public.minifiguras figure
+        where figure.user_id = profile.user_id and figure.estado_coleccion = 'COLECCIÓN'),
+      'latest', coalesce((
+        select jsonb_agg(entry.data order by entry.position)
+        from (
+          select jsonb_strip_nulls(jsonb_build_object(
+            'id', figure.id, 'name', figure.nombre, 'year', figure.anio,
+            'price', figure.precio, 'category', figure.categoria, 'subcategory', figure.subcategoria
+          )) as data,
+          row_number() over (order by figure.fecha_registro desc, figure.id asc) as position
+          from public.minifiguras figure
+          where figure.user_id = profile.user_id and figure.estado_coleccion = 'COLECCIÓN'
+          order by figure.fecha_registro desc, figure.id asc
+          limit 5
+        ) entry
+      ), '[]'::jsonb)
+    ),
+    'wanted', jsonb_build_object(
+      'total', (select count(*) from public.minifiguras figure
+        where figure.user_id = profile.user_id and figure.estado_coleccion = 'BUSCADA'),
+      'latest', coalesce((
+        select jsonb_agg(entry.data order by entry.position)
+        from (
+          select jsonb_strip_nulls(jsonb_build_object(
+            'id', figure.id, 'name', figure.nombre, 'year', figure.anio,
+            'price', figure.precio, 'category', figure.categoria, 'subcategory', figure.subcategoria
+          )) as data,
+          row_number() over (order by figure.fecha_registro desc, figure.id asc) as position
+          from public.minifiguras figure
+          where figure.user_id = profile.user_id and figure.estado_coleccion = 'BUSCADA'
+          order by figure.fecha_registro desc, figure.id asc
+          limit 5
+        ) entry
+      ), '[]'::jsonb)
+    ),
+    'achievements', coalesce((
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+        'id', achievement.item->'id', 'type', achievement.item->'type',
+        'name', achievement.item->'nombre', 'description', achievement.item->'descripcion',
+        'bricks', achievement.item->'bricks', 'repeatable', achievement.item->'repetible',
+        'quantity', achievement.item->'cantidad', 'total', achievement.item->'total'
+      )) order by case when achievement.item->>'type' = 'regalo' then 1 else 0 end,
+        case when achievement.item->>'type' <> 'regalo' then coalesce((achievement.item->>'total')::numeric, 0) end desc,
+        achievement.position)
+      from jsonb_array_elements(coalesce(game.logros, '[]'::jsonb)) with ordinality as achievement(item, position)
+    ), '[]'::jsonb)
+  ) into profile_result
+  from public.user_profiles profile
+  left join public.perfiles_publicos public_profile on public_profile.user_id = profile.user_id
+  left join public.gamificacion game on game.user_id = profile.user_id
+  where profile.user_id = p_usuario_id;
+
+  return profile_result;
+end;
+$$;
+
+revoke all on function public.amigos_perfil(uuid) from public, anon;
+grant execute on function public.amigos_perfil(uuid) to authenticated;
+
+create or replace function public.amigos_resumen(p_tipo text, p_query text default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  selected_rows jsonb;
+  result_rows jsonb;
+begin
+  if auth.uid() is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if p_tipo = 'search' then
+    select coalesce(jsonb_agg(to_jsonb(person)), '[]'::jsonb) into selected_rows
+    from public.amigos_buscar(p_query) person;
+  else
+    select coalesce(jsonb_agg(to_jsonb(person)), '[]'::jsonb) into selected_rows
+    from public.amigos_listar(p_tipo) person;
+  end if;
+
+  with ranked as (
+    select game.user_id, row_number() over (
+      order by coalesce((game.nivel->>'id')::numeric, 0) desc, game.bricks desc, game.user_id asc
+    ) as position
+    from public.gamificacion game
+  )
+  select coalesce(jsonb_agg(person.item || jsonb_build_object(
+    'nivel', jsonb_build_object('id', coalesce((person.item->'nivel'->>'id')::integer, 0),
+      'nombre', coalesce(person.item->'nivel'->>'nombre', 'Duplo')),
+    'posicion_global', ranked.position,
+    'total_coleccion', (select count(*) from public.minifiguras figure
+      where figure.user_id = (person.item->>'user_id')::uuid and figure.estado_coleccion = 'COLECCIÓN'),
+    'dna_principal', dna.data->>'principal',
+    'dna_rasgos', case when dna.data->>'principal' = 'Newbie' then '[]'::jsonb else (
+      select jsonb_agg(trait.data order by trait.is_principal desc, trait.percentage desc, trait.ordinal)
+      from (
+        select jsonb_build_object('nombre', traits.name, 'porcentaje', (dna.data->'porcentajes'->>traits.key)::numeric) as data,
+          traits.name = dna.data->>'principal' as is_principal,
+          (dna.data->'porcentajes'->>traits.key)::numeric as percentage, traits.ordinal
+        from (values ('rarityHunter', 'Rarity Hunter', 1), ('explorer', 'Explorer', 2),
+          ('collector', 'Collector', 3), ('fan', 'Fan', 4)) traits(key, name, ordinal)
+        order by is_principal desc, percentage desc, traits.ordinal
+        limit 2
+      ) trait
+    ) end
+  ) order by person.ordinal), '[]'::jsonb) into result_rows
+  from jsonb_array_elements(selected_rows) with ordinality person(item, ordinal)
+  left join ranked on ranked.user_id = (person.item->>'user_id')::uuid
+  cross join lateral (select private.dna_calcular((person.item->>'user_id')::uuid) as data) dna;
+  return result_rows;
+end;
+$$;
+
+create or replace function public.amigos_eliminar(p_amigo_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+  request_id uuid;
+  removed_count integer;
+begin
+  if actor_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  if p_amigo_id is null or p_amigo_id = actor_id then
+    raise exception using errcode = '22023', message = 'AUTORRELACION_NO_PERMITIDA';
+  end if;
+  select id into request_id from public.friend_requests
+  where pair_low_id = least(actor_id, p_amigo_id) and pair_high_id = greatest(actor_id, p_amigo_id)
+    and status = 'accepted'
+  for update;
+  delete from public.friendships
+  where user_low_id = least(actor_id, p_amigo_id) and user_high_id = greatest(actor_id, p_amigo_id);
+  get diagnostics removed_count = row_count;
+  if removed_count > 0 and request_id is not null then
+    delete from public.friend_requests where id = request_id and status = 'accepted';
+  end if;
+  return jsonb_build_object('ok', true, 'removed', removed_count > 0);
+end;
+$$;
+
+revoke all on function public.amigos_eliminar(uuid) from public, anon, service_role;
+grant execute on function public.amigos_eliminar(uuid) to authenticated;
+
+create or replace function public.amigos_contadores()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+begin
+  if actor_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  return jsonb_build_object(
+    'friends', (select count(*) from public.friendships where actor_id in (user_low_id, user_high_id)),
+    'sent', (select count(*) from public.friend_requests where sender_id = actor_id and status in ('pending', 'rejected')),
+    'received', (select count(*) from public.friend_requests where recipient_id = actor_id and status in ('pending', 'rejected'))
+  );
+end;
+$$;
+
+revoke all on function public.amigos_resumen(text, text), public.amigos_contadores() from public, anon, service_role;
+grant execute on function public.amigos_resumen(text, text), public.amigos_contadores() to authenticated;
 
 create or replace function public.guardar_perfil_usuario(
   p_username text,

@@ -11,6 +11,8 @@ const PRIMARY_KEYS = {
   regalos_enviados: ['donante_id', 'receptor_id', 'semana'],
   user_daily_snapshots: ['user_id', 'snapshot_date'],
   notificaciones: ['id'],
+  friend_requests: ['id'],
+  friendships: ['user_low_id', 'user_high_id'],
   agradecimientos_regalo: ['gift_notification_id'],
   ranking_top10_membership: ['user_id', 'ranking_type'],
 };
@@ -23,7 +25,9 @@ const COLUMN_DEFAULTS = {
   user_profile_favorite_categories: () => ({ created_at: new Date().toISOString() }),
   regalos_enviados: () => ({ fecha: new Date().toISOString(), semana: '0001-01-01' }),
   user_daily_snapshots: () => ({ created_at: new Date().toISOString() }),
-  notificaciones: () => ({ is_read: false, created_at: new Date().toISOString(), payload: {}, gift_thanked_at: null }),
+  notificaciones: () => ({ is_read: false, created_at: new Date().toISOString(), payload: {}, gift_thanked_at: null, social_request_id: null, social_request_accepted: false }),
+  friend_requests: () => ({ status: 'pending', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+  friendships: () => ({ created_at: new Date().toISOString() }),
   agradecimientos_regalo: () => ({ created_at: new Date().toISOString() }),
   ranking_top10_membership: () => ({ updated_at: new Date().toISOString() }),
 };
@@ -88,7 +92,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
   const tables = {
     minifiguras: [], gamificacion: [], perfiles_publicos: [], user_profiles: [], user_profile_favorite_categories: [],
     regalos_enviados: [], user_daily_snapshots: [],
-    notificaciones: [], agradecimientos_regalo: [], ranking_top10_membership: [],
+    notificaciones: [], friend_requests: [], friendships: [], agradecimientos_regalo: [], ranking_top10_membership: [],
   };
   const failures = [];
   const dailySync = {
@@ -130,6 +134,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       created_at: timestamp(),
       payload: {},
       gift_thanked_at: null,
+      social_request_id: null,
+      social_request_accepted: false,
       ...clone(row),
     };
     tables.notificaciones.push(notification);
@@ -253,6 +259,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     if (failure) return { data: null, error: failure };
     if (!tables[table]) return { data: null, error: { code: '42P01', message: 'relation does not exist' } };
     if (table === 'regalos_enviados') return { data: null, error: rlsError() };
+    if (['friend_requests', 'friendships'].includes(table) && state.operation !== 'select') return { data: null, error: rlsError() };
     if (['agradecimientos_regalo', 'ranking_top10_membership'].includes(table)) return { data: null, error: rlsError() };
     if (table === 'notificaciones'
       && (state.operation === 'insert' || state.operation === 'upsert' || state.operation === 'delete'
@@ -261,7 +268,11 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     }
 
     const rows = tables[table];
-    const visible = (row) => uid !== null && row.user_id === uid
+    const visible = (row) => uid !== null && (table === 'friend_requests'
+      ? row.recipient_id === uid
+      : table === 'friendships'
+        ? row.user_low_id === uid || row.user_high_id === uid
+        : row.user_id === uid)
       && state.filters.every(([column, value]) => row[column] === value)
       && state.comparisons.every(([column, operator, value]) => {
         if (operator === 'gte') return row[column] >= value;
@@ -334,6 +345,248 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     if (!uid) return { data: null, error: { code: '42501', message: 'NO_AUTENTICADO' } };
 
     if (name === 'guardar_perfil_usuario') return saveUserProfile(parameters, uid);
+
+    const canonicalPair = (left, right) => [left, right].sort();
+    const requestForPair = (left, right) => {
+      const [low, high] = canonicalPair(left, right);
+      return tables.friend_requests.find(({ sender_id, recipient_id }) => {
+        const [requestLow, requestHigh] = canonicalPair(sender_id, recipient_id);
+        return requestLow === low && requestHigh === high;
+      });
+    };
+    const globalPositions = new Map([...tables.gamificacion]
+      .sort((left, right) => (right.nivel?.id ?? 0) - (left.nivel?.id ?? 0)
+        || right.bricks - left.bricks || left.user_id.localeCompare(right.user_id))
+      .map(({ user_id }, index) => [user_id, index + 1]));
+    const personSummary = (userId) => {
+      const profile = tables.user_profiles.find(({ user_id }) => user_id === userId);
+      if (!profile) return null;
+      const publicProfile = tables.perfiles_publicos.find(({ user_id }) => user_id === userId);
+      const gamification = tables.gamificacion.find(({ user_id }) => user_id === userId);
+      const dna = calculateDna(gamification?.logros ?? []);
+      const traits = [['rarityHunter', 'Rarity Hunter'], ['explorer', 'Explorer'], ['collector', 'Collector'], ['fan', 'Fan']]
+        .map(([key, nombre], ordinal) => ({ nombre, porcentaje: dna.porcentajes[key], ordinal }))
+        .sort((left, right) => Number(right.nombre === dna.principal) - Number(left.nombre === dna.principal)
+          || right.porcentaje - left.porcentaje || left.ordinal - right.ordinal);
+      return {
+        user_id: userId,
+        username: profile.username,
+        avatar_url: profile.avatar_url ?? publicProfile?.avatar_url ?? null,
+        bricks: gamification?.bricks ?? 0,
+        nivel: clone(gamification?.nivel ?? {}),
+        posicion_global: globalPositions.get(userId) ?? null,
+        total_coleccion: tables.minifiguras.filter((figure) => figure.user_id === userId && figure.estado_coleccion === 'COLECCIÓN').length,
+        dna_principal: dna.principal,
+        dna_rasgos: dna.principal === 'Newbie' ? [] : traits.slice(0, 2).map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
+      };
+    };
+
+    if (name === 'amigos_resumen') {
+      return rpc(parameters?.p_tipo === 'search' ? 'amigos_buscar' : 'amigos_listar', parameters, uid);
+    }
+
+    if (name === 'amigos_eliminar') {
+      const friendId = parameters?.p_amigo_id;
+      if (!friendId || friendId === uid) return { data: null, error: { code: '22023', message: 'AUTORRELACION_NO_PERMITIDA' } };
+      const [low, high] = canonicalPair(uid, friendId);
+      const friendship = tables.friendships.find((row) => row.user_low_id === low && row.user_high_id === high);
+      if (!friendship) return { data: { ok: true, removed: false }, error: null };
+      const request = requestForPair(uid, friendId);
+      const failure = takeFailure('friendships', 'delete') ?? takeFailure('friend_requests', 'delete') ?? takeFailure('notificaciones', 'delete');
+      if (failure) return { data: null, error: failure };
+      tables.friendships = tables.friendships.filter((row) => row !== friendship);
+      if (request?.status === 'accepted') {
+        tables.friend_requests = tables.friend_requests.filter((row) => row !== request);
+        tables.notificaciones = tables.notificaciones.filter((row) => row.social_request_id !== request.id);
+      }
+      return { data: { ok: true, removed: true }, error: null };
+    }
+
+    if (name === 'amigos_contadores') {
+      return { data: {
+        friends: tables.friendships.filter((row) => [row.user_low_id, row.user_high_id].includes(uid)).length,
+        sent: tables.friend_requests.filter((row) => row.sender_id === uid && ['pending', 'rejected'].includes(row.status)).length,
+        received: tables.friend_requests.filter((row) => row.recipient_id === uid && ['pending', 'rejected'].includes(row.status)).length,
+      }, error: null };
+    }
+
+    if (name === 'amigos_buscar') {
+      const query = typeof parameters?.p_query === 'string' ? parameters.p_query.trim() : '';
+      if (query.length < 3) return { data: null, error: { code: '22023', message: 'CONSULTA_DEMASIADO_CORTA' } };
+      const data = tables.user_profiles.filter(({ user_id, username }) => user_id !== uid
+        && username.toLowerCase().includes(query.toLowerCase()))
+        .sort((left, right) => left.username.localeCompare(right.username) || left.user_id.localeCompare(right.user_id))
+        .slice(0, 50)
+        .map(({ user_id }) => {
+          const summary = personSummary(user_id);
+          const [low, high] = canonicalPair(uid, user_id);
+          const friendship = tables.friendships.find(({ user_low_id, user_high_id }) => user_low_id === low && user_high_id === high);
+          const request = requestForPair(uid, user_id);
+          const relationshipStatus = friendship ? 'friend'
+            : !request ? 'none'
+              : request.sender_id === uid ? 'request_sent'
+                : request.status === 'rejected' ? 'request_rejected' : 'request_received';
+          return { ...summary, relationship_status: relationshipStatus };
+        });
+      return { data, error: null };
+    }
+
+    if (name === 'amigos_listar') {
+      const type = parameters?.p_tipo;
+      if (!['friends', 'sent', 'received'].includes(type)) {
+        return { data: null, error: { code: '22023', message: 'TIPO_DE_LISTA_INVALIDO' } };
+      }
+      let relations = [];
+      if (type === 'friends') {
+        relations = tables.friendships.filter(({ user_low_id, user_high_id }) => uid === user_low_id || uid === user_high_id)
+          .map((friendship) => ({
+            relationship_id: null,
+            user_id: friendship.user_low_id === uid ? friendship.user_high_id : friendship.user_low_id,
+            status: 'accepted',
+            created_at: friendship.created_at,
+          }));
+      } else {
+        relations = tables.friend_requests.filter((request) => request.status !== 'accepted'
+          && (type === 'sent' ? request.sender_id === uid : request.recipient_id === uid))
+          .map((request) => ({
+            relationship_id: request.id,
+            user_id: type === 'sent' ? request.recipient_id : request.sender_id,
+            status: type === 'sent' ? 'pending' : request.status,
+            created_at: request.created_at,
+          }));
+      }
+      const data = relations.map((relation) => ({ ...personSummary(relation.user_id), ...relation }))
+        .filter(({ username }) => username)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at) || left.user_id.localeCompare(right.user_id));
+      return { data, error: null };
+    }
+
+    if (name === 'amigos_perfil') {
+      const targetId = parameters?.p_usuario_id;
+      if (!targetId || targetId === uid) return { data: null, error: { code: '22023', message: 'PERFIL_NO_PERMITIDO' } };
+      const summary = personSummary(targetId);
+      if (!summary) return { data: null, error: null };
+      const figures = tables.minifiguras.filter(({ user_id }) => user_id === targetId);
+      const collection = figures.filter(({ estado_coleccion }) => estado_coleccion === 'COLECCIÓN');
+      const wanted = figures.filter(({ estado_coleccion }) => estado_coleccion === 'BUSCADA');
+      const latest = (rows) => rows.toSorted((left, right) => right.fecha_registro.localeCompare(left.fecha_registro)
+        || left.id.localeCompare(right.id)).slice(0, 5).map(({ id, nombre, anio, precio, categoria, subcategoria }) => ({
+        id, name: nombre, year: anio, price: precio, category: categoria, subcategory: subcategoria,
+      }));
+      const priceTop = collection.toSorted((left, right) => {
+        if (left.precio == null && right.precio != null) return 1;
+        if (right.precio == null && left.precio != null) return -1;
+        return (right.precio ?? 0) - (left.precio ?? 0)
+          || (left.fecha_compra ?? '9999').localeCompare(right.fecha_compra ?? '9999')
+          || right.fecha_registro.localeCompare(left.fecha_registro);
+      }).slice(0, 5);
+      const ageTop = collection.toSorted((left, right) => {
+        if (left.anio == null && right.anio != null) return 1;
+        if (right.anio == null && left.anio != null) return -1;
+        return (left.anio ?? 9999) - (right.anio ?? 9999)
+          || (right.precio ?? 0) - (left.precio ?? 0)
+          || right.fecha_registro.localeCompare(left.fecha_registro);
+      }).slice(0, 5);
+      const publicFigure = ({ id, nombre, anio, precio, categoria, subcategoria }) => ({
+        id, name: nombre, year: anio, price: precio, category: categoria, subcategory: subcategoria,
+      });
+      const gamification = tables.gamificacion.find(({ user_id }) => user_id === targetId);
+      const achievementFields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+      const achievements = [...(gamification?.logros ?? [])].map((achievement, index) => ({ achievement, index }))
+        .sort((left, right) => Number(left.achievement.type === 'regalo') - Number(right.achievement.type === 'regalo')
+          || (left.achievement.type === 'regalo' ? 0 : (right.achievement.total ?? 0) - (left.achievement.total ?? 0))
+          || left.index - right.index)
+        .slice(0, 5)
+        .map(({ achievement }) => Object.fromEntries(achievementFields.filter((field) => achievement[field] != null)
+          .map((field) => [({ nombre: 'name', descripcion: 'description', repetible: 'repeatable', cantidad: 'quantity' }[field] ?? field), achievement[field]])));
+      return { data: {
+        userId: targetId,
+        username: summary.username,
+        avatarUrl: summary.avatar_url,
+        bricks: summary.bricks,
+        level: { id: gamification?.nivel?.id ?? 0, name: gamification?.nivel?.nombre ?? 'Duplo' },
+        dna: calculateDna(gamification?.logros ?? []).porcentajes,
+        top5Price: priceTop.map(publicFigure),
+        top5Age: ageTop.map(publicFigure),
+        collection: { total: collection.length, latest: latest(collection) },
+        wanted: { total: wanted.length, latest: latest(wanted) },
+        achievements,
+      }, error: null };
+    }
+
+    if (name === 'amigos_enviar') {
+      const receiverId = parameters?.p_receptor_id;
+      if (!receiverId || receiverId === uid) return { data: null, error: { code: '22023', message: 'AUTORRELACION_NO_PERMITIDA' } };
+      if (!tables.user_profiles.some(({ user_id }) => user_id === receiverId)) {
+        return { data: null, error: { code: 'P0002', message: 'USUARIO_NO_ENCONTRADO' } };
+      }
+      if (requestForPair(uid, receiverId) || tables.friendships.some(({ user_low_id, user_high_id }) => {
+        const [low, high] = canonicalPair(user_low_id, user_high_id);
+        const [targetLow, targetHigh] = canonicalPair(uid, receiverId);
+        return low === targetLow && high === targetHigh;
+      })) return { data: null, error: { code: '23505', message: 'SOLICITUD_EXISTENTE' } };
+      const requestFailure = takeFailure('friend_requests', 'insert');
+      if (requestFailure) return { data: null, error: requestFailure };
+      const requestSnapshot = clone(tables.friend_requests);
+      const notificationSnapshot = clone(tables.notificaciones);
+      sequence += 1;
+      const requestId = `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+      tables.friend_requests.push(withDefaults('friend_requests', {
+        id: requestId, sender_id: uid, recipient_id: receiverId,
+      }));
+      const notificationFailure = takeFailure('notificaciones', 'insert');
+      if (notificationFailure) {
+        tables.friend_requests = requestSnapshot;
+        tables.notificaciones = notificationSnapshot;
+        return { data: null, error: notificationFailure };
+      }
+      const senderName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
+      insertNotification({ user_id: receiverId, type: 'friend_request', payload: { user: senderName }, social_request_id: requestId });
+      return { data: { ok: true, requestId, status: 'pending' }, error: null };
+    }
+
+    if (name === 'amigos_rechazar' || name === 'amigos_aceptar') {
+      const request = tables.friend_requests.find(({ id, recipient_id }) => id === parameters?.p_solicitud_id && recipient_id === uid);
+      if (!request) return { data: null, error: { code: 'P0002', message: 'SOLICITUD_NO_ENCONTRADA' } };
+      if (name === 'amigos_rechazar') {
+        if (request.status === 'accepted') return { data: null, error: { code: '23514', message: 'SOLICITUD_YA_ACEPTADA' } };
+        request.status = 'rejected';
+        request.updated_at = timestamp();
+        return { data: { ok: true, status: 'rejected' }, error: null };
+      }
+      if (request.status === 'accepted') {
+        const incomingNotification = tables.notificaciones.find(({ user_id, type, social_request_id }) =>
+          user_id === uid && type === 'friend_request' && social_request_id === request.id);
+        if (incomingNotification) incomingNotification.social_request_accepted = true;
+        return { data: { ok: true, status: 'accepted', alreadyAccepted: true }, error: null };
+      }
+      const requestSnapshot = clone(tables.friend_requests);
+      const friendshipSnapshot = clone(tables.friendships);
+      const notificationSnapshot = clone(tables.notificaciones);
+      request.status = 'accepted';
+      request.updated_at = timestamp();
+      const [low, high] = canonicalPair(request.sender_id, request.recipient_id);
+      if (!tables.friendships.some(({ user_low_id, user_high_id }) => user_low_id === low && user_high_id === high)) {
+        tables.friendships.push(withDefaults('friendships', { user_low_id: low, user_high_id: high }));
+      }
+      const notificationFailure = takeFailure('notificaciones', 'insert');
+      if (notificationFailure) {
+        tables.friend_requests = requestSnapshot;
+        tables.friendships = friendshipSnapshot;
+        tables.notificaciones = notificationSnapshot;
+        return { data: null, error: notificationFailure };
+      }
+      const accepterName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
+      const incomingNotification = tables.notificaciones.find(({ user_id, type, social_request_id }) =>
+        user_id === uid && type === 'friend_request' && social_request_id === request.id);
+      if (incomingNotification) incomingNotification.social_request_accepted = true;
+      if (!tables.notificaciones.some(({ user_id, type, social_request_id }) => user_id === request.sender_id
+        && type === 'friend_request_accepted' && social_request_id === request.id)) {
+        insertNotification({ user_id: request.sender_id, type: 'friend_request_accepted',
+          payload: { user: accepterName }, social_request_id: request.id });
+      }
+      return { data: { ok: true, status: 'accepted', alreadyAccepted: false }, error: null };
+    }
 
     if (name === 'eliminar_cuenta_usuario') {
       for (const table of Object.keys(tables)) {
@@ -1003,12 +1256,14 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     },
     seed(table, userId, rows) {
       for (const row of rows) {
-        const identity = table === 'regalos_enviados' ? {} : { user_id: userId };
+        const identity = ['regalos_enviados', 'friend_requests', 'friendships'].includes(table) ? {} : { user_id: userId };
         tables[table].push(withDefaults(table, { ...identity, ...clone(row) }));
       }
     },
     rows(table, userId) {
-      return clone(tables[table].filter((row) => userId === undefined || row.user_id === userId));
+      return clone(tables[table].filter((row) => userId === undefined || row.user_id === userId
+        || (table === 'friend_requests' && (row.sender_id === userId || row.recipient_id === userId))
+        || (table === 'friendships' && (row.user_low_id === userId || row.user_high_id === userId))));
     },
     analyticsRows(table, runId) {
       if (table === 'cache') {

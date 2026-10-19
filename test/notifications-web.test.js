@@ -18,6 +18,8 @@ function createNotification(id, user, isRead = false, options = {}) {
     isRead,
     data: options.data ?? { message: `${user} thanks` },
     ...(options.canThank === undefined ? {} : { canThank: options.canThank }),
+    ...(options.accepted === undefined ? {} : { accepted: options.accepted }),
+    ...(options.canAccept === undefined ? {} : { canAccept: options.canAccept }),
   };
 }
 
@@ -30,9 +32,11 @@ function startApp({ initialPage = null } = {}) {
   let realtimeInserted = false;
   let thankHeld = false;
   let resolveThank = null;
+  let friendAcceptFails = false;
   let customPage = initialPage;
   let gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] };
   const thankRequests = [];
+  const friendAcceptRequests = [];
   window.fetch = async (url, init = {}) => {
     requests.push({ url, init });
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
@@ -52,6 +56,12 @@ function startApp({ initialPage = null } = {}) {
         });
         return { ok: true, json: async () => ({ ok: true }) };
       }
+      if (url.endsWith('/aceptar') && init.method === 'POST') {
+        friendAcceptRequests.push(url);
+        return friendAcceptFails
+          ? { ok: false, status: 500, json: async () => ({ error: 'NOTIFICACIONES_NO_DISPONIBLES' }) }
+          : { ok: true, json: async () => ({ ok: true, accepted: true, alreadyAccepted: false }) };
+      }
       if (user === 'A' && customPage) return { ok: true, json: async () => customPage };
       const cursor = new URL(url, 'http://localhost').searchParams.get('cursor');
       if (user === 'B') return { ok: true, json: async () => ({ notifications: [createNotification('b1', 'User B', false, { type: 'gift_thanks', data: { user: 'User B', amount: 5 } })], unreadCount: 1, nextCursor: null }) };
@@ -70,8 +80,10 @@ function startApp({ initialPage = null } = {}) {
     setRealtimeInserted(value) { realtimeInserted = value; },
     setGamificationState(value) { gamificationState = value; },
     thankRequests,
+    friendAcceptRequests,
     holdThank() { thankHeld = true; },
     releaseThank() { resolveThank?.(); thankHeld = false; },
+    setFriendAcceptFails(value) { friendAcceptFails = value; },
   };
 }
 
@@ -332,6 +344,95 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.equal(thankButton.disabled, true);
     assert.equal(window.document.querySelector('#notifications-unread-badge').hidden, false);
     assert.equal(window.document.querySelector('[data-notification-id="daily-1"]').classList.contains('is-read'), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('acepta solicitudes desde la bandeja sin leerlas, duplica eventos ni permitir un segundo clic', async () => {
+  const friendRequest = createNotification('friend-1', 'Grace', false, {
+    type: 'friend_request',
+    data: { user: 'Grace', message: 'Grace quiere ser tu amigo.' },
+    accepted: false,
+    canAccept: true,
+  });
+  const { dom, window, requests, friendAcceptRequests } = startApp({
+    initialPage: { notifications: [friendRequest], unreadCount: 1, nextCursor: null },
+  });
+  try {
+    await tick();
+    await tick();
+    const document = window.document;
+    const row = document.querySelector('[data-notification-id="friend-1"]');
+    const message = row.querySelector('.notification-message');
+    assert.equal(message.textContent, 'Grace quiere ser tu amigo.');
+    assert.equal(message.querySelector('strong').textContent, 'Grace');
+    const accept = row.querySelector('.notification-accept-friend');
+    assert.equal(accept.getAttribute('aria-label'), 'Aceptar solicitud de amistad de Grace');
+    assert.equal(accept.querySelector('.notification-friend-plus').textContent, '+');
+    assert.equal(accept.querySelector('.notification-friend-icon').getAttribute('src'), '/status_images/friends.png');
+    assert.equal(accept.querySelector('.notification-friend-heart'), null);
+    assert.equal(row.classList.contains('is-read'), false);
+
+    accept.click();
+    accept.click();
+    await tick();
+    const accepted = document.querySelector('[data-notification-id="friend-1"] .notification-accept-friend');
+    assert.equal(friendAcceptRequests.length, 1);
+    assert.equal(accepted.disabled, true);
+    assert.equal(accepted.querySelector('.notification-friend-plus').textContent, 'Aceptada');
+    assert.equal(document.querySelector('[data-notification-id="friend-1"]').classList.contains('is-read'), false);
+    assert.equal(document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 1 sin leer');
+    assert.equal(requests.some(({ url, init }) => url.endsWith('/leer') && init.method === 'POST'), false);
+    accepted.click();
+    await tick();
+    assert.equal(friendAcceptRequests.length, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la aceptación de amistad destaca el username como texto seguro en negrita', async () => {
+  const username = '<b>Collector</b>';
+  const accepted = createNotification('accepted-1', username, false, {
+    type: 'friend_request_accepted', data: { user: username },
+  });
+  const { dom, window } = startApp({ initialPage: { notifications: [accepted], unreadCount: 1, nextCursor: null } });
+  try {
+    await tick();
+    await tick();
+    const message = window.document.querySelector('.notification-message');
+    assert.equal(message.querySelector('strong').textContent, username);
+    assert.equal(message.querySelector('b'), null);
+    assert.equal(message.textContent, `${username} ha aceptado tu solicitud de amistad.`);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('un fallo al aceptar conserva lectura y deja reintentar', async () => {
+  const friendRequest = createNotification('friend-retry', 'Grace', false, {
+    type: 'friend_request', data: { user: 'Grace', message: 'Grace quiere ser tu amigo.' }, canAccept: true,
+  });
+  const { dom, window, friendAcceptRequests, setFriendAcceptFails } = startApp({
+    initialPage: { notifications: [friendRequest], unreadCount: 1, nextCursor: null },
+  });
+  try {
+    await tick();
+    await tick();
+    setFriendAcceptFails(true);
+    window.document.querySelector('.notification-accept-friend').click();
+    await tick();
+    assert.equal(window.document.querySelector('.notification-error[role="alert"]').textContent, 'No se pudo aceptar la solicitud. Inténtalo de nuevo.');
+    assert.equal(window.document.querySelector('.notification-accept-friend').disabled, false);
+    assert.equal(window.document.querySelector('[data-notification-id="friend-retry"]').classList.contains('is-read'), false);
+    setFriendAcceptFails(false);
+    window.document.querySelector('.notification-accept-friend').click();
+    await tick();
+    assert.equal(friendAcceptRequests.length, 2);
+    assert.equal(window.document.querySelector('.notification-accept-friend').disabled, true);
+    assert.equal(window.document.querySelector('.notification-error'), null);
+    assert.equal(window.document.querySelector('[data-notification-id="friend-retry"]').classList.contains('is-read'), false);
   } finally {
     dom.window.close();
   }

@@ -291,7 +291,7 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
   assert.equal(instance.configuration.type, 'doughnut');
   assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40.56]);
   assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40.56 }), 'Fan: 40,56%');
-  const centerLabel = document.querySelector('.dna-chart-label');
+  const centerLabel = document.querySelector('#dna-chart .dna-chart-label');
   assert.equal(centerLabel.hidden, false);
   instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 1 } });
   assert.equal(centerLabel.hidden, true);
@@ -308,10 +308,10 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
     'dna-swatch dna-swatch-fan', 'dna-swatch dna-swatch-collector', 'dna-swatch dna-swatch-explorer', 'dna-swatch dna-swatch-rarity',
   ]);
   assert.equal(document.querySelector('#dna-status').parentElement, document.querySelector('#dna-legend').parentElement);
-  assert.match(document.querySelector('.dna-legend').textContent, /Busca piezas raras y valiosas/);
-  assert.match(document.querySelector('.dna-legend').textContent, /Descubre categorías y subcategorías/);
-  assert.match(document.querySelector('.dna-legend').textContent, /Amplía y completa la colección/);
-  assert.match(document.querySelector('.dna-legend').textContent, /afinidad por temáticas y personajes/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Busca piezas raras y valiosas/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Descubre categorías y subcategorías/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Amplía y completa la colección/);
+  assert.match(document.querySelector('#dna-legend').textContent, /afinidad por temáticas y personajes/);
   document.querySelector('#dna-close').click();
   dialog.dispatchEvent(new dom.window.Event('close'));
   assert.equal(dialog.open, false);

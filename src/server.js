@@ -23,11 +23,23 @@ import { createDailyAnalyticsJobs } from './daily-analytics-jobs.js';
 import { createDailyAnalyticsRepository } from './daily-analytics-repository.js';
 import { DailyAnalyticsHistoryRepository } from './daily-analytics-history-repository.js';
 import {
+  AmigosNoDisponiblesError,
+  AmigosRepository,
+  AutorrelacionNoPermitidaError,
+  ConsultaAmigosInvalidaError,
+  PerfilAmigosNoPermitidoError,
+  SolicitudAmigosExistenteError,
+  SolicitudAmigosNoEncontradaError,
+  SolicitudYaAceptadaError,
+  UsuarioAmigosNoEncontradoError,
+} from './amigos-repository.js';
+import {
   CursorNotificacionesInvalidoError,
   NotificacionesNoDisponiblesError,
   NotificacionesRepository,
   RegaloNoAgradecibleError,
   RegaloYaAgradecidoError,
+  SolicitudAmistadNotificacionNoEncontradaError,
 } from './notificaciones-repository.js';
 import {
   AutorregaloNoPermitidoError,
@@ -53,7 +65,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -194,6 +206,7 @@ export function createServer({
     }
 
     const rankingRepository = new RankingRepository({ client, userId });
+    const friendsRepository = new AmigosRepository({ client, userId });
     const userProfileRepository = new UserProfileRepository({ client, userId, categoriasRepository });
       const historyRepository = new DailyAnalyticsHistoryRepository({ client });
     const notificationsRepository = new NotificacionesRepository({ client });
@@ -213,6 +226,7 @@ export function createServer({
       userId,
       repository,
       rankingRepository,
+      friendsRepository,
       userProfileRepository,
       notificationsRepository,
         historyRepository,
@@ -359,6 +373,7 @@ export function createServer({
     let userId;
     let ensureGamificacion;
     let rankingRepository;
+    let friendsRepository;
     let notificationsRepository;
     let historyRepository;
     let readGamificationDna;
@@ -369,7 +384,193 @@ export function createServer({
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository, notificationsRepository, historyRepository, readGamificationDna, userProfileRepository } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, historyRepository, readGamificationDna, userProfileRepository } = context);
+    }
+
+    if (requestUrl.pathname === '/api/amigos' || requestUrl.pathname.startsWith('/api/amigos/')) {
+      response.setHeader('cache-control', 'no-store');
+    }
+
+    if (requestUrl.pathname === '/api/amigos/contadores') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await friendsRepository.counts());
+      } catch {
+        sendJson(response, 500, { error: 'AMIGOS_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
+    const removeFriendRoute = /^\/api\/amigos\/([^/]+)$/.exec(requestUrl.pathname);
+    if (removeFriendRoute && !['buscar', 'solicitudes'].includes(removeFriendRoute[1])) {
+      if (request.method !== 'DELETE') {
+        response.setHeader('allow', 'DELETE');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(removeFriendRoute[1]) || requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await friendsRepository.remove(removeFriendRoute[1].toLowerCase()));
+      } catch (error) {
+        sendJson(response, error instanceof AutorrelacionNoPermitidaError ? 400 : 500, {
+          error: error instanceof AutorrelacionNoPermitidaError ? error.code : 'AMIGOS_NO_DISPONIBLES',
+        });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/amigos') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if ([...requestUrl.searchParams.keys()].some((key) => key !== 'tipo')
+        || requestUrl.searchParams.getAll('tipo').length > 1) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      const type = requestUrl.searchParams.get('tipo');
+      if (!['friends', 'sent', 'received'].includes(type)) {
+        sendJson(response, 400, { error: 'TIPO_DE_LISTA_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, { users: await friendsRepository.list(type) });
+      } catch {
+        sendJson(response, 500, { error: 'AMIGOS_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/amigos/buscar') {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if ([...requestUrl.searchParams.keys()].some((key) => key !== 'q')
+        || requestUrl.searchParams.getAll('q').length > 1) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      const query = requestUrl.searchParams.get('q') ?? '';
+      if (query.trim().length < 3) {
+        sendJson(response, 400, { error: 'CONSULTA_DEMASIADO_CORTA' });
+        return;
+      }
+      try {
+        sendJson(response, 200, { users: await friendsRepository.search(query) });
+      } catch (error) {
+        sendJson(response, error instanceof ConsultaAmigosInvalidaError ? 400 : 500, {
+          error: error instanceof ConsultaAmigosInvalidaError ? error.code : 'AMIGOS_NO_DISPONIBLES',
+        });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/api/amigos/solicitudes') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      let payload;
+      try {
+        payload = await readJsonBody(request);
+      } catch {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      if (requestUrl.search || Object.keys(payload).length !== 1 || typeof payload.receptorId !== 'string'
+        || !UUID_PATTERN.test(payload.receptorId)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 201, await friendsRepository.send(payload.receptorId.toLowerCase()));
+      } catch (error) {
+        if (error instanceof AutorrelacionNoPermitidaError) {
+          sendJson(response, 400, { error: error.code });
+        } else if (error instanceof UsuarioAmigosNoEncontradoError) {
+          sendJson(response, 404, { error: error.code });
+        } else if (error instanceof SolicitudAmigosExistenteError) {
+          sendJson(response, 409, { error: error.code });
+        } else {
+          sendJson(response, 500, { error: error instanceof AmigosNoDisponiblesError ? error.code : 'AMIGOS_NO_DISPONIBLES' });
+        }
+      }
+      return;
+    }
+
+    const friendRequestActionRoute = /^\/api\/amigos\/solicitudes\/([^/]+)\/(aceptar|rechazar)$/.exec(requestUrl.pathname);
+    if (friendRequestActionRoute) {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(friendRequestActionRoute[1])) {
+        sendJson(response, 400, { error: 'SOLICITUD_INVALIDA' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        const action = friendRequestActionRoute[2] === 'aceptar' ? 'accept' : 'reject';
+        sendJson(response, 200, await friendsRepository[action](friendRequestActionRoute[1].toLowerCase()));
+      } catch (error) {
+        if (error instanceof SolicitudAmigosNoEncontradaError) {
+          sendJson(response, 404, { error: error.code });
+        } else if (error instanceof SolicitudYaAceptadaError) {
+          sendJson(response, 409, { error: error.code });
+        } else {
+          sendJson(response, 500, { error: 'AMIGOS_NO_DISPONIBLES' });
+        }
+      }
+      return;
+    }
+
+    const friendProfileRoute = /^\/api\/amigos\/([^/]+)\/perfil$/.exec(requestUrl.pathname);
+    if (friendProfileRoute) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(friendProfileRoute[1])) {
+        sendJson(response, 400, { error: 'USUARIO_INVALIDO' });
+        return;
+      }
+      if (requestUrl.search) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await friendsRepository.profile(friendProfileRoute[1].toLowerCase()));
+      } catch (error) {
+        if (error instanceof PerfilAmigosNoPermitidoError) {
+          sendJson(response, 400, { error: error.code });
+        } else if (error instanceof UsuarioAmigosNoEncontradoError) {
+          sendJson(response, 404, { error: error.code });
+        } else {
+          sendJson(response, 500, { error: 'AMIGOS_NO_DISPONIBLES' });
+        }
+      }
+      return;
     }
 
     if (requestUrl.pathname === '/api/profile') {
@@ -522,6 +723,33 @@ export function createServer({
           return;
         }
         sendJson(response, 500, { error: error instanceof NotificacionesNoDisponiblesError ? error.code : 'NOTIFICACIONES_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
+    const acceptFriendNotificationRoute = /^\/api\/notificaciones\/([^/]+)\/aceptar$/.exec(requestUrl.pathname);
+    if (acceptFriendNotificationRoute) {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(acceptFriendNotificationRoute[1])) {
+        sendJson(response, 400, { error: 'NOTIFICACION_INVALIDA' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await notificationsRepository.acceptFriendRequest(acceptFriendNotificationRoute[1].toLowerCase()));
+      } catch (error) {
+        if (error instanceof SolicitudAmistadNotificacionNoEncontradaError) {
+          sendJson(response, 404, { error: error.code });
+        } else {
+          sendJson(response, 500, { error: 'NOTIFICACIONES_NO_DISPONIBLES' });
+        }
       }
       return;
     }
