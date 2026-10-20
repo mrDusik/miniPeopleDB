@@ -1032,6 +1032,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
   :root { font-size: 14px; }
+  .modal-dna { overflow-x: hidden; }
+  .dna-legend-panel { width: calc(100% + 32px); margin-left: -16px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
   .watchlist-row { padding: 4px 13px 8px; }
   .watchlist-row:has(> .watchlist-card:nth-child(6)):not([hidden]) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
@@ -1040,8 +1042,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
   .watchlist-card > span, .top-five .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
   .watchlist-state-icon .status-icon-image { width: 12px; height: 12px; }
-  .dna-dialog-body { grid-template-columns: minmax(0, 1fr); align-items: center; gap: 16px; }
-  .dna-chart { width: min(200px, 64vw); }
+  .dna-dialog-body { grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 16px; }
+  .dna-chart { width: min(200px, 64vw); justify-self: center; }
   .dna-legend { gap: 10px; }
   .dna-legend-item { gap: 3px 5px; }
   .dna-legend-item > strong { font-size: 0.8rem; }
