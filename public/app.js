@@ -857,7 +857,7 @@ function renderCatalogPage() {
       ? 'No hay ninguna minifigura registrada en tu cuenta.'
       : 'No hay minifiguras que coincidan con la consulta.');
   } else {
-    setStatus('Catálogo actualizado.');
+    setStatus('');
   }
 }
 

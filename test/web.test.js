@@ -1294,6 +1294,7 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
 
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(window.document.querySelector('#status').textContent, '');
   const collectionToggle = window.document.querySelector('#filter-coleccion');
   const wantedToggle = window.document.querySelector('#filter-buscada');
   const submitFilters = async () => {
@@ -1304,6 +1305,7 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
 
   collectionToggle.checked = true;
   assert.deepEqual(await submitFilters(), ['OWNED']);
+  assert.equal(window.document.querySelector('#status').textContent, '');
   wantedToggle.checked = true;
   assert.deepEqual(await submitFilters(), ['OWNED', 'WANTED']);
   collectionToggle.checked = false;
