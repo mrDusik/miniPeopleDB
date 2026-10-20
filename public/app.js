@@ -1757,6 +1757,8 @@ function updateFormMode() {
     if (formEstadoInput.value === 'BUSCADA') field.value = '';
     field.disabled = isView || formEstadoInput.value === 'BUSCADA' || (isCreate && !formSynced);
   });
+  formFechaCompraInput.type = formFechaCompraInput.disabled && !formFechaCompraInput.value ? 'text' : 'date';
+  formPrecioInput.placeholder = formSynced && !formPrecioInput.value ? 'Sin precio' : '';
   formStateToggleButtons.forEach((button) => { button.disabled = isView || isRankingCreate || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);

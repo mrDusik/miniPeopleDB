@@ -417,20 +417,33 @@ test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', 
     assert.equal(declarations.get('.friends-tabs .friends-tab-label-short').getPropertyValue('display'), 'inline');
     const profileStats = declarations.get('.modal-public-profile .public-profile-stats');
     assert.equal(profileStats.getPropertyValue('display'), 'grid');
-    assert.equal(profileStats.getPropertyValue('grid-template-columns'), 'max-content minmax(0, 1fr)');
+    assert.equal(profileStats.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
+    assert.equal(profileStats.getPropertyValue('grid-column'), '1');
+    assert.equal(profileStats.getPropertyValue('grid-row'), '1');
     assert.equal(profileStats.getPropertyValue('align-items'), 'center');
-    assert.equal(profileStats.getPropertyValue('gap'), '6px 16px');
+    assert.equal(profileStats.getPropertyValue('gap'), '6px 8px');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-content').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) minmax(0, 1fr)');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-overview').getPropertyValue('display'), 'contents');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-dna-section').getPropertyValue('grid-column'), '2');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-dna-section').getPropertyValue('grid-row'), '1');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-awards').getPropertyValue('grid-column'), '1 / -1');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-awards').getPropertyValue('grid-row'), '2');
+    assert.equal(declarations.get('.modal-public-profile .public-profile-content > .public-profile-tops').getPropertyValue('grid-column'), '1 / -1');
     const profileGroup = declarations.get('.modal-public-profile .public-profile-stats > div');
-    assert.equal(profileGroup.getPropertyValue('grid-template-columns'), '28px minmax(0, 1fr)');
+    assert.equal(profileGroup.getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr)');
     assert.equal(profileGroup.getPropertyValue('overflow'), '');
     const profileIcon = declarations.get('.modal-public-profile .public-profile-stat-icon');
-    assert.equal(profileIcon.getPropertyValue('width'), '28px');
-    assert.equal(profileIcon.getPropertyValue('height'), '28px');
+    assert.equal(profileIcon.getPropertyValue('width'), '24px');
+    assert.equal(profileIcon.getPropertyValue('height'), '24px');
     const profileCounter = declarations.get('.modal-public-profile .public-profile-stats strong');
     assert.equal(profileCounter.getPropertyValue('white-space'), 'nowrap');
     assert.equal(profileCounter.getPropertyValue('overflow'), '');
     assert.equal(profileCounter.getPropertyValue('text-overflow'), '');
     const baseDeclarations = new Map(rules.filter((rule) => rule.selectorText).map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(baseDeclarations.get('.public-profile-content').getPropertyValue('grid-template-columns'), '');
+    assert.equal(baseDeclarations.get('.public-profile-overview').getPropertyValue('display'), 'grid');
+    assert.equal(baseDeclarations.get('.public-profile-stats').getPropertyValue('grid-template-columns'), 'max-content minmax(0, 1fr) max-content max-content');
+    assert.equal(baseDeclarations.get('.public-profile-content').getPropertyValue('padding-inline'), '8px');
     assert.equal(baseDeclarations.get('.public-profile-stats > div').getPropertyValue('grid-template-columns'), '32px minmax(0, 1fr)');
     assert.equal(baseDeclarations.get('.public-profile-stat-icon').getPropertyValue('width'), '32px');
     assert.equal(baseDeclarations.get('.public-profile-stat-icon').getPropertyValue('height'), '32px');
@@ -1559,6 +1572,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   assert.equal(window.document.querySelector('#form-nombre').disabled, true);
   assert.equal(window.document.querySelector('#form-descripcion').disabled, true);
   assert.equal(window.document.querySelector('#form-fechaCompra').disabled, true);
+  assert.equal(window.document.querySelector('#form-fechaCompra').type, 'text');
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, true);
   idInput.value = 'new-f';
   idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -1578,6 +1592,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
     assert.equal(field.classList.contains('input-readonly'), true);
   }
   assert.equal(window.document.querySelector('#form-fechaCompra').disabled, false);
+  assert.equal(window.document.querySelector('#form-fechaCompra').type, 'date');
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
   window.document.querySelector('#form-estadoColeccion').value = '';
   window.document.querySelector('#minifigura-form').dispatchEvent(
@@ -1592,12 +1607,21 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   idInput.value = 'new-f';
   idInput.dispatchEvent(new window.Event('input'));
   preview.dispatchEvent(new window.Event('error'));
-  resolveBrickset({ ok: true, json: async () => ({ nombre: 'Sin descripcion', descripcion: null, categoria: 'Space', anio: 2024, precio: 12 }) });
+  resolveBrickset({ ok: true, json: async () => ({ nombre: 'Sin descripcion', descripcion: null, categoria: 'Space', anio: 2024, precio: null }) });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(window.document.querySelector('#form-descripcion').value, '');
+  assert.equal(window.document.querySelector('#form-precio').value, '');
+  assert.equal(window.document.querySelector('#form-precio').placeholder, 'Sin precio');
   assert.equal(window.document.querySelector('#form-submit').disabled, false);
+  window.document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal('precio' in submittedPayload, false);
+  window.document.querySelector('#new-minifigura').click();
   idInput.value = 'other-id';
   idInput.dispatchEvent(new window.Event('input'));
+  assert.equal(window.document.querySelector('#form-precio').placeholder, '');
   assert.equal(window.document.querySelector('#form-nombre').value, '');
   assert.equal(window.document.querySelector('#form-descripcion').value, '');
   assert.equal(window.document.querySelector('#form-submit').disabled, true);
@@ -1795,6 +1819,8 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(window.document.querySelector('#form-id').disabled, true);
   assert.equal(window.document.querySelector('#form-cancel').textContent, 'Cerrar');
+  assert.equal(window.document.querySelector('#form-fechaCompra').value, '');
+  assert.equal(window.document.querySelector('#form-fechaCompra').type, 'text');
   const collectionToggle = window.document.querySelector('[data-form-state="COLECCIÓN"]');
   const wantedToggle = window.document.querySelector('[data-form-state="BUSCADA"]');
   const followToggle = window.document.querySelector('#form-observada');
@@ -1847,9 +1873,11 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(purchaseDate.value, '');
   assert.equal(purchasePrice.value, '');
   assert.equal(purchaseDate.disabled, true);
+  assert.equal(purchaseDate.type, 'text');
   assert.equal(purchasePrice.disabled, true);
   collectionToggle.click();
   assert.equal(purchaseDate.disabled, false);
+  assert.equal(purchaseDate.type, 'date');
   assert.equal(purchasePrice.disabled, false);
   wantedToggle.click();
   window.document.querySelector('#minifigura-form').dispatchEvent(

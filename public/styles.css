@@ -474,11 +474,11 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .public-profile-heading h2 { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ink); font: 700 1.2rem 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
 .public-profile-avatar, .public-profile-avatar-fallback { display: grid; flex: 0 0 42px; place-items: center; width: 42px; height: 42px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .public-profile-avatar[hidden], .public-profile-avatar-fallback[hidden] { display: none; }
-.public-profile-content { display: grid; flex: 1 1 auto; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.public-profile-content { display: grid; flex: 1 1 auto; gap: 12px; min-height: 0; padding-inline: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .public-profile-content[hidden] { display: none; }
 .public-profile-overview { display: grid; grid-template-columns: minmax(140px, 180px) minmax(0, 1fr); align-items: center; gap: 16px; min-width: 0; }
 .public-profile-overview > .public-profile-section { padding-top: 0; border-top: 0; }
-.public-profile-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-width: 0; }
+.public-profile-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; align-items: center; gap: 4px 20px; min-width: 0; }
 .public-profile-stats > div { display: grid; flex: 0 1 auto; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 4px 8px; min-width: 0; max-width: 100%; padding: 4px 0; }
 .public-profile-stat-icon { grid-column: 1; grid-row: 1; width: 32px; height: 32px; object-fit: contain; }
 .public-profile-stats > div > span, .public-profile-stats > div > strong { grid-column: 2; }
@@ -1013,9 +1013,14 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-friends .friends-tabs .button { height: 44px; min-height: 44px; min-width: 0; padding: 0 3px; font-size: 0.7rem; line-height: 1.2; white-space: normal; }
   .friends-tabs .friends-tab-label-full { display: none; }
   .friends-tabs .friends-tab-label-short { display: inline; }
-  .modal-public-profile .public-profile-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 6px 16px; }
-  .modal-public-profile .public-profile-stats > div { grid-template-columns: 28px minmax(0, 1fr); gap: 3px; }
-  .modal-public-profile .public-profile-stat-icon { width: 28px; height: 28px; }
+  .modal-public-profile .public-profile-content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-content: start; }
+  .modal-public-profile .public-profile-overview { display: contents; }
+  .modal-public-profile .public-profile-stats { display: grid; grid-column: 1; grid-row: 1; grid-template-columns: minmax(0, 1fr); align-self: center; align-items: center; gap: 6px 8px; }
+  .modal-public-profile .public-profile-dna-section { grid-column: 2; grid-row: 1; align-self: center; width: 100%; }
+  .modal-public-profile .public-profile-awards { grid-column: 1 / -1; grid-row: 2; }
+  .modal-public-profile .public-profile-content > .public-profile-tops { grid-column: 1 / -1; }
+  .modal-public-profile .public-profile-stats > div { grid-template-columns: 24px minmax(0, 1fr); gap: 3px; }
+  .modal-public-profile .public-profile-stat-icon { width: 24px; height: 24px; }
   .modal-public-profile .public-profile-stats strong { white-space: nowrap; }
   .modal-public-profile #public-profile-level { overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
   .modal-ranking .ranking-highlight-group .ranking-card-static { flex-basis: 112px; align-content: start; }
