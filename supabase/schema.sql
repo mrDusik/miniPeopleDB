@@ -234,12 +234,13 @@ create table if not exists private.daily_sync_prices (
   updated_at timestamptz not null default now(),
   primary key (run_id, figure_id),
   constraint daily_sync_prices_id_check check (length(btrim(figure_id)) > 0),
-  constraint daily_sync_prices_status_check check (status in ('pending', 'processing', 'completed', 'failed')),
+  constraint daily_sync_prices_status_check check (status in ('pending', 'processing', 'completed', 'failed', 'unavailable')),
   constraint daily_sync_prices_attempts_check check (attempts >= 0),
   constraint daily_sync_prices_price_check check (price is null or price >= 0),
   constraint daily_sync_prices_result_check check (
     (status = 'completed' and price is not null and failure_code is null)
     or (status = 'failed' and price is null and failure_code is not null)
+    or (status = 'unavailable' and price is null and failure_code = 'PRICE_NOT_KNOWN')
     or status in ('pending', 'processing')
   )
 );
@@ -713,7 +714,7 @@ begin
   if not found then
     raise exception using errcode = '22023', message = 'DAILY_SYNC_ID_NO_INCLUIDO';
   end if;
-  if v_work.status = 'completed' then
+  if v_work.status in ('completed', 'unavailable') then
     return true;
   end if;
 
@@ -738,20 +739,29 @@ begin
         attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
     where run_id = p_run_id and figure_id = p_figure_id;
   else
-    if p_price is not null or p_failure_code is null
-      or p_failure_code not in ('SCRAPER_ERROR', 'TIMEOUT', 'RATE_LIMIT', 'INVALID_RESPONSE') then
+    if p_price is not null or p_failure_code is null then
       raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
     end if;
-    update private.daily_sync_prices
-    set status = 'failed', price = null, failure_code = p_failure_code,
-        attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
-    where run_id = p_run_id and figure_id = p_figure_id;
-    update private.daily_sync_runs
-    set failed_prices = (
-      select count(*)::integer from private.daily_sync_prices
-      where run_id = p_run_id and status = 'failed'
-    ), updated_at = clock_timestamp()
-    where id = p_run_id;
+    if p_failure_code = 'PRICE_NOT_KNOWN' then
+      update private.daily_sync_prices
+      set status = 'unavailable', price = null, failure_code = p_failure_code,
+          attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
+      where run_id = p_run_id and figure_id = p_figure_id;
+    else
+      if p_failure_code not in ('SCRAPER_ERROR', 'TIMEOUT', 'RATE_LIMIT', 'INVALID_RESPONSE') then
+        raise exception using errcode = '22023', message = 'DAILY_SYNC_PRECIO_INVALIDO';
+      end if;
+      update private.daily_sync_prices
+      set status = 'failed', price = null, failure_code = p_failure_code,
+          attempts = attempts + 1, checkpoint_at = clock_timestamp(), updated_at = clock_timestamp()
+      where run_id = p_run_id and figure_id = p_figure_id;
+      update private.daily_sync_runs
+      set failed_prices = (
+        select count(*)::integer from private.daily_sync_prices
+        where run_id = p_run_id and status = 'failed'
+      ), updated_at = clock_timestamp()
+      where id = p_run_id;
+    end if;
   end if;
   return true;
 end;

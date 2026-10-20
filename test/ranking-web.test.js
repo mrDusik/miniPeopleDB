@@ -35,6 +35,7 @@ function installFetch(window, ranking, orderedRankings = {}, weeklyResult = { av
   window.fetch = async (url, options = {}) => {
     calls.push({ url, options });
     if (url === '/categorias') return { ok: true, status: 200, json: async () => JSON.parse(categoriasMockRaw) };
+    if (url.startsWith('/minifiguras/') && url.endsWith('/brickset')) return { ok: true, status: 200, json: async () => ({ nombre: 'Nombre Brickset', descripcion: null, categoria: 'Space', anio: 2020, precio: 50 }) };
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, status: 200, json: async () => [] };
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] }) };
@@ -565,7 +566,7 @@ test('no ofrece alta mientras el catalogo completo esta pendiente', async () => 
   dom.window.close();
 });
 
-test('alta rapida precarga metadatos, fija BUSCADA y deja nombre, descripcion y seguimiento editables', async () => {
+test('alta rapida obtiene nombre y descripcion de Brickset, los bloquea y fija BUSCADA', async () => {
   const dom = createDom();
   const figure = { id: 'HIGH', nombre: 'Nombre ajeno', descripcion: 'Privado', categoria: 'Space', anio: 2020, precio: 50, observada: true };
   const calls = installFetch(dom.window, [entry({ top5Precio: [figure] })]);
@@ -582,7 +583,8 @@ test('alta rapida precarga metadatos, fija BUSCADA y deja nombre, descripcion y 
   assert.equal(document.querySelector('#form-id').value, 'HIGH');
   assert.equal(document.querySelector('#form-nombre').value, '');
   assert.equal(document.querySelector('#form-descripcion').value, '');
-  assert.equal(document.querySelector('#form-nombre').disabled, false);
+  assert.equal(document.querySelector('#form-nombre').disabled, true);
+  assert.equal(document.querySelector('#form-descripcion').disabled, true);
   assert.equal(document.querySelector('#form-estadoColeccion').value, 'BUSCADA');
   assert.equal(document.querySelector('#form-estadoColeccion').disabled, true);
   assert.ok([...document.querySelectorAll('[data-form-state]')].every((button) => button.disabled));
@@ -597,10 +599,11 @@ test('alta rapida precarga metadatos, fija BUSCADA y deja nombre, descripcion y 
   assert.equal(document.querySelector('#form-precio').value, '50');
   document.querySelector('#form-preview-image').dispatchEvent(new dom.window.Event('load'));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(calls.filter(({ url }) => url.startsWith('/minifiguras/') && url.endsWith('/brickset')).length, 0);
-  assert.equal(document.querySelector('#form-submit').disabled, true);
-  document.querySelector('#form-nombre').value = 'Mi figura';
-  document.querySelector('#form-nombre').dispatchEvent(new dom.window.Event('input'));
+  assert.equal(calls.filter(({ url }) => url.startsWith('/minifiguras/') && url.endsWith('/brickset')).length, 1);
+  assert.equal(document.querySelector('#form-nombre').value, 'Nombre Brickset');
+  assert.equal(document.querySelector('#form-descripcion').value, '');
+  assert.equal(document.querySelector('#form-nombre').disabled, true);
+  assert.equal(document.querySelector('#form-descripcion').disabled, true);
   assert.equal(document.querySelector('#form-submit').disabled, false);
   dom.window.close();
 });
@@ -618,10 +621,8 @@ test('alta rapida completa metadatos ausentes con Brickset y bloquea guardar si 
     document.querySelector('#open-global-ranking').click();
     await new Promise((resolve) => setTimeout(resolve, 10));
     document.querySelector('.ranking-add-wanted').click();
-    document.querySelector('#form-nombre').value = 'Mi figura';
-    document.querySelector('#form-nombre').dispatchEvent(new dom.window.Event('input'));
     assert.equal(document.querySelector('#form-submit').disabled, true);
-    resolveLookup({ ok: success, json: async () => ({ categoria: 'Space', anio: 0, precio: 15 }) });
+    resolveLookup({ ok: success, json: async () => ({ nombre: 'Nombre Brickset', descripcion: null, categoria: 'Space', anio: 0, precio: 15 }) });
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(document.querySelector('#form-submit').disabled, !success);
     if (success) assert.equal(document.querySelector('#form-anio').value, String(new Date().getFullYear()));
@@ -657,7 +658,7 @@ test('alta rapida usa POST una vez, conserva filtros y oculta todas las acciones
   const form = document.querySelector('#minifigura-form');
   form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
   assert.equal(resolvePost, undefined);
-  document.querySelector('#form-nombre').value = 'Mi figura';
+  await new Promise((resolve) => setTimeout(resolve, 0));
   document.querySelector('#form-observada').click();
   document.querySelector('#form-estadoColeccion').value = 'COLECCIÓN';
   document.querySelector('#form-precioCompra').value = '99';
@@ -668,7 +669,7 @@ test('alta rapida usa POST una vez, conserva filtros y oculta todas las acciones
   const payload = JSON.parse(posts[0].options.body);
   assert.equal(posts[0].url, '/minifiguras');
   assert.equal(payload.id, 'HIGH');
-  assert.equal(payload.nombre, 'Mi figura');
+  assert.equal(payload.nombre, 'Nombre Brickset');
   assert.equal(payload.descripcion, '');
   assert.equal(payload.estadoColeccion, 'BUSCADA');
   assert.equal(payload.observada, true);
@@ -708,7 +709,7 @@ test('alta rapida mantiene errores de duplicado, seguimiento y servidor sin muta
     document.querySelector('#open-global-ranking').click();
     await new Promise((resolve) => setTimeout(resolve, 10));
     document.querySelector('.ranking-add-wanted').click();
-    document.querySelector('#form-nombre').value = 'Mi figura';
+    await new Promise((resolve) => setTimeout(resolve, 0));
     document.querySelector('#minifigura-form').dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(document.querySelector('#form-dialog').open, true);

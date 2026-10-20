@@ -6,7 +6,7 @@ Permite consultar y mantener el precio en Euros de las minifiguras mediante scra
 
 ### Requirement: Consultar el precio público de Brickset
 
-El sistema SHALL consultar mediante fetch la URL pública `https://brickset.com/minifigs/<ID>` y SHALL extraer el importe asociado a `Current Value - New` como un número en Euros. La consulta no SHALL requerir credenciales ni API Key.
+El sistema SHALL consultar mediante fetch la URL pública `https://brickset.com/minifigs/<ID>` y SHALL extraer el importe asociado a `Current Value - New` como un número en Euros. Si Brickset indica `Not known`, SHALL devolver el precio ausente sin tratarlo como error. La consulta no SHALL requerir credenciales ni API Key.
 
 #### Scenario: Precio disponible
 - **WHEN** se solicita el precio de una minifigura con una página Brickset válida que contiene `Current Value - New`
@@ -14,9 +14,14 @@ El sistema SHALL consultar mediante fetch la URL pública `https://brickset.com/
 - **AND** no modifica el catálogo hasta que el cliente confirme o solicite su persistencia
 
 #### Scenario: Precio no disponible
-- **WHEN** la página no existe, no contiene `Current Value - New` o el importe no puede interpretarse
+- **WHEN** la página no existe, no contiene `Current Value - New` o el importe tiene un formato o moneda inválidos
 - **THEN** el sistema devuelve un error público controlado
 - **AND** no devuelve HTML bruto ni modifica el precio previamente almacenado
+
+#### Scenario: Brickset indica Not known
+- **WHEN** la página incluye `Current Value - New` con el texto `Not known`
+- **THEN** la consulta individual devuelve los datos de la figura con el precio ausente
+- **AND** no genera un error de consulta
 
 ### Requirement: Calcular el valor total y los contadores de la colección
 
@@ -35,7 +40,7 @@ El sistema SHALL exponer un resumen en Euros con el valor total, el número de m
 
 ### Requirement: Actualizar precios de Brickset de forma resiliente
 
-El sistema SHALL ofrecer una operación individual y una operación masiva para consultar Brickset. La actualización masiva SHALL ejecutarse como una tarea en segundo plano por usuario que procese cada figura persistida de forma aislada y secuencial, respetando el límite global de peticiones a Brickset, conserve precios anteriores cuando falle una consulta y persista cada precio válido en cuanto se obtenga. `POST /sincronizacion/brickset` SHALL iniciar la tarea y responder HTTP `202` con su estado sin esperar a que termine. El estado SHALL incluir `estado` (`en_curso` o `completada`), `procesados`, `total`, `actualizados` (IDs) y `fallidos` (pares `id`/`error`).
+El sistema SHALL ofrecer una operación individual y una operación masiva para consultar Brickset. La actualización masiva SHALL ejecutarse como una tarea en segundo plano por usuario que procese cada figura persistida de forma aislada y secuencial, respetando el límite global de peticiones a Brickset, conserve precios anteriores cuando falle una consulta y persista cada precio válido en cuanto se obtenga. Una respuesta `Not known` SHALL conservar el precio anterior, SHALL registrarse en `sinPrecio` (IDs) y SHALL NOT contarse como fallo. `POST /sincronizacion/brickset` SHALL iniciar la tarea y responder HTTP `202` con su estado sin esperar a que termine. El estado SHALL incluir `estado` (`en_curso` o `completada`), `procesados`, `total`, `actualizados` (IDs), `sinPrecio` (IDs) y `fallidos` (pares `id`/`error`).
 
 #### Scenario: Iniciar la actualización masiva
 - **WHEN** un usuario autenticado sin tarea en curso solicita `POST /sincronizacion/brickset`
@@ -61,6 +66,11 @@ El sistema SHALL ofrecer una operación individual y una operación masiva para 
 - **THEN** el sistema persiste solo los precios válidos
 - **AND** informa por separado elementos actualizados y fallidos
 - **AND** las consultas locales continúan funcionando
+
+#### Scenario: Precio no publicado en sincronización masiva
+- **WHEN** Brickset responde `Not known` para una figura
+- **THEN** se conserva su precio previo y su ID aparece en `sinPrecio`
+- **AND** el ID no aparece en `fallidos`
 
 #### Scenario: Actualización de todas las figuras persistidas
 - **WHEN** se inicia una actualización masiva con figuras `COLECCIÓN` y `BUSCADA`

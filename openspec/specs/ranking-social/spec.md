@@ -104,7 +104,7 @@ Las tarjetas de los Top 3 por precio y antiguedad de otros usuarios SHALL mostra
 
 ### Requirement: Crear una buscada desde un destacado ajeno
 
-Al activar el boton de alta SHALL abrirse el modal unificado con apariencia de edicion y metadatos de la figura precargados: ID deshabilitado y sombreado, Categoria, Subcategoria cuando exista, Año, Precio Brickset e Imagen. Nombre y Descripcion SHALL estar vacios, Nombre SHALL ser obligatorio y Descripcion opcional. BUSCADA SHALL estar seleccionado y fijo; seguimiento SHALL ser editable, inicialmente desactivado y sujeto al limite vigente. Los datos de compra SHALL permanecer vacios y deshabilitados. Guardar SHALL crear un nuevo registro de la cuenta autenticada mediante `POST /minifiguras`, nunca editar la figura ajena; SHALL NOT copiar nombre, descripcion, seguimiento, compras ni fecha de registro del propietario. Si faltan metadatos obligatorios, SHALL obtenerlos por el ID antes de permitir Guardar, sin pedir al usuario que complete campos Brickset.
+Al activar el boton de alta SHALL abrirse el modal unificado con apariencia de edicion y metadatos de la figura precargados: ID deshabilitado y sombreado, Categoria, Subcategoria cuando exista, Año, Precio Brickset e Imagen. Nombre y Descripcion SHALL estar vacios, Nombre SHALL ser obligatorio y Descripcion opcional. El Precio Brickset SHALL ser opcional si Brickset indica `Not known`. BUSCADA SHALL estar seleccionado y fijo; seguimiento SHALL ser editable, inicialmente desactivado y sujeto al limite vigente. Los datos de compra SHALL permanecer vacios y deshabilitados. Guardar SHALL crear un nuevo registro de la cuenta autenticada mediante `POST /minifiguras`, nunca editar la figura ajena; SHALL NOT copiar nombre, descripcion, seguimiento, compras ni fecha de registro del propietario. Si faltan metadatos obligatorios, SHALL obtenerlos por el ID antes de permitir Guardar, sin pedir al usuario que complete campos Brickset.
 
 #### Scenario: Apertura y validacion
 - **WHEN** el usuario activa el boton de una figura ajena ausente
@@ -116,6 +116,11 @@ Al activar el boton de alta SHALL abrirse el modal unificado con apariencia de e
 - **WHEN** los datos del destacado no bastan para un alta valida
 - **THEN** la aplicacion completa los datos desde Brickset por el mismo ID y aplica las reglas vigentes de categorias y fallback de año
 - **AND** si falla conserva el formulario, muestra error y no permite un alta incompleta
+
+#### Scenario: Precio Brickset todavía desconocido
+- **WHEN** Brickset indica `Not known` para el precio de un destacado
+- **THEN** el alta rápida puede guardarse sin precio si Nombre y los demás metadatos obligatorios están disponibles
+- **AND** los datos privados del propietario siguen sin copiarse
 
 #### Scenario: Alta confirmada
 - **WHEN** el servidor confirma la creacion de la buscada

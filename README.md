@@ -11,7 +11,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **Colección e inventario:** alta, consulta, edición y borrado de minifiguras; categorías y subcategorías Brickset; estados `COLECCIÓN` y `BUSCADA`; fecha de alta, datos de compra e imagen de cada figura. Las altas y ediciones validan IDs, importes, fechas y la relación categoría-subcategoría.
 * **Búsqueda y seguimiento:** filtros por ID, nombre, categoría, subcategoría, año, estado y observación. La búsqueda de la tabla se aplica sobre la colección cargada en el navegador; incluye ordenación, paginación y un límite de diez figuras observadas.
 * **Resumen y valoración:** valor total en euros, contadores de colección y buscadas, galería de observación y destacados Top 5 por precio y antigüedad. El valor de mercado Brickset tiene prioridad sobre el precio de compra; las buscadas no aportan al total.
-* **Sincronización Brickset:** consulta individual de categoría, subcategoría, año y precio; actualización masiva del precio en segundo plano, con progreso, pausa/reanudación, resultados parciales, límite global de peticiones y tratamiento de `429 Retry-After`.
+* **Sincronización Brickset:** consulta individual de nombre, descripción, categoría, subcategoría, año y precio, sin edición manual de estos campos; actualización masiva del precio en segundo plano, con progreso, pausa/reanudación, resultados parciales, límite global de peticiones y tratamiento de `429 Retry-After`.
 * **Gamificación:** Bricks, niveles, progreso y logros calculados a partir del inventario y el catálogo de categorías. Los regalos recibidos se conservan al recalcular la parte derivada de la colección.
 * **DNA de colección:** cuatro rasgos (Rarity Hunter, Collector, Explorer y Fan), porcentajes privados para el usuario y un resumen público limitado al rasgo principal.
 * **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA, más un Top 10 semanal de Bricks netos; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
@@ -31,6 +31,8 @@ El valor total solo incluye figuras `COLECCIÓN`. Para cada una se prioriza `pre
 
 La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y extrae `Current Value - New`. Si una consulta falla, se conserva el precio anterior.
 
+Nombre y descripción se autocompletan desde `Name` de Brickset y permanecen deshabilitados y sombreados. Si contiene ` - `, el primer separador divide nombre y descripción, conservando las comas posteriores. Sin ese separador, se guarda como nombre solo el texto anterior a la primera coma y la descripción queda vacía; sin coma, todo el texto es el nombre. La misma regla se aplica en alta ordinaria, alta desde ranking y sincronización individual al editar; no se migran registros existentes ni se cambian sus nombres con la actualización masiva de precios.
+
 ---
 
 ## Arquitectura e integraciones
@@ -38,7 +40,7 @@ La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y
 * **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. Supabase JS y Chart.js se sirven como recursos locales en `/vendor/supabase.js` y `/vendor/chart.js`.
 * **Identidad:** Supabase Auth admite Google OAuth con PKCE y cuentas clásicas. El acceso clásico pide Username y contraseña; el registro también pide email y repetir contraseña. La API valida el bearer token con Supabase Auth.
 * **Persistencia:** Supabase Postgres almacena minifiguras, gamificación, perfiles públicos, ponderaciones DNA y regalos. RLS limita las operaciones ordinarias a la identidad autenticada.
-* **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa exclusivamente desde el proceso backend para las RPC allowlisted del recálculo de categorías y del worker de analítica diaria. No se entrega al navegador ni se usa en rutas ordinarias; estas conservan `anon` + JWT y RLS.
+* **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa desde el proceso backend para las RPC allowlisted del recálculo de categorías y del worker de analítica diaria. Como excepción puntual autorizada, el script de corrección de nombres usa solo sus dos RPC temporales de mantenimiento, que deben retirarse al terminar. No se entrega al navegador ni se usa en rutas ordinarias; estas conservan `anon` + JWT y RLS.
 * **Brickset:** el backend lee páginas públicas de `brickset.com` mediante `fetch` y extrae campos de minifigura; no utiliza una API key. Normaliza a EUR los precios publicados en USD con el último tipo de referencia diario del BCE, cacheado 24 horas; si no obtiene una tasa válida, falla de forma segura. Las peticiones se serializan globalmente y el intervalo mínimo se configura con `BRICKSET_MIN_INTERVAL_MS`.
 * **Catálogo de categorías:** `data/categorias-brickset.json` es la fuente local validada. Se puede actualizar manualmente desde la página pública de categorías de Brickset con `node scripts/sync-brickset-categorias.js`.
 * **Imágenes:** las imágenes de minifiguras se cargan desde el CDN de BrickLink (`img.bricklink.com`); logos, iconos, niveles y otros recursos de la interfaz son locales en `public/`.
@@ -225,6 +227,45 @@ En ese caso abre `http://localhost:3001/`. En Google Cloud conserva como URI de 
 Para comprobarlo, abre la URL local e inicia sesión con Google: al terminar debes seguir en el mismo localhost y puerto. Si vuelves a Render, revisa las **Redirect URLs** del proyecto indicado por `SUPABASE_URL`. Un cambio de esquema de la spec requiere aplicarlo en ese proyecto Supabase, aunque no despliegues el código en Render.
 
 Las peticiones a Brickset se serializan y respetan un intervalo mínimo global de 9 segundos. Puede ajustarse con `BRICKSET_MIN_INTERVAL_MS`; la sincronización masiva se ejecuta en segundo plano y expone su progreso en la interfaz.
+
+### Corrección puntual de nombres y descripciones de Brickset
+
+Esta herramienta de mantenimiento corrige `nombre` y `descripcion` de todas las minifiguras existentes de todos los usuarios del proyecto elegido. No es un proceso nocturno ni una ruta de la aplicación. Consulta cada ID distinto una vez por ejecución, pagina los IDs y respeta el intervalo de Brickset de 9 segundos; no depende del precio, categoría o año publicados. Usa las mismas reglas de separación del campo `Name` que el alta de figuras.
+
+El script espera hasta 30 segundos por petición y reintenta los fallos de red o timeout hasta dos veces más, manteniendo el intervalo de 9 segundos entre peticiones. Los mensajes de error de red pueden corresponder a intentos intermedios recuperados: solo `failedIds` en el resumen final identifica los IDs que no pudieron resolverse. Si quedan fallos, puedes repetir la vista previa sin modificar datos; el modo de aplicación también es reejecutable. Estos ajustes son exclusivos de esta herramienta y no cambian los límites del worker nocturno.
+
+1. Antes de aplicar cambios en producción, crea un respaldo recuperable de `public.minifiguras` con su clave `(user_id, id)` y los textos originales. La corrección reemplaza también nombres y descripciones antiguos personalizados. Pausa el cron de Brickset mientras ejecutas la herramienta para evitar consultas paralelas desde otro proceso.
+2. Aplica únicamente `supabase/brickset-name-correction.sql` en el SQL Editor del proyecto destino. Instala dos RPC temporales restringidas a `service_role`: lectura de IDs únicos y actualización de los dos campos de texto. No amplía permisos de clientes ordinarios ni forma parte de `schema.sql`.
+3. Usa un archivo de credenciales privado, fuera de Git (puede ser el `sup.env` existente si apunta a producción), con `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`. El script lee exclusivamente ese archivo, sin heredar credenciales de otro proyecto desde variables del proceso. No pegues la clave en comandos ni logs.
+4. Ejecuta primero la vista previa, que consulta Brickset y muestra los valores propuestos sin escribir filas:
+
+```powershell
+node scripts/correct-brickset-names.js --env-file sup.env
+```
+
+Para reintentar solo los fallidos, copia sus IDs del `failedIds` mostrado por la pasada anterior y pásalos separados por comas. Por ejemplo, para consultar únicamente DIM030:
+
+```powershell
+node scripts/correct-brickset-names.js --env-file sup.env --ids DIM030
+```
+
+`--ids` también admite varios IDs, como `--ids DIM030,CAS056`, y se puede combinar con `--apply --confirm-project PROJECT_REF_PROD` para aplicar solo a esa selección. El script sigue leyendo las páginas de IDs existentes en Supabase, pero no consulta Brickset ni escribe para los demás. Rechaza listas vacías o inválidas en lugar de ejecutar una pasada completa. El resumen anterior no se guarda automáticamente: usa los IDs impresos en consola. Una vista previa, incluso correcta, no ha aplicado los resultados previos a la BD.
+
+5. Comprueba el destino mostrado y las propuestas. Para aplicar, confirma explícitamente el `project-ref` del dominio `https://<project-ref>.supabase.co`:
+
+```powershell
+node scripts/correct-brickset-names.js --env-file sup.env --apply --confirm-project PROJECT_REF_PROD
+```
+
+La aplicación vuelve a consultar Brickset; ambas pasadas pueden durar varios minutos. Cada RPC actualiza atómicamente las filas todavía existentes del ID en todas las cuentas, solo si sus textos son distintos. No inserta figuras ni modifica precios, categorías, estado, fechas de compra/registro o gamificación. Un ID no resuelto conserva sus textos y aparece en `failedIds`; esos fallos permiten continuar y producen código de salida 1. Un fallo de BD detiene la ejecución sin declarar éxito: los IDs ya aplicados quedan corregidos y se puede reejecutar, porque las escrituras son idempotentes. El resumen distingue IDs consultados de filas realmente modificadas.
+
+6. Verifica el resultado, conserva el respaldo según la política de producción y elimina las RPC temporales en el SQL Editor. Después puedes reactivar el cron:
+
+```sql
+drop function if exists public.leer_correccion_nombres_brickset(text, integer);
+drop function if exists public.aplicar_correccion_nombres_brickset(text, text, text);
+notify pgrst, 'reload schema';
+```
 
 ### Despliegue de analítica histórica
 

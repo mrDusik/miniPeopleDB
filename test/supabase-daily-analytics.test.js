@@ -293,6 +293,7 @@ test('las tablas privadas materializan usuarios sin actividad y mantienen un sol
       );
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/daily-analytics-unknown-prices.sql', import.meta.url), 'utf8'));
     await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
       userWithCollection, 'collection@example.invalid', emptyUser, 'empty@example.invalid',
     ]);
@@ -563,6 +564,7 @@ test('checkpoint de precio deduplica IDs, conserva precios fallidos y no recrea 
       `insert into public.minifiguras(user_id, id, nombre, categoria, precio)
        values ($1, 'FIG-SHARED', 'Shared A', 'Test', 8),
               ($1, 'FIG-FAIL', 'Failure', 'Test', 6),
+              ($1, 'FIG-UNKNOWN', 'Unknown', 'Test', null),
               ($2, 'FIG-SHARED', 'Shared B', 'Test', 9),
               ($2, 'FIG-DELETE', 'Deleted', 'Test', 11)`,
       [userA, userB],
@@ -570,10 +572,16 @@ test('checkpoint de precio deduplica IDs, conserva precios fallidos y no recrea 
     await db.query("select set_config('request.jwt.claim.role', 'service_role', false)");
     const started = (await db.query('select public.iniciar_daily_sync() as data')).rows[0].data;
     await db.query('select public.reclamar_daily_sync($1, $2, 120)', [started.jobId, leaseOwner]);
-    assert.equal((await db.query('select count(*)::integer as count from private.daily_sync_prices where run_id = $1', [started.jobId])).rows[0].count, 3);
+    assert.equal((await db.query('select count(*)::integer as count from private.daily_sync_prices where run_id = $1', [started.jobId])).rows[0].count, 4);
 
     await db.query('select public.aplicar_daily_sync_precio($1, $2, $3, true, 12.5, null)', [started.jobId, leaseOwner, 'FIG-SHARED']);
     assert.deepEqual((await db.query('select user_id, precio from public.minifiguras where id = $1 order by user_id', ['FIG-SHARED'])).rows.map(({ precio }) => Number(precio)), [12.5, 12.5]);
+    await db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-UNKNOWN', false, null, 'PRICE_NOT_KNOWN')", [started.jobId, leaseOwner]);
+    assert.deepEqual((await db.query('select status, failure_code from private.daily_sync_prices where run_id = $1 and figure_id = $2', [started.jobId, 'FIG-UNKNOWN'])).rows, [
+      { status: 'unavailable', failure_code: 'PRICE_NOT_KNOWN' },
+    ]);
+    assert.equal((await db.query('select failed_prices from private.daily_sync_runs where id = $1', [started.jobId])).rows[0].failed_prices, 0);
+    assert.equal((await db.query("select count(*)::integer as count from private.daily_sync_figure_prices where figure_id = 'FIG-UNKNOWN'")).rows[0].count, 0);
     await db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-FAIL', false, null, 'TIMEOUT')", [started.jobId, leaseOwner]);
     assert.deepEqual((await db.query('select precio from public.minifiguras where id = $1 order by user_id', ['FIG-FAIL'])).rows.map(({ precio }) => Number(precio)), [6]);
     await assert.rejects(db.query("select public.aplicar_daily_sync_precio($1, $2, 'FIG-FAIL', true, -1, null)", [started.jobId, leaseOwner]), /DAILY_SYNC_PRECIO_INVALIDO/);

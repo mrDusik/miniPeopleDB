@@ -48,6 +48,11 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
       storedCatalog.push(figure);
       return { ok: true, status: 201, json: async () => figure };
     }
+    if (url.startsWith('/minifiguras/') && url.endsWith('/brickset')) {
+      return { ok: true, status: 200, json: async () => ({
+        id: decodeURIComponent(url.split('/')[2]), nombre: 'Brickset Figure', categoria: 'Space', anio: 2020, precio: null,
+      }) };
+    }
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => structuredClone(storedCatalog) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] }) };
@@ -657,16 +662,19 @@ test('la lupa del perfil añade solo a la colección propia en BUSCADA y oculta 
     assert.equal(document.querySelectorAll('#public-profile-content [data-wanted-id="SHARED-1"]').length, 3);
     const trigger = document.querySelector('#public-profile-top-age .ranking-add-wanted');
     trigger.click();
+    await tick();
     assert.equal(document.querySelector('#form-dialog').open, true);
     assert.equal(document.querySelector('#public-profile-dialog').open, true);
     assert.equal(document.querySelector('#form-id').value, 'SHARED-1');
     assert.equal(document.querySelector('#form-estadoColeccion').value, 'BUSCADA');
     assert.equal(document.querySelector('#form-estadoColeccion').disabled, true);
     assert.equal(document.querySelector('#form-categoria').value, 'Space');
+    assert.equal(document.querySelector('#form-nombre').value, 'Brickset Figure');
+    assert.equal(document.querySelector('#form-precio').value, '');
     document.querySelector('#form-cancel').click();
     assert.equal(document.activeElement, trigger);
     trigger.click();
-    document.querySelector('#form-nombre').value = 'My searched figure';
+    await tick();
     document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await tick();
     await tick();
@@ -697,7 +705,7 @@ test('un fallo al añadir desde el perfil conserva formulario, perfil y lupa', a
     document.querySelector('#friends-list-friends .friends-user-button').click();
     await tick();
     document.querySelector('#public-profile-top-price .ranking-add-wanted').click();
-    document.querySelector('#form-nombre').value = 'Figure';
+    await tick();
     document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await tick();
     assert.equal(document.querySelector('#form-dialog').open, true);

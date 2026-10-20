@@ -32,7 +32,7 @@ test('crea una tarea, avanza por figura y separa actualizados y fallidos', async
   });
   const updates = [];
   const start = await jobs.start('user-a', repository([{ id: 'A' }, { id: 'B' }], updates));
-  assert.deepEqual(start, { estado: 'en_curso', procesados: 0, total: 2, actualizados: [], fallidos: [] });
+  assert.deepEqual(start, { estado: 'en_curso', procesados: 0, total: 2, actualizados: [], sinPrecio: [], fallidos: [] });
   const done = await waitForCompletion(jobs, 'user-a');
   assert.deepEqual(done.actualizados, ['A']);
   assert.deepEqual(done.fallidos, [{ id: 'B', error: 'BRICKSET_LIMITE' }]);
@@ -56,8 +56,25 @@ test('mantiene una sola tarea por usuario y aisla los estados', async () => {
 test('marca un catalogo vacio como completado', async () => {
   const jobs = createBricksetSyncJobs({ brickset: { getPrice: async () => 1 } });
   assert.deepEqual(await jobs.start('user-a', repository([])), {
-    estado: 'completada', procesados: 0, total: 0, actualizados: [], fallidos: [],
+    estado: 'completada', procesados: 0, total: 0, actualizados: [], sinPrecio: [], fallidos: [],
   });
+});
+
+test('registra un precio Not known como ausente y no como error', async () => {
+  const updates = [];
+  const jobs = createBricksetSyncJobs({ brickset: { async getPrice() { return null; } } });
+  const start = await jobs.start('user-a', repository([{ id: 'SH1159' }], updates));
+  assert.deepEqual(start.sinPrecio, []);
+  const done = await waitForCompletion(jobs, 'user-a');
+  assert.deepEqual(done, {
+    estado: 'completada',
+    procesados: 1,
+    total: 1,
+    actualizados: [],
+    sinPrecio: ['SH1159'],
+    fallidos: [],
+  });
+  assert.deepEqual(updates, []);
 });
 
 test('usa el repositorio refrescado para las escrituras posteriores', async () => {

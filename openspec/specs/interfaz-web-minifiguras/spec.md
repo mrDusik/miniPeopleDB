@@ -120,12 +120,17 @@ La interfaz SHALL comunicar cargas, errores locales y errores de Brickset sin bo
 
 ### Requirement: Gestionar datos de compra y precio Brickset
 
-La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el modo lo permita, y `categoria`, `subcategoria`, `anio` y `precio` como campos provenientes de Brickset con estilo `.input-readonly`. SHALL sincronizar individualmente de forma automática al cargar correctamente la imagen de un ID introducido. El backend SHALL conservar la sincronización masiva autenticada mediante `/sincronizacion/brickset`, pero el dashboard SHALL NOT mostrar un disparador manual; la lógica y el endpoint se conservan para reactivarlos en el futuro. La sincronización individual SHALL aplicar el año actual como fallback cuando Brickset devuelva `0` o no lo devuelva.
+La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el modo lo permita, y `nombre`, `descripcion`, `categoria`, `subcategoria`, `anio` y `precio` como campos provenientes de Brickset con estilo `.input-readonly`. Nombre y descripcion SHALL permanecer siempre deshabilitados y sombreados en todos los modos. SHALL sincronizar individualmente de forma automática al cargar correctamente la imagen de un ID introducido. El backend SHALL conservar la sincronización masiva autenticada mediante `/sincronizacion/brickset`, pero el dashboard SHALL NOT mostrar un disparador manual; la lógica y el endpoint se conservan para reactivarlos en el futuro. La sincronización individual SHALL aplicar el año actual como fallback cuando Brickset devuelva `0` o no lo devuelva.
 
 #### Scenario: Consulta individual
 - **WHEN** se carga correctamente la imagen del ID válido introducido en el modal de alta o edición
 - **THEN** solicita los datos individuales a la API
-- **AND** rellena categoría, subcategoría cuando aplica, año y precio
+- **AND** rellena nombre, descripcion, categoría, subcategoría cuando aplica, año y precio sin introducir nombre ni descripcion manualmente
+
+#### Scenario: Alta sin precio publicado
+- **WHEN** Brickset indica `Not known` para `Current Value - New`
+- **THEN** el campo Precio permanece vacío y no bloquea Guardar si el resto de datos obligatorios es válido
+- **AND** la figura se crea sin el campo `precio`
 
 #### Scenario: Actualización masiva
 - **WHEN** un cliente autenticado inicia una actualización mediante `POST /sincronizacion/brickset`
@@ -287,22 +292,29 @@ La interfaz SHALL minimizar el trabajo de renderizado al mostrar la colección: 
 
 ### Requirement: Rellenar Categoría, Subcategoría y Año desde Brickset en el formulario
 
-El formulario de alta y edición SHALL mostrar `categoria`, `subcategoria` y `anio` como campos no editables, igual que `precio`. Ninguno de estos cuatro campos SHALL aceptar edición manual: SHALL rellenarse únicamente al consultar los datos de Brickset con un `id` válido, mediante un único botón cuyo texto SHALL reflejar que consulta datos generales de Brickset y no solo el precio.
+El formulario de alta y edición SHALL mostrar `nombre`, `descripcion`, `categoria` y `subcategoria` como campos no editables, igual que `anio` y `precio`. Los seis campos SHALL rellenarse automaticamente al consultar Brickset con un `id` valido, sin boton individual. Nombre y descripcion SHALL estar siempre deshabilitados y sombreados. La respuesta individual SHALL obtener ambos desde el campo `Name`: si existe ` - `, SHALL separar por su primera aparicion y conservar todo el resto, incluidas comas y guiones, como descripcion; sin ese separador, SHALL usar como nombre solo el texto anterior a la primera coma y descartar lo posterior, con descripcion nula; sin separadores, SHALL usar todo el texto como nombre y descripcion nula. SHALL normalizar espacios y entidades HTML y recortar los valores. El formulario SHALL representar una descripcion nula como texto vacio y permitir guardar sin rellenarla. Al cambiar el ID en alta ordinaria SHALL limpiar ambos campos y bloquear Guardar hasta obtener los datos del nuevo ID.
 
 #### Scenario: Consulta de datos rellena los cuatro campos
 - **WHEN** el usuario solicita los datos de Brickset con un `id` válido
 - **THEN** la interfaz solicita los datos a la API
-- **AND** rellena `categoria`, `subcategoria` (cuando Brickset la resuelve dentro del catálogo local), `anio` y `precio`
-- **AND** los cuatro campos permanecen no editables
+- **AND** rellena `nombre`, `descripcion`, `categoria`, `subcategoria` (cuando Brickset la resuelve dentro del catálogo local), `anio` y `precio`
+- **AND** los seis campos permanecen no editables
 
 #### Scenario: Categoría no reconocida en el catálogo local
 - **WHEN** la API no puede resolver la categoría de Brickset contra el catálogo local de categorías
 - **THEN** la interfaz muestra un Toast de error
-- **AND** conserva los valores previos de `categoria`, `subcategoria`, `anio` y `precio`
+- **AND** conserva los valores previos de `nombre`, `descripcion`, `categoria`, `subcategoria`, `anio` y `precio`
 
 #### Scenario: Alta de una minifigura nueva
 - **WHEN** el usuario abre el formulario para crear una minifigura
-- **THEN** `categoria`, `subcategoria`, `anio` y `precio` aparecen vacíos y no editables hasta que se consulten los datos de Brickset
+- **THEN** `nombre`, `descripcion`, `categoria`, `subcategoria`, `anio` y `precio` aparecen vacíos y no editables hasta que se consulten los datos de Brickset
+
+#### Scenario: Parsear los titulos acordados
+- **WHEN** Brickset devuelve los titulos de CAS056, COL047, NIKE002 y NJO1029
+- **THEN** CAS056 tiene nombre `Ninja` y descripcion `Shogun, Blue with Armor`
+- **AND** COL047 tiene nombre `Baseball Player` y descripcion nula, sin almacenar la serie ni los parentesis posteriores a la coma
+- **AND** NIKE002 tiene nombre `Basketball Player` y descripcion nula
+- **AND** NJO1029 tiene nombre `Lloyd` y descripcion `Dragon Form`
 
 ### Requirement: Representar las acciones de alta, edición y eliminación como iconos
 
@@ -371,7 +383,7 @@ La interfaz SHALL centrar horizontal y verticalmente el contenido de rankings, s
 
 ### Requirement: Unificar el modal por modo de apertura
 
-La interfaz SHALL usar un modal de dos columnas con formulario a la izquierda y preview de 250px a la derecha, sin fondo gris detrás de la imagen. El modal SHALL ajustarse al viewport sin scroll horizontal ni vertical. La fila de identidad SHALL ocupar el ancho de la columna del formulario y distribuir en dos áreas iguales una columna apilada de ID y Nombre y el campo de Descripción. La consulta individual SHALL iniciarse automáticamente al cargar la imagen tras introducir un ID en alta ordinaria; no habrá un botón individual de sincronización. Los asteriscos de campos obligatorios SHALL ocultarse en visualización. El estado SHALL controlarse mediante botones de icono mutuamente excluyentes, con `📦` seleccionado por defecto en alta ordinaria; Seguir SHALL ser un toggle visual con los estados activo/inactivo de la tabla. En creación ordinaria solo ID estará habilitado inicialmente; los campos dependientes y Guardar permanecerán deshabilitados hasta obtener datos y completar ID, Nombre, Estado, Categoría, Año y Precio Brickset. En edición ID SHALL estar deshabilitado, sombreado y no editable, los campos Brickset serán solo lectura y se conservará `FechaRegistro`; Nombre y Descripción, estado, seguimiento y datos de compra SHALL mantener las posibilidades de edición vigentes, con compra deshabilitada para BUSCADA. El alta rápida desde ranking SHALL reutilizar el modal con aspecto de edición, ID deshabilitado y sombreado, metadatos precargados, Nombre y Descripción vacíos, BUSCADA fijo, seguimiento editable y datos de compra deshabilitados; guardar SHALL crear una figura propia, no editar una ajena. En visualización todos los campos e iconos estarán deshabilitados y solo Cerrar estará activo.
+La interfaz SHALL usar un modal de dos columnas con formulario a la izquierda y preview de 250px a la derecha, sin fondo gris detrás de la imagen. El modal SHALL ajustarse al viewport sin scroll horizontal ni vertical. La fila de identidad SHALL ocupar el ancho de la columna del formulario y distribuir en dos áreas iguales una columna apilada de ID y Nombre y el campo de Descripción. La consulta individual SHALL iniciarse automáticamente al cargar la imagen tras introducir un ID en alta ordinaria; no habrá un botón individual de sincronización. Los asteriscos de campos obligatorios SHALL ocultarse en visualización. El estado SHALL controlarse mediante botones de icono mutuamente excluyentes, con `📦` seleccionado por defecto en alta ordinaria; Seguir SHALL ser un toggle visual con los estados activo/inactivo de la tabla. En creación ordinaria solo ID estará habilitado inicialmente; los campos dependientes y Guardar permanecerán deshabilitados hasta obtener datos y completar ID, Nombre, Estado, Categoría y Año; el Precio Brickset será opcional cuando Brickset indique `Not known`. Nombre y Descripción SHALL autocompletarse desde Brickset y permanecer siempre deshabilitados y sombreados. En edición ID SHALL estar deshabilitado, sombreado y no editable, los campos Brickset serán solo lectura y se conservará `FechaRegistro`; estado, seguimiento y datos de compra SHALL mantener las posibilidades de edición vigentes, con compra deshabilitada para BUSCADA. El alta rápida desde ranking SHALL reutilizar el modal con aspecto de edición, ID deshabilitado y sombreado, metadatos precargados, BUSCADA fijo, seguimiento editable y datos de compra deshabilitados; SHALL consultar automaticamente Brickset para rellenar Nombre y Descripción, sin usar los datos privados de otro usuario, y bloquear Guardar hasta obtener un nombre y metadatos validos. Guardar SHALL crear una figura propia, no editar una ajena. En visualización todos los campos e iconos estarán deshabilitados y solo Cerrar estará activo.
 
 #### Scenario: Crear y sincronizar
 - **WHEN** el usuario abre alta ordinaria, introduce un ID y sincroniza correctamente
@@ -391,12 +403,12 @@ La interfaz SHALL usar un modal de dos columnas con formulario a la izquierda y 
 #### Scenario: Editar una figura existente
 - **WHEN** se abre una figura propia en edición
 - **THEN** ID está deshabilitado y sombreado y los campos Brickset no admiten edición manual
-- **AND** Nombre, Descripción, estado, seguimiento y datos de compra siguen las reglas vigentes
+- **AND** Nombre y Descripción permanecen deshabilitados y sombreados, y estado, seguimiento y datos de compra siguen las reglas vigentes
 - **AND** guardar conserva el ID y `FechaRegistro`
 
 #### Scenario: Alta rápida desde ranking
 - **WHEN** se abre una figura ajena mediante el botón de añadir a buscadas
-- **THEN** el modal muestra ID y metadatos bloqueados, Nombre y Descripción vacíos y BUSCADA seleccionado sin posibilidad de cambiar estado
+- **THEN** el modal muestra ID y metadatos bloqueados, obtiene Nombre y Descripción de Brickset manteniendolos deshabilitados y sombreados, y BUSCADA seleccionado sin posibilidad de cambiar estado
 - **AND** seguimiento permanece editable y guardar crea un registro propio
 
 #### Scenario: Restaurar los modos ordinarios

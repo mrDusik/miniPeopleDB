@@ -795,7 +795,7 @@ test('consulta los datos individuales de Brickset y actualiza precios de forma m
 
     const sync = await fetch(`${baseUrl}/sincronizacion/brickset`, { method: 'POST' });
     assert.equal(sync.status, 202);
-    assert.deepEqual(await sync.json(), { estado: 'en_curso', procesados: 0, total: 2, actualizados: [], fallidos: [] });
+    assert.deepEqual(await sync.json(), { estado: 'en_curso', procesados: 0, total: 2, actualizados: [], sinPrecio: [], fallidos: [] });
 
     let status;
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -807,6 +807,7 @@ test('consulta los datos individuales de Brickset y actualiza precios de forma m
           procesados: 2,
           total: 2,
           actualizados: ['A'],
+          sinPrecio: [],
           fallidos: [{ id: 'B', error: 'BRICKSET_PRECIO_NO_DISPONIBLE' }],
         });
         break;
@@ -893,6 +894,35 @@ test('GET /minifiguras/:id/brickset resuelve subcategoria conocida y omite una d
   });
 });
 
+test('permite consultar y crear una minifigura cuyo precio Brickset es Not known', async () => {
+  const fetchImpl = async (url) => {
+    if (!url.endsWith('/SH1159')) throw new Error('URL inesperada');
+    return new Response(
+      '<dl><dt>Name</dt><dd>Figura Nueva</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2026</dd></dl><p>Current Value - New</p><span>Not known</span>',
+      { status: 200 },
+    );
+  };
+
+  await withServerOptions('[]', { fetchImpl, minIntervalMs: 0 }, async (baseUrl) => {
+    const lookup = await fetch(`${baseUrl}/minifiguras/SH1159/brickset`);
+    assert.equal(lookup.status, 200);
+    assert.deepEqual(await lookup.json(), {
+      id: 'SH1159', nombre: 'Figura Nueva', descripcion: null, categoria: 'Space', anio: 2026, precio: null,
+    });
+
+    const created = await fetch(`${baseUrl}/minifiguras`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'SH1159', nombre: 'Figura Nueva', categoria: 'Space', anio: 2026,
+        estadoColeccion: 'COLECCIÓN', observada: false,
+      }),
+    });
+    assert.equal(created.status, 201);
+    assert.equal((await created.json()).id, 'SH1159');
+  });
+});
+
 test('GET /minifiguras/:id/brickset resuelve COL041 aunque Brickset duplique espacios', async () => {
   const fetchImpl = async () => new Response(
     "<dl><dt>Category</dt><dd><a href='/minifigs/category-Collectible-Minifigures'>Collectible Minifigures</a></dd><dt>Subcategory</dt><dd><a href='/minifigs/category-Collectible-Minifigures/subcategory-Series-3-Minifigures'>Series  3 Minifigures</a></dd><dt>Year released</dt><dd>2011</dd></dl><p>Current Value - New</p><span>€6.28</span>",
@@ -931,6 +961,40 @@ test('una ruta existente /brickset con un metodo no permitido devuelve 405', asy
     assert.equal(response.status, 405);
     assert.equal(response.headers.get('allow'), 'GET');
     assert.deepEqual(await response.json(), { error: 'METODO_NO_PERMITIDO' });
+  });
+});
+
+test('los nombres Brickset se parsean y persisten sin entrada manual', async () => {
+  const cases = [
+    ['CAS056', 'Ninja - Shogun, Blue with Armor', 'Ninja', 'Shogun, Blue with Armor'],
+    ['COL047', 'Baseball Player, Series 3 (Minifigure Only without Stand and Accessories)', 'Baseball Player', null],
+    ['NIKE002', 'Basketball Player', 'Basketball Player', null],
+    ['NJO1029', 'Lloyd - Dragon Form', 'Lloyd', 'Dragon Form'],
+  ];
+  const fetchImpl = async (url) => {
+    const [, title] = cases.find(([id]) => url.endsWith(`/${id}`));
+    return new Response(`<dl><dt>Name</dt><dd>${title}</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2026</dd></dl><p>Current Value - New €5</p>`);
+  };
+  await withServerOptions('[]', { fetchImpl, minIntervalMs: 0 }, async (baseUrl) => {
+    for (const [id, , nombre, descripcion] of cases) {
+      const response = await fetch(`${baseUrl}/minifiguras/${id}/brickset`);
+      assert.equal(response.status, 200);
+      const details = await response.json();
+      assert.equal(details.nombre, nombre);
+      assert.equal(details.descripcion, descripcion);
+      const created = await fetch(`${baseUrl}/minifiguras`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...details, descripcion: details.descripcion ?? '' }),
+      });
+      assert.equal(created.status, 201);
+    }
+    const catalog = await (await fetch(`${baseUrl}/minifiguras`)).json();
+    for (const [id, , nombre, descripcion] of cases) {
+      const stored = catalog.find((figure) => figure.id === id);
+      assert.equal(stored.nombre, nombre);
+      assert.equal(stored.descripcion || null, descripcion);
+    }
   });
 });
 

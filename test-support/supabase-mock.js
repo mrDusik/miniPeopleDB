@@ -1029,9 +1029,11 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       const run = ownedRun();
       const work = dailySync.prices.find(({ run_id, figure_id }) => run_id === parameters.p_run_id && figure_id === parameters.p_figure_id);
       if (!run || !work) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
-      if (work.status !== 'completed') {
+      if (!['completed', 'unavailable'].includes(work.status)) {
         work.attempts += 1;
-        work.status = parameters.p_success ? 'completed' : 'failed';
+        work.status = parameters.p_success
+          ? 'completed'
+          : parameters.p_failure_code === 'PRICE_NOT_KNOWN' ? 'unavailable' : 'failed';
         work.price = parameters.p_success ? parameters.p_price : null;
         work.failure_code = parameters.p_success ? null : parameters.p_failure_code;
         if (parameters.p_success) {

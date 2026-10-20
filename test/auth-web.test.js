@@ -1070,7 +1070,7 @@ test('al aparecer la primera figura se expanden los paneles sin repetir la bienv
     if (url === '/minifiguras') return { ok: true, status: 200, json: async () => figures };
     if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: figures.length, buscadas: 0, top5: [], top5Antiguas: [] }) };
     if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
-    if (url === '/sincronizacion/brickset') return { ok: true, status: 200, json: async () => ({ estado: 'completada', procesados: figures.length, total: figures.length, actualizados: [], fallidos: [] }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, status: 200, json: async () => ({ estado: 'completada', procesados: figures.length, total: figures.length, actualizados: [], sinPrecio: [], fallidos: [] }) };
   } });
   await tick();
   $('#first-minifigura-dialog').close();
