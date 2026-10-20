@@ -519,7 +519,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-public-profile .public-profile-tops { grid-template-columns: repeat(auto-fit, minmax(min(100%, 584px), 1fr)); }
   .public-profile-figures > li { flex-basis: 112px; }
   .modal-ranking .ranking-highlight-group .ranking-card-static { flex-basis: 112px; align-content: start; }
-  .public-profile-figures .ranking-card, .modal-ranking .ranking-highlight-group .ranking-card-static { padding-top: 44px; }
   .public-profile-figures .ranking-caption, .ranking-highlight-group .ranking-caption { max-width: 100%; overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
 }
 @media (min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
@@ -528,7 +527,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-public-profile .public-profile-tops { grid-template-columns: repeat(auto-fit, minmax(min(100%, 584px), 1fr)); }
   .public-profile-figures > li { flex-basis: 112px; }
   .modal-ranking .ranking-highlight-group .ranking-card-static { flex-basis: 112px; align-content: start; }
-  .public-profile-figures .ranking-card, .modal-ranking .ranking-highlight-group .ranking-card-static { padding-top: 44px; }
   .public-profile-figures .ranking-caption, .ranking-highlight-group .ranking-caption { max-width: 100%; overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
 }
 @media (min-width: 761px) and (max-width: 939px) and (hover: hover) and (pointer: fine) {
@@ -667,10 +665,12 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-highlight-group .ranking-card-static { flex: 0 0 64px; }
 .ranking-card-static { cursor: default; }
 .ranking-card-static:hover { border-color: var(--line); }
-.ranking-card-static { position: relative; padding-top: 30px; }
-.ranking-add-wanted { position: absolute; top: 3px; right: 3px; display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 32px; height: 24px; padding: 2px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--blue); cursor: pointer; font-weight: 700; }
-.ranking-add-wanted img { width: 16px; height: 16px; object-fit: contain; }
-.ranking-add-wanted:hover { border-color: var(--accent); }
+.ranking-card-static { position: relative; }
+.modal-public-profile .ranking-card-static, .modal-ranking .ranking-card-static { grid-template-rows: 96px auto; padding: 6px 4px; }
+.modal-public-profile .ranking-card-static .ranking-img, .modal-ranking .ranking-card-static .ranking-img { width: 96px; max-width: 100%; height: 96px; object-fit: contain; }
+.ranking-add-wanted { position: absolute; top: 3px; right: 3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 7px; border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.ranking-add-wanted img { width: 22px; height: 22px; object-fit: contain; }
+.ranking-add-wanted:hover { background: rgba(0, 0, 0, 0.06); }
 .ranking-add-wanted:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 .ranking-summary { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 6px; min-width: 0; }
@@ -1013,14 +1013,13 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .modal-friends .friends-tabs .button { height: 44px; min-height: 44px; min-width: 0; padding: 0 3px; font-size: 0.7rem; line-height: 1.2; white-space: normal; }
   .friends-tabs .friends-tab-label-full { display: none; }
   .friends-tabs .friends-tab-label-short { display: inline; }
-  .modal-public-profile .public-profile-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; align-items: stretch; gap: 6px; }
-  .modal-public-profile .public-profile-stats > div { grid-template-columns: 20px minmax(0, 1fr); gap: 3px; }
-  .modal-public-profile .public-profile-stat-icon { width: 20px; height: 20px; }
-  .modal-public-profile .public-profile-stats strong { font-size: 0.75rem; white-space: nowrap; }
-  .modal-public-profile #public-profile-level { overflow-wrap: anywhere; white-space: normal; }
+  .modal-public-profile .public-profile-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 6px 16px; }
+  .modal-public-profile .public-profile-stats > div { grid-template-columns: 28px minmax(0, 1fr); gap: 3px; }
+  .modal-public-profile .public-profile-stat-icon { width: 28px; height: 28px; }
+  .modal-public-profile .public-profile-stats strong { white-space: nowrap; }
+  .modal-public-profile #public-profile-level { overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
   .modal-ranking .ranking-highlight-group .ranking-card-static { flex-basis: 112px; align-content: start; }
   .modal-public-profile .public-profile-figures > li:not(.public-profile-empty) { flex-basis: 112px; }
-  .modal-public-profile .public-profile-figures .ranking-card, .modal-ranking .ranking-highlight-group .ranking-card-static { padding-top: 52px; }
 }
 
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {

@@ -155,8 +155,38 @@ test('los ajustes de anchura y tarjetas se limitan al monitor con ratón', () =>
     assert.equal(declaration('.modal-public-profile .public-profile-tops').getPropertyValue('grid-template-columns'), 'repeat(auto-fit, minmax(min(100%, 584px), 1fr))');
     assert.equal(declaration('.public-profile-figures > li').getPropertyValue('flex-basis'), '112px');
     assert.equal(declaration('.modal-ranking .ranking-highlight-group .ranking-card-static').getPropertyValue('flex-basis'), '112px');
-    assert.equal(declaration('.public-profile-figures .ranking-card, .modal-ranking .ranking-highlight-group .ranking-card-static').getPropertyValue('padding-top'), '44px');
     assert.equal(declaration('.public-profile-figures .ranking-caption, .ranking-highlight-group .ranking-caption').getPropertyValue('white-space'), 'normal');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('las tarjetas de modales amplian la imagen y superponen la lupa sin reservar una franja superior', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const declaration = (selector) => rules.find((rule) => rule.selectorText === selector)?.style;
+    const cards = declaration('.modal-public-profile .ranking-card-static, .modal-ranking .ranking-card-static');
+    assert.equal(cards.getPropertyValue('grid-template-rows'), '96px auto');
+    assert.equal(cards.getPropertyValue('padding'), '6px 4px');
+    const images = declaration('.modal-public-profile .ranking-card-static .ranking-img, .modal-ranking .ranking-card-static .ranking-img');
+    assert.equal(images.getPropertyValue('width'), '96px');
+    assert.equal(images.getPropertyValue('height'), '96px');
+    const action = declaration('.ranking-add-wanted');
+    assert.equal(action.getPropertyValue('position'), 'absolute');
+    assert.equal(action.getPropertyValue('top'), '3px');
+    assert.equal(action.getPropertyValue('right'), '3px');
+    assert.equal(action.getPropertyValue('border'), '0');
+    assert.equal(action.getPropertyValue('background'), 'transparent');
+    assert.equal(action.getPropertyValue('min-height'), '36px');
+    assert.equal(declaration('.ranking-card').getPropertyValue('grid-template-rows'), '48px auto');
+    for (const rule of rules.filter((entry) => entry.cssRules)) {
+      for (const nested of rule.cssRules) {
+        if (nested.selectorText?.includes('.ranking-card')) {
+          assert.equal(nested.style.getPropertyValue('padding-top'), '');
+        }
+      }
+    }
   } finally {
     dom.window.close();
   }
@@ -546,6 +576,8 @@ test('el perfil reutiliza gráfico, iconos y tarjetas y destruye el gráfico al 
     assert.equal(document.querySelectorAll('#public-profile-content [data-action], #public-profile-content [data-gift-user]').length, 0);
     assert.equal(document.querySelectorAll('#public-profile-content .ranking-add-wanted').length, 4);
     assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted img').getAttribute('src'), '/status_images/lupa.png');
+    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted').textContent, '');
+    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted').getAttribute('aria-label'), 'Añadir a buscadas');
     assert.equal(document.querySelector('#public-profile-achievements .achievement-icon').getAttribute('src'), '/toast_images/75206.png');
     assert.equal(document.querySelector('#public-profile-achievements .achievement-count').textContent, 'x5');
     const overview = document.querySelector('.public-profile-overview');
