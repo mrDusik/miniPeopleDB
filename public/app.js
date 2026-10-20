@@ -1076,7 +1076,7 @@ const DNA_TRAITS = [
   { key: 'rarityHunter', name: 'Rarity Hunter', description: 'Busca piezas raras y valiosas.', color: 'rarity' },
   { key: 'explorer', name: 'Explorer', description: 'Descubre categorías y subcategorías.', color: 'explorer' },
   { key: 'collector', name: 'Collector', description: 'Amplía y completa la colección.', color: 'collector' },
-  { key: 'fan', name: 'Fan', description: 'Muestra afinidad por temáticas y personajes.', color: 'fan' },
+  { key: 'fan', name: 'Fan', description: 'Muestra afinidad por temáticas.', color: 'fan' },
 ];
 
 let dnaChartInstance = null;
