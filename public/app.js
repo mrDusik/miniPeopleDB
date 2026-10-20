@@ -1305,13 +1305,10 @@ function updateRankingWantedActions(list) {
     if (card.closest('#public-profile-content')) button.dataset.profileWanted = 'true';
     button.title = 'Añadir a buscadas';
     button.setAttribute('aria-label', 'Añadir a buscadas');
-    const plus = document.createElement('span');
-    plus.textContent = '+';
-    plus.setAttribute('aria-hidden', 'true');
     const icon = document.createElement('img');
     icon.src = '/status_images/lupa.png';
     icon.alt = '';
-    button.append(plus, icon);
+    button.append(icon);
     card.append(button);
   }
 }
