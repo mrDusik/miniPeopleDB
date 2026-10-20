@@ -180,8 +180,10 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .summary-ranking-row .summary-ranking-link { flex: 1 1 0; min-width: 0; white-space: normal; }
 .collection-counts-panel { display: flex; align-items: center; gap: 16px; }
 .collection-counts-panel > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.collection-total-group { display: grid; justify-items: center; gap: 3px; min-width: 0; }
 .collection-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .collection-value strong { color: var(--ink); font: 700 1.2rem Arial, sans-serif; white-space: nowrap; }
+.collection-total-updated { color: var(--muted); font: 0.68rem/1.2 Arial, sans-serif; text-align: center; }
 .gamification-details .count-icon { width: 40px; text-align: center; }
 .collection-counts-panel strong { min-width: 2ch; color: var(--ink); font: 700 1.25rem Arial, sans-serif; }
 .count-icon { width: 1.35rem; height: 1.35rem; }
@@ -279,6 +281,7 @@ button { min-height: 36px; }
 .results-heading-actions { display: flex; align-items: center; gap: 16px; }
 .result-count { margin: 5px 0 0; color: var(--accent); font: 700 0.82rem Arial, sans-serif; }
 .status { min-height: 24px; margin-bottom: 14px; color: var(--muted); font: 0.95rem Arial, sans-serif; }
+#status:empty { display: none; }
 .status.error { color: var(--accent-dark); }
 #ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty { display: none; }
 .table-wrap { overflow-x: auto; }
@@ -1042,7 +1045,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .dna-legend { gap: 10px; }
   .dna-legend-item { gap: 3px 5px; }
   .dna-legend-item > strong { font-size: 0.8rem; }
-  .dna-description { font-size: 0.72rem; }
+  .dna-description { grid-column: 1 / -1; font-size: 0.72rem; white-space: nowrap; }
   .global-ranking-list { gap: 6px; }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
   .ranking-summary { grid-column: 1; grid-row: 1; }

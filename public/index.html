@@ -236,7 +236,10 @@ Esta acción no se puede deshacer.</p>
             </div>
             <div class="summary-sync-row">
               <button type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
-              <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
+              <div class="collection-total-group">
+                <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
+                <small id="collection-total-updated" class="collection-total-updated" aria-live="polite"></small>
+              </div>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>

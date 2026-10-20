@@ -9,6 +9,7 @@ const pageStatus = document.querySelector('#page-status');
 const newMinifiguraButton = document.querySelector('#new-minifigura');
 const syncPricesButton = document.querySelector('#sync-prices');
 const collectionTotal = document.querySelector('#collection-total');
+const collectionTotalUpdated = document.querySelector('#collection-total-updated');
 const collectionCount = document.querySelector('#collection-count');
 const wantedCount = document.querySelector('#wanted-count');
 const topFiveList = document.querySelector('#top-five-list');
@@ -274,6 +275,7 @@ let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
 let appStarted = false;
+let lastCollectionTotal = null;
 let profileRequestSequence = 0;
 let profileReadyUserId = null;
 let currentUserProfile = null;
@@ -1004,7 +1006,12 @@ async function loadTotal() {
       throw new Error(`HTTP ${response.status}`);
     }
     const summary = await response.json();
-    collectionTotal.textContent = formatPrice(summary.total ?? 0);
+    const total = summary.total ?? 0;
+    if (lastCollectionTotal === null || total !== lastCollectionTotal) {
+      lastCollectionTotal = total;
+      collectionTotalUpdated.textContent = formatCollectionTotalUpdatedAt(new Date());
+    }
+    collectionTotal.textContent = formatPrice(total);
     collectionCount.textContent = `${summary.enColeccion ?? 0}`;
     wantedCount.textContent = `${summary.buscadas ?? 0}`;
     renderTopFive(Array.isArray(summary.top5) ? summary.top5 : []);
@@ -1018,6 +1025,12 @@ async function loadTotal() {
     renderOldestFive([]);
     renderWatchlist([]);
   }
+}
+
+function formatCollectionTotalUpdatedAt(date) {
+  const [year, month, day] = madridDateString(date).split('-');
+  const time = notificationClockTime(date).replace(':', '.');
+  return `Última actualización: ${day}/${month}/${year} a las ${time}`;
 }
 
 function renderGamification(state) {
@@ -4202,6 +4215,8 @@ function clearUserData() {
   hasLoadedFullCatalog = false;
   applyFilters();
   collectionTotal.textContent = formatPrice(0);
+  collectionTotalUpdated.textContent = '';
+  lastCollectionTotal = null;
   collectionCount.textContent = '0';
   wantedCount.textContent = '0';
   renderTopFive([]);
