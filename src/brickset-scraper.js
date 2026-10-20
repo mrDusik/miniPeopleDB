@@ -51,6 +51,9 @@ function bricksetPriceContext(html) {
 
 function parseBricksetPriceQuote(html) {
   const text = normalizeHtmlText(html);
+  if (/Current\s*Value\s*[-–—]?\s*New\s*[:\-–—]?\s*Not\s+known/i.test(text)) {
+    return null;
+  }
   const amount = '[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?';
   const priceMatch = text.match(new RegExp(
     `Current\\s*Value\\s*[-–—]?\\s*New\\s*[:\\-–—]?\\s*(?:[~≈]\\s*)?(?:([€$])\\s*(${amount})|(${amount})\\s*([€$]))`,
@@ -66,6 +69,7 @@ function parseBricksetPriceQuote(html) {
 
 export function parseBricksetPrice(html) {
   const quote = parseBricksetPriceQuote(html);
+  if (quote === null) return null;
   if (quote.currency !== 'EUR') throw new BricksetPriceError('BRICKSET_MONEDA_NO_SOPORTADA');
   return quote.amount;
 }
@@ -89,6 +93,7 @@ function matchDetailField(html, label) {
 }
 
 function parseBricksetDetailFields(html) {
+  const name = matchDetailField(html, 'Name');
   const categoria = matchDetailField(html, 'Category');
   const subcategoria = matchDetailField(html, 'Subcategory');
   const anioText = matchDetailField(html, 'Year released');
@@ -98,10 +103,18 @@ function parseBricksetDetailFields(html) {
   }
 
   return {
+    ...(name ? parseBricksetName(decodeMinifigEntities(name)) : {}),
     categoria: decodeMinifigEntities(categoria),
     subcategoria: subcategoria ? decodeMinifigEntities(subcategoria) : undefined,
     anio: Number(anioText) || undefined,
   };
+}
+
+function parseBricksetName(name) {
+  const separator = name.indexOf(' - ');
+  return separator >= 0
+    ? { nombre: name.slice(0, separator).trim(), descripcion: name.slice(separator + 3).trim() || null }
+    : { nombre: name.split(',')[0].trim(), descripcion: null };
 }
 
 export function parseBricksetDetails(html) {
@@ -301,6 +314,14 @@ export class BricksetScraper {
     throw lastError ?? new BricksetPriceError();
   }
 
+  async getNames(id, { signal } = {}) {
+    const { html } = await this._fetchHtml(id, signal);
+    const name = matchDetailField(html, 'Name');
+    const fields = name ? parseBricksetName(decodeMinifigEntities(name)) : null;
+    if (!fields?.nombre) throw new BricksetPriceError('BRICKSET_NOMBRE_NO_DISPONIBLE');
+    return fields;
+  }
+
   async getPrice(id, { signal } = {}) {
     const { html, url } = await this._fetchHtml(id, signal);
     let quote;
@@ -309,6 +330,10 @@ export class BricksetScraper {
     } catch {
       console.error(`[BricksetScraper] No se extrajo 'Current Value - New' de ${url}. Current Value: ${bricksetPriceContext(html)}`);
       throw new BricksetPriceError();
+    }
+    if (quote === null) {
+      console.warn(`[BricksetScraper] Brickset indica 'Not known' para ${url}; se reintentará en futuras sincronizaciones.`);
+      return null;
     }
     return this._priceInEur(quote, signal);
   }
@@ -324,6 +349,9 @@ export class BricksetScraper {
       console.error(`[BricksetScraper] No se extrajeron los detalles de ${url}. Current Value: ${bricksetPriceContext(html)}`);
       throw new BricksetPriceError('BRICKSET_DETALLES_NO_DISPONIBLES');
     }
-    return { ...details, precio: await this._priceInEur(quote, signal) };
+    if (quote === null) {
+      console.warn(`[BricksetScraper] Brickset indica 'Not known' para ${url}; se reintentará en futuras sincronizaciones.`);
+    }
+    return { ...details, precio: quote === null ? null : await this._priceInEur(quote, signal) };
   }
 }

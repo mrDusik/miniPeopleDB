@@ -54,15 +54,15 @@ function startSyncApp({ statusStates = [], postState, session = undefined, dnaSt
 
 test('muestra progreso, actualiza el sondeo y muestra el toast exacto al completar', async () => {
   const app = startSyncApp({
-    postState: { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 2, actualizados: [], fallidos: [] }) },
+    postState: { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 2, actualizados: [], sinPrecio: [], fallidos: [] }) },
     dnaStates: [
       { principal: 'Explorer', porcentajes: { rarityHunter: 0, explorer: 100, collector: 0, fan: 0 } },
       { principal: 'Collector', porcentajes: { rarityHunter: 0, explorer: 0, collector: 100, fan: 0 } },
     ],
     statusStates: [
       { estado: 'inactiva' },
-      { estado: 'en_curso', procesados: 1, total: 2, actualizados: ['A-1'], fallidos: [] },
-      { estado: 'completada', procesados: 2, total: 2, actualizados: ['A-1'], fallidos: [{ id: 'B-2', error: 'BRICKSET_LIMITE' }] },
+      { estado: 'en_curso', procesados: 1, total: 2, actualizados: ['A-1'], sinPrecio: [], fallidos: [] },
+      { estado: 'completada', procesados: 2, total: 2, actualizados: ['A-1'], sinPrecio: ['SH1159'], fallidos: [{ id: 'B-2', error: 'BRICKSET_LIMITE' }] },
     ],
   });
   await tick();
@@ -89,13 +89,13 @@ test('muestra progreso, actualiza el sondeo y muestra el toast exacto al complet
   assert.equal(app.$('#gamification-dna-principal').textContent, 'Collector');
   assert.equal(app.requests.filter(({ url }) => url === '/gamificacion/dna').length, 2);
   const toast = app.$('#toast-region .toast-success');
-  assert.equal(toast.textContent, 'Actualización de precios terminada: 1 actualizadas, 1 fallidas.');
+  assert.equal(toast.textContent, 'Actualización de precios terminada: 1 actualizadas, 1 sin precio publicado, 1 fallidas.');
   app.dom.window.close();
 });
 
 test('respuesta completada inicial no muestra barra y un error rehabilita el boton', async () => {
   const completed = startSyncApp({
-    postState: { ok: true, json: async () => ({ estado: 'completada', procesados: 0, total: 0, actualizados: [], fallidos: [] }) },
+    postState: { ok: true, json: async () => ({ estado: 'completada', procesados: 0, total: 0, actualizados: [], sinPrecio: [], fallidos: [] }) },
     statusStates: [{ estado: 'inactiva' }],
   });
   await tick();
@@ -121,8 +121,8 @@ test('respuesta completada inicial no muestra barra y un error rehabilita el bot
 
 test('retoma una tarea sin POST y cancela el sondeo al cerrar sesión', async () => {
   const app = startSyncApp({
-    postState: { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], fallidos: [] }) },
-    statusStates: [{ estado: 'en_curso', procesados: 1, total: 1, actualizados: [], fallidos: [] }],
+    postState: { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], sinPrecio: [], fallidos: [] }) },
+    statusStates: [{ estado: 'en_curso', procesados: 1, total: 1, actualizados: [], sinPrecio: [], fallidos: [] }],
   });
   await tick();
   assert.equal(app.$('#sync-progress').hidden, false);

@@ -146,6 +146,36 @@ test('usa el scraper compartido, deduplica el ID y preserva precios ante fallo',
   assert.equal((await jobs.status(mock.analyticsRows('runs')[0].id)).status, 'completed');
 });
 
+test('trata Not known como precio pendiente, avisa con el ID y no cuenta un fallo', async () => {
+  const warnings = [];
+  const logs = [];
+  const { jobs, mock } = analyticsHarness({
+    figures: [{ user_id: USER_A, id: 'SH1159', nombre: 'Spider-Man', categoria: 'Test', estado_coleccion: 'COLECCIÓN' }],
+    brickset: { async getPrice() { return null; } },
+    coordinatorOptions: {
+      logger: {
+        info(...args) { logs.push(args); },
+        warn(...args) { warnings.push(args); },
+        error() {},
+      },
+    },
+  });
+
+  const run = await jobs.start();
+  await jobs.waitForIdle();
+
+  const price = mock.analyticsRows('prices', run.jobId)[0];
+  const summary = JSON.parse(logs.find(([message]) => message === '[daily-analytics] resumen')[1]);
+  assert.equal(price.status, 'unavailable');
+  assert.equal(price.failure_code, 'PRICE_NOT_KNOWN');
+  assert.deepEqual(mock.analyticsRows('cache'), []);
+  assert.equal((await jobs.status(run.jobId)).failedPrices, 0);
+  assert.equal(summary.bricksetFailures, 0);
+  assert.equal(summary.unavailablePrices, 1);
+  assert.deepEqual(summary.unavailablePriceIds, ['SH1159']);
+  assert.ok(warnings.some(([message, id]) => message.includes('Not known') && id === 'SH1159'));
+});
+
 test('relee fuentes cuando una captura detecta una revision obsoleta', async () => {
   let sourceReads = 0;
   const captures = [];

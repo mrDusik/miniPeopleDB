@@ -92,6 +92,8 @@ export function createDailyAnalyticsJobs({
       bricksetRequests: 0,
       bricksetSuccesses: 0,
       bricksetFailures: 0,
+      unavailablePrices: 0,
+      unavailablePriceIds: [],
       bricksetDurationMs: 0,
       failedPrices: 0,
       totalUsers: 0,
@@ -165,6 +167,8 @@ export function createDailyAnalyticsJobs({
             );
             result = Number.isFinite(price) && price >= 0
               ? { success: true, price }
+              : price === null
+                ? { success: false, failureCode: 'PRICE_NOT_KNOWN' }
               : { success: false, failureCode: 'INVALID_RESPONSE' };
           } catch (error) {
             result = { success: false, failureCode: scraperFailureCode(error) };
@@ -172,8 +176,15 @@ export function createDailyAnalyticsJobs({
             metrics.bricksetDurationMs += Math.max(0, now() - requestStartedAtMs);
             activeRequests.delete(controller);
           }
-          if (result.success) metrics.bricksetSuccesses += 1;
-          else metrics.bricksetFailures += 1;
+          if (result.success) {
+            metrics.bricksetSuccesses += 1;
+          } else if (result.failureCode === 'PRICE_NOT_KNOWN') {
+            metrics.unavailablePrices += 1;
+            metrics.unavailablePriceIds.push(figureId);
+            logger.warn?.('[daily-analytics] Brickset indica precio "Not known"; se reintentará en próximos trabajos', figureId);
+          } else {
+            metrics.bricksetFailures += 1;
+          }
           ensureLease();
           await retryStorage(() => repository.applyPrice(run.jobId, leaseOwner, figureId, result));
         }
@@ -274,6 +285,8 @@ export function createDailyAnalyticsJobs({
         bricksetRequests: metrics.bricksetRequests,
         bricksetSuccesses: metrics.bricksetSuccesses,
         bricksetFailures: metrics.bricksetFailures,
+        unavailablePrices: metrics.unavailablePrices,
+        unavailablePriceIds: metrics.unavailablePriceIds,
         failedPrices: metrics.failedPrices,
         averageBricksetTime: metrics.bricksetRequests
           ? formatDuration(metrics.bricksetDurationMs / metrics.bricksetRequests)

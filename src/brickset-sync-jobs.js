@@ -4,6 +4,7 @@ function snapshot(task) {
     procesados: task.procesados,
     total: task.total,
     actualizados: [...task.actualizados],
+    sinPrecio: [...task.sinPrecio],
     fallidos: task.fallidos.map((item) => ({ ...item })),
   };
 }
@@ -29,6 +30,10 @@ export function createBricksetSyncJobs({ brickset }) {
       if (task.pausado) await waitWhilePaused(task);
       try {
         const precio = await brickset.getPrice(minifigura.id);
+        if (precio === null) {
+          task.sinPrecio.push(minifigura.id);
+          continue;
+        }
         const persisted = await task.repository.updatePrice(minifigura.id, precio);
         if (persisted === null) {
           task.fallidos.push({ id: minifigura.id, error: 'MINIFIGURA_NO_ENCONTRADA' });
@@ -63,6 +68,7 @@ export function createBricksetSyncJobs({ brickset }) {
         procesados: 0,
         total: catalogo.length,
         actualizados: [],
+        sinPrecio: [],
         fallidos: [],
         catalogo,
         repository,

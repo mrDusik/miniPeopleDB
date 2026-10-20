@@ -2,6 +2,33 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BricksetPriceError, BricksetScraper, parseBricksetDetails, parseBricksetPrice } from '../src/brickset-scraper.js';
 
+test('parsea nombre y descripcion Brickset conservando comas solo tras el guion', () => {
+  const cases = [
+    ['CAS056', 'Ninja - Shogun, Blue with Armor', 'Ninja', 'Shogun, Blue with Armor'],
+    ['COL047', 'Baseball Player, Series 3 (Minifigure Only without Stand and Accessories)', 'Baseball Player', null],
+    ['NIKE002', 'Basketball Player', 'Basketball Player', null],
+    ['NJO1029', 'Lloyd - Dragon Form', 'Lloyd', 'Dragon Form'],
+    ['EXTRA', '  Hero &amp; Friend - First - Second, Info  ', 'Hero & Friend', 'First - Second, Info'],
+  ];
+  for (const [id, title, nombre, descripcion] of cases) {
+    const html = `<dl><dt>Name</dt><dd>${title}</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2026</dd></dl><p>Current Value - New €5</p>`;
+    const details = parseBricksetDetails(html);
+    assert.equal(details.nombre, nombre, id);
+    assert.equal(details.descripcion, descripcion, id);
+  }
+});
+
+test('consulta nombres sin depender de precios, categoria o anio y no acepta nombres vacios', async () => {
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => new Response(url.endsWith('/CAS056')
+      ? '<dl><dt>Name</dt><dd>Ninja - Shogun, Blue with Armor</dd></dl>'
+      : '<dl><dt>Name</dt><dd> </dd></dl>'),
+  });
+  assert.deepEqual(await scraper.getNames('CAS056'), { nombre: 'Ninja', descripcion: 'Shogun, Blue with Armor' });
+  await assert.rejects(() => scraper.getNames('MISSING'), { code: 'BRICKSET_NOMBRE_NO_DISPONIBLE' });
+});
+
 test('extrae Current Value - New en Euros y construye la URL publica', async () => {
   let requestedUrl;
   let requestedOptions;
@@ -27,6 +54,35 @@ test('tolera HTML, saltos de linea y el prefijo ~€ alrededor del precio', () =
   `), 1234.56);
   assert.equal(parseBricksetPrice('<p>Current Value - New</p><span>1.234 €</span>'), 1234);
   assert.equal(parseBricksetPrice('<p>Current Value - New</p><span>12.34 €</span>'), 12.34);
+});
+
+test('trata Current Value - New Not known como precio ausente recuperable', async () => {
+  const html = '<dl><dt>Name</dt><dd>Spider-Man</dd><dt>Category</dt><dd>Super Heroes</dd><dt>Year released</dt><dd>2026</dd></dl><p>Current Value - New</p><span>Not known</span>';
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+
+  try {
+    assert.equal(parseBricksetPrice(html), null);
+    assert.deepEqual(parseBricksetDetails(html), {
+      nombre: 'Spider-Man',
+      descripcion: null,
+      categoria: 'Super Heroes',
+      subcategoria: undefined,
+      anio: 2026,
+      precio: null,
+    });
+
+    const scraper = new BricksetScraper({
+      minIntervalMs: 0,
+      fetchImpl: async () => new Response(html, { status: 200 }),
+    });
+    assert.equal(await scraper.getPrice('SH1159'), null);
+    assert.equal((await scraper.getDetails('SH1159')).precio, null);
+    assert.ok(warnings.some((message) => message.includes('Not known') && message.includes('/SH1159')));
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test('rechaza precios en otras monedas y no salta al precio usado en euros', () => {

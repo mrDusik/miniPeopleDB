@@ -918,8 +918,8 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   editButton.click();
   assert.equal(window.document.querySelector('#form-estadoColeccion').value, '');
   assert.equal(window.document.querySelector('#form-id').disabled, true);
-  assert.equal(window.document.querySelector('#form-nombre').disabled, false);
-  assert.equal(window.document.querySelector('#form-descripcion').disabled, false);
+  assert.equal(window.document.querySelector('#form-nombre').disabled, true);
+  assert.equal(window.document.querySelector('#form-descripcion').disabled, true);
   assert.equal(window.document.querySelector('#form-observada').disabled, false);
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
   assert.equal(window.eval('buildPayloadFromForm().id'), 'c');
@@ -1396,7 +1396,7 @@ test('la interfaz mantiene bloqueados los controles de temas tras sincronizar si
   const { window } = dom;
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => [] };
-    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'completada', procesados: 0, total: 0, actualizados: [], fallidos: [] }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'completada', procesados: 0, total: 0, actualizados: [], sinPrecio: [], fallidos: [] }) };
     if (url === '/minifiguras' || url === '/valoracion') return { ok: true, json: async () => url === '/valoracion' ? { total: 0, enColeccion: 0, buscadas: 0 } : [] };
     return { ok: false, json: async () => ({}) };
   };
@@ -1448,7 +1448,7 @@ test('la sincronización deshabilita solo su botón mientras está en curso', as
   let syncStatus = 'en_curso';
   window.fetch = async (url) => {
     if (url === '/sincronizacion/brickset' && syncStatus === 'en_curso') {
-      return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], fallidos: [] }) };
+      return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], sinPrecio: [], fallidos: [] }) };
     }
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/minifiguras' || url === '/valoracion') return {
@@ -1490,7 +1490,7 @@ test('la sincronización mantiene utilizables las acciones creadas al refrescar 
   const summaryPending = new Promise((resolve) => { releaseSummary = resolve; });
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
-    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], fallidos: [] }) };
+    if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'en_curso', procesados: 0, total: 1, actualizados: [], sinPrecio: [], fallidos: [] }) };
     if (url === '/minifiguras') return { ok: true, json: async () => catalog };
     if (url === '/valoracion') {
       valuationCalls += 1;
@@ -1567,15 +1567,18 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   const bricksetLoading = window.document.querySelector('#brickset-loading');
   assert.equal(bricksetLoading.hidden, false);
   assert.equal(bricksetLoading.textContent.trim(), 'Autocompletando...');
-  resolveBrickset({ ok: true, json: async () => ({ id: 'NEW-FIGURE', categoria: 'Space', anio: 2024, precio: 12 }) });
+  resolveBrickset({ ok: true, json: async () => ({ id: 'NEW-FIGURE', nombre: 'Nueva', descripcion: 'Variante, Info', categoria: 'Space', anio: 2024, precio: 12 }) });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(bricksetLoading.hidden, true);
   assert.equal(preview.getAttribute('src'), '/logo_images/image_fallback.png');
-  assert.equal(window.document.querySelector('#form-nombre').disabled, false);
-  assert.equal(window.document.querySelector('#form-descripcion').disabled, false);
+  for (const selector of ['#form-nombre', '#form-descripcion']) {
+    const field = window.document.querySelector(selector);
+    assert.equal(field.disabled, true);
+    assert.equal(field.readOnly, true);
+    assert.equal(field.classList.contains('input-readonly'), true);
+  }
   assert.equal(window.document.querySelector('#form-fechaCompra').disabled, false);
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
-  window.document.querySelector('#form-nombre').value = 'Nueva';
   window.document.querySelector('#form-estadoColeccion').value = '';
   window.document.querySelector('#minifigura-form').dispatchEvent(
     new window.Event('submit', { bubbles: true, cancelable: true }),
@@ -1583,6 +1586,21 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(submittedPayload.estadoColeccion, 'COLECCIÓN');
+  assert.equal(submittedPayload.nombre, 'Nueva');
+  assert.equal(submittedPayload.descripcion, 'Variante, Info');
+  window.document.querySelector('#new-minifigura').click();
+  idInput.value = 'new-f';
+  idInput.dispatchEvent(new window.Event('input'));
+  preview.dispatchEvent(new window.Event('error'));
+  resolveBrickset({ ok: true, json: async () => ({ nombre: 'Sin descripcion', descripcion: null, categoria: 'Space', anio: 2024, precio: 12 }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(window.document.querySelector('#form-descripcion').value, '');
+  assert.equal(window.document.querySelector('#form-submit').disabled, false);
+  idInput.value = 'other-id';
+  idInput.dispatchEvent(new window.Event('input'));
+  assert.equal(window.document.querySelector('#form-nombre').value, '');
+  assert.equal(window.document.querySelector('#form-descripcion').value, '');
+  assert.equal(window.document.querySelector('#form-submit').disabled, true);
   dom.window.close();
 });
 
@@ -1759,7 +1777,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
     }
     if (url.endsWith('/brickset')) {
       lookups += 1;
-      return { ok: true, json: async () => ({ id: 'NEW-1', categoria: 'Space', anio: 2024, precio: 18 }) };
+      return { ok: true, json: async () => ({ id: 'NEW-1', nombre: 'Nueva', descripcion: null, categoria: 'Space', anio: 2024, precio: 18 }) };
     }
     return { ok: true, json: async () => catalog };
   };

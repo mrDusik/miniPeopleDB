@@ -1107,6 +1107,7 @@ export function createServer({
 
         const resultado = {
           id: id.trim().toUpperCase(),
+          ...(detalles.nombre ? { nombre: detalles.nombre, descripcion: detalles.descripcion ?? null } : {}),
           categoria: categoriaEncontrada.categoria,
           anio: Number.isInteger(detalles.anio) && detalles.anio > 0 ? detalles.anio : new Date().getFullYear(),
           precio: detalles.precio,

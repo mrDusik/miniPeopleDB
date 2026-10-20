@@ -436,6 +436,41 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
   dom.window.close();
 });
 
+test('permite guardar una figura nueva cuando Brickset devuelve precio Not known', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  const catalogo = [];
+  let submittedPayload;
+  const saved = { id: 'SH1159', nombre: 'Figura Nueva', categoria: 'Space', anio: 2026, estadoColeccion: 'COLECCIÓN', observada: false };
+  const fallbackFetch = baseFetch(catalogo, state(), saved);
+  window.fetch = async (url, options = {}) => {
+    if (url.endsWith('/brickset')) {
+      return { ok: true, json: async () => ({ ...saved, descripcion: null, precio: null }) };
+    }
+    if (url === '/minifiguras' && options.method === 'POST') {
+      submittedPayload = JSON.parse(options.body);
+      return { ok: true, status: 201, json: async () => saved };
+    }
+    return fallbackFetch(url, options);
+  };
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  window.document.querySelector('#new-minifigura').click();
+  window.document.querySelector('#form-id').value = 'SH1159';
+  window.document.querySelector('#form-id').dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(window.document.querySelector('#form-precio').value, '');
+  assert.equal(window.document.querySelector('#form-submit').disabled, false);
+  window.document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(submittedPayload.id, 'SH1159');
+  assert.equal(Object.hasOwn(submittedPayload, 'precio'), false);
+  dom.window.close();
+});
+
 test('pagina la tabla en bloques de diez filas', async () => {
   const dom = createDom();
   const { window } = dom;

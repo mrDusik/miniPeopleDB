@@ -892,7 +892,8 @@ async function finishSync(state) {
   syncProgress.hidden = true;
   syncPricesButton.disabled = !categoriasReady;
   await revalidate();
-  showToast(`Actualización de precios terminada: ${state.actualizados.length} actualizadas, ${state.fallidos.length} fallidas.`, 'success');
+  const sinPrecio = state.sinPrecio?.length ?? 0;
+  showToast(`Actualización de precios terminada: ${state.actualizados.length} actualizadas, ${sinPrecio} sin precio publicado, ${state.fallidos.length} fallidas.`, 'success');
 }
 
 function scheduleSyncPoll() {
@@ -1710,7 +1711,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   updateFormMode();
   formDialog.showModal();
   if (mode === 'ranking-create') {
-    formNombreInput.focus();
+    formObservedButton.focus();
     if (!formSynced) void loadFormBricksetData();
   }
 }
@@ -1743,7 +1744,7 @@ function updateFormMode() {
   const isRankingCreate = currentFormMode === 'ranking-create';
   const isView = currentFormMode === 'view';
   const hasId = formIdInput.value.trim() !== '';
-  const editableFields = [formNombreInput, formDescripcionInput, formEstadoInput];
+  const editableFields = [formEstadoInput];
   const purchaseFields = [formPrecioCompraInput, formFechaCompraInput];
   const bricksetFields = [formCategoriaInput, formSubcategoriaInput, formAnioInput, formPrecioInput];
 
@@ -1759,6 +1760,10 @@ function updateFormMode() {
   formStateToggleButtons.forEach((button) => { button.disabled = isView || isRankingCreate || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);
+    field.readOnly = true;
+  });
+  [formNombreInput, formDescripcionInput].forEach((field) => {
+    field.disabled = true;
     field.readOnly = true;
   });
   formObservedButton.disabled = isCreate && !formSynced;
@@ -1787,20 +1792,21 @@ function updateFormToggleStates() {
 }
 
 function hasFormMetadata() {
-  return formCategoriaInput.value.trim() !== ''
+  return formNombreInput.value.trim() !== ''
+    && formCategoriaInput.value.trim() !== ''
     && officialCategorias.some(({ categoria }) => categoria === formCategoriaInput.value.trim())
-    && Number.isInteger(Number(formAnioInput.value)) && Number(formAnioInput.value) > 0
-    && formPrecioInput.value.trim() !== '' && Number.isFinite(Number(formPrecioInput.value)) && Number(formPrecioInput.value) >= 0;
+    && Number.isInteger(Number(formAnioInput.value)) && Number(formAnioInput.value) > 0;
 }
 
 function isFormValid() {
+  const precio = formPrecioInput.value.trim();
   return formIdInput.value.trim() !== ''
     && formNombreInput.value.trim() !== ''
     && formEstadoInput.value.trim() !== ''
     && formCategoriaInput.value.trim() !== ''
     && Number.isInteger(Number(formAnioInput.value))
     && Number(formAnioInput.value) > 0
-    && Number.isFinite(Number(formPrecioInput.value));
+    && (precio === '' || (Number.isFinite(Number(precio)) && Number(precio) >= 0));
 }
 
 function closeFormDialog() {
@@ -1889,8 +1895,8 @@ function validatePayload(payload) {
   if (payload.anio === undefined || payload.anio <= 0) {
     return 'El año es obligatorio.';
   }
-  if (payload.precio === undefined || !Number.isFinite(payload.precio)) {
-    return 'El precio Brickset es obligatorio.';
+  if (payload.precio !== undefined && (!Number.isFinite(payload.precio) || payload.precio < 0)) {
+    return 'El precio Brickset no es válido.';
   }
   if (!officialCategorias.some(({ categoria }) => categoria === payload.categoria)) {
     return 'La categoría debe ser una categoría oficial de Brickset.';
@@ -3926,6 +3932,8 @@ formDialog.addEventListener('close', () => {
       imageLookupSequence += 1;
       bricksetLoading.hidden = true;
       formSynced = false;
+      formNombreInput.value = '';
+      formDescripcionInput.value = '';
       formCategoriaInput.value = '';
       formSubcategoriaInput.value = '';
       formAnioInput.value = '';
@@ -4035,7 +4043,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
 async function loadFormBricksetData() {
   if (!formDialog.open || currentFormMode === 'view') return;
   const id = formIdInput.value.trim();
-  if (id.length < 5 || formPreviewImage.src !== imagenUrlPara(id)) return;
+  if (!id || (id.length < 5 && currentFormMode !== 'ranking-create') || formPreviewImage.src !== imagenUrlPara(id)) return;
   const lookupSequence = imageLookupSequence;
 
   bricksetLoading.hidden = false;
@@ -4043,13 +4051,15 @@ async function loadFormBricksetData() {
     const response = await apiFetch(`/minifiguras/${encodeURIComponent(id)}/brickset`);
     const result = await response.json();
     if (!formDialog.open || currentFormMode === 'view' || imageLookupSequence !== lookupSequence || formIdInput.value.trim() !== id) return;
-    if (!response.ok) {
+    if (!response.ok || typeof result.nombre !== 'string' || !result.nombre.trim()) {
       throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
     }
+    formNombreInput.value = result.nombre;
+    formDescripcionInput.value = result.descripcion ?? '';
     formCategoriaInput.value = result.categoria;
     formSubcategoriaInput.value = result.subcategoria ?? '';
     formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
-    formPrecioInput.value = result.precio;
+    formPrecioInput.value = result.precio ?? '';
     formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
