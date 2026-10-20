@@ -1033,7 +1033,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
   :root { font-size: 14px; }
   .modal-dna { overflow-x: hidden; }
-  #dna-dialog:not(:has(#dna-status.loading-message)) .dna-legend-panel { width: calc(100% + 32px); margin-left: -16px; }
+  #dna-dialog:not(:has(#dna-status.loading-message)) .dna-legend-panel { width: calc(100% + 24px); margin-left: -16px; }
   #dna-dialog:has(#dna-status.loading-message) #dna-status { margin-inline: 8px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
   .watchlist-row { padding: 4px 13px 8px; }
@@ -1046,9 +1046,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 16px; }
   .dna-chart { width: min(200px, 64vw); justify-self: center; }
   .dna-legend { gap: 10px; }
-  .dna-legend-item { gap: 3px 5px; }
+  .dna-legend-item { gap: 3px 5px; margin-right: 8px; }
   .dna-legend-item > strong { font-size: 0.8rem; }
-  .dna-description { grid-column: 1 / -1; font-size: 0.72rem; white-space: nowrap; }
+  .dna-description { grid-column: 1 / -1; font-size: 0.68rem; white-space: nowrap; }
   .global-ranking-list { gap: 6px; }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
   .ranking-summary { grid-column: 1; grid-row: 1; }
