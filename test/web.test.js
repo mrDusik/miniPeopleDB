@@ -408,8 +408,12 @@ test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', 
     const rules = [...dom.window.document.styleSheets[0].cssRules];
     const smartphone = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
     const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    const dnaSmartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)').at(-1);
+    const dnaDeclarations = new Map([...dnaSmartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
     assert.equal(declarations.get('#form-dialog .description-field textarea').getPropertyValue('height'), '100%');
     assert.equal(declarations.get('#dna-dialog #dna-chart').getPropertyValue('transform'), 'translateY(-8px)');
+    assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('grid-column'), '1 / -1');
+    assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('white-space'), 'nowrap');
     assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('overflow'), 'visible');
     assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('grid-template-columns'), 'repeat(4, minmax(0, 1fr))');
     assert.equal(declarations.get('.modal-friends .friends-tabs .button').getPropertyValue('height'), '44px');
@@ -470,6 +474,8 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   assert.equal(headings.style.getPropertyValue('height'), '66px');
   assert.equal(headings.style.getPropertyValue('align-items'), 'center');
   assert.equal(headings.style.getPropertyValue('margin-bottom'), '12px');
+  const emptyCatalogStatus = rules.find((rule) => rule.selectorText === '#status:empty');
+  assert.equal(emptyCatalogStatus.style.getPropertyValue('display'), 'none');
   const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty');
   assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
   const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button, .friends-dialog-heading .button');
@@ -733,7 +739,8 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.children[3].querySelector('.collection-value img').title, 'Valor total de tu colección');
     assert.equal(details.children[3].querySelector('#collection-total').textContent, '€0,00');
     assert.equal(details.children[3].children[0].id, 'sync-prices');
-    assert.equal(details.children[3].children[1].className, 'collection-value');
+    assert.equal(details.children[3].children[1].className, 'collection-total-group');
+    assert.equal(details.children[3].querySelector('#collection-total-updated').textContent, '');
     assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
     assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.equal(details.querySelector('#sync-prices').hidden, true);
@@ -1918,5 +1925,44 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(submittedPayloads[1].estadoColeccion, 'BUSCADA');
   assert.equal('fechaCompra' in submittedPayloads[1], false);
   assert.equal('precioCompra' in submittedPayloads[1], false);
+  dom.window.close();
+});
+
+test('la fecha de actualización del valor solo cambia cuando cambia el total', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  let currentTime = '2026-10-20T10:34:00.000Z';
+  const NativeDate = window.Date;
+  window.Date = class extends NativeDate {
+    constructor(...args) {
+      super(...(args.length ? args : [currentTime]));
+    }
+  };
+  let total = 15;
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
+    if (url === '/minifiguras') return { ok: true, json: async () => [] };
+    if (url === '/gamificacion') return { ok: true, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (url === '/gamificacion/dna') return { ok: true, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }) };
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const updatedAt = window.document.querySelector('#collection-total-updated');
+  assert.equal(updatedAt.textContent, 'Última actualización: 20/10/2026 a las 12.34');
+
+  currentTime = '2026-10-20T11:35:00.000Z';
+  await window.loadTotal();
+  assert.equal(updatedAt.textContent, 'Última actualización: 20/10/2026 a las 12.34');
+
+  total = 20;
+  await window.loadTotal();
+  assert.equal(updatedAt.textContent, 'Última actualización: 20/10/2026 a las 13.35');
   dom.window.close();
 });
