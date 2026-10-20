@@ -410,6 +410,11 @@ test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', 
     const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
     const dnaSmartphone = rules.filter((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)').at(-1);
     const dnaDeclarations = new Map([...dnaSmartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(dnaDeclarations.get('.modal-dna').getPropertyValue('overflow-x'), 'hidden');
+    assert.equal(dnaDeclarations.get('.dna-dialog-body').getPropertyValue('justify-items'), 'stretch');
+    assert.equal(dnaDeclarations.get('.dna-chart').getPropertyValue('justify-self'), 'center');
+    assert.equal(dnaDeclarations.get('.dna-legend-panel').getPropertyValue('width'), 'calc(100% + 32px)');
+    assert.equal(dnaDeclarations.get('.dna-legend-panel').getPropertyValue('margin-left'), '-16px');
     assert.equal(declarations.get('#form-dialog .description-field textarea').getPropertyValue('height'), '100%');
     assert.equal(declarations.get('#dna-dialog #dna-chart').getPropertyValue('transform'), 'translateY(-8px)');
     assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('grid-column'), '1 / -1');
