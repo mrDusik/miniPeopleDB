@@ -1033,7 +1033,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
   :root { font-size: 14px; }
   .modal-dna { overflow-x: hidden; }
-  .dna-legend-panel { width: calc(100% + 32px); margin-left: -16px; }
+  #dna-dialog:not(:has(#dna-status.loading-message)) .dna-legend-panel { width: calc(100% + 32px); margin-left: -16px; }
+  #dna-dialog:has(#dna-status.loading-message) #dna-status { margin-inline: 8px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
   .watchlist-row { padding: 4px 13px 8px; }
   .watchlist-row:has(> .watchlist-card:nth-child(6)):not([hidden]) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
