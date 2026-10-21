@@ -185,6 +185,20 @@ test('las tarjetas de modales amplian la imagen y superponen la lupa sin reserva
     assert.equal(action.getPropertyValue('background'), 'transparent');
     assert.equal(action.getPropertyValue('min-height'), '36px');
     assert.equal(declaration('.ranking-card').getPropertyValue('grid-template-rows'), '48px auto');
+    const smartphoneRules = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).flatMap((rule) => [...rule.cssRules]);
+    const profileRow = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures');
+    const profileItems = smartphoneRules.filter((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures > li:not(.public-profile-empty)').at(-1);
+    const profileCards = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-card-static');
+    const profileImages = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-card-static .ranking-img');
+    const profileAction = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-add-wanted');
+    const profileActionImage = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-add-wanted img');
+    assert.equal(profileRow.style.getPropertyValue('gap'), '4px');
+    assert.equal(profileItems.style.getPropertyValue('flex-basis'), 'calc((100% - 16px) / 5)');
+    assert.equal(profileCards.style.getPropertyValue('height'), '90px');
+    assert.equal(profileCards.style.getPropertyValue('grid-template-rows'), '48px minmax(0, 1fr)');
+    assert.equal(profileImages.style.getPropertyValue('height'), '48px');
+    assert.equal(profileAction.style.getPropertyValue('inset'), '-1px');
+    assert.equal(profileActionImage.style.getPropertyValue('width'), '18px');
     for (const rule of rules.filter((entry) => entry.cssRules)) {
       for (const nested of rule.cssRules) {
         if (nested.selectorText?.includes('.ranking-card')) {
@@ -316,6 +330,10 @@ test('el launcher abre el modal accesible de cuatro pestañas y la lista muestra
     assert.equal(document.activeElement.id, 'friends-tab-friends');
     assert.equal(document.querySelector('#friends-list-friends .friends-row').dataset.userId, 'friend-a');
     const friendRow = document.querySelector('#friends-list-friends .friends-row');
+    const friendCard = friendRow.querySelector('.friends-user-button');
+    assert.ok(friendCard.classList.contains('ranking-expand'));
+    assert.ok(friendCard.parentElement.classList.contains('ranking-summary'));
+    assert.match(styles, /\.ranking-summary \.ranking-expand \{[^}]*grid-template-rows: 40px minmax\(24px, auto\) minmax\(16px, auto\) minmax\(26px, auto\);/);
     assert.equal(friendRow.querySelector('.friends-username').textContent, 'BrickFan');
     assert.equal(friendRow.querySelector('.ranking-level-number').textContent, '4');
     assert.equal(friendRow.querySelector('.ranking-bricks strong').textContent, '240');

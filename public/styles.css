@@ -205,8 +205,9 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-level:hover .gamification-level-title { color: var(--accent-dark); }
 .gamification-level-title { position: relative; display: grid; grid-row: 1 / 3; grid-template-columns: var(--level-image-size) auto minmax(0, 1fr); grid-template-rows: subgrid; min-width: 0; align-items: center; column-gap: 7px; row-gap: inherit; font: 700 1.35rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: nowrap; }
 .gamification-level-title > .gamification-level-image { grid-column: 1; grid-row: 1 / 3; width: var(--level-image-size); height: 100%; min-height: 0; aspect-ratio: 1; }
-.gamification-level-title > #gamification-level-number { grid-column: 2; grid-row: 1; }
-.gamification-level-title > #gamification-level-name { grid-column: 3; grid-row: 1; }
+.gamification-level-label { display: contents; }
+.gamification-level-title #gamification-level-number { grid-column: 2; grid-row: 1; }
+.gamification-level-title #gamification-level-name { grid-column: 3; grid-row: 1; }
 .gamification-dna-row { position: relative; z-index: 1; display: flex; grid-column: 2; grid-row: 2; align-items: center; min-width: 0; }
 .gamification-dna-name { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; column-gap: 4px; width: auto; max-width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font: italic 700 0.75rem/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-align: left; text-transform: uppercase; white-space: normal; }
 .gamification-dna-name > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
@@ -218,7 +219,8 @@ h2 { margin-bottom: 0; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', Ari
 .gamification-level-tooltip-image { display: block; width: 128px; height: 112px; object-fit: contain; background: white; }
 #gamification-level-number { font-size: 1.75rem; }
 .gamification-level strong { color: var(--ink); font-size: 1.05rem; }
-.gamification-bricks-value { display: flex; align-items: center; gap: 6px; }
+.gamification-metrics, .gamification-values { display: contents; }
+.gamification-bricks-value { display: flex; order: -1; align-items: center; gap: 6px; }
 .gamification-bricks-value strong { line-height: 1; }
 .gamification-brick-icon { display: block; width: auto; height: 2.15rem; object-fit: contain; }
 .gamification-progress { display: grid; justify-items: center; gap: 8px; color: var(--muted); font: 700 0.78rem Arial, sans-serif; }
@@ -642,7 +644,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-avatar-fallback[hidden], .ranking-avatar[hidden] { display: none; }
 .ranking-name { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; color: var(--ink); font: 700 1rem Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .ranking-level-info { display: flex; grid-column: 3; grid-row: 2; flex-wrap: wrap; align-content: center; align-items: center; gap: 3px 5px; min-width: 0; max-width: 100%; overflow: visible; color: var(--ink); font: 700 0.8rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: normal; }
-.ranking-level-info .gamification-level-image { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
+.ranking-level-info .gamification-level-image { flex-basis: 2rem; width: 2rem; height: 2rem; }
 .ranking-level-number { flex: 0 0 auto; color: var(--ink); font-size: 0.9rem; line-height: 1; }
 .ranking-level-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .ranking-dna-principal { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: italic 700 0.68rem 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif; text-transform: uppercase; white-space: normal; }
@@ -679,11 +681,20 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .ranking-summary { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 6px; min-width: 0; }
 .global-ranking-row > .ranking-summary { grid-column: 1; grid-row: 1; }
 .ranking-summary > .ranking-expand { grid-column: 1; grid-row: 1; }
-.ranking-summary .ranking-expand { grid-template-columns: 34px 42px minmax(0, 1fr) 100px 70px 18px; }
-.ranking-summary .ranking-name { grid-row: 1; }
-.ranking-summary .ranking-bricks { grid-column: 4; }
-.ranking-summary .ranking-collection-count { grid-column: 5; width: 70px; }
-.ranking-summary .ranking-row-chevron { grid-column: 6; }
+.ranking-summary .ranking-expand { grid-template-columns: 28px 46px minmax(0, 1fr) 18px; grid-template-rows: 40px minmax(24px, auto) minmax(16px, auto) minmax(26px, auto); column-gap: 6px; padding: 6px 10px; }
+.ranking-summary .ranking-position { grid-column: 1; grid-row: 1; align-self: center; }
+.ranking-summary .ranking-avatar-wrap { grid-column: 2; grid-row: 1; justify-self: center; }
+.ranking-summary .ranking-name { grid-column: 3; grid-row: 1; }
+.ranking-summary .ranking-level-info { display: grid; grid-column: 2 / 4; grid-row: 2 / 5; grid-template-columns: 46px auto minmax(0, 1fr); grid-template-rows: subgrid; align-content: stretch; align-items: center; gap: 3px 6px; }
+.ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 4; justify-self: center; align-self: center; width: 48px; height: 48px; }
+.ranking-summary .ranking-level-number { grid-column: 2; grid-row: 1; }
+.ranking-summary .ranking-level-name { grid-column: 3; grid-row: 1; }
+.ranking-summary .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; }
+.ranking-summary .ranking-level-name, .ranking-summary .ranking-dna-principal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: max-content 1.55rem; width: auto; }
+.ranking-summary .ranking-bricks strong { justify-self: start; }
+.ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; justify-self: end; width: auto; }
+.ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
 .achievements-heading-text { flex: 1 1 auto; min-width: 0; }
 .achievements-heading h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
 
@@ -706,12 +717,12 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .ranking-gift-space { display: none; }
   .ranking-user-details { margin-right: 0; }
   .ranking-summary { grid-column: 1 / -1; }
-  .ranking-summary .ranking-expand { grid-template-columns: 32px 40px minmax(0, 1fr) 18px; grid-template-rows: 40px minmax(30px, auto) 36px; }
-  .ranking-summary .ranking-name { grid-row: 1; }
-  .ranking-summary .ranking-avatar-wrap { grid-row: 1; align-self: start; }
-  .ranking-summary .ranking-row-chevron { grid-column: 4; }
-  .ranking-summary .ranking-expand .ranking-bricks { grid-column: 2 / 4; grid-row: 3; }
-  .ranking-summary .ranking-expand .ranking-collection-count { grid-column: 1 / 3; grid-row: 3; justify-self: start; width: 70px; }
+  .ranking-summary .ranking-expand { grid-template-columns: 28px 46px minmax(0, 1fr) 16px; grid-template-rows: 40px minmax(24px, auto) minmax(16px, auto) minmax(26px, auto); padding: 6px 8px; }
+  .ranking-summary .ranking-level-info { grid-template-columns: 46px auto minmax(0, 1fr); }
+  .ranking-summary .ranking-level-info .gamification-level-image { width: 44px; height: 44px; }
+  .ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; width: auto; }
+  .ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; width: auto; }
+  .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
 }
 
 @media (max-width: 600px) and (orientation: portrait), (max-width: 600px) and (max-height: 500px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
@@ -991,7 +1002,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .achievements-heading-icon, .friends-dialog-heading img { width: 32px; height: 32px; }
   .achievements-heading-text { min-width: 0; }
   .achievements-heading-bricks { gap: 4px; white-space: nowrap; }
-  .ranking-summary .ranking-expand .ranking-bricks { grid-column: 3 / 5; justify-self: end; }
 }
 
 @media (max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
@@ -1007,9 +1017,21 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .header-top > .notifications-entry-row .user-menu-chevron { width: 18px; }
   .header-top > .notifications-entry-row .user-profile { left: auto; right: 0; }
   .notifications-entry-row > .gamification-summary { grid-column: 1 / -1; grid-row: 2; }
-  .header-top > .notifications-entry-row .gamification-level-stack { grid-column: 1 / 3; grid-row: 1; }
-  .header-top > .notifications-entry-row .gamification-bricks-value { grid-column: 1; grid-row: 2; justify-self: start; }
-  .header-top > .notifications-entry-row .collection-counts-panel { grid-column: 2 / 4; grid-row: 2; justify-self: end; }
+  .header-top > .notifications-entry-row .gamification-summary { padding: 8px 12px 9px; }
+  .header-top > .notifications-entry-row .gamification-main { position: relative; grid-template-columns: 15% minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 0; min-height: 0; }
+  .header-top > .notifications-entry-row .gamification-level-stack { grid-column: 1 / 3; grid-row: 1 / 4; grid-template-columns: subgrid; grid-template-rows: subgrid; gap: inherit; }
+  .header-top > .notifications-entry-row .gamification-level { grid-column: 1 / -1; grid-row: 1 / 4; grid-template-columns: subgrid; grid-template-rows: subgrid; }
+  .header-top > .notifications-entry-row .gamification-level-title { grid-column: 1 / -1; grid-row: 1 / 4; grid-template-columns: subgrid; grid-template-rows: subgrid; column-gap: 0; }
+  .header-top > .notifications-entry-row .gamification-level-image { grid-column: 1; grid-row: 1 / 4; width: 100%; height: 100%; aspect-ratio: auto; contain: size; align-self: center; justify-self: center; }
+  .header-top > .notifications-entry-row .gamification-level-label { display: flex; grid-column: 2; grid-row: 1; align-items: center; justify-content: flex-start; gap: 5px; min-width: 0; padding-inline: 8px 0; font-size: 1.15em; }
+  .header-top > .notifications-entry-row #gamification-level-number { font-size: 1.61rem; }
+  .header-top > .notifications-entry-row .gamification-dna-row { grid-column: 2; grid-row: 2; justify-content: flex-start; padding-inline: 8px 0; }
+  .header-top > .notifications-entry-row .gamification-metrics { position: relative; display: flex; grid-column: 2; grid-row: 3; align-items: center; min-width: 0; padding-left: 8px; }
+  .header-top > .notifications-entry-row .gamification-values { display: flex; flex: 1 1 0; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; }
+  .header-top > .notifications-entry-row .gamification-bricks-value { position: relative; flex: 0 0 auto; flex-wrap: nowrap; margin-inline: 0; gap: 6px; }
+  .header-top > .notifications-entry-row .collection-counts-panel { display: flex; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; gap: 8px; }
+  .header-top > .notifications-entry-row .collection-counts-panel > span { flex-direction: row; justify-content: flex-end; gap: 4px; }
+  .header-top > .notifications-entry-row #gamification-toggle { position: static; flex: 0 0 28px; align-self: center; margin-right: 8px; width: 28px; height: 44px; min-height: 0; }
   #form-dialog .description-field textarea { height: 100%; min-height: 0; }
   #dna-dialog #dna-chart { transform: translateY(-8px); }
   .modal-friends .friends-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
@@ -1042,6 +1064,19 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .watchlist-card, .top-five .ranking-card { width: 100%; min-width: 0; height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
   .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
   .watchlist-card > span, .top-five .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
+  .ranking-user-details .ranking-highlight-group .ranking-row { gap: 4px; }
+  .ranking-user-details .ranking-highlight-group .ranking-card-static { flex: 0 0 calc((100% - 16px) / 5); height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
+  .ranking-user-details .ranking-highlight-group .ranking-card-static .ranking-img { width: 100%; height: 48px; object-fit: contain; }
+  .ranking-user-details .ranking-highlight-group .ranking-card-static .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
+  .ranking-user-details .ranking-highlight-group .ranking-add-wanted { inset: -1px; width: auto; height: auto; min-height: 0; padding: 0; border-radius: inherit; align-items: flex-start; justify-content: flex-end; }
+  .ranking-user-details .ranking-highlight-group .ranking-add-wanted img { width: 18px; height: 18px; margin: 3px; }
+  .modal-public-profile .public-profile-figures { gap: 4px; }
+  .modal-public-profile .public-profile-figures > li:not(.public-profile-empty) { flex-basis: calc((100% - 16px) / 5); }
+  .modal-public-profile .public-profile-figures .ranking-card-static { height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
+  .modal-public-profile .public-profile-figures .ranking-card-static .ranking-img { width: 100%; height: 48px; object-fit: contain; }
+  .modal-public-profile .public-profile-figures .ranking-caption { max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
+  .modal-public-profile .public-profile-figures .ranking-add-wanted { inset: -1px; width: auto; height: auto; min-height: 0; padding: 0; border-radius: inherit; align-items: flex-start; justify-content: flex-end; }
+  .modal-public-profile .public-profile-figures .ranking-add-wanted img { width: 18px; height: 18px; margin: 3px; }
   .watchlist-state-icon .status-icon-image { width: 12px; height: 12px; }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 16px; }
   .dna-chart { width: min(200px, 64vw); justify-self: center; }
@@ -1052,21 +1087,22 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .global-ranking-list { gap: 6px; }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
   .ranking-summary { grid-column: 1; grid-row: 1; }
-  .ranking-summary .ranking-expand { grid-template-columns: 24px 28px minmax(0, 1fr) 12px; grid-template-rows: auto auto auto; min-height: 0; gap: 4px 6px; padding: 6px; }
+  .ranking-summary .ranking-expand { grid-template-columns: 24px 40px minmax(0, 1fr) 12px; grid-template-rows: 36px minmax(24px, auto) minmax(16px, auto) 26px; min-height: 0; gap: 3px 6px; padding: 5px; }
   .ranking-summary .ranking-position { grid-column: 1; grid-row: 1; align-self: center; font-size: 0.8rem; }
-  .ranking-summary .ranking-avatar-wrap { grid-column: 2; grid-row: 1; align-self: center; }
+  .ranking-summary .ranking-avatar-wrap { grid-column: 2; grid-row: 1; justify-self: center; align-self: center; }
   .ranking-avatar-wrap, .ranking-avatar, .ranking-avatar-fallback { width: 28px; height: 28px; }
   .ranking-summary .ranking-name { grid-column: 3; grid-row: 1; font-size: 0.85rem; }
-  .ranking-summary .ranking-level-info { display: grid; grid-column: 1 / 4; grid-row: 2; grid-template-columns: 28px auto minmax(0, 1fr); grid-template-rows: auto auto; gap: 2px 6px; }
-  .ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 3; width: 28px; height: 28px; }
+  .ranking-summary .ranking-level-info { grid-column: 2 / 4; grid-row: 2 / 5; grid-template-columns: 40px auto minmax(0, 1fr); grid-template-rows: subgrid; gap: 2px 6px; }
+  .ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 4; width: 44px; height: 44px; }
   .ranking-level-number { grid-column: 2; grid-row: 1; font-size: 1.1rem; }
   .ranking-level-name { grid-column: 3; grid-row: 1; font-size: 0.9rem; line-height: 1.2; }
   .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; font-size: 0.68rem; line-height: 1.35; }
-  .ranking-summary .ranking-expand .ranking-bricks { grid-column: 1 / 3; grid-row: 3; justify-self: start; width: auto; grid-template-columns: auto 1.2rem; }
-  .ranking-summary .ranking-expand .ranking-collection-count { grid-column: 3; grid-row: 3; justify-self: end; width: auto; grid-template-columns: 1.2rem auto; }
+  .ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: max-content 1.2rem; width: auto; }
+  .ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; justify-self: end; width: auto; grid-template-columns: 1.2rem auto; }
   .ranking-bricks strong, .ranking-collection-count strong { font-size: 0.95rem; }
   .ranking-bricks .gamification-brick-icon, .ranking-collection-count .ranking-collection-icon { width: 1.2rem; height: 1.2rem; }
-  .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 4; }
+  .ranking-summary .ranking-bricks, .ranking-summary .ranking-collection-count { column-gap: 1px; }
+  .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
   .ranking-gift { grid-column: 2; grid-row: 1; min-height: 44px; gap: 3px; padding: 0 3px; font-size: 0.7rem; }
   .ranking-gift-icon { height: 1rem; }
   .brand-heading { width: min(204px, 68%); }
