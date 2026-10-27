@@ -153,6 +153,26 @@ El sistema SHALL exponer `GET /minifiguras/:id/brickset` que consulte la misma p
 - **THEN** el sistema responde con HTTP `502`
 - **AND** no modifica el catálogo de minifiguras
 
+### Requirement: Reutilizar metadatos publicos recientes de Brickset
+
+El backend SHALL reutilizar durante cinco minutos las respuestas completas y correctas de detalles de una figura, incluido su precio en EUR, sin otra consulta externa para el mismo ID canonico. SHALL normalizar el ID recortando espacios exteriores y sin distinguir mayusculas. La cache SHALL ser solo en memoria, limitada a 500 entradas por proceso con desalojo de la menos consultada recientemente. SHALL compartir las consultas simultaneas del mismo ID que no tengan cancelacion independiente y devolver resultados independientes para cada consumidor. Errores, datos incompletos y operaciones canceladas SHALL NOT almacenarse. Las operaciones con cancelacion independiente SHALL NOT cancelar consultas de otro consumidor. Todas las peticiones HTTP SHALL seguir exigiendo autenticacion y validando categorias contra el catalogo local aunque los detalles esten en cache. SHALL NOT almacenarse datos de coleccion, compras ni identidad del usuario. Las consultas frescas y la sincronizacion de precios SHALL NOT usar esta cache; las peticiones externas reales SHALL conservar el limite global vigente.
+
+#### Scenario: Consulta repetida o simultanea
+- **WHEN** dos usuarios autenticados consultan los detalles del mismo ID con diferentes mayusculas dentro de la vigencia, sin cancelacion independiente
+- **THEN** se reutiliza una sola consulta externa y se devuelven los mismos metadatos publicos sin compartir datos privados ni objetos mutables
+
+#### Scenario: Caducidad o desalojo
+- **WHEN** la entrada alcanza cinco minutos o ha sido desalojada por el limite de capacidad
+- **THEN** la siguiente consulta solicita de nuevo los detalles respetando la cola y el intervalo de Brickset
+
+#### Scenario: Error o cancelacion
+- **WHEN** la consulta falla, devuelve datos incompletos o se cancela
+- **THEN** no queda una respuesta reutilizable de esa operacion y una consulta posterior puede reintentarse
+
+#### Scenario: Precio fresco y autenticacion
+- **WHEN** se actualizan precios o una peticion sin sesion intenta consultar un ID cacheado
+- **THEN** la actualizacion consulta el precio sin usar la cache de detalles y la peticion sin sesion se rechaza
+
 ### Requirement: Mantener la actualización masiva de precios sin afectar categoría, subcategoría o año
 
 La actualización masiva de precios SHALL seguir consultando y persistiendo únicamente el precio de cada minifigura persistida, sin leer ni modificar `categoria`, `subcategoria` ni `anio`.

@@ -102,7 +102,7 @@ function mapProfileFigure(figure) {
 
 function mapProfileAchievement(achievement) {
   if (!achievement || typeof achievement !== 'object' || Array.isArray(achievement)) throw new AmigosNoDisponiblesError();
-  const fields = ['id', 'type', 'name', 'description', 'bricks', 'repeatable', 'quantity', 'total'];
+  const fields = ['id', 'type', 'name', 'description', 'bricks', 'repeatable', 'quantity', 'total', 'featured'];
   return Object.fromEntries(fields.filter((field) => Object.hasOwn(achievement, field)
     && (typeof achievement[field] === 'string' || typeof achievement[field] === 'number' || typeof achievement[field] === 'boolean'))
     .map((field) => [field, achievement[field]]));

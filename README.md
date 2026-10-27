@@ -31,6 +31,8 @@ El valor total solo incluye figuras `COLECCIÓN`. Para cada una se prioriza `pre
 
 La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y extrae `Current Value - New`. Si una consulta falla, se conserva el precio anterior.
 
+Las consultas de metadatos del modal reutilizan una cache en memoria del backend durante cinco minutos, con un maximo de 500 figuras y desalojo de la menos consultada recientemente. El ID se normaliza sin distinguir mayusculas y espacios exteriores; las consultas simultaneas del mismo ID se agrupan cuando no tienen cancelacion independiente. Solo se guardan respuestas completas y correctas de datos publicos de Brickset, incluido su precio EUR; no se guardan errores ni datos privados del usuario. La categoria se sigue validando contra el catalogo local en cada respuesta. La sincronizacion de precios no usa esta cache y conserva sus consultas frescas y limites de peticiones. La primera consulta de un ID nuevo sigue dependiendo de Brickset; la cache se vacia al reiniciar el backend y no requiere migracion de base de datos.
+
 Nombre y descripción se autocompletan desde `Name` de Brickset y permanecen deshabilitados y sombreados. Si contiene ` - `, el primer separador divide nombre y descripción, conservando las comas posteriores. Sin ese separador, se guarda como nombre solo el texto anterior a la primera coma y la descripción queda vacía; sin coma, todo el texto es el nombre. La misma regla se aplica en alta ordinaria, alta desde ranking y sincronización individual al editar; no se migran registros existentes ni se cambian sus nombres con la actualización masiva de precios.
 
 ---
@@ -64,6 +66,18 @@ El username guardado sustituye al nombre de Google y al email como identidad vis
 
 Preferencias incluye al final "Eliminar cuenta", con el estilo de Cerrar sesión. Abre una confirmación separada, irreversible, con Cancelar enfocado por defecto; abrir o cancelar no borra nada. Solo confirmar envía `DELETE /api/profile`, sin cuerpo ni selector, mediante el JWT de la cuenta. La RPC SQL solo elimina `auth.uid()` y sus datos asociados por cascada, en una transacción y sin `service_role`; no concede lectura ni borrado directo sobre Auth. Un fallo conserva cuenta, sesión y preferencias; tras éxito se limpia la aplicación y se cierra la sesión local. La migración no se ha aplicado automáticamente a Supabase remoto. Reiniciar el backend tras desplegar el código para activar el nuevo método DELETE.
 
+### Logros destacados
+
+Desde el modal propio de Logros se pueden destacar hasta cinco IDs obtenidos, incluidos regalos. La estrella guarda inmediatamente con el JWT de la cuenta y solo cambia al confirmar el servidor, sin cerrar el modal. Las preferencias se comparten entre dispositivos y no cambian Bricks, cantidades, nivel ni DNA. Perder un logro elimina su estrella y libera el hueco; recuperarlo no la restaura automaticamente.
+
+Las listas muestran primero los destacados del titular y despues los demas; dentro de cada grupo mantienen no-regalos antes que regalos, total descendente y orden original en empates. El perfil muestra hasta cinco tras ordenar y completa con no destacados cuando corresponde. Las estrellas ajenas son indicadores sin accion. Los avisos de nuevos logros conservan su orden anterior.
+
+Para una base existente, aplicar `supabase/featured-achievements.sql` despues de las migraciones sociales previas y antes de desplegar este backend/frontend. Es transaccional e idempotente: crea la seleccion vacia, RLS propia, RPC de escritura acotada y limpieza al actualizar logros; actualiza las proyecciones de perfil y ranking sin ampliar elegibilidad. Las instalaciones nuevas ya lo incluyen en `supabase/schema.sql`. Reiniciar el backend para activar `PUT /gamificacion/logros/:logroId/destacado` y `/vendor/star.svg`, y recargar los recursos del navegador. Los archivos locales no aplican cambios a Supabase remoto.
+
+Para revertir, restaurar primero el backend/frontend anterior y despues aplicar `supabase/rollback-featured-achievements.sql` en una ventana controlada. Restaura las proyecciones anteriores y retira tabla, trigger y RPC de destacados. Se pierden las estrellas, pero no se modifican coleccion, gamificacion, regalos, notificaciones ni historial. No volver a aplicar migraciones sociales antiguas despues de la de destacados, porque podrian sustituir sus proyecciones.
+
+Las pruebas PGlite de migracion, permisos, limite y rollback estan en `test/featured-achievements.test.js`. La prueba real de bloqueos en `test/featured-achievements-concurrency.test.js` requiere `FEATURED_TEST_DATABASE_URL` apuntando a una base nueva y desechable local con nombre `featured_test_*`; no admite hosts remotos y prepara sus propios esquemas y roles. Sin esa variable se omite expresamente, sin sustituir la comprobacion concurrente por llamadas secuenciales. No utiliza los archivos de credenciales del proyecto.
+
 ## API principal
 
 ### Avatar y favoritas
@@ -89,6 +103,7 @@ El guardado intenta limpiar subidas descartadas y avatares administrados anterio
 | `/valoracion` y `/valor-total` | `GET` | Autenticado | Resumen, destacados y observadas |
 | `/sincronizacion/brickset` | `GET`, `POST`, `PATCH` | Autenticado | Consultar/iniciar tarea y pausar/reanudarla |
 | `/gamificacion` y `/gamificacion/dna` | `GET` | Autenticado | Estado propio de gamificación y DNA |
+| `/gamificacion/logros/:logroId/destacado` | `PUT` | JWT propio | Establecer `{ "destacado": true/false }` sin selector de cuenta; devuelve `logrosDestacados` |
 | `/api/ranking` | `GET` | Autenticado | Top 10 global con criterio opcional |
 | `/api/ranking/semanal` | `GET` | Autenticado | Top 10 de Bricks netos de la semana actual |
 | `/api/ranking/:userId/logros` | `GET` | Autenticado | Logros públicos del Top 10 |

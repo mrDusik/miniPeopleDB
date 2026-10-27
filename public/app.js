@@ -242,7 +242,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
   MINIFIGURA_INVALIDA: 'Los datos de la minifigura no son válidos.',
-  ID_DUPLICADO: 'Ya existe una minifigura con ese id.',
+  ID_DUPLICADO: 'Esta minifigura ya está registrada en tu inventario.',
   MINIFIGURA_NO_ENCONTRADA: 'La minifigura ya no existe.',
   CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
   CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
@@ -305,6 +305,11 @@ let dnaDialogTrigger = null;
 let gamificationRequestSequence = 0;
 let dnaRequestSequence = 0;
 let achievementsTrigger = null;
+let achievementsMode = 'own';
+let achievementsViewSequence = 0;
+let featuredMutationSequence = 0;
+let featuredSessionSequence = 0;
+let featuredSaving = false;
 let notificationsTrigger = null;
 let notificationsItems = [];
 let notificationsNextCursor = null;
@@ -1038,7 +1043,7 @@ function formatCollectionTotalUpdatedAt(date) {
 }
 
 function renderGamification(state) {
-  ownGamification = state;
+  ownGamification = { ...state, logrosDestacados: state.logrosDestacados ?? ownGamification?.logrosDestacados ?? [] };
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
   const imagePath = levelImagePath(level.id);
   gamificationLevelImage.src = imagePath;
@@ -1054,7 +1059,9 @@ function renderGamification(state) {
   gamificationNext.textContent = state.siguienteNivel
     ? `Próximo nivel: ${state.siguienteNivel.id} ${state.siguienteNivel.nombre}`
     : 'Nivel máximo alcanzado';
-  renderAchievements(state);
+  if (!gamificationDialog.open || achievementsMode === 'own') {
+    renderAchievements(ownGamification, 'Logros', { editable: true });
+  }
 }
 
 function renderGamificationDna(state) {
@@ -1198,7 +1205,22 @@ function openDnaDialog(trigger) {
   void loadDnaDialog();
 }
 
-function renderAchievements(state, title = 'Logros') {
+function compareAchievements(left, right) {
+  return Number(right.destacado === true) - Number(left.destacado === true)
+    || Number(left.type === 'regalo') - Number(right.type === 'regalo')
+    || (right.total ?? 0) - (left.total ?? 0);
+}
+
+function sortedAchievements(logros, selectedIds) {
+  const selected = Array.isArray(selectedIds) ? new Set(selectedIds) : null;
+  return logros.map((logro) => ({ ...logro, destacado: selected ? selected.has(logro.id) : logro.destacado === true }))
+    .sort(compareAchievements);
+}
+
+function renderAchievements(state, title = 'Logros', { editable = false } = {}) {
+  const mode = editable ? 'own' : 'public';
+  if (achievementsMode !== mode) achievementsViewSequence += 1;
+  achievementsMode = mode;
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
   gamificationDialogTitle.textContent = title;
   achievementsHeadingImage.src = levelImagePath(level.id);
@@ -1206,18 +1228,71 @@ function renderAchievements(state, title = 'Logros') {
   gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
   achievementsStatus.textContent = state.logros?.length ? '' : 'No hay logros.';
   gamificationAchievements.replaceChildren();
-  const achievements = [...(state.logros ?? [])].sort((left, right) => {
-    const leftIsGift = left.type === 'regalo';
-    const rightIsGift = right.type === 'regalo';
-    if (leftIsGift !== rightIsGift) return leftIsGift ? 1 : -1;
-    return (right.total ?? 0) - (left.total ?? 0);
-  });
+  const achievements = sortedAchievements(state.logros ?? [], editable ? state.logrosDestacados ?? [] : undefined);
   for (const logro of achievements) {
-    gamificationAchievements.append(createAchievementItem(logro));
+    gamificationAchievements.append(createAchievementItem(logro, { editable }));
   }
 }
 
-function createAchievementItem(logro) {
+async function saveFeaturedAchievement(id, destacado) {
+  if (featuredSaving || achievementsMode !== 'own' || !gamificationDialog.open || !currentSession) return;
+  if (destacado && (ownGamification?.logrosDestacados?.length ?? 0) >= 5) {
+    achievementsStatus.textContent = 'Puedes destacar hasta 5 logros';
+    return;
+  }
+  const userId = currentSession.user.id;
+  const sessionSequence = featuredSessionSequence;
+  const viewSequence = achievementsViewSequence;
+  const sequence = ++featuredMutationSequence;
+  gamificationRequestSequence += 1;
+  featuredSaving = true;
+  achievementsStatus.textContent = '';
+  for (const button of gamificationAchievements.querySelectorAll('.achievement-star-toggle')) button.disabled = true;
+  const isCurrent = () => sequence === featuredMutationSequence && sessionSequence === featuredSessionSequence
+    && currentSession?.user?.id === userId;
+  const isCurrentView = () => isCurrent() && gamificationDialog.open && achievementsMode === 'own'
+    && viewSequence === achievementsViewSequence;
+  try {
+    const response = await apiFetch(`/gamificacion/logros/${encodeURIComponent(id)}/destacado`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ destacado }),
+    });
+    const result = await response.json();
+    if (!isCurrent()) return;
+    if (!response.ok) throw new Error(result.error === 'LIMITE_LOGROS_DESTACADOS'
+      ? 'Puedes destacar hasta 5 logros' : 'No se ha podido guardar el logro destacado.');
+    if (!Array.isArray(result.logrosDestacados) || result.logrosDestacados.length > 5
+      || new Set(result.logrosDestacados).size !== result.logrosDestacados.length
+      || result.logrosDestacados.some((value) => typeof value !== 'string')) throw new Error('No se ha podido guardar el logro destacado.');
+    ownGamification = { ...ownGamification, logrosDestacados: result.logrosDestacados };
+    if (isCurrentView()) {
+      featuredSaving = false;
+      renderAchievements(ownGamification, 'Logros', { editable: true });
+      [...gamificationAchievements.querySelectorAll('.achievement-star-toggle')]
+        .find((button) => button.dataset.featuredId === id)?.focus();
+    }
+  } catch (error) {
+    if (isCurrentView()) achievementsStatus.textContent = error.message || 'No se ha podido guardar el logro destacado.';
+  } finally {
+    if (isCurrent()) {
+      featuredSaving = false;
+      gamificationRequestSequence += 1;
+      if (achievementsMode === 'own') {
+        for (const button of gamificationAchievements.querySelectorAll('.achievement-star-toggle')) button.disabled = false;
+        if (gamificationDialog.open && viewSequence !== achievementsViewSequence) void loadGamification();
+      }
+    }
+  }
+}
+
+function resetFeaturedAchievements() {
+  featuredSessionSequence += 1;
+  featuredMutationSequence += 1;
+  achievementsViewSequence += 1;
+  featuredSaving = false;
+  achievementsMode = 'none';
+}
+
+function createAchievementItem(logro, { editable = false } = {}) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
@@ -1256,6 +1331,29 @@ function createAchievementItem(logro) {
     bricks.append(bricksValue, brickIcon);
 
     item.append(icon, info, count, bricks);
+    if (editable || logro.destacado === true) {
+      const star = document.createElement(editable ? 'button' : 'span');
+      star.className = `achievement-star ${logro.destacado ? 'active' : 'inactive'}`;
+      const symbol = document.createElement('span');
+      symbol.className = 'achievement-star-image';
+      symbol.setAttribute('aria-hidden', 'true');
+      star.append(symbol);
+      if (editable) {
+        star.type = 'button';
+        star.classList.add('achievement-star-toggle');
+        star.dataset.featuredId = logro.id;
+        star.title = logro.destacado ? 'Quitar destacado' : 'Destacar';
+        star.setAttribute('aria-label', star.title);
+        star.setAttribute('aria-pressed', String(logro.destacado === true));
+        star.disabled = featuredSaving;
+        star.addEventListener('click', () => { void saveFeaturedAchievement(logro.id, !logro.destacado); });
+      } else {
+        star.setAttribute('role', 'img');
+        star.setAttribute('aria-label', 'Logro destacado');
+        star.title = 'Logro destacado';
+      }
+      item.append(star);
+    }
     return item;
 }
 
@@ -1274,6 +1372,7 @@ function newGamificationAchievements(previous, next) {
 }
 
 async function loadGamification({ notifyAchievements = false } = {}) {
+  if (featuredSaving) return;
   const sessionUserId = currentSession?.user?.id;
   const previousState = ownGamification;
   const sequence = ++gamificationRequestSequence;
@@ -1291,9 +1390,11 @@ async function loadGamification({ notifyAchievements = false } = {}) {
     if (sequence !== gamificationRequestSequence || sessionUserId !== currentSession?.user?.id) return;
     gamificationLevelNumber.textContent = '';
     gamificationLevelName.textContent = 'Nivel no disponible';
-    gamificationDialogLevel.textContent = 'Nivel no disponible';
     gamificationBricks.textContent = '0';
-    gamificationDialogBricks.textContent = '0';
+    if (!gamificationDialog.open || achievementsMode === 'own') {
+      gamificationDialogLevel.textContent = 'Nivel no disponible';
+      gamificationDialogBricks.textContent = '0';
+    }
     gamificationProgress.value = 0;
     gamificationPercentage.textContent = '0%';
     gamificationPercentage.classList.remove('on-accent');
@@ -1327,6 +1428,14 @@ function refreshSocialGamification() {
 function ownsMinifigura(id) {
   const canonicalId = String(id).trim().toUpperCase();
   return catalogCache.some((item) => String(item.id).trim().toUpperCase() === canonicalId);
+}
+
+function duplicateMinifiguraMessage(id) {
+  const canonicalId = String(id).trim().toUpperCase();
+  const existing = catalogCache.find((item) => String(item.id).trim().toUpperCase() === canonicalId);
+  if (existing?.estadoColeccion === 'BUSCADA') return 'Ya la estás buscando';
+  if (existing?.estadoColeccion === 'COLECCIÓN') return 'Ya está incluída en tu colección';
+  return null;
 }
 
 function updateRankingWantedActions(list) {
@@ -2063,10 +2172,12 @@ firstMinifiguraAccept.addEventListener('click', () => {
 });
 
 function openOwnAchievements(trigger) {
+  achievementsViewSequence += 1;
   achievementsTrigger = trigger;
-  renderAchievements(ownGamification ?? {});
+  renderAchievements(ownGamification ?? {}, 'Logros', { editable: true });
   gamificationDialog.showModal();
   gamificationCloseButton.focus();
+  void loadGamification();
 }
 
 function setNotificationsUnreadCount(count) {
@@ -2570,6 +2681,7 @@ function invalidateClientStateForGamificationVersion() {
   isShowingAchievement = false;
   toastRegion.replaceChildren();
   ownGamification = null;
+  resetFeaturedAchievements();
   ownDnaState = null;
   dnaRequestSequence += 1;
   rankingRequestId += 1;
@@ -3020,13 +3132,6 @@ function clearPublicProfile() {
 function renderPublicProfileFigures(selector, rows, mode = 'price') {
   const list = document.querySelector(selector);
   list.replaceChildren();
-  if (!rows.length) {
-    const empty = document.createElement('li');
-    empty.className = 'public-profile-empty';
-    empty.textContent = 'Sin elementos.';
-    list.append(empty);
-    return;
-  }
   for (const [index, figure] of rows.slice(0, 5).entries()) {
     const item = document.createElement('li');
     const card = rankingCard({ id: figure.id, nombre: figure.name }, index + 1,
@@ -3078,10 +3183,11 @@ function renderPublicProfile(profile) {
   renderPublicProfileFigures('#public-profile-latest-wanted', profile.wanted.latest);
   updateRankingWantedActions(publicProfileContent);
   const achievements = document.querySelector('#public-profile-achievements');
-  achievements.replaceChildren(...profile.achievements.slice(0, 5).map((achievement) => createAchievementItem({
+  const profileAchievements = sortedAchievements(profile.achievements.map((achievement) => ({
     id: achievement.id, type: achievement.type, nombre: achievement.name, descripcion: achievement.description,
-    cantidad: achievement.quantity, total: achievement.total, bricks: achievement.bricks,
+    cantidad: achievement.quantity, total: achievement.total, bricks: achievement.bricks, destacado: achievement.featured === true,
   })));
+  achievements.replaceChildren(...profileAchievements.slice(0, 5).map((achievement) => createAchievementItem(achievement)));
   if (!profile.achievements.length) {
     const empty = document.createElement('li');
     empty.className = 'public-profile-empty';
@@ -3251,10 +3357,14 @@ dnaDialog.addEventListener('close', () => {
 });
 
 gamificationCloseButton.addEventListener('click', () => {
+  achievementsViewSequence += 1;
+  achievementsMode = 'none';
   gamificationDialog.close();
 });
 
 gamificationDialog.addEventListener('close', () => {
+  achievementsViewSequence += 1;
+  achievementsMode = 'none';
   if (rankingDialog.open) restoreRankingFocus(achievementsTrigger);
   else if (currentSession && achievementsTrigger?.isConnected) achievementsTrigger.focus();
   achievementsTrigger = null;
@@ -3806,7 +3916,7 @@ function openWantedFigure(wanted, figure) {
   if (!hasLoadedFullCatalog || !currentSession || wanted.dataset.ownerUser === currentSession.user.id) return;
   if (ownsMinifigura(wanted.dataset.wantedId)) {
     updateRankingWantedActions();
-    showToast(messageForErrorCode('ID_DUPLICADO'), 'error');
+    showToast(duplicateMinifiguraMessage(wanted.dataset.wantedId) ?? messageForErrorCode('ID_DUPLICADO'), 'error');
     return;
   }
   if (figure) openFormDialog('ranking-create', figure, wanted);
@@ -4054,6 +4164,8 @@ formDialog.addEventListener('close', () => {
 [formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput].forEach((input) => {
   input.addEventListener('input', () => {
     if (currentFormMode === 'create' && input === formIdInput) {
+      formError.textContent = '';
+      formSending = false;
       imageLookupSequence += 1;
       bricksetLoading.hidden = true;
       formSynced = false;
@@ -4095,8 +4207,9 @@ minifiguraForm.addEventListener('submit', async (event) => {
 
   const isRankingCreate = currentFormMode === 'ranking-create';
   if (isRankingCreate && (!formSynced || !hasFormMetadata())) return;
-  if (isRankingCreate && ownsMinifigura(formIdInput.value)) {
-    formError.textContent = messageForErrorCode('ID_DUPLICADO');
+  const duplicateMessage = currentEditId === null ? duplicateMinifiguraMessage(formIdInput.value) : null;
+  if (duplicateMessage) {
+    formError.textContent = duplicateMessage;
     updateRankingWantedActions();
     return;
   }
@@ -4137,17 +4250,33 @@ minifiguraForm.addEventListener('submit', async (event) => {
         showToast(formError.textContent, 'warning');
         return;
       }
+      if (errorCode === 'ID_DUPLICADO') {
+        let duplicateMessage = duplicateMinifiguraMessage(payload.id);
+        try {
+          const catalog = await fetchCatalog();
+          if (!isCurrent()) return;
+          setCatalogCache(catalog);
+          applyFilters({ preservePage: true });
+          duplicateMessage = duplicateMinifiguraMessage(payload.id);
+        } catch {
+          if (!isCurrent()) return;
+        }
+        formError.textContent = duplicateMessage ?? 'No se pudo comprobar el estado de la minifigura. Inténtalo de nuevo.';
+        updateRankingWantedActions();
+        return;
+      }
       const errorMessage = messageForErrorCode(errorCode);
       formError.textContent = errorMessage;
       showToast(errorMessage, 'error');
-      if (isRankingCreate && errorCode === 'ID_DUPLICADO') void revalidate();
       return;
     }
 
     const result = await response.json();
     if (!isCurrent()) return;
     showGamificationToasts(result.gamificacion);
-    if (result.gamificacion?.state) ownGamification = result.gamificacion.state;
+    if (result.gamificacion?.state) ownGamification = {
+      ...result.gamificacion.state, logrosDestacados: result.gamificacion.state.logrosDestacados ?? ownGamification?.logrosDestacados ?? [],
+    };
     upsertCached(result);
     applyFilters({ preservePage: true });
     closeFormDialog();
@@ -4313,6 +4442,7 @@ function clearUserData() {
   if (dnaDialog.open) dnaDialog.close();
   achievementsTrigger = null;
   ownGamification = null;
+  resetFeaturedAchievements();
   formTrigger = null;
   imageLookupSequence += 1;
   formSending = false;

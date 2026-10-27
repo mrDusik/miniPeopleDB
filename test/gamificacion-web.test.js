@@ -54,6 +54,187 @@ function state(overrides = {}) {
   };
 }
 
+const nextTurn = () => new Promise((resolve) => setTimeout(resolve, 0));
+const starredLogros = () => [
+  { id: 'high', nombre: 'High', total: 100, cantidad: 1 },
+  { id: 'low', nombre: 'Low', total: 1, cantidad: 20 },
+  { id: 'tie', nombre: 'Tie', total: 1, cantidad: 1 },
+  { id: 'gift', nombre: 'Gift', type: 'regalo', total: 0, cantidad: 1 },
+];
+
+test('destacados reserva columna estable y amplia solo Logros con reglas propias de Smartphone', async () => {
+  const dom = createDom();
+  const style = dom.window.document.createElement('style');
+  style.textContent = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  dom.window.document.head.append(style);
+  const rules = [...style.sheet.cssRules];
+  assert.equal(rules.find((rule) => rule.selectorText === '.modal-achievements').style.width, 'min(660px, calc(100% - 32px))');
+  assert.equal(rules.find((rule) => rule.selectorText === '.modal').style.width, 'min(860px, calc(100% - 32px))');
+  const star = rules.find((rule) => rule.selectorText === '.achievement-star');
+  assert.equal(star.style.width, '36px');
+  assert.equal(star.style.height, '36px');
+  const responsive = rules.find((rule) => rule.conditionText?.includes('max-width: 600px')
+    && [...rule.cssRules].some((entry) => entry.selectorText?.includes('.modal-achievements .achievement-item:has(.achievement-star)')));
+  assert.ok(responsive);
+  assert.match(responsive.conditionText, /pointer: coarse/);
+  assert.equal([...responsive.cssRules][0].style.getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr) auto 36px');
+  dom.window.close();
+});
+
+test('destacados ordena por titular, conserva empates y no ofrece edicion en consulta ajena', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state({ logros: starredLogros(), logrosDestacados: ['gift'] }));
+  window.eval(script);
+  await nextTurn();
+  const document = window.document;
+  document.querySelector('#open-achievements').click();
+  await nextTurn();
+  assert.deepEqual([...document.querySelectorAll('#gamification-achievements .achievement-name')].map((node) => node.textContent), ['Gift', 'High', 'Low', 'Tie']);
+  assert.equal(document.querySelectorAll('.achievement-star-toggle').length, 4);
+  assert.equal(document.querySelector('[data-featured-id="gift"]').getAttribute('aria-pressed'), 'true');
+  window.eval(`renderAchievements({bricks:5,logros:[{id:'public',nombre:'Public',total:1,destacado:true},{id:'other',nombre:'Other',total:100}]}, 'Logros de B')`);
+  assert.equal(document.querySelectorAll('.achievement-star-toggle').length, 0);
+  assert.equal(document.querySelector('.achievement-name').textContent, 'Public');
+  assert.equal(document.querySelector('.achievement-star').getAttribute('aria-label'), 'Logro destacado');
+  assert.equal(document.querySelector('#gamification-bricks').textContent, '820');
+  dom.window.close();
+});
+
+test('destacados confirma antes de reordenar, bloquea dobles envios y conserva foco por ID', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  const gamificacion = state({ logros: starredLogros(), logrosDestacados: [] });
+  const original = baseFetch([], gamificacion);
+  let resolveSave;
+  let requests = 0;
+  window.fetch = (url, options) => {
+    if (url === '/gamificacion/logros/low/destacado') {
+      requests += 1;
+      assert.deepEqual(JSON.parse(options.body), { destacado: true });
+      return new Promise((resolve) => { resolveSave = resolve; });
+    }
+    return original(url, options);
+  };
+  window.eval(script);
+  await nextTurn();
+  window.document.querySelector('#open-achievements').click();
+  await nextTurn();
+  const button = window.document.querySelector('[data-featured-id="low"]');
+  button.focus();
+  button.click();
+  button.click();
+  assert.equal(requests, 1);
+  assert.equal(button.disabled, true);
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
+  assert.equal(window.document.querySelector('.achievement-name').textContent, 'High');
+  resolveSave({ ok: true, json: async () => ({ logrosDestacados: ['low'] }) });
+  await nextTurn();
+  assert.equal(window.document.querySelector('.achievement-name').textContent, 'Low');
+  assert.equal(window.document.activeElement.dataset.featuredId, 'low');
+  assert.equal(window.document.activeElement.getAttribute('aria-pressed'), 'true');
+  assert.equal(window.document.querySelector('#gamification-dialog').open, true);
+  dom.window.close();
+});
+
+test('destacados conserva estado ante fallo y rechaza el sexto sin sustituir', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  const logros = Array.from({ length: 6 }, (_, index) => ({ id: `earned-${index}`, nombre: `Earned ${index}`, cantidad: 1, total: index }));
+  const original = baseFetch([], state({ logros, logrosDestacados: logros.slice(0, 5).map(({ id }) => id) }));
+  let requests = 0;
+  window.fetch = (url, options) => url.startsWith('/gamificacion/logros/')
+    ? (requests += 1, Promise.resolve({ ok: false, json: async () => ({ error: 'FAIL' }) })) : original(url, options);
+  window.eval(script);
+  await nextTurn();
+  window.document.querySelector('#open-achievements').click();
+  await nextTurn();
+  window.document.querySelector('[data-featured-id="earned-5"]').click();
+  assert.equal(requests, 0);
+  assert.equal(window.document.querySelector('#achievements-status').textContent, 'Puedes destacar hasta 5 logros');
+  window.document.querySelector('[data-featured-id="earned-0"]').click();
+  await nextTurn();
+  assert.equal(requests, 1);
+  assert.equal(window.document.querySelectorAll('.achievement-star-toggle.active').length, 5);
+  assert.match(window.document.querySelector('#achievements-status').textContent, /No se ha podido guardar/);
+  assert.equal(window.document.querySelector('[data-featured-id="earned-0"]').disabled, false);
+  dom.window.close();
+});
+
+test('destacados ignora lectura anterior al guardado y no reabre al terminar cerrado', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  const gamificacion = state({ logros: starredLogros(), logrosDestacados: [] });
+  window.fetch = baseFetch([], gamificacion);
+  window.eval(script);
+  await nextTurn();
+  window.document.querySelector('#open-achievements').click();
+  await nextTurn();
+  const original = window.fetch;
+  let resolveRead;
+  let resolveSave;
+  window.fetch = (url, options) => url === '/gamificacion'
+    ? new Promise((resolve) => { resolveRead = resolve; })
+    : url.startsWith('/gamificacion/logros/') ? new Promise((resolve) => { resolveSave = resolve; }) : original(url, options);
+  const older = window.eval('loadGamification()');
+  window.document.querySelector('[data-featured-id="low"]').click();
+  resolveSave({ ok: true, json: async () => ({ logrosDestacados: ['low'] }) });
+  await nextTurn();
+  resolveRead({ ok: true, json: async () => gamificacion });
+  await older;
+  assert.equal(window.document.querySelector('[data-featured-id="low"]').getAttribute('aria-pressed'), 'true');
+  window.document.querySelector('[data-featured-id="low"]').click();
+  window.document.querySelector('#gamification-close').click();
+  resolveSave({ ok: true, json: async () => ({ logrosDestacados: [] }) });
+  await nextTurn();
+  assert.equal(window.document.querySelector('#gamification-dialog').open, false);
+  dom.window.close();
+});
+
+test('destacados revalida al reabrir y descarta guardados de otra sesion o vista publica', async () => {
+  for (const context of ['reopen', 'session', 'public']) {
+    const dom = createDom();
+    const { window } = dom;
+    const gamificacion = state({ logros: starredLogros(), logrosDestacados: [] });
+    const original = baseFetch([], gamificacion);
+    let resolveSave;
+    window.fetch = (url, options) => url.startsWith('/gamificacion/logros/')
+      ? new Promise((resolve) => { resolveSave = resolve; }) : original(url, options);
+    window.eval(script);
+    await nextTurn();
+    window.document.querySelector('#open-achievements').click();
+    await nextTurn();
+    window.document.querySelector('[data-featured-id="low"]').click();
+    if (context === 'reopen') {
+      window.document.querySelector('#gamification-close').click();
+      window.document.querySelector('#open-achievements').click();
+      gamificacion.logrosDestacados = ['low'];
+    } else if (context === 'session') {
+      window.__supabaseStub.setSession('SIGNED_OUT', null);
+      await nextTurn();
+      window.__supabaseStub.setSession('SIGNED_IN', { access_token: 'other-token', user: { id: 'other-user' } });
+      await nextTurn();
+      await nextTurn();
+    } else {
+      window.eval("renderAchievements({bricks:5,nivel:{id:1,nombre:'Stud'},logros:[{id:'public',nombre:'Public',destacado:true}]},'Logros de B')");
+    }
+    resolveSave({ ok: true, json: async () => ({ logrosDestacados: ['low'] }) });
+    await nextTurn();
+    await nextTurn();
+    if (context === 'reopen') {
+      assert.equal(window.document.querySelector('[data-featured-id="low"]').getAttribute('aria-pressed'), 'true');
+    } else if (context === 'session') {
+      window.document.querySelector('#open-achievements').click();
+      await nextTurn();
+      assert.equal(window.document.querySelectorAll('.achievement-star-toggle.active').length, 0);
+    } else {
+      assert.equal(window.document.querySelector('.achievement-name').textContent, 'Public');
+      assert.equal(window.document.querySelectorAll('.achievement-star-toggle').length, 0);
+    }
+    dom.window.close();
+  }
+});
+
 test('renderiza el nivel, progreso y modal de desglose', async () => {
   const dom = createDom();
   const { window } = dom;

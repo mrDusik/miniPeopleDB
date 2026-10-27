@@ -247,6 +247,22 @@ La interfaz SHALL ofrecer creación, edición y eliminación mediante formulario
 - **THEN** la caché y la tabla no se modifican
 - **AND** muestra un mensaje o Toast de error
 
+### Requirement: Informar del estado de una minifigura duplicada
+
+Al intentar crear una figura cuyo ID ya exista en el inventario propio, el formulario SHALL mostrar `Ya está incluída en tu colección` si la figura existente esta en `COLECCIÓN`, o `Ya la estás buscando` si esta en `BUSCADA`. SHALL usar el estado de la figura ya guardada y comparar IDs sin distinguir mayusculas y espacios exteriores, nunca deducirlo del estado elegido para la nueva figura ni de la lista filtrada. Un conflicto confirmado por el servidor SHALL permitir consultar el inventario propio actualizado cuando sea necesario para resolver ese estado, sin acceder a datos ajenos ni modificar figuras existentes. El aviso del formulario SHALL desaparecer inmediatamente al modificar el campo ID, sin esperar al autocompletado, al guardado o al cierre del modal. Una respuesta pendiente de un ID anterior SHALL NOT restaurar el aviso despues de modificarlo. Los duplicados del formulario SHALL NOT dejar un toast independiente visible tras ese cambio.
+
+#### Scenario: Duplicado con estado distinto al seleccionado
+- **WHEN** se intenta crear una figura cuyo ID ya esta guardado con un estado distinto del seleccionado en el formulario
+- **THEN** el aviso describe si la figura existente esta en coleccion o en buscadas y no crea ni sobrescribe ninguna figura
+
+#### Scenario: Conflicto detectado por el servidor
+- **WHEN** el servidor devuelve un conflicto de ID que no estaba en la cache del navegador
+- **THEN** el formulario resuelve el aviso desde el inventario propio actualizado y conserva el modal abierto
+
+#### Scenario: Modificar el ID tras un duplicado
+- **WHEN** se modifica el ID despues del aviso o mientras su comprobacion esta pendiente
+- **THEN** el error anterior se limpia inmediatamente y ninguna respuesta tardia lo vuelve a mostrar para el ID nuevo
+
 ### Requirement: Mantener una caché local del catálogo por sesión
 
 La interfaz SHALL cargar el catálogo completo del usuario autenticado mediante una única petición `GET /minifiguras` sin parámetros al iniciar la sesión y SHALL mantenerlo en memoria como fuente para filtrado, ordenación, paginación, apertura de detalles y opciones dinámicas de filtros. La caché SHALL mantenerse solo en memoria, SHALL vaciarse al cerrar o expirar la sesión y SHALL revalidarse tras mutaciones, cambios de observación y sincronización masiva de precios. Si una revalidación anterior responde después de otra más reciente, su resultado SHALL descartarse.
@@ -542,15 +558,17 @@ La interfaz SHALL mostrar en rojo cada asterisco visible que identifica un campo
 
 Todos los logros de coleccion SHALL representar requisitos cumplidos por las minifiguras actuales en `COLECCIÓN` y los totales conocidos actuales, no concesiones historicas permanentes. El catalogo y condiciones SHALL ser exclusivamente las de `logros-v2`. El recalcule SHALL reconstruir cantidades y Bricks, ajustar nivel y progreso tanto al alza como a la baja y conservar los umbrales de nivel vigentes. SHALL ganar, perder o recuperar logros tras altas, ediciones, eliminaciones, cambios entre COLECCIÓN y BUSCADA, cambios validos de metadatos de figuras, totales y anio de serie, y despliegues de objetivos. `repetible: false` SHALL limitar a una concesion vigente sin impedir perdida o recuperacion. Los logros sociales SHALL seguir igualmente sus fuentes vigentes V2. Las siguientes consultas de DNA, logros publicos, perfil y ranking SHALL reflejar el estado confirmado.
 
-Los regalos y agradecimientos V2 persistidos SHALL conservar su contribucion vigente independientemente del inventario; la migracion unica autorizada SHALL retirar las fuentes V1. La UI SHALL mantener su presentacion y orden existentes, sin grupos editoriales nuevos ni importar la columna Total. El saldo de Bricks SHALL admitir contribuciones directas que no se representan como logros repetibles.
+Los regalos y agradecimientos V2 persistidos SHALL conservar su contribucion vigente independientemente del inventario; la migracion unica autorizada SHALL retirar las fuentes V1. La UI SHALL mantener su presentacion de recompensas, sin grupos editoriales nuevos ni importar la columna Total, pero las listas de logros obtenidos SHALL usar la prioridad de `logros-destacados`. La seleccion de estrellas SHALL NOT alterar el calculo V2; el recalcule SHALL conservar solo las estrellas de logros que siguen obtenidos, retirar las de logros perdidos y no restaurarlas al recuperarlos. Los toasts de nuevos logros SHALL conservar su orden anterior por Bricks nuevos ascendentes. El saldo de Bricks SHALL admitir contribuciones directas que no se representan como logros repetibles.
 
 #### Scenario: Aumento del total conocido
 - **WHEN** el total de una categoria o subcategoria aumenta y deja de cumplirse un hito
 - **THEN** se retiran o reducen los logros y sus Bricks, ajustando nivel y progreso sin borrar regalos V2
+- **AND** se retiran las estrellas solo de IDs que dejan de estar obtenidos
 
 #### Scenario: Pérdida y recuperación por estado de figura
 - **WHEN** una figura necesaria pasa a BUSCADA y posteriormente vuelve a COLECCIÓN
 - **THEN** se pierden y recuperan los logros cuyos requisitos cambian, incluidos los no repetibles
+- **AND** recuperar un logro no restaura su estrella retirada
 
 #### Scenario: Concesión retroactiva sin nueva adquisición
 - **WHEN** se aplica V2 y el inventario conservado ya cumple requisitos nuevos
@@ -559,6 +577,7 @@ Los regalos y agradecimientos V2 persistidos SHALL conservar su contribucion vig
 #### Scenario: Revalidacion tras accion social
 - **WHEN** se confirma un regalo, agradecimiento, envio, rechazo, aceptacion o eliminacion de amistad
 - **THEN** el panel y los modales afectados revalidan Bricks, nivel, logros y DNA sin conservar resultados obsoletos de otra sesion
+- **AND** las estrellas se conservan o retiran conforme a los IDs que siguen obtenidos
 
 ### Requirement: Calcular DNA propio dinamico y retroactivo
 

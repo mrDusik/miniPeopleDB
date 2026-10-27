@@ -274,6 +274,114 @@ test('BricksetScraper.getDetails reutiliza la misma peticion que getPrice', asyn
   assert.equal(requestedUrl, 'https://brickset.com/minifigs/col079');
 });
 
+const cachedDetailsHtml = '<dl><dt>Name</dt><dd>Space Pilot</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2020</dd></dl><p>Current Value - New</p><span>\u20ac5</span>';
+
+test('cache de detalles reutiliza IDs canonicos y devuelve copias independientes', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => {
+      requests += 1;
+      assert.equal(url, 'https://brickset.com/minifigs/COL079');
+      return new Response(cachedDetailsHtml);
+    },
+  });
+  const first = await scraper.getDetails(' COL079 ');
+  first.nombre = 'Changed locally';
+  const second = await scraper.getDetails('col079');
+  assert.equal(second.nombre, 'Space Pilot');
+  assert.equal(requests, 1);
+});
+
+test('cache de detalles comparte peticiones simultaneas sin duplicar scraping', async () => {
+  let requests = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => {
+      requests += 1;
+      await gate;
+      return new Response(cachedDetailsHtml);
+    },
+  });
+  const first = scraper.getDetails('col079');
+  const second = scraper.getDetails('COL079');
+  release();
+  const [left, right] = await Promise.all([first, second]);
+  assert.equal(requests, 1);
+  assert.deepEqual(left, right);
+  assert.notEqual(left, right);
+});
+
+test('cache de detalles caduca y limita entradas con desalojo de la menos reciente', async () => {
+  let clock = 0;
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0, detailsCacheMs: 100, detailsCacheMaxEntries: 2, now: () => clock,
+    fetchImpl: async () => { requests += 1; return new Response(cachedDetailsHtml); },
+  });
+  await scraper.getDetails('a');
+  await scraper.getDetails('b');
+  await scraper.getDetails('a');
+  await scraper.getDetails('c');
+  await scraper.getDetails('b');
+  assert.equal(requests, 4);
+  clock = 100;
+  await scraper.getDetails('b');
+  assert.equal(requests, 5);
+});
+
+test('cache de detalles no guarda fallos y nunca sustituye consultas frescas de precio', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => { requests += 1; return new Response(cachedDetailsHtml, { status: requests === 1 ? 404 : 200 }); },
+  });
+  await assert.rejects(scraper.getDetails('col079'), (error) => error.code === 'BRICKSET_NO_ENCONTRADO');
+  await scraper.getDetails('col079');
+  await scraper.getDetails('col079');
+  assert.equal(requests, 2);
+  assert.equal(await scraper.getPrice('col079'), 5);
+  assert.equal(requests, 3);
+});
+
+test('cache de detalles admite desactivacion y respeta una consulta ya cancelada', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0, detailsCacheMs: 0,
+    fetchImpl: async () => { requests += 1; return new Response(cachedDetailsHtml); },
+  });
+  await scraper.getDetails('col079');
+  await scraper.getDetails('col079');
+  assert.equal(requests, 2);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(scraper.getDetails('col079', { signal: controller.signal }), (error) => error.code === 'BRICKSET_CANCELADO');
+  assert.equal(requests, 2);
+});
+
+test('cache de detalles no guarda HTML incompleto ni una peticion cancelada en curso', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => {
+      requests += 1;
+      return new Response(requests === 1 ? '<html>Incomplete</html>' : cachedDetailsHtml);
+    },
+  });
+  await assert.rejects(scraper.getDetails('col079'), (error) => error.code === 'BRICKSET_DETALLES_NO_DISPONIBLES');
+  await scraper.getDetails('col079');
+  assert.equal(requests, 2);
+  const controller = new AbortController();
+  const cancellable = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async () => { controller.abort(); return new Response(cachedDetailsHtml); },
+  });
+  await assert.rejects(cancellable.getDetails('col079', { signal: controller.signal }), (error) => error.code === 'BRICKSET_CANCELADO');
+  assert.equal(cancellable.detailsCache.size, 0);
+});
+
 test('serializa peticiones y respeta el intervalo minimo', async () => {
   let clock = 0;
   const starts = [];

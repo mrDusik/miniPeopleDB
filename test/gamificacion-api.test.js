@@ -13,6 +13,67 @@ function figura(overrides = {}) {
   };
 }
 
+test('PUT destacado guarda por JWT, valida cupo/cuerpo y mantiene privacidad y recompensas', async () => {
+  const supabase = createTestSupabase();
+  const logros = Array.from({ length: 7 }, (_, index) => ({
+    id: `earned-${index}`, nombre: `Earned ${index}`, bricks: 1, repetible: true, cantidad: 1, total: 1,
+  }));
+  supabase.seed('gamificacion', TEST_USER.id, [{ bricks: 7, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros }]);
+  const server = await startTestServer({ supabase });
+  const endpoint = `${server.baseUrl}/gamificacion/logros/earned-0/destacado`;
+  const put = (url, body, request = fetch) => request(url, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  try {
+    assert.equal((await put(endpoint, { destacado: true }, globalThis.fetch)).status, 401);
+    for (const body of [{ destacado: 'true' }, { destacado: true, userId: OTHER_USER.id }, {}, []]) {
+      assert.equal((await put(endpoint, body)).status, 400);
+    }
+    assert.equal((await put(`${endpoint}?userId=${OTHER_USER.id}`, { destacado: true })).status, 400);
+    assert.equal((await put(endpoint, { destacado: true }, authFetch(OTHER_TOKEN))).status, 400);
+    assert.equal((await put(endpoint.replace('earned-0', 'unknown'), { destacado: true })).status, 400);
+    const before = supabase.rows('gamificacion', TEST_USER.id);
+    for (let index = 0; index < 5; index += 1) {
+      assert.equal((await put(endpoint.replace('earned-0', `earned-${index}`), { destacado: true })).status, 200);
+    }
+    const repeat = await put(endpoint, { destacado: true });
+    assert.equal(repeat.status, 200);
+    assert.equal((await repeat.json()).logrosDestacados.length, 5);
+    const sixth = await put(endpoint.replace('earned-0', 'earned-5'), { destacado: true });
+    assert.equal(sixth.status, 409);
+    assert.deepEqual(await sixth.json(), { error: 'LIMITE_LOGROS_DESTACADOS' });
+    assert.deepEqual(supabase.rows('gamificacion', TEST_USER.id), before);
+    const state = await (await fetch(`${server.baseUrl}/gamificacion`)).json();
+    assert.equal(state.logrosDestacados.length, 5);
+    supabase.failNext('establecer_logro_destacado', { message: 'private SQL detail' });
+    const failed = await put(endpoint, { destacado: false });
+    assert.equal(failed.status, 500);
+    assert.deepEqual(await failed.json(), { error: 'LOGROS_DESTACADOS_NO_DISPONIBLES' });
+    assert.equal((await put(endpoint, { destacado: false })).status, 200);
+    assert.equal((await put(endpoint, { destacado: false })).status, 200);
+  } finally {
+    await server.close();
+  }
+});
+
+test('destacado conserva cantidad positiva, se pierde con el logro y no se restaura al recuperarlo', async () => {
+  await withServer([figura({ precio: 500 })], async (baseUrl) => {
+    const initial = await (await fetch(`${baseUrl}/gamificacion`)).json();
+    const id = initial.logros.find(({ id: achievementId }) => achievementId === 'epic-piece').id;
+    const response = await fetch(`${baseUrl}/gamificacion/logros/${id}/destacado`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ destacado: true }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await (await fetch(`${baseUrl}/gamificacion`)).json()).logrosDestacados, [id]);
+    for (const estadoColeccion of ['BUSCADA', 'COLECCIÓN']) {
+      assert.equal((await fetch(`${baseUrl}/minifiguras/MF-API`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(figura({ precio: 500, estadoColeccion })),
+      })).status, 200);
+      assert.deepEqual((await (await fetch(`${baseUrl}/gamificacion`)).json()).logrosDestacados, []);
+    }
+  });
+});
+
 async function withServer(catalogo, callback) {
   const server = await startTestServer({ catalog: catalogo });
   try {
@@ -162,6 +223,8 @@ test('gamificacion y logros publicos eliminan propiedades DNA por logro', async 
       rarity_hunter: 5, dna_weights: { fan: 20 }, dna: { porcentajes: { collector: 60 } },
     }],
   }]);
+  supabase.seed('logros_destacados', PUBLIC_LOGROS_USER, [{ logro_id: 'solid-investment' }]);
+  supabase.seed('user_profiles', PUBLIC_LOGROS_USER, [{ username: 'PublicFixture' }]);
   const server = await startTestServer({ supabase });
   try {
     const own = await (await fetch(`${server.baseUrl}/gamificacion`)).json();
@@ -169,7 +232,10 @@ test('gamificacion y logros publicos eliminan propiedades DNA por logro', async 
     const publicAchievements = await fetch(`${server.baseUrl}/api/ranking/${PUBLIC_LOGROS_USER}/logros`);
     assert.equal(publicAchievements.status, 200);
     const achievements = await publicAchievements.json();
-    assert.deepEqual(achievements.logros, [{ id: 'solid-investment', nombre: 'Solid Investment', bricks: 1, repetible: false, cantidad: 1, total: 1 }]);
+    assert.deepEqual(achievements.logros, [{ id: 'solid-investment', nombre: 'Solid Investment', bricks: 1, repetible: false, cantidad: 1, total: 1, destacado: true }]);
+    const profile = await (await fetch(`${server.baseUrl}/api/amigos/${PUBLIC_LOGROS_USER}/perfil`)).json();
+    assert.equal(profile.achievements[0].featured, true);
+    assert.doesNotMatch(JSON.stringify(profile.achievements), /dna_weights|rarity_hunter/);
     const ranking = await (await fetch(`${server.baseUrl}/api/ranking`)).json();
     assert.equal(ranking[0].userId, PUBLIC_LOGROS_USER);
     assert.equal(ranking[0].dnaPrincipal, 'Collector');

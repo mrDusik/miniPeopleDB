@@ -1564,6 +1564,74 @@ test('la sincronización mantiene utilizables las acciones creadas al refrescar 
   dom.window.close();
 });
 
+test('el duplicado informa del estado existente y se limpia inmediatamente al modificar el ID', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  for (const estadoColeccion of ['COLECCIÓN', 'BUSCADA']) {
+    for (const initiallyCached of [true, false]) {
+      const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+      const { window } = dom;
+      window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+      window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+      const existing = { id: 'ABC001', nombre: 'Existing', categoria: 'Space', anio: 2020, estadoColeccion };
+      let duplicateConfirmed = false;
+      window.fetch = async (url, options = {}) => {
+        if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+        if (url === '/minifiguras' && options.method === 'POST') {
+          duplicateConfirmed = true;
+          return { ok: false, status: 409, json: async () => ({ error: 'ID_DUPLICADO' }) };
+        }
+        if (url === '/minifiguras') return { ok: true, json: async () => initiallyCached || duplicateConfirmed ? [existing] : [] };
+        if (url.endsWith('/brickset')) return { ok: true, json: async () => ({ nombre: 'Existing', categoria: 'Space', anio: 2020, precio: 5 }) };
+        if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+        return { ok: false, json: async () => ({}) };
+      };
+      try {
+        window.eval(script);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const document = window.document;
+        document.querySelector('#new-minifigura').click();
+        const id = document.querySelector('#form-id');
+        id.value = 'aBc001';
+        id.dispatchEvent(new window.Event('input', { bubbles: true }));
+        document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.querySelector(`[data-form-state="${estadoColeccion === 'BUSCADA' ? 'COLECCIÓN' : 'BUSCADA'}"]`).click();
+        document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(document.querySelector('#form-error').textContent,
+          estadoColeccion === 'BUSCADA' ? 'Ya la estás buscando' : 'Ya está incluída en tu colección');
+        assert.equal(document.querySelector('#form-dialog').open, true);
+        id.value = 'DIFFERENT';
+        id.dispatchEvent(new window.Event('input', { bubbles: true }));
+        assert.equal(document.querySelector('#form-error').textContent, '');
+        assert.doesNotMatch(document.querySelector('#toast-region').textContent,
+          /Ya está incluída en tu colección|Ya la estás buscando|Ya existe una minifigura con ese id/);
+        const previousFetch = window.fetch;
+        let resolveDuplicate;
+        window.fetch = (url, options = {}) => url === '/minifiguras' && options.method === 'POST'
+          ? new Promise((resolve) => { resolveDuplicate = resolve; }) : previousFetch(url, options);
+        id.value = 'ABC002';
+        id.dispatchEvent(new window.Event('input', { bubbles: true }));
+        document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+        id.value = 'ABC003';
+        id.dispatchEvent(new window.Event('input', { bubbles: true }));
+        resolveDuplicate({ ok: false, status: 409, json: async () => ({ error: 'ID_DUPLICADO' }) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(document.querySelector('#form-error').textContent, '');
+        document.querySelector('#form-preview-image').dispatchEvent(new window.Event('load'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.equal(document.querySelector('#form-submit').disabled, false);
+      } finally {
+        dom.window.close();
+      }
+    }
+  }
+});
+
 test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();

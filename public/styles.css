@@ -432,7 +432,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .form-error { min-height: 20px; margin: 0; color: var(--accent-dark); font: 0.85rem Arial, sans-serif; }
 .modal ul { display: grid; gap: 8px; margin: 0 0 18px; padding-left: 20px; color: var(--muted); font: 0.95rem/1.4 Arial, sans-serif; }
 
-.modal-achievements { width: min(600px, calc(100% - 32px)); }
+.modal-achievements { width: min(660px, calc(100% - 32px)); }
 .modal-friends { width: min(960px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow: hidden; }
 .friends-dialog-heading { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .friends-dialog-heading img { width: 3rem; height: 3rem; object-fit: contain; }
@@ -591,6 +591,23 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .achievement-bricks { display: flex; align-items: center; gap: 6px; }
 .achievement-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; line-height: 1; }
 .achievement-brick-icon { display: block; width: auto; height: 1.6rem; object-fit: contain; }
+.achievement-item:has(.achievement-star) { grid-template-columns: auto minmax(0, 1fr) auto auto 36px; }
+.achievement-star { display: inline-grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; background: transparent; color: #a97900; }
+.achievement-star-toggle { cursor: pointer; }
+.achievement-star.inactive { opacity: 0.35; color: var(--ink); }
+.achievement-star.active { opacity: 1; }
+.achievement-star-toggle:disabled { cursor: default; }
+.achievement-star-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.achievement-star-image { display: block; width: 22px; height: 22px; background: currentColor; mask: url('/vendor/star.svg') center / contain no-repeat; }
+.achievement-info { overflow-wrap: anywhere; }
+.public-profile-awards .achievement-item { grid-template-columns: 24px minmax(0, 1fr) auto auto 36px; }
+@media (max-width: 600px), (max-width: 900px) and (max-height: 500px) and (pointer: coarse) {
+  .modal-achievements .achievement-item:has(.achievement-star), .public-profile-awards .achievement-item { grid-template-columns: 24px minmax(0, 1fr) auto 36px; gap: 6px; }
+  .achievement-item:has(.achievement-star) .achievement-info, .public-profile-awards .achievement-info { grid-column: 2 / span 2; grid-row: 1; }
+  .achievement-item:has(.achievement-star) .achievement-star { grid-column: 4; grid-row: 1 / span 2; }
+  .achievement-item:has(.achievement-star) .achievement-count, .public-profile-awards .achievement-count { grid-column: 1 / span 2; grid-row: 2; justify-self: start; min-width: 0; padding: 3px 0; }
+  .achievement-item:has(.achievement-star) .achievement-bricks, .public-profile-awards .achievement-bricks { grid-column: 3; grid-row: 2; justify-self: end; }
+}
 .achievements-heading-bricks { margin-left: auto; }
 .achievements-heading-bricks strong { color: var(--ink); font: 700 1.1rem Arial, sans-serif; }
 .achievements-heading .button { flex: 0 0 auto; }

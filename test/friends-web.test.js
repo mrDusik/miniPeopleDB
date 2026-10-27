@@ -105,6 +105,32 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+test('perfil prioriza estrellas del titular antes de limitar a cinco y solo muestra indicadores', async () => {
+  const achievements = Array.from({ length: 6 }, (_, index) => ({
+    id: `logro-${index}`, name: `Logro ${index}`, quantity: 1, total: 100 - index,
+  }));
+  achievements.push({ id: 'gift', name: 'Gift', type: 'regalo', quantity: 1, total: 0, featured: true });
+  const { dom, window, setGamificationState } = createApp({ profileOverrides: { achievements } });
+  try {
+    await tick();
+    await tick();
+    setGamificationState({ bricks: 1, nivel: { id: 0, nombre: 'Duplo' }, logros: [{ id: 'own', nombre: 'Own', total: 1 }], logrosDestacados: ['own'] });
+    await window.eval('loadGamification()');
+    window.document.querySelector('#open-friends').click();
+    await tick();
+    window.document.querySelector('#friends-list-friends .friends-user-button').click();
+    await tick();
+    const awards = window.document.querySelector('#public-profile-achievements');
+    assert.equal(awards.children.length, 5);
+    assert.equal(awards.querySelector('.achievement-name').textContent, 'Gift');
+    assert.equal(awards.querySelectorAll('.achievement-star').length, 1);
+    assert.equal(awards.querySelectorAll('button').length, 0);
+    assert.equal(awards.textContent.includes('Own'), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('las solicitudes enviadas y recibidas abren el perfil y devuelven el foco a la fila', async () => {
   for (const type of ['sent', 'received']) {
     const { dom, window, requests } = createApp();
@@ -166,6 +192,26 @@ test('los ajustes de anchura y tarjetas se limitan al monitor con ratón', () =>
     assert.equal(declaration('.public-profile-figures > li').getPropertyValue('flex-basis'), '112px');
     assert.equal(declaration('.modal-ranking .ranking-highlight-group .ranking-card-static').getPropertyValue('flex-basis'), '112px');
     assert.equal(declaration('.public-profile-figures .ranking-caption, .ranking-highlight-group .ranking-caption').getPropertyValue('white-space'), 'normal');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('las filas de logros del perfil reservan la columna de estrella incluso sin destacado', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const profileRows = rules.filter((rule) => rule.selectorText === '.public-profile-awards .achievement-item');
+    assert.equal(profileRows.at(-1).style.getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr) auto auto 36px');
+    const smartphone = rules.find((rule) => rule.conditionText?.includes('(max-width: 600px)')
+      && [...rule.cssRules].some((entry) => entry.selectorText?.includes('.modal-achievements .achievement-item:has(.achievement-star)')));
+    const mobileRows = [...smartphone.cssRules].find((rule) => rule.selectorText?.split(', ')
+      .includes('.public-profile-awards .achievement-item'));
+    assert.equal(mobileRows?.style.getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr) auto 36px');
+    for (const selector of ['.achievement-info', '.achievement-count', '.achievement-bricks']) {
+      assert.ok([...smartphone.cssRules].some((rule) => rule.selectorText?.split(', ')
+        .includes(`.public-profile-awards ${selector}`)), selector);
+    }
   } finally {
     dom.window.close();
   }
@@ -662,7 +708,7 @@ test('el perfil reutiliza gráfico, iconos y tarjetas y destruye el gráfico al 
       'public-profile-section public-profile-dna-section', 'public-profile-section public-profile-awards',
     ]);
     assert.equal(overview.previousElementSibling.className, 'public-profile-stats');
-    assert.equal(document.querySelector('#public-profile-achievements-title').textContent, 'Logros más importantes');
+    assert.equal(document.querySelector('#public-profile-achievements-title').textContent, 'Logros Destacados');
     assert.equal(document.querySelector('#public-profile-level').title, '4 Citizen');
     assert.equal(overview.nextElementSibling.className, 'public-profile-tops');
     assert.match(styles, /#public-profile-level \{[^}]*white-space: nowrap/);
@@ -708,6 +754,14 @@ test('un perfil vacío conserva DNA Newbie y no inventa tarjetas ni logros', asy
     assert.equal(document.querySelectorAll('#public-profile-content .ranking-card').length, 0);
     assert.equal(document.querySelectorAll('#public-profile-content .achievement-item').length, 0);
     assert.equal(document.querySelector('#public-profile-achievements').textContent, 'No hay logros.');
+    for (const selector of [
+      '#public-profile-top-price', '#public-profile-top-age',
+      '#public-profile-latest-collection', '#public-profile-latest-wanted',
+    ]) {
+      assert.equal(document.querySelector(selector).children.length, 0, selector);
+      assert.equal(document.querySelector(selector).textContent, '', selector);
+    }
+    assert.doesNotMatch(document.querySelector('#public-profile-dialog').textContent, /Sin elementos\./);
   } finally {
     dom.window.close();
   }
