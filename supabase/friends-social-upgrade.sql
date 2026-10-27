@@ -82,6 +82,9 @@ begin
   if removed_count > 0 and request_id is not null then
     delete from public.friend_requests where id = request_id and status = 'accepted';
   end if;
+  if removed_count > 0 then
+    perform private.gamificacion_reconstruir_social(array[actor_id, p_amigo_id]);
+  end if;
   return jsonb_build_object('ok', true, 'removed', removed_count > 0);
 end;
 $$;

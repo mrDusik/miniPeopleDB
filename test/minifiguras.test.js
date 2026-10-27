@@ -975,13 +975,14 @@ test('los nombres Brickset se parsean y persisten sin entrada manual', async () 
     const [, title] = cases.find(([id]) => url.endsWith(`/${id}`));
     return new Response(`<dl><dt>Name</dt><dd>${title}</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2026</dd></dl><p>Current Value - New €5</p>`);
   };
-  await withServerOptions('[]', { fetchImpl, minIntervalMs: 0 }, async (baseUrl) => {
-    for (const [id, , nombre, descripcion] of cases) {
+  await withServerOptions('[]', { fetchImpl, minIntervalMs: 0 }, async (baseUrl, supabase) => {
+    for (const [id, fullName, nombre, descripcion] of cases) {
       const response = await fetch(`${baseUrl}/minifiguras/${id}/brickset`);
       assert.equal(response.status, 200);
       const details = await response.json();
       assert.equal(details.nombre, nombre);
       assert.equal(details.descripcion, descripcion);
+      assert.equal('nombreCompleto' in details, false);
       const created = await fetch(`${baseUrl}/minifiguras`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -990,10 +991,12 @@ test('los nombres Brickset se parsean y persisten sin entrada manual', async () 
       assert.equal(created.status, 201);
     }
     const catalog = await (await fetch(`${baseUrl}/minifiguras`)).json();
-    for (const [id, , nombre, descripcion] of cases) {
+    for (const [id, fullName, nombre, descripcion] of cases) {
       const stored = catalog.find((figure) => figure.id === id);
       assert.equal(stored.nombre, nombre);
       assert.equal(stored.descripcion || null, descripcion);
+      assert.equal('nombreCompleto' in stored, false);
+      assert.equal(supabase.rows('minifiguras', TEST_USER.id).find((figure) => figure.id === id).nombre_completo, fullName);
     }
   });
 });

@@ -47,7 +47,6 @@ truncate table
   private.daily_sync_prices,
   private.daily_sync_runs,
   private.daily_sync_figure_prices,
-  private.thanks_reward_ownership_migration,
   private.ranking_top10_reconciliation_state,
   auth.users
  cascade;

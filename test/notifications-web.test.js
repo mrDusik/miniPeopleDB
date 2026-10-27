@@ -78,6 +78,7 @@ function startApp({ initialPage = null } = {}) {
   return {
     dom, window, requests,
     setRealtimeInserted(value) { realtimeInserted = value; },
+    setNotificationPage(value) { customPage = value; },
     setGamificationState(value) { gamificationState = value; },
     thankRequests,
     friendAcceptRequests,
@@ -189,13 +190,23 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     const firstChannel = window.__supabaseStub.channels[0];
     assert.equal(firstChannel.handlers[0].filter.filter, 'user_id=eq.user-a');
     setRealtimeInserted(true);
-    firstChannel.emit({ new: { id: 'event-hint', type: 'gift_received' } });
+    firstChannel.emit({ new: { id: 'event-hint', type: 'gift_received', payload: { user: 'Grace', amount: 50 } } });
     await tick();
     assert.equal(window.document.querySelector('#notifications-list .notification-item').dataset.notificationId, 'a-new');
     assert.equal(window.document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 3 sin leer');
-    const newToast = window.document.querySelector('.toast-notification');
-    assert.equal(newToast.textContent.trim(), 'Tienes una nueva notificación');
-    assert.equal(newToast.querySelector('.toast-icon').getAttribute('src'), '/status_images/sobre.png');
+    const newToast = window.document.querySelector('#toast-region .toast-task');
+    assert.equal(newToast.textContent.trim(), '¡Has recibido un regalo de Grace: +50 Bricks!');
+    assert.ok(newToast.classList.contains('toast-gift'));
+    assert.equal(newToast.querySelector('strong'), null);
+    assert.equal(newToast.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
+
+    firstChannel.emit({ eventType: 'INSERT', new: { id: 'thanks-hint', type: 'gift_thanks', payload: { user: 'Alex', amount: 5 } } });
+    await tick();
+    const thanksToast = window.document.querySelector('#toast-region').lastElementChild;
+    assert.equal(thanksToast.textContent.trim(), '¡Alex te ha dado las gracias por tu regalo: +5 Bricks!');
+    assert.ok(thanksToast.classList.contains('toast-gift'));
+    assert.equal(thanksToast.querySelector('strong'), null);
+    assert.equal(thanksToast.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
 
     window.document.querySelector('#open-notifications').click();
     assert.equal(window.document.querySelector('#notifications-dialog').open, true);
@@ -206,6 +217,28 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     assert.equal(badge.hidden, true);
     assert.equal([...window.document.querySelectorAll('.notification-item')].every((item) => item.classList.contains('is-read')), true);
     assert.equal(requests.filter(({ url, init }) => url.endsWith('/leer-todas') && init.method === 'POST').length, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('muestra al volver a la pestaña el toast de regalo recibido mientras estaba oculta', async () => {
+  const { dom, window } = startApp();
+  try {
+    await tick();
+    await tick();
+    Object.defineProperty(window.document, 'visibilityState', { configurable: true, value: 'hidden' });
+    window.__supabaseStub.channels[0].emit({ eventType: 'INSERT', new: { id: 'background-gift', type: 'gift_received', payload: { user: 'Grace', amount: 5 } } });
+    await tick();
+    assert.equal(window.document.querySelectorAll('#toast-region .toast').length, 0);
+
+    Object.defineProperty(window.document, 'visibilityState', { configurable: true, value: 'visible' });
+    window.document.dispatchEvent(new window.Event('visibilitychange'));
+    const toast = window.document.querySelector('#toast-region .toast-task');
+    assert.equal(toast?.textContent.trim(), '¡Has recibido un regalo de Grace: +5 Bricks!');
+    assert.ok(toast?.classList.contains('toast-gift'));
+    assert.equal(toast?.querySelector('strong'), null);
+    assert.equal(toast?.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
   } finally {
     dom.window.close();
   }
@@ -356,7 +389,7 @@ test('acepta solicitudes desde la bandeja sin leerlas, duplica eventos ni permit
     accepted: false,
     canAccept: true,
   });
-  const { dom, window, requests, friendAcceptRequests } = startApp({
+  const { dom, window, requests, friendAcceptRequests, setGamificationState } = startApp({
     initialPage: { notifications: [friendRequest], unreadCount: 1, nextCursor: null },
   });
   try {
@@ -374,6 +407,12 @@ test('acepta solicitudes desde la bandeja sin leerlas, duplica eventos ni permit
     assert.equal(accept.querySelector('.notification-friend-heart'), null);
     assert.equal(row.classList.contains('is-read'), false);
 
+    setGamificationState({
+      bricks: 3,
+      nivel: { id: 0, nombre: 'Duplo' },
+      progreso: { porcentaje: 15 },
+      logros: [{ id: 'handshake', type: 'amistad', nombre: 'Handshake', descripcion: 'Has aceptado la primera solicitud de amistad', bricks: 3, cantidad: 1, total: 3 }],
+    });
     accept.click();
     accept.click();
     await tick();
@@ -381,6 +420,7 @@ test('acepta solicitudes desde la bandeja sin leerlas, duplica eventos ni permit
     assert.equal(friendAcceptRequests.length, 1);
     assert.equal(accepted.disabled, true);
     assert.equal(accepted.querySelector('.notification-friend-plus').textContent, 'Aceptada');
+    assert.equal(document.querySelector('#gamification-bricks').textContent, '3');
     assert.equal(document.querySelector('[data-notification-id="friend-1"]').classList.contains('is-read'), false);
     assert.equal(document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 1 sin leer');
     assert.equal(requests.some(({ url, init }) => url.endsWith('/leer') && init.method === 'POST'), false);
@@ -461,7 +501,7 @@ test('agrupa fechas con calendario de Madrid y fija title exacto incluso en el l
   }
 });
 
-test('actualiza regalos y el logro de gracias en el donante por Realtime sin recargar', async () => {
+test('refresca logros V2 al agradecer y el pago directo al donante por Realtime', async () => {
   const gift = createNotification('gift-live', 'Ada', false, {
     type: 'gift_received', canThank: true,
     data: { user: 'Ada', amount: 50, message: 'Ada te regaló 50 Bricks.' },
@@ -475,32 +515,40 @@ test('actualiza regalos y el logro de gracias en el donante por Realtime sin rec
     assert.equal(window.document.querySelector('#gamification-bricks').textContent, '0');
     window.document.querySelector('#gamification-level').click();
     const giftedState = {
-      bricks: 50,
+      bricks: 70,
       nivel: { id: 2, nombre: 'Plate' },
       siguienteNivel: { id: 3, nombre: 'Three-Seven-Five' },
       progreso: { porcentaje: 0 },
-      logros: [{ id: 'someone-liked-your-collection', type: 'regalo', nombre: 'Someone liked your collection', bricks: 50, cantidad: 1, total: 50 }],
+      logros: [{ id: 'oh-you-shouldnt-have', type: 'regalo', nombre: "Oh! you shouldn't have!", descripcion: 'Has recibido tu primer regalo', bricks: 20, cantidad: 1, total: 20 }],
     };
     setGamificationState(giftedState);
     window.__supabaseStub.channels[0].emit({ new: { id: gift.id, type: 'gift_received' } });
     await tick();
     await tick();
-    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '50');
-    assert.equal(window.document.querySelector('#gamification-dialog-bricks').textContent, '50');
+    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '70');
+    assert.equal(window.document.querySelector('#gamification-dialog-bricks').textContent, '70');
     assert.ok([...window.document.querySelectorAll('#gamification-achievements .achievement-name')]
-      .some(({ textContent }) => textContent === 'Someone liked your collection'));
+      .some(({ textContent }) => textContent === "Oh! you shouldn't have!"));
     window.document.querySelector('#gamification-close').click();
 
     window.document.querySelector('#open-notifications').click();
-  await tick();
-  await tick();
-    setGamificationState(giftedState);
+    await tick();
+    await tick();
+    const thankedState = {
+      ...giftedState,
+      bricks: 75,
+      logros: [
+        giftedState.logros[0],
+        { id: 'gratitude-is-the-sign-of-noble-souls', type: 'regalo', nombre: 'Gratitude is the sign of noble souls', descripcion: 'Has dado las gracias por primera vez', bricks: 5, cantidad: 1, total: 5 },
+      ],
+    };
+    setGamificationState(thankedState);
     window.document.querySelector('.notification-thank').click();
     await tick();
     await tick();
-    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '50');
-    assert.equal([...window.document.querySelectorAll('#gamification-achievements .achievement-name')]
-      .some(({ textContent }) => textContent === 'Gratitude is the sign of noble souls'), false);
+    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '75');
+    assert.ok([...window.document.querySelectorAll('#gamification-achievements .achievement-name')]
+      .some(({ textContent }) => textContent === 'Gratitude is the sign of noble souls'));
 
     const sessionB = { access_token: 'token-b', user: { id: 'user-b', email: 'b@example.invalid' } };
     setGamificationState({ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, progreso: { porcentaje: 0 }, logros: [] });
@@ -508,23 +556,64 @@ test('actualiza regalos y el logro de gracias en el donante por Realtime sin rec
     await tick();
     await tick();
     setGamificationState({
-      bricks: 110,
+      bricks: 105,
       nivel: { id: 3, nombre: 'Three-Seven-Five' },
       progreso: { porcentaje: 0 },
-      logros: [{
-        id: 'thanks-for-the-gift', type: 'regalo', nombre: 'Gratitude is the sign of noble souls',
-        descripcion: 'Un coleccionista te dio las gracias por tu regalo.', bricks: 5, cantidad: 1, total: 5,
-      }],
+      logros: [],
     });
     window.__supabaseStub.channels[1].emit({ new: { id: 'thanks-live', type: 'gift_thanks' } });
     await tick();
     await tick();
-    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '110');
+    assert.equal(window.document.querySelector('#gamification-bricks').textContent, '105');
     assert.ok(requests.filter(({ url }) => url === '/gamificacion').length >= 4);
     window.document.querySelector('#gamification-level').click();
-    assert.ok([...window.document.querySelectorAll('#gamification-achievements .achievement-name')]
-      .some(({ textContent }) => textContent === 'Gratitude is the sign of noble souls'));
+    assert.equal(window.document.querySelectorAll('#gamification-achievements .achievement-item').length, 0);
     assert.equal(window.location.pathname, '/');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el cambio de version vacia la bandeja y los toasts V1 y conserva la sesion', async () => {
+  const staleNotification = createNotification('v1-notification', 'Grace', false, {
+    type: 'gift_received', canThank: true,
+    data: { user: 'Grace', amount: 50, message: 'Grace te regaló 50 Bricks.' },
+  });
+  const { dom, window, requests, setNotificationPage } = startApp({
+    initialPage: { notifications: [staleNotification], unreadCount: 1, nextCursor: null },
+  });
+  try {
+    await tick();
+    await tick();
+    const document = window.document;
+    document.querySelector('#open-notifications').click();
+    await tick();
+    assert.ok(document.querySelector('[data-notification-id="v1-notification"]'));
+    assert.equal(document.querySelector('#notifications-unread-badge').hidden, false);
+
+    window.eval("showGamificationToasts({ logrosNuevos: [{ nombre: 'V1 visible', bricksNuevos: 50 }, { nombre: 'V1 pendiente', bricksNuevos: 20 }] })");
+    assert.ok(document.querySelector('#toast-region .toast-task'));
+    window.localStorage.setItem('minipeople.gamificationVersion', 'v1');
+    setNotificationPage({ notifications: [], unreadCount: 0, nextCursor: null });
+    const versionRefresh = window.eval('loadGamification()');
+    await versionRefresh;
+    await tick();
+    assert.equal(document.querySelector('#notifications-dialog').open, false);
+    assert.equal(document.querySelector('#notifications-unread-badge').hidden, true);
+    assert.equal(window.localStorage.getItem('minipeople.gamificationVersion'), 'v2');
+    assert.equal(document.querySelectorAll('#toast-region .toast').length, 0);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.equal(document.querySelectorAll('#toast-region .toast').length, 0);
+    assert.ok(requests.some(({ url, init }) => url === '/gamificacion' && init.headers.Authorization === 'Bearer token-a'));
+
+    window.__supabaseStub.channels[0].emit({ new: { id: 'late-v1-event', type: 'gift_received' } });
+    await tick();
+    assert.equal(document.querySelectorAll('#toast-region .toast-notification').length, 0);
+    document.querySelector('#open-notifications').click();
+    await tick();
+    await tick();
+    assert.equal(document.querySelector('#notifications-status').textContent, 'No tienes notificaciones.');
+    assert.equal(document.querySelectorAll('[data-notification-id]').length, 0);
   } finally {
     dom.window.close();
   }

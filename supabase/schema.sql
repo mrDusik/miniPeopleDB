@@ -9,6 +9,7 @@ create table if not exists public.minifiguras (
   categoria text not null,
   subcategoria text,
   anio integer,
+  nombre_completo text,
   estado_coleccion text not null default 'COLECCIÓN',
   precio_compra numeric(12, 2),
   fecha_compra date,
@@ -25,6 +26,8 @@ create table if not exists public.minifiguras (
   constraint minifiguras_precio_compra_check check (precio_compra is null or precio_compra >= 0),
   constraint minifiguras_precio_check check (precio is null or precio >= 0)
 );
+
+alter table public.minifiguras add column if not exists nombre_completo text;
 
 create index if not exists minifiguras_user_id_idx
   on public.minifiguras (user_id);
@@ -66,6 +69,7 @@ create table if not exists public.user_daily_snapshots (
   pct_explorer numeric(5, 2) not null,
   pct_rarity_hunter numeric(5, 2) not null,
   pct_fan numeric(5, 2) not null,
+  calculation_version text not null default 'v1',
   created_at timestamptz not null default now(),
   constraint user_daily_snapshots_total_figures_check check (total_figures >= 0),
   constraint user_daily_snapshots_total_value_check check (total_value >= 0),
@@ -81,8 +85,13 @@ create table if not exists public.user_daily_snapshots (
     (pct_collector = 0 and pct_explorer = 0 and pct_rarity_hunter = 0 and pct_fan = 0)
     or abs(pct_collector + pct_explorer + pct_rarity_hunter + pct_fan - 100) <= 0.02
   ),
+  constraint user_daily_snapshots_calculation_version_check check (calculation_version in ('v1', 'v2')),
   constraint user_daily_snapshots_user_date_key unique (user_id, snapshot_date)
 );
+
+alter table public.user_daily_snapshots
+  add column if not exists calculation_version text not null default 'v1'
+  check (calculation_version in ('v1', 'v2'));
 
 create index if not exists user_daily_snapshots_user_date_idx
   on public.user_daily_snapshots (user_id, snapshot_date desc);
@@ -115,8 +124,7 @@ create table if not exists public.dna_ponderaciones (
     and fan between 0 and 100
   ),
   constraint dna_ponderaciones_suma_check check (
-    (logro_id in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
-    or (logro_id not in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter + collector + explorer + fan = 100)
+    rarity_hunter + collector + explorer + fan in (0, 100)
   )
 );
 
@@ -125,54 +133,38 @@ alter table public.dna_ponderaciones
 
 alter table public.dna_ponderaciones
   add constraint dna_ponderaciones_suma_check check (
-    (logro_id in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter = 0 and collector = 0 and explorer = 0 and fan = 0)
-    or (logro_id not in ('someone-liked-your-collection', 'thanks-for-the-gift') and rarity_hunter + collector + explorer + fan = 100)
+    rarity_hunter + collector + explorer + fan in (0, 100)
   );
 
+with weight_groups(logro_ids, rarity_hunter, collector, explorer, fan) as (
+  values
+    (array['block-by-block', 'first-contact', 'handshake', 'crew', 'brick-alliance', 'full-house', 'community', 'curator', 'grail-seeker', 'nerd', 'curiosity-driven', 'oh-you-shouldnt-have', 'is-it-my-birthday-or-what', 'gratitude-is-the-sign-of-noble-souls', 'great-manners'], 0, 0, 0, 0),
+    (array['solid-investment', 'sweet-find'], 5, 80, 5, 10),
+    (array['vault-guardian'], 15, 70, 5, 10),
+    (array['crown-jewel'], 20, 60, 10, 10),
+    (array['treasure-hoard', 'plastic-tycoon', 'the-original-crew'], 50, 50, 0, 0),
+    (array['hidden-gem'], 20, 50, 10, 20),
+    (array['epic-piece'], 40, 30, 5, 25),
+    (array['holy-grail'], 80, 10, 0, 10),
+    (array['unicorn', 'pure-gold-zero-leprechauns-required', 'pop-culture-fan', 'fairgoer', 'strike-it-rich', 'we-all-make-mistakes', 'sewer-treasure'], 100, 0, 0, 0),
+    (array['fresh-start'], 0, 30, 60, 10),
+    (array['almost-there', 'series-showcase', 'retro-find', 'vault-specialist', 'archived-forever'], 0, 90, 0, 10),
+    (array['the-90s', 'the-80s', 'dusty-relic'], 65, 30, 5, 0),
+    (array['the-cornerstone', 'your-adventure-begins', 'new-sea-creature', 'old-bat', 'there-is-a-new-boy-in-the-castle', 'dimensional', 'bricky-mouse', 'daydreamer', 'you-dropped-in-tilted-towers', 'alohomora', 'may-the-sun-shine-upon-you', 'that-belongs-in-a-museum', 'clever-girl', 'a-new-warrior-joins-the-tribe', 'sssss-boom', 'unlocking-the-monkie-power', 'upgrade-complete-new-knight-in-the-realm', 'iron-sharpens-iron-brother-sharpens-brother', 'im-going-to-be-the-king-of-the-pirates', 'land-ho', 'you-almost-caught-captain-jack-sparrow', 'i-choose-you', 'gotta-go-fast', 'houston-weve-had-a-problem-here', 'web-slinger', 'are-you-ready-kids', 'warsie', 'trekkie', 'welcome-to-the-upsidedown', 'i-can-do-this-all-day', 'its-a-me-mario', 'cowabunga', 'my-precious', 'its-dangerous-to-go-alone-take-this', 'honey-where-are-my-paaannts', 'welcome-to-apocalypseburg', 'the-worst-guy-in-the-world', 'ay-caramba', 'theres-a-snake-in-my-boot', 'a-new-cowboy-in-the-wild-west'], 0, 10, 90, 0),
+    (array['category-halfway', 'theme-specialist', 'category-conquest', 'major-milestone', 'category-dominance', 'theme-master', 'grand-horizon', 'mega-specialist', 'grand-category-legend'], 0, 60, 0, 40),
+    (array['retired-police', 'retired-firefighter', 'retired-courier'], 80, 20, 0, 0),
+    (array['i-have-a-soft-spot-for-him', 'dear-olivusik'], 25, 25, 25, 25),
+    (array['youngling', 'padawan', 'jedi-knight', 'jedi-master', 'grand-master', 'muggle', 'first-year', 'prefect', 'head-student', 'order-of-merlin', 'sidekick', 'hero', 'superhero', 'legend', 'universe-guardian', 'mouseketeer', 'dream-chaser', 'fairytale-fan', 'magic-master', 'once-upon-a-legend'], 0, 5, 0, 95)
+), projected as (
+  select objective.logro_id, weights.rarity_hunter, weights.collector, weights.explorer, weights.fan
+  from weight_groups weights
+  cross join lateral unnest(weights.logro_ids) as objective(logro_id)
+), removed as (
+  delete from public.dna_ponderaciones existing
+  where not exists (select 1 from projected where projected.logro_id = existing.logro_id)
+)
 insert into public.dna_ponderaciones (logro_id, rarity_hunter, collector, explorer, fan)
-values
-  ('new-mini-person', 0, 80, 10, 10),
-  ('woah', 50, 20, 10, 20),
-  ('deal-master', 80, 10, 0, 10),
-  ('masterpiece', 90, 5, 0, 5),
-  ('holy-grail', 80, 10, 0, 10),
-  ('omgold', 95, 5, 0, 0),
-  ('lets-go', 0, 5, 90, 5),
-  ('collector', 5, 90, 0, 5),
-  ('step-by-step', 5, 45, 50, 0),
-  ('bricky-potter', 0, 10, 20, 70),
-  ('bricky-mouse', 0, 10, 20, 70),
-  ('its-a-me-mario', 0, 10, 20, 70),
-  ('green-hill-zone', 0, 10, 20, 70),
-  ('dimensional', 60, 10, 20, 10),
-  ('warsie', 0, 10, 20, 70),
-  ('in-ny-i-was', 80, 10, 0, 10),
-  ('welcome-to-the-upsidedown', 60, 30, 0, 10),
-  ('chill-nancy-im-fine', 80, 10, 0, 10),
-  ('the-legend', 0, 10, 20, 70),
-  ('heh-there-is-another-one-for-you', 0, 10, 20, 70),
-  ('change-will-not-come-in-a-single-sunrise', 0, 10, 20, 70),
-  ('start-poetry', 0, 10, 20, 70),
-  ('mental-breakdown', 90, 5, 0, 5),
-  ('the-dark-plastic', 90, 5, 0, 5),
-  ('concrete-savanna', 90, 5, 0, 5),
-  ('youre-shooting-for-the-stars', 20, 40, 0, 40),
-  ('strike', 20, 40, 0, 40),
-  ('retired-police', 90, 5, 5, 0),
-  ('retired-firefighter', 90, 5, 5, 0),
-  ('retired-doctor', 90, 5, 5, 0),
-  ('trio-of-senior-citizens', 90, 5, 0, 5),
-  ('antiquarian', 80, 10, 0, 10),
-  ('to-lay-the-groundwork', 50, 50, 0, 0),
-  ('investor', 50, 50, 0, 0),
-  ('investment-fund', 50, 50, 0, 0),
-  ('almost-millionaire', 50, 50, 0, 0),
-  ('weirdo', 100, 0, 0, 0),
-  ('hooked', 0, 100, 0, 0),
-  ('land-ho', 0, 0, 100, 0),
-  ('nerd', 0, 0, 0, 100),
-  ('someone-liked-your-collection', 0, 0, 0, 0),
-  ('thanks-for-the-gift', 0, 0, 0, 0)
+select logro_id, rarity_hunter, collector, explorer, fan from projected
 on conflict (logro_id) do update set
   rarity_hunter = excluded.rarity_hunter,
   collector = excluded.collector,
@@ -181,6 +173,18 @@ on conflict (logro_id) do update set
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
+
+create table if not exists private.gamificacion_v2_activation (
+  singleton boolean primary key default true check (singleton),
+  version text not null check (version = 'v2'),
+  activated_at timestamptz not null,
+  available_from date not null,
+  constraint gamificacion_v2_activation_week_check check (
+    available_from = (date_trunc('week', activated_at at time zone 'Europe/Madrid')::date + 7)
+  )
+);
+alter table private.gamificacion_v2_activation enable row level security;
+revoke all on table private.gamificacion_v2_activation from public, anon, authenticated, service_role;
 
 create table if not exists private.daily_sync_runs (
   id uuid primary key default gen_random_uuid(),
@@ -341,18 +345,6 @@ create table if not exists public.agradecimientos_regalo (
   created_at timestamptz not null default now(),
   constraint agradecimientos_regalo_distintos_check check (thanker_id <> donor_id)
 );
-
-create table if not exists private.thanks_reward_ownership_migration (
-  singleton boolean primary key default true check (singleton),
-  applied boolean not null default false,
-  updated_at timestamptz not null default now()
-);
-
-insert into private.thanks_reward_ownership_migration (singleton, applied)
-values (true, false)
-on conflict (singleton) do nothing;
-alter table private.thanks_reward_ownership_migration enable row level security;
-revoke all on table private.thanks_reward_ownership_migration from public, anon, authenticated, service_role;
 
 create table if not exists public.ranking_top10_membership (
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -769,23 +761,33 @@ $$;
 
 create or replace function private.daily_sync_user_revision(p_user_id uuid)
 returns text
-language sql
+language plpgsql
 stable
 security definer
 set search_path = pg_catalog, public, private, pg_temp
 as $$
-  select md5(jsonb_build_object(
+begin
+  return md5(jsonb_build_object(
     'figures', coalesce((
       select jsonb_agg(jsonb_build_array(
-        figures.id, figures.nombre, figures.descripcion, figures.categoria, figures.subcategoria,
+        figures.id, figures.nombre, figures.descripcion, figures.nombre_completo, figures.categoria, figures.subcategoria,
         figures.anio, figures.estado_coleccion, figures.precio_compra, figures.fecha_compra,
         figures.precio, figures.fecha_registro, figures.observada
       ) order by figures.id)
       from public.minifiguras figures where figures.user_id = p_user_id
     ), '[]'::jsonb),
     'gifts', coalesce((
-      select jsonb_agg(jsonb_build_array(gifts.donante_id, gifts.fecha) order by gifts.donante_id)
+      select jsonb_agg(jsonb_build_array(gifts.donante_id, gifts.receptor_id, gifts.semana, gifts.fecha) order by gifts.donante_id, gifts.semana)
       from public.regalos_enviados gifts where gifts.receptor_id = p_user_id
+    ), '[]'::jsonb),
+    'friend_requests', coalesce((
+      select jsonb_agg(jsonb_build_array(request.id, request.sender_id, request.recipient_id, request.status, request.updated_at) order by request.id)
+      from public.friend_requests request where p_user_id in (request.sender_id, request.recipient_id)
+    ), '[]'::jsonb),
+    'friendships', coalesce((
+      select jsonb_agg(jsonb_build_array(friendship.user_low_id, friendship.user_high_id, friendship.created_at)
+        order by friendship.user_low_id, friendship.user_high_id)
+      from public.friendships friendship where p_user_id in (friendship.user_low_id, friendship.user_high_id)
     ), '[]'::jsonb),
     'thanks', coalesce((
       select jsonb_agg(jsonb_build_array(
@@ -794,10 +796,12 @@ as $$
       from public.agradecimientos_regalo thanks
       where thanks.thanker_id = p_user_id or thanks.donor_id = p_user_id
     ), '[]'::jsonb),
+    'version', 'v2',
     'fingerprint', coalesce((
       select version.fingerprint from public.gamificacion_categoria_version version where version.singleton = true
     ), '')
-  )::text)
+  )::text);
+end;
 $$;
 
 create or replace function public.leer_daily_sync_fuentes(p_run_id uuid, p_lease_owner uuid, p_user_id uuid)
@@ -814,6 +818,7 @@ declare
   v_thanks_sent integer;
   v_thanks_received integer;
   v_fingerprint text;
+  v_social_sources jsonb;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception using errcode = '42501', message = 'DAILY_SYNC_NO_AUTORIZADO';
@@ -831,6 +836,7 @@ begin
 
   select coalesce(jsonb_agg(jsonb_build_object(
     'id', figures.id,
+    'nombreCompleto', figures.nombre_completo,
     'categoria', figures.categoria,
     'subcategoria', figures.subcategoria,
     'anio', figures.anio,
@@ -851,6 +857,26 @@ begin
   into v_thanks_sent, v_thanks_received
   from public.agradecimientos_regalo thanks
   where thanks.thanker_id = p_user_id or thanks.donor_id = p_user_id;
+  select jsonb_build_object(
+    'friends', (select count(*)::integer from public.friendships friendship
+      where p_user_id in (friendship.user_low_id, friendship.user_high_id)),
+    'sent_pending', (select count(*)::integer from public.friend_requests request
+      where request.sender_id = p_user_id and request.status = 'pending'),
+    'accepted_sent', (select count(*)::integer from public.friend_requests request
+      where request.sender_id = p_user_id and request.status = 'accepted'
+        and exists (select 1 from public.friendships friendship
+          where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+            and friendship.user_high_id = greatest(request.sender_id, request.recipient_id))),
+    'accepted_received', (select count(*)::integer from public.friend_requests request
+      where request.recipient_id = p_user_id and request.status = 'accepted'
+        and exists (select 1 from public.friendships friendship
+          where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+            and friendship.user_high_id = greatest(request.sender_id, request.recipient_id))),
+    'global_gifts_received', coalesce(v_gifts_received, 0),
+    'weekly_gifts_received', coalesce(v_weekly_gifts_received, 0),
+    'thanks_sent', coalesce(v_thanks_sent, 0),
+    'thanks_received', coalesce(v_thanks_received, 0)
+  ) into v_social_sources;
   select version.fingerprint into v_fingerprint
   from public.gamificacion_categoria_version version where version.singleton = true;
 
@@ -861,6 +887,8 @@ begin
     'weeklyGiftsReceived', coalesce(v_weekly_gifts_received, 0),
     'thanksSent', coalesce(v_thanks_sent, 0),
     'thanksReceived', coalesce(v_thanks_received, 0),
+    'socialSources', v_social_sources,
+    'version', 'v2',
     'fingerprint', coalesce(v_fingerprint, '')
   );
 end;
@@ -958,14 +986,15 @@ begin
   v_dna := private.dna_calcular(p_user_id);
   insert into public.user_daily_snapshots (
     user_id, snapshot_date, total_figures, total_value, bricks, level,
-    pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+    pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
   ) values (
     p_user_id, v_run.snapshot_date, v_total_figures, v_total_value,
     (p_state->>'bricks')::integer, v_level,
     round((v_dna->'porcentajes'->>'collector')::numeric, 2),
     round((v_dna->'porcentajes'->>'explorer')::numeric, 2),
     round((v_dna->'porcentajes'->>'rarityHunter')::numeric, 2),
-    round((v_dna->'porcentajes'->>'fan')::numeric, 2)
+    round((v_dna->'porcentajes'->>'fan')::numeric, 2),
+    'v2'
   ) on conflict (user_id, snapshot_date) do update set
     total_figures = excluded.total_figures,
     total_value = excluded.total_value,
@@ -974,7 +1003,8 @@ begin
     pct_collector = excluded.pct_collector,
     pct_explorer = excluded.pct_explorer,
     pct_rarity_hunter = excluded.pct_rarity_hunter,
-    pct_fan = excluded.pct_fan;
+    pct_fan = excluded.pct_fan,
+    calculation_version = excluded.calculation_version;
 
   update private.daily_sync_users
   set status = 'completed', attempts = attempts + 1,
@@ -1027,14 +1057,17 @@ returns table (
 language sql
 stable
 security definer
-set search_path = pg_catalog, pg_temp
+set search_path = pg_catalog, private, pg_temp
 as $$
   with fecha_local as (
-    select (p_instante at time zone 'Europe/Madrid')::date as fecha
+    select (p_instante at time zone 'Europe/Madrid')::date as fecha,
+      activation.available_from
+    from (select 1) seed
+    left join private.gamificacion_v2_activation activation on activation.singleton = true
   )
   select
-    fecha >= date '2026-10-12',
-    date '2026-10-12',
+    coalesce(available_from is not null and fecha >= available_from, false),
+    available_from,
     fecha,
     fecha - (extract(isodow from fecha)::integer - 1),
     fecha - (extract(isodow from fecha)::integer - 1) + 6
@@ -1057,11 +1090,13 @@ as $$
     from public.user_daily_snapshots snapshot
     cross join context
     where snapshot.snapshot_date = context.week_start - 1
+      and snapshot.calculation_version = 'v2'
   ), latest as (
     select distinct on (snapshot.user_id) snapshot.user_id, snapshot.bricks
     from public.user_daily_snapshots snapshot
     cross join context
     where snapshot.snapshot_date between context.week_start and least(context.week_end, context.reference_date)
+      and snapshot.calculation_version = 'v2'
     order by snapshot.user_id, snapshot.snapshot_date desc
   ), ranked as (
     select latest.user_id,
@@ -1945,6 +1980,7 @@ begin
   values (current_user_id, p_receptor_id) returning id into request_id;
   insert into public.notificaciones(user_id, type, payload, social_request_id)
   values (p_receptor_id, 'friend_request', jsonb_build_object('user', sender_username), request_id);
+  perform private.gamificacion_reconstruir_social(array[current_user_id, p_receptor_id]);
   return jsonb_build_object('ok', true, 'requestId', request_id, 'status', 'pending');
 exception
   when unique_violation then
@@ -1960,12 +1996,13 @@ set search_path = ''
 as $$
 declare
   current_user_id uuid := auth.uid();
+  request_sender_id uuid;
   request_status text;
 begin
   if current_user_id is null or auth.role() is distinct from 'authenticated' then
     raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
   end if;
-  select status into request_status from public.friend_requests
+  select sender_id, status into request_sender_id, request_status from public.friend_requests
   where id = p_solicitud_id and recipient_id = current_user_id for update;
   if not found then
     raise exception using errcode = 'P0002', message = 'SOLICITUD_NO_ENCONTRADA';
@@ -1976,6 +2013,7 @@ begin
   if request_status = 'pending' then
     update public.friend_requests set status = 'rejected', updated_at = now() where id = p_solicitud_id;
   end if;
+  perform private.gamificacion_reconstruir_social(array[request_sender_id, current_user_id]);
   return jsonb_build_object('ok', true, 'status', 'rejected');
 end;
 $$;
@@ -2005,6 +2043,7 @@ begin
   if request_status = 'accepted' then
     update public.notificaciones set social_request_accepted = true
     where type = 'friend_request' and social_request_id = p_solicitud_id and user_id = current_user_id;
+    perform private.gamificacion_reconstruir_social(array[request_sender_id, request_recipient_id]);
     return jsonb_build_object('ok', true, 'status', 'accepted', 'alreadyAccepted', true);
   end if;
 
@@ -2018,6 +2057,7 @@ begin
   on conflict (user_id, type, social_request_id) where social_request_id is not null do nothing;
   update public.notificaciones set social_request_accepted = true
   where type = 'friend_request' and social_request_id = p_solicitud_id and user_id = current_user_id;
+  perform private.gamificacion_reconstruir_social(array[request_sender_id, request_recipient_id]);
   return jsonb_build_object('ok', true, 'status', 'accepted', 'alreadyAccepted', false);
 end;
 $$;
@@ -2231,6 +2271,9 @@ begin
   if removed_count > 0 and request_id is not null then
     delete from public.friend_requests where id = request_id and status = 'accepted';
   end if;
+  if removed_count > 0 then
+    perform private.gamificacion_reconstruir_social(array[actor_id, p_amigo_id]);
+  end if;
   return jsonb_build_object('ok', true, 'removed', removed_count > 0);
 end;
 $$;
@@ -2261,6 +2304,85 @@ $$;
 
 revoke all on function public.amigos_resumen(text, text), public.amigos_contadores() from public, anon, service_role;
 grant execute on function public.amigos_resumen(text, text), public.amigos_contadores() to authenticated;
+
+create or replace function public.gamificacion_social_fuentes()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+begin
+  if actor_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  return jsonb_build_object(
+    'friends', (
+      select count(*)::integer from public.friendships
+      where actor_id in (user_low_id, user_high_id)
+    ),
+    'sent_pending', (
+      select count(*)::integer from public.friend_requests
+      where sender_id = actor_id and status = 'pending'
+    ),
+    'accepted_sent', (
+      select count(*)::integer from public.friend_requests request
+      where request.sender_id = actor_id and request.status = 'accepted'
+        and exists (
+          select 1 from public.friendships friendship
+          where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+            and friendship.user_high_id = greatest(request.sender_id, request.recipient_id)
+        )
+    ),
+    'accepted_received', (
+      select count(*)::integer from public.friend_requests request
+      where request.recipient_id = actor_id and request.status = 'accepted'
+        and exists (
+          select 1 from public.friendships friendship
+          where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+            and friendship.user_high_id = greatest(request.sender_id, request.recipient_id)
+        )
+    ),
+    'global_gifts_received', (
+      select count(*)::integer from public.regalos_enviados
+      where receptor_id = actor_id and semana = '0001-01-01'
+    ),
+    'weekly_gifts_received', (
+      select count(*)::integer from public.regalos_enviados
+      where receptor_id = actor_id and semana <> '0001-01-01'
+    ),
+    'thanks_sent', (
+      select count(*)::integer from public.agradecimientos_regalo where thanker_id = actor_id
+    ),
+    'thanks_received', (
+      select count(*)::integer from public.agradecimientos_regalo where donor_id = actor_id
+    ),
+    'source_revision', md5(concat_ws('|',
+      coalesce((
+        select jsonb_agg(jsonb_build_array(id, sender_id, recipient_id, status, updated_at) order by id)::text
+        from public.friend_requests where actor_id in (sender_id, recipient_id)
+      ), '[]'),
+      coalesce((
+        select jsonb_agg(jsonb_build_array(user_low_id, user_high_id, created_at) order by user_low_id, user_high_id)::text
+        from public.friendships where actor_id in (user_low_id, user_high_id)
+      ), '[]'),
+      coalesce((
+        select jsonb_agg(jsonb_build_array(donante_id, receptor_id, semana, fecha) order by donante_id, receptor_id, semana)::text
+        from public.regalos_enviados where receptor_id = actor_id
+      ), '[]'),
+      coalesce((
+        select jsonb_agg(jsonb_build_array(gift_notification_id, thanker_id, donor_id, created_at) order by gift_notification_id)::text
+        from public.agradecimientos_regalo where actor_id in (thanker_id, donor_id)
+      ), '[]')
+    ))
+  );
+end;
+$$;
+
+revoke all on function public.gamificacion_social_fuentes() from public, anon, service_role;
+grant execute on function public.gamificacion_social_fuentes() to authenticated;
 
 create or replace function public.guardar_perfil_usuario(
   p_username text,
@@ -2386,9 +2508,118 @@ begin;
 drop function if exists public.ranking_global();
 drop function if exists public.ranking_global(text);
 
+create or replace function public.leer_recalculo_gamificacion_categorias(
+  p_after_user_id uuid default null,
+  p_limit integer default 1000
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, auth, pg_temp
+as $$
+declare
+  page_user_ids uuid[];
+  page_end_user_id uuid;
+  has_more boolean := false;
+  applied_fingerprint text;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception using errcode = '42501', message = 'RECALCULO_CATEGORIAS_NO_AUTORIZADO';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 1000 then
+    raise exception using errcode = '22023', message = 'RECALCULO_CATEGORIAS_PAGINACION_INVALIDA';
+  end if;
+
+  select coalesce(array_agg(page.user_id order by page.user_id), '{}'::uuid[])
+  into page_user_ids
+  from (
+    select users.id as user_id
+    from auth.users users
+    where p_after_user_id is null or users.id > p_after_user_id
+    order by users.id
+    limit p_limit
+  ) page;
+  if cardinality(page_user_ids) > 0 then
+    page_end_user_id := page_user_ids[cardinality(page_user_ids)];
+    select exists(select 1 from auth.users users where users.id > page_end_user_id) into has_more;
+  end if;
+
+  select version.fingerprint into applied_fingerprint
+  from public.gamificacion_categoria_version version
+  where version.singleton = true;
+
+  return jsonb_build_object(
+    'version', 'v2',
+    'fingerprint', applied_fingerprint,
+    'users', to_jsonb(page_user_ids),
+    'next_cursor', case when has_more then to_jsonb(page_end_user_id) else 'null'::jsonb end,
+    'has_more', has_more,
+    'figures', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'user_id', figure.user_id,
+        'id', figure.id,
+        'nombreCompleto', figure.nombre_completo,
+        'categoria', figure.categoria,
+        'subcategoria', figure.subcategoria,
+        'anio', figure.anio,
+        'estado_coleccion', figure.estado_coleccion,
+        'precio', figure.precio,
+        'precio_compra', figure.precio_compra
+      ) order by figure.user_id, figure.id)
+      from public.minifiguras figure where figure.user_id = any(page_user_ids)
+    ), '[]'::jsonb),
+    'social_sources', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'user_id', page.user_id,
+        'friends', page.friends,
+        'sent_pending', page.sent_pending,
+        'accepted_sent', page.accepted_sent,
+        'accepted_received', page.accepted_received,
+        'global_gifts_received', page.global_gifts_received,
+        'weekly_gifts_received', page.weekly_gifts_received,
+        'thanks_sent', page.thanks_sent,
+        'thanks_received', page.thanks_received
+      ) order by page.user_id)
+      from (
+        select users.id as user_id,
+          (select count(*)::integer from public.friendships friendship
+            where users.id in (friendship.user_low_id, friendship.user_high_id)) as friends,
+          (select count(*)::integer from public.friend_requests request
+            where request.sender_id = users.id and request.status = 'pending') as sent_pending,
+          (select count(*)::integer from public.friend_requests request
+            where request.sender_id = users.id and request.status = 'accepted'
+              and exists (select 1 from public.friendships friendship
+                where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+                  and friendship.user_high_id = greatest(request.sender_id, request.recipient_id))) as accepted_sent,
+          (select count(*)::integer from public.friend_requests request
+            where request.recipient_id = users.id and request.status = 'accepted'
+              and exists (select 1 from public.friendships friendship
+                where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+                  and friendship.user_high_id = greatest(request.sender_id, request.recipient_id))) as accepted_received,
+          (select count(*)::integer from public.regalos_enviados gift
+            where gift.receptor_id = users.id and gift.semana = '0001-01-01') as global_gifts_received,
+          (select count(*)::integer from public.regalos_enviados gift
+            where gift.receptor_id = users.id and gift.semana <> '0001-01-01') as weekly_gifts_received,
+          (select count(*)::integer from public.agradecimientos_regalo thanks
+            where thanks.thanker_id = users.id) as thanks_sent,
+          (select count(*)::integer from public.agradecimientos_regalo thanks
+            where thanks.donor_id = users.id) as thanks_received
+        from unnest(page_user_ids) as users(id)
+      ) page
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.leer_recalculo_gamificacion_categorias(uuid, integer) from public, anon, authenticated;
+grant execute on function public.leer_recalculo_gamificacion_categorias(uuid, integer) to service_role;
+
+drop function if exists public.aplicar_recalculo_gamificacion_categorias(text, jsonb);
+
 create or replace function public.aplicar_recalculo_gamificacion_categorias(
   p_fingerprint text,
-  p_estados jsonb
+  p_estados jsonb,
+  p_version text default 'v1'
 )
 returns boolean
 language plpgsql
@@ -2397,6 +2628,7 @@ set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   v_fingerprint text;
+  v_migration_status text;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception using errcode = '42501', message = 'RECALCULO_CATEGORIAS_NO_AUTORIZADO';
@@ -2404,6 +2636,16 @@ begin
   if p_fingerprint is null or p_fingerprint !~ '^[0-9a-f]{64}$'
     or p_estados is null or jsonb_typeof(p_estados) is distinct from 'array' then
     raise exception using errcode = '22023', message = 'RECALCULO_CATEGORIAS_INVALIDO';
+  end if;
+  if p_version is distinct from 'v2' then
+    raise exception using errcode = '55000', message = 'RECALCULO_CATEGORIAS_VERSION_OBSOLETA';
+  end if;
+  if to_regclass('private.gamificacion_v2_migration') is not null then
+    execute 'select status from private.gamificacion_v2_migration where singleton = true'
+      into v_migration_status;
+    if v_migration_status is distinct from 'applied' then
+      raise exception using errcode = '55000', message = 'RECALCULO_CATEGORIAS_MIGRACION_NO_APLICADA';
+    end if;
   end if;
 
   select fingerprint into v_fingerprint
@@ -2438,13 +2680,17 @@ begin
   update public.gamificacion_categoria_version
   set fingerprint = p_fingerprint, updated_at = now()
   where singleton = true;
+  if to_regclass('private.gamificacion_v2_migration') is not null then
+    execute 'update private.gamificacion_v2_migration set fingerprint = $1 where singleton = true and status = ''applied'''
+      using p_fingerprint;
+  end if;
 
   return true;
 end;
 $$;
 
-revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) from public, anon, authenticated;
-grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb) to service_role;
+revoke all on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb, text) from public, anon, authenticated;
+grant execute on function public.aplicar_recalculo_gamificacion_categorias(text, jsonb, text) to service_role;
 
 create function public.ranking_global(p_criterio text default 'nivel')
 returns table (
@@ -2594,12 +2840,14 @@ begin
       select snapshot.user_id, snapshot.bricks
       from public.user_daily_snapshots snapshot
       where snapshot.snapshot_date = v_context.week_start - 1
+        and snapshot.calculation_version = 'v2'
     ), latest as (
       select distinct on (snapshot.user_id)
         snapshot.user_id, snapshot.bricks, snapshot.snapshot_date
       from public.user_daily_snapshots snapshot
       where snapshot.snapshot_date between v_context.week_start
         and least(v_context.week_end, v_context.reference_date)
+        and snapshot.calculation_version = 'v2'
       order by snapshot.user_id, snapshot.snapshot_date desc
     ), candidates as (
       select
@@ -2773,18 +3021,8 @@ set search_path = public, pg_temp
 as $$
 declare
   v_donante_id uuid := auth.uid();
-  v_bricks integer;
-  v_cantidad integer;
-  v_nivel_id integer;
-  v_nivel_nombre text;
-  v_siguiente_id integer;
-  v_siguiente_nombre text;
-  v_desde integer;
-  v_hasta integer;
-  v_logros jsonb;
   v_nombre_donante text;
   v_amount integer := case when p_semana = '0001-01-01' then 50 else 5 end;
-  v_achievement_id text := case when p_semana = '0001-01-01' then 'someone-liked-your-collection' else 'youre-on-fire-this-week' end;
 begin
   if v_donante_id is null then
     raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
@@ -2793,9 +3031,8 @@ begin
     raise exception using errcode = 'P0001', message = 'AUTORREGALO_NO_PERMITIDO';
   end if;
 
-  select g.bricks, g.logros into v_bricks, v_logros
-  from public.gamificacion g
-  where g.user_id = p_receptor_id
+  perform 1 from public.gamificacion
+  where user_id = p_receptor_id
   for update;
   if not found then
     raise exception using errcode = 'P0001', message = 'RECEPTOR_NO_ENCONTRADO';
@@ -2808,59 +3045,7 @@ begin
     raise exception using errcode = 'P0001', message = 'REGALO_YA_ENVIADO';
   end;
 
-  select count(*)::integer into v_cantidad
-  from public.regalos_enviados
-  where receptor_id = p_receptor_id
-    and (semana = '0001-01-01') = (p_semana = '0001-01-01');
-  v_bricks := v_bricks + v_amount;
-
-  select level.id, level.nombre, level.umbral, next_level.id, next_level.nombre, coalesce(next_level.umbral, level.umbral)
-  into v_nivel_id, v_nivel_nombre, v_desde, v_siguiente_id, v_siguiente_nombre, v_hasta
-  from (values
-    (0,'Duplo',0),(1,'Stud',20),(2,'Plate',50),(3,'Three-Seven-Five',100),(4,'Citizen',200),(5,'Skeleton',300),
-    (6,'Pirate',400),(7,'Captain',500),(8,'Redbeard',750),(9,'Forestman',1000),(10,'Wolfpack',1500),(11,'Wolfpack Master',2000),
-    (12,'Ninja',2500),(13,'RX',3000),(14,'Dragon Form',5000),(15,'Space Baby',6000),(16,'Space Man',7000),(17,'Blacktron',8000),
-    (18,'Technic',9000),(19,'Majisto',10000),(20,'Castle Knight',12500),(21,'Chrome Gold',15000),(22,'Wooden Duck',20000),
-    (23,'De Billund',30000),(24,'Mr. Kirk',50000),(25,'Mr. Gold',100000)
-  ) as level(id,nombre,umbral)
-  left join (values
-    (0,'Duplo',0),(1,'Stud',20),(2,'Plate',50),(3,'Three-Seven-Five',100),(4,'Citizen',200),(5,'Skeleton',300),
-    (6,'Pirate',400),(7,'Captain',500),(8,'Redbeard',750),(9,'Forestman',1000),(10,'Wolfpack',1500),(11,'Wolfpack Master',2000),
-    (12,'Ninja',2500),(13,'RX',3000),(14,'Dragon Form',5000),(15,'Space Baby',6000),(16,'Space Man',7000),(17,'Blacktron',8000),
-    (18,'Technic',9000),(19,'Majisto',10000),(20,'Castle Knight',12500),(21,'Chrome Gold',15000),(22,'Wooden Duck',20000),
-    (23,'De Billund',30000),(24,'Mr. Kirk',50000),(25,'Mr. Gold',100000)
-  ) as next_level(id,nombre,umbral) on next_level.id = level.id + 1
-  where level.umbral <= v_bricks
-  order by level.umbral desc
-  limit 1;
-
-  select coalesce(jsonb_agg(item), '[]'::jsonb) into v_logros
-  from jsonb_array_elements(v_logros) item
-  where item->>'id' <> v_achievement_id;
-  v_logros := v_logros || jsonb_build_array(jsonb_build_object(
-    'id', v_achievement_id,
-    'type', 'regalo',
-    'nombre', case when v_amount = 50 then 'Your collection is top!' else 'You''re on fire this week!' end,
-    'descripcion', case when v_amount = 50 then 'Has aparecido en el ranking global y te han hecho un regalo.' else 'Has aparecido en el ranking semanal y te han hecho un regalo.' end,
-    'bricks', v_amount,
-    'repetible', true,
-    'cantidad', v_cantidad,
-    'total', v_cantidad * v_amount
-  ));
-
-  update public.gamificacion
-  set bricks = v_bricks,
-      nivel = jsonb_build_object('id', v_nivel_id, 'nombre', v_nivel_nombre, 'umbral', v_desde),
-      siguiente_nivel = case when v_siguiente_id is null then null else jsonb_build_object('id', v_siguiente_id, 'nombre', v_siguiente_nombre, 'umbral', v_hasta) end,
-      progreso = jsonb_build_object(
-        'actual', v_bricks,
-        'desde', v_desde,
-        'hasta', v_hasta,
-        'porcentaje', case when v_siguiente_id is null then 100 else round(least(100, greatest(0, ((v_bricks - v_desde)::numeric / (v_hasta - v_desde)) * 100))) end
-      ),
-      logros = v_logros,
-      updated_at = now()
-  where user_id = p_receptor_id;
+  perform private.gamificacion_reconstruir_social(array[p_receptor_id]);
 
   select coalesce(profile.username, 'Coleccionista') into v_nombre_donante
   from public.user_profiles profile
@@ -2985,98 +3170,196 @@ begin
 end;
 $$;
 
-create or replace function private.migrar_propiedad_logro_agradecimiento()
+create or replace function private.gamificacion_reconstruir_social(p_user_ids uuid[])
 returns void
 language plpgsql
 security definer
 set search_path = pg_catalog, public, private, pg_temp
 as $$
 declare
-  v_applied boolean;
-  v_user record;
-  v_logros jsonb;
+  target_user_id uuid;
+  current_logros jsonb;
+  collection_logros jsonb;
+  social_logros jsonb;
+  next_logros jsonb;
+  current_bricks integer;
+  next_bricks integer;
+  friend_count integer;
+  pending_sent_count integer;
+  accepted_sent_count integer;
+  accepted_received_count integer;
+  global_gift_count integer;
+  weekly_gift_count integer;
+  thanks_sent_count integer;
+  thanks_received_count integer;
 begin
-  select applied into v_applied
-  from private.thanks_reward_ownership_migration
-  where singleton = true
-  for update;
-  if coalesce(v_applied, false) then
+  if coalesce(cardinality(p_user_ids), 0) = 0 then
     return;
   end if;
 
-  for v_user in
-    select users.user_id,
-      count(*) filter (where thanks.thanker_id = users.user_id)::integer as sent_count,
-      count(*) filter (where thanks.donor_id = users.user_id)::integer as received_count
-    from (
-      select thanker_id as user_id from public.agradecimientos_regalo
-      union
-      select donor_id as user_id from public.agradecimientos_regalo
-    ) users
-    join public.gamificacion gamification on gamification.user_id = users.user_id
-    join public.agradecimientos_regalo thanks
-      on thanks.thanker_id = users.user_id or thanks.donor_id = users.user_id
-    group by users.user_id
+  for target_user_id in
+    select distinct requested.user_id
+    from unnest(p_user_ids) as requested(user_id)
+    where requested.user_id is not null
+    order by requested.user_id
   loop
-    select logros into v_logros
-    from public.gamificacion where user_id = v_user.user_id;
-    select coalesce(jsonb_agg(entries.item order by entries.ordinality), '[]'::jsonb)
-    into v_logros
-    from jsonb_array_elements(v_logros) with ordinality as entries(item, ordinality)
-    where entries.item->>'id' <> 'thanks-for-the-gift';
-    if v_user.received_count > 0 then
-      v_logros := v_logros || jsonb_build_array(jsonb_build_object(
-        'id', 'thanks-for-the-gift',
-        'type', 'regalo',
-        'nombre', 'Gratitude is the sign of noble souls',
-        'descripcion', 'Un coleccionista te dio las gracias por tu regalo.',
-        'bricks', 5,
-        'repetible', true,
-        'cantidad', v_user.received_count,
-        'total', v_user.received_count * 5
-      ));
-    end if;
-    update public.gamificacion
-    set logros = v_logros, updated_at = clock_timestamp()
-    where user_id = v_user.user_id;
-    if v_user.received_count <> v_user.sent_count then
-      perform private.gamificacion_ajustar_bricks(
-        v_user.user_id, (v_user.received_count - v_user.sent_count) * 5
-      );
-    end if;
+    insert into public.gamificacion(user_id, bricks, nivel, siguiente_nivel, progreso, logros)
+    values (
+      target_user_id,
+      0,
+      jsonb_build_object('id', 0, 'nombre', 'Duplo', 'umbral', 0),
+      jsonb_build_object('id', 1, 'nombre', 'Stud', 'umbral', 20),
+      jsonb_build_object('actual', 0, 'desde', 0, 'hasta', 20, 'porcentaje', 0),
+      '[]'::jsonb
+    )
+    on conflict (user_id) do nothing;
   end loop;
 
-  update private.thanks_reward_ownership_migration
-  set applied = true, updated_at = clock_timestamp()
-  where singleton = true;
+  perform gamification.user_id
+  from public.gamificacion gamification
+  where gamification.user_id = any(p_user_ids)
+  order by gamification.user_id
+  for update;
+
+  for target_user_id in
+    select distinct requested.user_id
+    from unnest(p_user_ids) as requested(user_id)
+    where requested.user_id is not null
+    order by requested.user_id
+  loop
+    select gamification.logros, gamification.bricks
+    into current_logros, current_bricks
+    from public.gamificacion gamification
+    where gamification.user_id = target_user_id;
+
+    select count(*)::integer into friend_count
+    from public.friendships friendship
+    where target_user_id in (friendship.user_low_id, friendship.user_high_id);
+    select count(*)::integer into pending_sent_count
+    from public.friend_requests request
+    where request.sender_id = target_user_id and request.status = 'pending';
+    select count(*)::integer into accepted_sent_count
+    from public.friend_requests request
+    where request.sender_id = target_user_id and request.status = 'accepted'
+      and exists (
+        select 1 from public.friendships friendship
+        where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+          and friendship.user_high_id = greatest(request.sender_id, request.recipient_id)
+      );
+    select count(*)::integer into accepted_received_count
+    from public.friend_requests request
+    where request.recipient_id = target_user_id and request.status = 'accepted'
+      and exists (
+        select 1 from public.friendships friendship
+        where friendship.user_low_id = least(request.sender_id, request.recipient_id)
+          and friendship.user_high_id = greatest(request.sender_id, request.recipient_id)
+      );
+    select count(*) filter (where gift.semana = '0001-01-01')::integer,
+      count(*) filter (where gift.semana <> '0001-01-01')::integer
+    into global_gift_count, weekly_gift_count
+    from public.regalos_enviados gift
+    where gift.receptor_id = target_user_id;
+    select count(*) filter (where thanks.thanker_id = target_user_id)::integer,
+      count(*) filter (where thanks.donor_id = target_user_id)::integer
+    into thanks_sent_count, thanks_received_count
+    from public.agradecimientos_regalo thanks
+    where target_user_id in (thanks.thanker_id, thanks.donor_id);
+
+    select coalesce(jsonb_agg(achievement.item order by achievement.ordinality), '[]'::jsonb)
+    into collection_logros
+    from jsonb_array_elements(coalesce(current_logros, '[]'::jsonb)) with ordinality as achievement(item, ordinality)
+    where achievement.item->>'id' not in (
+      'first-contact', 'handshake', 'crew', 'brick-alliance', 'full-house', 'community',
+      'oh-you-shouldnt-have', 'is-it-my-birthday-or-what',
+      'gratitude-is-the-sign-of-noble-souls', 'great-manners',
+      'someone-liked-your-collection', 'youre-on-fire-this-week', 'thanks-for-the-gift'
+    );
+
+    select coalesce(jsonb_agg(
+      jsonb_build_object(
+        'id', objective.id,
+        'nombre', objective.nombre,
+        'descripcion', objective.descripcion,
+        'bricks', objective.bricks,
+        'repetible', false,
+        'cantidad', objective.cantidad,
+        'total', objective.bricks * objective.cantidad
+      ) || case when objective.tipo = 'regalo' then jsonb_build_object('type', 'regalo') else '{}'::jsonb end
+      order by objective.orden
+    ) filter (where objective.cantidad > 0), '[]'::jsonb)
+    into social_logros
+    from (values
+      (1, 'first-contact', 'First contact', 'Has enviado la primera solicitud de amistad', 2, case when pending_sent_count > 0 or accepted_sent_count > 0 then 1 else 0 end, 'normal'),
+      (2, 'handshake', 'Handshake', 'Has aceptado la primera solicitud de amistad', 3, case when accepted_received_count > 0 then 1 else 0 end, 'normal'),
+      (3, 'crew', 'Crew', 'Tienes 10 amigos', 20, case when friend_count >= 10 then 1 else 0 end, 'normal'),
+      (4, 'brick-alliance', 'Brick Alliance', 'Tienes 20 amigos', 40, case when friend_count >= 20 then 1 else 0 end, 'normal'),
+      (5, 'full-house', 'Full House', 'Tienes 50 amigos', 100, case when friend_count >= 50 then 1 else 0 end, 'normal'),
+      (6, 'community', 'Community', 'Tienes un centenar de amigos', 300, case when friend_count >= 100 then 1 else 0 end, 'normal'),
+      (7, 'oh-you-shouldnt-have', 'Oh! you shouldn''t have!', 'Has recibido tu primer regalo', 20, case when global_gift_count + weekly_gift_count >= 1 then 1 else 0 end, 'regalo'),
+      (8, 'is-it-my-birthday-or-what', 'Is it my birthday or what?!', 'Has recibido 10 regalos', 100, case when global_gift_count + weekly_gift_count >= 10 then 1 else 0 end, 'regalo'),
+      (9, 'gratitude-is-the-sign-of-noble-souls', 'Gratitude is the sign of noble souls', 'Has dado las gracias por primera vez', 5, case when thanks_sent_count >= 1 then 1 else 0 end, 'regalo'),
+      (10, 'great-manners', 'Great manners', 'Has dado las gracias 10 veces', 30, case when thanks_sent_count >= 10 then 1 else 0 end, 'regalo')
+    ) as objective(orden, id, nombre, descripcion, bricks, cantidad, tipo);
+
+    next_logros := collection_logros || social_logros;
+    select coalesce(sum((achievement.item->>'total')::integer), 0)::integer
+      + (global_gift_count * 50) + (weekly_gift_count * 5) + (thanks_received_count * 5)
+    into next_bricks
+    from jsonb_array_elements(next_logros) as achievement(item);
+
+    if current_logros is distinct from next_logros then
+      update public.gamificacion
+      set logros = next_logros, updated_at = now()
+      where user_id = target_user_id;
+    end if;
+    if current_bricks is distinct from next_bricks then
+      perform private.gamificacion_ajustar_bricks(target_user_id, next_bricks - current_bricks);
+    end if;
+  end loop;
 end;
 $$;
 
-select private.migrar_propiedad_logro_agradecimiento();
+revoke all on function private.gamificacion_reconstruir_social(uuid[]) from public, anon, authenticated, service_role;
 
-update public.gamificacion gamification
-set logros = (
-  select coalesce(jsonb_agg(
-    case when achievement.item->>'id' = 'thanks-for-the-gift' then
-      jsonb_set(
-        jsonb_set(achievement.item, '{nombre}', to_jsonb('Gratitude is the sign of noble souls'::text), true),
-        '{descripcion}', to_jsonb('Un coleccionista te dio las gracias por tu regalo.'::text), true
-      )
-    else achievement.item end
-    order by achievement.ordinality
-  ), '[]'::jsonb)
-  from jsonb_array_elements(gamification.logros) with ordinality as achievement(item, ordinality)
-), updated_at = clock_timestamp()
-where gamification.logros @> '[{"id":"thanks-for-the-gift"}]'::jsonb
-  and exists (
-    select 1
-    from jsonb_array_elements(gamification.logros) as achievement(item)
-    where achievement.item->>'id' = 'thanks-for-the-gift'
-      and (
-        achievement.item->>'nombre' is distinct from 'Gratitude is the sign of noble souls'
-        or achievement.item->>'descripcion' is distinct from 'Un coleccionista te dio las gracias por tu regalo.'
-      )
-  );
+create or replace function private.gamificacion_reconstruir_supervivientes_amigos()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $$
+declare
+  surviving_user_ids uuid[];
+begin
+  select coalesce(array_agg(distinct affected.user_id order by affected.user_id), '{}'::uuid[])
+  into surviving_user_ids
+  from (
+    select case when friendship.user_low_id = old.id then friendship.user_high_id else friendship.user_low_id end as user_id
+    from public.friendships friendship
+    where old.id in (friendship.user_low_id, friendship.user_high_id)
+    union all
+    select case when request.sender_id = old.id then request.recipient_id else request.sender_id end as user_id
+    from public.friend_requests request
+    where old.id in (request.sender_id, request.recipient_id)
+  ) affected
+  where affected.user_id is not null and affected.user_id <> old.id;
+
+  delete from public.friendships
+  where old.id in (user_low_id, user_high_id);
+  delete from public.friend_requests
+  where old.id in (sender_id, recipient_id);
+
+  if cardinality(surviving_user_ids) > 0 then
+    perform private.gamificacion_reconstruir_social(surviving_user_ids);
+  end if;
+  return old;
+end;
+$$;
+
+revoke all on function private.gamificacion_reconstruir_supervivientes_amigos() from public, anon, authenticated, service_role;
+drop trigger if exists auth_users_reconstruir_amigos on auth.users;
+create trigger auth_users_reconstruir_amigos
+  before delete on auth.users
+  for each row execute function private.gamificacion_reconstruir_supervivientes_amigos();
 
 with notification_actors as (
   select notification.id, notification.type, notification.gift_semana,
@@ -3126,8 +3409,6 @@ declare
   v_thanker_id uuid := auth.uid();
   v_notification public.notificaciones%rowtype;
   v_thanker_name text;
-  v_thanks_count integer;
-  v_logros jsonb;
 begin
   if v_thanker_id is null then
     raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
@@ -3156,7 +3437,7 @@ begin
   update public.notificaciones set gift_thanked_at = clock_timestamp()
   where id = p_notification_id;
 
-  perform private.gamificacion_ajustar_bricks(v_notification.gift_donante_id, 10);
+  perform private.gamificacion_reconstruir_social(array[v_thanker_id, v_notification.gift_donante_id]);
 
   select coalesce(profile.username, 'Coleccionista') into v_thanker_name
   from public.user_profiles profile where profile.user_id = v_thanker_id;
@@ -3172,25 +3453,6 @@ begin
       'message', v_thanker_name || ' te dio las gracias por tu regalo.'
     )
   );
-
-  select logros into v_logros from public.gamificacion where user_id = v_notification.gift_donante_id;
-  select count(*)::integer into v_thanks_count
-  from public.agradecimientos_regalo where donor_id = v_notification.gift_donante_id;
-  select coalesce(jsonb_agg(item), '[]'::jsonb) into v_logros
-  from jsonb_array_elements(v_logros) item
-  where item->>'id' <> 'thanks-for-the-gift';
-  v_logros := v_logros || jsonb_build_array(jsonb_build_object(
-    'id', 'thanks-for-the-gift',
-    'type', 'regalo',
-    'nombre', 'Gratitude is the sign of noble souls',
-    'descripcion', 'Un coleccionista te dio las gracias por tu regalo.',
-    'bricks', 5,
-    'repetible', true,
-    'cantidad', v_thanks_count,
-    'total', v_thanks_count * 5
-  ));
-  update public.gamificacion set logros = v_logros, updated_at = now()
-  where user_id = v_notification.gift_donante_id;
 
   return jsonb_build_object('ok', true);
 end;
@@ -3279,7 +3541,6 @@ revoke all on function public.agradecer_regalo(uuid) from public, anon, service_
 revoke all on function public.agradecimientos_regalo_count() from public, anon, service_role;
 revoke all on function public.recalcular_agradecimientos_regalo_count(uuid[]) from public, anon, authenticated;
 revoke all on function private.gamificacion_ajustar_bricks(uuid, integer) from public, anon, authenticated, service_role;
-revoke all on function private.migrar_propiedad_logro_agradecimiento() from public, anon, authenticated, service_role;
 revoke all on function private.dna_calcular(uuid) from public, anon, authenticated;
 revoke all on function public.gamificacion_dna() from public, anon;
 revoke all on table public.dna_ponderaciones from public, anon, authenticated;

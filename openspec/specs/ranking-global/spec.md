@@ -83,57 +83,52 @@ Cada entrada de `GET /api/ranking` SHALL incluir `top5Precio` y `top5Antiguedad`
 
 ### Requirement: Enviar un regalo único de Bricks
 
-El sistema SHALL exponer `POST /api/ranking/regalar` para usuarios autenticados con un cuerpo `{ "receptorId": <uuid> }`. Una donación válida SHALL registrar de forma atómica la pareja donante-receptor, incrementar en 50 los Bricks del receptor sin reducir los del donante y actualizar el nivel y progreso del receptor conforme a su nuevo saldo.
+El sistema SHALL conservar `POST /api/ranking/regalar` con JWT y cuerpo `{ "receptorId": <uuid> }`. Una donacion valida SHALL registrar atomicamente pareja, fecha, 50 Bricks directos del receptor, hitos V2 resultantes, nivel, progreso y notificacion, sin reducir el saldo del donante. El saldo final SHALL incluir ademas los hitos V2 que se crucen, sin duplicar el importe directo. La unicidad por pareja SHALL regir dentro del ledger vigente V2; las parejas consumidas V1 SHALL resetearse una sola vez.
 
 #### Scenario: Regalo válido
-- **WHEN** un usuario autenticado envía un receptor existente distinto de sí mismo al que nunca había regalado
-- **THEN** el sistema responde `200`
-- **AND** registra una sola donación con su fecha
-- **AND** el receptor obtiene exactamente 50 Bricks sin alterar el saldo del donante
+- **WHEN** un usuario autenticado regala a un receptor existente distinto de si mismo sin regalo previo en el ledger V2
+- **THEN** recibe 200 y se registra una donacion con fecha
+- **AND** el receptor suma exactamente 50 Bricks directos mas los nuevos hitos que correspondan, sin alterar el saldo del donante
 
 #### Scenario: Autorregalo
-- **WHEN** el `receptorId` coincide con el usuario autenticado
-- **THEN** el sistema responde `400` con `{ "error": "AUTORREGALO_NO_PERMITIDO" }`
-- **AND** no modifica ningún saldo ni registro
+- **WHEN** receptorId es el usuario autenticado
+- **THEN** responde 400 AUTORREGALO_NO_PERMITIDO sin cambios
 
 #### Scenario: Regalo repetido
-- **WHEN** el mismo donante ya regaló anteriormente al receptor
-- **THEN** el sistema responde `409` con `{ "error": "REGALO_YA_ENVIADO" }`
-- **AND** no vuelve a incrementar los Bricks
+- **WHEN** ya existe regalo V2 de la misma pareja
+- **THEN** responde 409 REGALO_YA_ENVIADO sin incrementar saldo ni hitos
 
 #### Scenario: Receptor inexistente
-- **WHEN** `receptorId` no identifica a un usuario con gamificación
-- **THEN** el sistema responde `404` con `{ "error": "RECEPTOR_NO_ENCONTRADO" }`
-- **AND** no registra la donación
+- **WHEN** receptorId no identifica un usuario con gamificacion
+- **THEN** responde 404 RECEPTOR_NO_ENCONTRADO sin registrar donacion
 
 ### Requirement: Registrar el logro de regalo
 
-Cada regalo válido SHALL añadir o incrementar en la gamificación del receptor un logro de tipo `regalo`, con título `Your collection is top!`, descripción `Has aparecido en el ranking global y te han hecho un regalo.` y una contribución de 50 Bricks por regalo. El logro y sus Bricks SHALL conservarse tras posteriores recálculos de gamificación. El titulo actualizado SHALL aplicarse tambien a regalos existentes, conservando su identificador, cantidad y Bricks.
+Cada regalo global V2 SHALL incrementar el contador unificado de regalos recibidos, junto con los semanales, y reevaluar los dos hitos no repetibles de `logros-v2`: primer regalo por 20 Bricks y diez regalos por 100, acumulativos. Los 50 Bricks directos SHALL mantenerse aparte; SHALL NOT recrearse Your collection is top! ni su ID V1. Un recalcule SHALL preservar ledger V2 e hitos vigentes sin convertir cada regalo en una concesion repetible. Las fuentes V1 SHALL eliminarse durante la migracion, no retitularse como V2.
 
 #### Scenario: Primer regalo recibido
-- **WHEN** un usuario recibe su primer regalo válido
-- **THEN** su estado de gamificación contiene el logro de tipo `regalo` con cantidad 1 y total 50
+- **WHEN** una cuenta sin otras recompensas recibe el primer regalo V2 global
+- **THEN** obtiene 70 Bricks, un hito tipo regalo de cantidad 1 y total 20, y ningun logro repetible V1
 
 #### Scenario: Regalos de distintos donantes
-- **WHEN** un receptor obtiene regalos válidos de dos donantes diferentes
-- **THEN** el logro de regalo tiene cantidad 2 y total 100
-- **AND** ambos regalos forman parte de sus Bricks
+- **WHEN** una cuenta recibe dos regalos globales V2 de donantes diferentes
+- **THEN** conserva el primer hito con cantidad 1 y 20 Bricks, mas 100 Bricks directos
+- **AND** el hito de diez solo se obtiene al alcanzar diez regalos combinados
 
 ### Requirement: Notificar regalos y procesar agradecimientos
 
-Una donacion confirmada por el contrato existente de Ranking Global SHALL crear una notificacion para el receptor. El receptor SHALL poder agradecer cada donacion como maximo una vez. El agradecimiento SHALL otorgar 5 Bricks directos al donante original, notificarlo y concederle un logro adicional repetible de tipo `regalo` por recibir las gracias, independiente del logro existente de 50 Bricks por regalo recibido. El usuario que agradece SHALL NOT recibir ese logro ni sus Bricks.
+Una donacion confirmada SHALL crear atomicamente una notificacion agradecible para el receptor, identificando al donante por username y el importe directo de 50. El receptor SHALL poder agradecer cada regalo V2 una sola vez. SHALL mantenerse el pago directo existente de 5 Bricks al donante y su notificacion, pero SHALL eliminarse el logro V1 adicional repetible por recibir las gracias. Los nuevos hitos por agradecer SHALL corresponder al emisor de las gracias, segun `logros-v2`, por la primera y decima accion confirmada. Esta regla SHALL aplicarse tambien al agradecimiento de regalos semanales, sin premios por accion adicionales no definidos en V2.
 
 #### Scenario: Donacion confirmada
-- **WHEN** `POST /api/ranking/regalar` confirma una donacion valida
-- **THEN** el receptor obtiene una notificacion que incluye el nombre visible del donante y los 50 Bricks concedidos
-- **AND** un fallo al crear la notificacion no deja una donacion confirmada sin su evento asociado
+- **WHEN** POST /api/ranking/regalar confirma un regalo
+- **THEN** hay una notificacion con username e importe directo 50
+- **AND** un fallo del evento revierte el regalo y sus consecuencias
 
 #### Scenario: Recompensar un agradecimiento
-- **WHEN** el receptor agradece una donacion valida no agradecida
-- **THEN** el donante recibe exactamente 5 Bricks y una notificacion de agradecimiento
-- **AND** el donante original obtiene una concesion separada de tipo `regalo` por recibir las gracias, por 5 Bricks adicionales
-- **AND** quien agradece no obtiene esa concesion
+- **WHEN** el receptor agradece por primera vez un regalo V2 valido
+- **THEN** el donante obtiene 5 Bricks directos y una notificacion, sin logro repetible V1
+- **AND** quien agradece obtiene su hito V2 de 5 Bricks si aun no lo tenia
 
 #### Scenario: Solicitud duplicada o ajena
-- **WHEN** se repite el agradecimiento o se intenta agradecer una donacion que no fue recibida por la sesion
-- **THEN** la operacion no concede Bricks ni altera logros o notificaciones
+- **WHEN** se repite el agradecimiento o pertenece a un regalo ajeno
+- **THEN** no se conceden Bricks, hitos ni notificaciones adicionales

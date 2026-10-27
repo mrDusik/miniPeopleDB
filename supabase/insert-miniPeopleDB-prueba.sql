@@ -24,63 +24,9 @@ insert into public.gamificacion_categoria_version (singleton, fingerprint)
 values (true, '')
 on conflict (singleton) do update set fingerprint = excluded.fingerprint, updated_at = now();
 
-insert into private.thanks_reward_ownership_migration (singleton, applied)
-values (true, true)
-on conflict (singleton) do update set applied = true, updated_at = now();
-
 insert into private.ranking_top10_reconciliation_state (singleton, initialized)
 values (true, false)
 on conflict (singleton) do update set initialized = false, updated_at = now();
-
-insert into public.dna_ponderaciones (logro_id, rarity_hunter, collector, explorer, fan)
-values
-  ('new-mini-person', 0, 80, 10, 10),
-  ('woah', 50, 20, 10, 20),
-  ('deal-master', 80, 10, 0, 10),
-  ('masterpiece', 90, 5, 0, 5),
-  ('holy-grail', 80, 10, 0, 10),
-  ('omgold', 95, 5, 0, 0),
-  ('lets-go', 0, 5, 90, 5),
-  ('collector', 5, 90, 0, 5),
-  ('step-by-step', 5, 45, 50, 0),
-  ('bricky-potter', 0, 10, 20, 70),
-  ('bricky-mouse', 0, 10, 20, 70),
-  ('its-a-me-mario', 0, 10, 20, 70),
-  ('green-hill-zone', 0, 10, 20, 70),
-  ('dimensional', 60, 10, 20, 10),
-  ('warsie', 0, 10, 20, 70),
-  ('in-ny-i-was', 80, 10, 0, 10),
-  ('welcome-to-the-upsidedown', 60, 30, 0, 10),
-  ('chill-nancy-im-fine', 80, 10, 0, 10),
-  ('the-legend', 0, 10, 20, 70),
-  ('heh-there-is-another-one-for-you', 0, 10, 20, 70),
-  ('change-will-not-come-in-a-single-sunrise', 0, 10, 20, 70),
-  ('start-poetry', 0, 10, 20, 70),
-  ('mental-breakdown', 90, 5, 0, 5),
-  ('the-dark-plastic', 90, 5, 0, 5),
-  ('concrete-savanna', 90, 5, 0, 5),
-  ('youre-shooting-for-the-stars', 20, 40, 0, 40),
-  ('strike', 20, 40, 0, 40),
-  ('retired-police', 90, 5, 5, 0),
-  ('retired-firefighter', 90, 5, 5, 0),
-  ('retired-doctor', 90, 5, 5, 0),
-  ('trio-of-senior-citizens', 90, 5, 0, 5),
-  ('antiquarian', 80, 10, 0, 10),
-  ('to-lay-the-groundwork', 50, 50, 0, 0),
-  ('investor', 50, 50, 0, 0),
-  ('investment-fund', 50, 50, 0, 0),
-  ('almost-millionaire', 50, 50, 0, 0),
-  ('weirdo', 100, 0, 0, 0),
-  ('hooked', 0, 100, 0, 0),
-  ('land-ho', 0, 0, 100, 0),
-  ('nerd', 0, 0, 0, 100),
-  ('someone-liked-your-collection', 0, 0, 0, 0),
-  ('thanks-for-the-gift', 0, 0, 0, 0)
-on conflict (logro_id) do update set
-  rarity_hunter = excluded.rarity_hunter,
-  collector = excluded.collector,
-  explorer = excluded.explorer,
-  fan = excluded.fan;
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,

@@ -270,9 +270,22 @@ export class MinifigurasRepository {
     return validateCatalogo(rows.map(fromRow), await this.officialCategorias());
   }
 
+  async readGamificationCatalog() {
+    const catalogo = await this.readCatalog();
+    const metadata = await this.run(this.client.from(TABLE).select('id,nombre_completo'));
+    if (!Array.isArray(metadata)) throw new CatalogoNoDisponibleError();
+    const fullNames = new Map(metadata
+      .filter(({ nombre_completo }) => typeof nombre_completo === 'string' && nombre_completo.trim() !== '')
+      .map(({ id, nombre_completo }) => [id, nombre_completo]));
+    return catalogo.map((figure) => {
+      const nombreCompleto = fullNames.get(figure.id);
+      return nombreCompleto ? { ...figure, nombreCompleto } : figure;
+    });
+  }
+
   async notifyPersisted() {
     this.lastGamification = this.onCatalogPersisted
-      ? await this.onCatalogPersisted(await this.readCatalog()) ?? null
+      ? await this.onCatalogPersisted(await this.readGamificationCatalog()) ?? null
       : null;
   }
 
@@ -410,7 +423,7 @@ export class MinifigurasRepository {
     return summary;
   }
 
-  async create(minifigura) {
+  async create(minifigura, { nombreCompleto } = {}) {
     const officialCategorias = await this.officialCategorias();
     const nextMinifigura = {
       ...minifigura,
@@ -423,7 +436,11 @@ export class MinifigurasRepository {
       throw new MinifiguraInvalidaError();
     }
 
-    await this.run(this.client.from(TABLE).insert(toRow(nextMinifigura)));
+    const row = toRow(nextMinifigura);
+    if (typeof nombreCompleto === 'string' && nombreCompleto.trim() !== '') {
+      row.nombre_completo = nombreCompleto;
+    }
+    await this.run(this.client.from(TABLE).insert(row));
     await this.notifyPersisted();
     return nextMinifigura;
   }

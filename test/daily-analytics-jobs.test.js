@@ -99,8 +99,9 @@ test('daily-sync conserva regalos semanales sin multiplicarlos por 50', async ()
   await jobs.start();
   await jobs.waitForIdle();
   const state = mock.rows('gamificacion', USER_A)[0];
-  assert.equal(state.bricks, 55);
-  assert.equal(state.logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 5);
+  assert.equal(state.bricks, 75);
+  assert.equal(state.logros.find(({ id }) => id === 'oh-you-shouldnt-have').total, 20);
+  assert.equal(state.logros.some(({ id }) => id === 'youre-on-fire-this-week'), false);
 });
 
 test('daily-sync conserva logros y Bricks derivados del ledger de agradecimientos', async () => {
@@ -114,10 +115,10 @@ test('daily-sync conserva logros y Bricks derivados del ledger de agradecimiento
 
   const thanker = mock.rows('gamificacion', USER_A)[0];
   const donor = mock.rows('gamificacion', USER_B)[0];
-  assert.equal(thanker.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
-  assert.equal(thanker.bricks, 0);
-  assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift')?.cantidad, 1);
-  assert.equal(donor.bricks, 10);
+  assert.equal(thanker.logros.find(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls')?.cantidad, 1);
+  assert.equal(thanker.bricks, 5);
+  assert.equal(donor.logros.some(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls'), false);
+  assert.equal(donor.bricks, 5);
 });
 
 test('usa el scraper compartido, deduplica el ID y preserva precios ante fallo', async () => {
@@ -506,12 +507,12 @@ test('un precio actualizado cambia logro y DNA, y la recalculacion conserva rega
 
   const gamification = mock.rows('gamificacion', USER_A)[0];
   const snapshot = mock.analyticsRows('snapshots').find(({ user_id }) => user_id === USER_A);
-  const woah = gamification.logros.find(({ id }) => id === 'woah');
-  const gift = gamification.logros.find(({ id }) => id === 'someone-liked-your-collection');
+  const sweetFind = gamification.logros.find(({ id }) => id === 'sweet-find');
+  const gift = gamification.logros.find(({ id }) => id === 'oh-you-shouldnt-have');
   const dna = mock.calculateDna(gamification.logros);
-  assert.equal(woah.cantidad, 1);
+  assert.equal(sweetFind.cantidad, 1);
   assert.equal(gift.cantidad, 1);
-  assert.ok(gamification.logros.some(({ id }) => id === 'bricky-potter'));
+  assert.ok(gamification.logros.some(({ id }) => id === 'alohomora'));
   assert.equal(Number(snapshot.total_value), 20);
   assert.deepEqual([
     snapshot.pct_rarity_hunter,

@@ -29,6 +29,25 @@ test('consulta nombres sin depender de precios, categoria o anio y no acepta nom
   await assert.rejects(() => scraper.getNames('MISSING'), { code: 'BRICKSET_NOMBRE_NO_DISPONIBLE' });
 });
 
+test('recupera Name completo y conserva sufijos Comic-Con y Toy Fair fuera de los campos visibles', async () => {
+  const fullNames = new Map([
+    ['COL100', 'Convention Exclusive, Comic-Con 2022'],
+    ['COL200', 'Exclusive Minifigure - Toy Fair 2012'],
+  ]);
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => {
+      const id = url.split('/').at(-1).toUpperCase();
+      return new Response(`<dl><dt>Name</dt><dd>${fullNames.get(id)}</dd></dl>`);
+    },
+  });
+
+  assert.equal(await scraper.getFullName('COL100'), 'Convention Exclusive, Comic-Con 2022');
+  assert.deepEqual(await scraper.getNames('COL100'), { nombre: 'Convention Exclusive', descripcion: null });
+  assert.equal(await scraper.getFullName('COL200'), 'Exclusive Minifigure - Toy Fair 2012');
+  assert.deepEqual(await scraper.getNames('COL200'), { nombre: 'Exclusive Minifigure', descripcion: 'Toy Fair 2012' });
+});
+
 test('extrae Current Value - New en Euros y construye la URL publica', async () => {
   let requestedUrl;
   let requestedOptions;
@@ -67,6 +86,7 @@ test('trata Current Value - New Not known como precio ausente recuperable', asyn
     assert.deepEqual(parseBricksetDetails(html), {
       nombre: 'Spider-Man',
       descripcion: null,
+      nombreCompleto: 'Spider-Man',
       categoria: 'Super Heroes',
       subcategoria: undefined,
       anio: 2026,

@@ -44,24 +44,23 @@ El sistema SHALL ofrecer `POST /api/notificaciones/:id/leer` para marcar como le
 
 ### Requirement: Entregar eventos sociales y cambios de pertenencia a rankings
 
-El sistema SHALL crear notificaciones duraderas para regalos recibidos, agradecimientos y transiciones de entrada o salida del Top 10 de Ranking Global o Ranking Semanal. Las notificaciones de regalo SHALL identificar al donante por su nombre visible y el importe efectivamente concedido. Las de agradecimiento SHALL indicar quien agradecio al donante original. Una transicion de ranking SHALL producir un solo evento por usuario, ranking y transicion; la lectura de rankings SHALL NOT volver a emitir el mismo evento. El Ranking Semanal SHALL respetar su fecha de disponibilidad vigente.
+El sistema SHALL crear notificaciones duraderas para regalos V2, agradecimientos y transiciones reales de entrada/salida del Top 10 global/semanal. El regalo SHALL identificar donante por username e importe directo confirmado de 50 o 5. El agradecimiento SHALL identificar al emisor y el importe directo vigente, sin anunciar el logro repetible V1 por recibir las gracias. Los nuevos hitos por agradecer SHALL concederse al emisor, no al donante receptor de las gracias. Una transicion SHALL generar un solo evento por usuario/ranking/transicion; leer rankings SHALL NOT emitir ni duplicar eventos. El semanal SHALL respetar su activacion V2.
 
 #### Scenario: Recibir un regalo
-- **WHEN** una donacion de Ranking Global se confirma
-- **THEN** el receptor recibe una notificacion no leida con el texto `El usuario {user} vio tus tops en el Ranking Global y te regaló {amount} Bricks 🧱`
-- **AND** el importe coincide con los Bricks confirmados por la donacion
+- **WHEN** se confirma una donacion V2 global o semanal
+- **THEN** el receptor recibe una notificacion no leida con username y el importe directo correcto
+- **AND** el texto no confunde ese importe con los Bricks adicionales de un hito
 
 #### Scenario: Entrar o salir de un Top 10
-- **WHEN** una actualizacion valida cambia la pertenencia de un usuario al Top 10 global o semanal
-- **THEN** se crea una notificacion no leida con el ranking y la posicion de entrada, o con el aviso de salida
-- **AND** consultar repetidamente el ranking no duplica esa transicion
+- **WHEN** una mutacion ordinaria V2 cambia pertenencia a un ranking disponible
+- **THEN** se crea una sola notificacion de entrada con posicion o de salida sin posicion inventada
+- **AND** consultar de nuevo no duplica el evento
 
 #### Scenario: Agradecer un regalo una sola vez
-- **WHEN** el receptor agradece una notificacion de regalo todavia no agradecida
-- **THEN** el donante original recibe 5 Bricks y una notificacion con el texto `{user} te dio las gracias por tu regalo.`
-- **AND** el donante original recibe un logro separado de tipo `regalo` llamado `Gratitude is the sign of noble souls` que concede otros 5 Bricks y se conserva al recalcular su gamificacion
-- **AND** el usuario que agradece no recibe el logro ni sus Bricks
-- **AND** la misma donacion no puede volver a generar recompensas ni agradecimientos
+- **WHEN** un receptor agradece un regalo V2 propio no agradecido
+- **THEN** el donante recibe la notificacion y 5 Bricks directos, sin el logro repetible V1
+- **AND** el emisor actualiza los hitos por su primera o decima accion, sin marcar la notificacion como leida
+- **AND** un reintento no genera nuevos premios ni eventos
 
 ### Requirement: Crear un resumen diario desde snapshots confirmados
 
@@ -130,3 +129,15 @@ La acción rápida de una notificación de solicitud SHALL aceptar la misma soli
 #### Scenario: Solicitud ya aceptada o no disponible
 - **WHEN** la solicitud se aceptó desde otro lugar o dejó de ser aceptable
 - **THEN** la bandeja muestra respectivamente `Aceptada` deshabilitado o un error controlado sin duplicar efectos
+
+### Requirement: Empezar V2 con bandeja vacia y migracion silenciosa
+
+La migracion unica SHALL eliminar todas las notificaciones existentes y su estado de lectura. SHALL establecer la pertenencia a ranking recalculada como base silenciosa y SHALL NOT emitir avisos de logros, subidas/bajadas de nivel, progreso diario ni entradas/salidas causadas exclusivamente por el reset. Los primeros accesos SHALL devolver bandeja vacia y unreadCount cero, salvo eventos ordinarios V2 realmente posteriores. Workers invalidados, reconexiones Realtime y caches de cliente SHALL NOT reintroducir notificaciones V1. Las acciones sociales conservadas SHALL seguir siendo gestionables desde Amigos aunque sus notificaciones antiguas se hayan borrado.
+
+#### Scenario: Migracion de usuarios de prueba
+- **WHEN** termina el reset y la reconstruccion V2
+- **THEN** no quedan notificaciones V1 ni avisos sinteticos del recalcule y el indicador no leido se limpia
+
+#### Scenario: Primer evento ordinario posterior
+- **WHEN** llega un regalo nuevo V2 despues de la migracion
+- **THEN** se genera la notificacion normal una vez y sucesivos reinicios no la borran

@@ -235,6 +235,8 @@ userAvatar.addEventListener('error', () => {
   userAvatar.hidden = true;
 });
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión ha caducado. Inicia sesión de nuevo.';
+const GAMIFICATION_UI_VERSION = 'v2';
+const GAMIFICATION_UI_VERSION_KEY = 'minipeople.gamificationVersion';
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 
 const ERROR_MESSAGES = {
@@ -300,6 +302,7 @@ let weeklyRankingTrigger = null;
 let ownGamification = null;
 let ownDnaState = null;
 let dnaDialogTrigger = null;
+let gamificationRequestSequence = 0;
 let dnaRequestSequence = 0;
 let achievementsTrigger = null;
 let notificationsTrigger = null;
@@ -317,6 +320,7 @@ const notificationFriendAcceptErrors = new Map();
 const notificationReadRequests = new Set();
 const notificationReadErrors = new Map();
 const notificationToastIds = new Set();
+let pendingNotificationToasts = [];
 let notificationsClock = () => new Date();
 let analyticsHistoryRequestSequence = 0;
 let analyticsHistoryTrigger = null;
@@ -893,7 +897,7 @@ async function finishSync(state) {
   isSyncingPrices = false;
   syncProgress.hidden = true;
   syncPricesButton.disabled = !categoriasReady;
-  await revalidate();
+  await revalidate({ notifyAchievements: true });
   const sinPrecio = state.sinPrecio?.length ?? 0;
   showToast(`Actualización de precios terminada: ${state.actualizados.length} actualizadas, ${sinPrecio} sin precio publicado, ${state.fallidos.length} fallidas.`, 'success');
 }
@@ -982,7 +986,7 @@ async function loadCatalog() {
 }
 
 // Keeps the locally applied state if the catalog cannot be refreshed.
-async function revalidate() {
+async function revalidate({ notifyAchievements = false } = {}) {
   const currentRequest = ++requestSequence;
   await Promise.all([
     fetchCatalog()
@@ -993,7 +997,7 @@ async function revalidate() {
       })
       .catch(() => {}),
     loadTotal(),
-    loadGamification(),
+    loadGamification({ notifyAchievements }),
     loadGlobalRanking({ showState: false }),
   ]);
   await loadGamificationDna();
@@ -1220,7 +1224,7 @@ function createAchievementItem(logro) {
     const icon = document.createElement('img');
     icon.className = 'achievement-icon';
     if (logro.type === 'regalo') {
-      icon.src = '/toast_images/regalo.jpg';
+      icon.src = '/toast_images/regalo.png';
       icon.alt = 'Regalo';
     } else {
       icon.src = '/toast_images/75206.png';
@@ -1255,16 +1259,36 @@ function createAchievementItem(logro) {
     return item;
 }
 
-async function loadGamification() {
+function newGamificationAchievements(previous, next) {
+  if (!previous || !Array.isArray(previous.logros) || !Array.isArray(next?.logros)) return [];
+  const previousCounts = new Map(previous.logros.map((logro) => [logro.id, logro.cantidad ?? 0]));
+  return next.logros.flatMap((logro) => {
+    const cantidadNueva = (logro.cantidad ?? 0) - (previousCounts.get(logro.id) ?? 0);
+    if (cantidadNueva <= 0) return [];
+    return [{
+      ...logro,
+      cantidadNueva,
+      bricksNuevos: cantidadNueva * (Number.isFinite(logro.bricks) ? logro.bricks : 0),
+    }];
+  });
+}
+
+async function loadGamification({ notifyAchievements = false } = {}) {
   const sessionUserId = currentSession?.user?.id;
+  const previousState = ownGamification;
+  const sequence = ++gamificationRequestSequence;
   try {
     const response = await apiFetch('/gamificacion');
     if (!response.ok) throw new Error('GAMIFICACION_NO_DISPONIBLE');
     const state = await response.json();
-    if (sessionUserId !== currentSession?.user?.id) return;
+    if (sequence !== gamificationRequestSequence || sessionUserId !== currentSession?.user?.id) return;
+    const stateInvalidated = invalidateClientStateForGamificationVersion();
+    if (notifyAchievements && previousState && !stateInvalidated) {
+      showGamificationToasts({ logrosNuevos: newGamificationAchievements(previousState, state), nivelesAlcanzados: [] });
+    }
     renderGamification(state);
   } catch {
-    if (sessionUserId !== currentSession?.user?.id) return;
+    if (sequence !== gamificationRequestSequence || sessionUserId !== currentSession?.user?.id) return;
     gamificationLevelNumber.textContent = '';
     gamificationLevelName.textContent = 'Nivel no disponible';
     gamificationDialogLevel.textContent = 'Nivel no disponible';
@@ -1293,6 +1317,11 @@ async function loadGamificationDna(showLoading = false) {
     if (!ownDnaState) gamificationDnaPrincipal.textContent = 'DNA no disponible';
     if (dnaDialog.open) renderDnaError();
   }
+}
+
+function refreshSocialGamification() {
+  void loadGamification({ notifyAchievements: true });
+  void loadGamificationDna();
 }
 
 function ownsMinifigura(id) {
@@ -1601,8 +1630,9 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
 function showToast(message, type = 'success', iconSrc = null, iconPosition = 'after') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
+  if (type === 'gift') toast.classList.add('toast-task', 'toast-gift');
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  const messageNode = document.createTextNode(message);
+  const messageNode = typeof message === 'string' ? document.createTextNode(message) : message;
   if (iconSrc === null) iconSrc = '/toast_images/87X2Rz8y2ZY.png';
   iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
   const icon = iconSrc ? document.createElement('img') : null;
@@ -1610,7 +1640,7 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
     icon.className = 'toast-icon';
     icon.src = iconSrc;
     icon.alt = type === 'notification' ? 'Notificaciones'
-      : type === 'level' ? 'Nivel alcanzado' : type === 'task' ? 'Bricks' : 'Separador de ladrillos';
+      : type === 'level' ? 'Nivel alcanzado' : type === 'task' || type === 'gift' ? 'Bricks' : 'Separador de ladrillos';
   }
   if (icon && iconPosition === 'before') toast.append(icon);
   toast.append(messageNode);
@@ -1620,6 +1650,36 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
     toast.remove();
   }, 4000);
 }
+
+function showRealtimeNotificationToast(notification) {
+  if (notification?.type === 'gift_received' || notification?.type === 'gift_thanks') {
+    const payload = notification.payload ?? {};
+    const user = typeof payload.user === 'string' && payload.user.trim() ? payload.user : 'Coleccionista';
+    const isThanks = notification.type === 'gift_thanks';
+    const amount = Number.isFinite(payload.amount) ? payload.amount : isThanks ? 5 : 50;
+    const message = isThanks
+      ? `¡${user} te ha dado las gracias por tu regalo: +${amount} Bricks!`
+      : `¡Has recibido un regalo de ${user}: +${amount} Bricks!`;
+    showToast(message, 'gift', '/toast_images/regalo.png', 'before');
+    return;
+  }
+  showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
+}
+
+function showPendingNotificationToast() {
+  if (document.visibilityState === 'hidden' || pendingNotificationToasts.length === 0) return;
+  const pending = pendingNotificationToasts;
+  pendingNotificationToasts = [];
+  pending.forEach(({ userId, notification }, index) => {
+    const show = () => {
+      if (userId === currentSession?.user?.id) showRealtimeNotificationToast(notification);
+    };
+    if (index === 0) show();
+    else setTimeout(show, index * 300);
+  });
+}
+
+document.addEventListener('visibilitychange', showPendingNotificationToast);
 
 function showGamificationToasts(gamification) {
   const achievements = (gamification?.logrosNuevos ?? [])
@@ -2314,6 +2374,7 @@ async function acceptFriendNotification(notificationId) {
     notificationsItems = notificationsItems.map((item) => item.id === notificationId
       ? { ...item, accepted: true, canAccept: false }
       : item);
+    refreshSocialGamification();
     void loadFriendsCounts();
     if (friendsDialog.open && friendsActiveTab !== 'search') void loadFriendsList();
   } catch {
@@ -2339,6 +2400,7 @@ async function thankNotification(notificationId) {
     if (sessionUserId !== currentSession?.user?.id) return;
     if (response.ok || response.status === 404 || response.status === 409) {
       notificationsItems = notificationsItems.map((item) => item.id === notificationId ? { ...item, canThank: false } : item);
+      refreshSocialGamification();
     } else {
       throw new Error('thanks unavailable');
     }
@@ -2439,28 +2501,33 @@ function stopNotificationsRealtime() {
 function startNotificationsRealtime() {
   const sessionUserId = currentSession?.user?.id;
   if (!sessionUserId || !supabaseClient?.channel) return;
-  notificationsChannel = supabaseClient.channel(`notificaciones-${sessionUserId}`)
-    .on('postgres_changes', {
+  const channel = supabaseClient.channel(`notificaciones-${sessionUserId}`);
+  notificationsChannel = channel;
+  channel.on('postgres_changes', {
       event: '*', schema: 'public', table: 'notificaciones', filter: `user_id=eq.${sessionUserId}`,
     }, (payload) => {
-      if (currentSession?.user?.id !== sessionUserId) return;
+      if (notificationsChannel !== channel || currentSession?.user?.id !== sessionUserId) return;
       const notificationId = payload?.new?.id;
       if ((!payload?.eventType || payload.eventType === 'INSERT') && notificationId && !notificationToastIds.has(notificationId)) {
         notificationToastIds.add(notificationId);
-        showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
+        if (document.visibilityState === 'hidden') {
+          pendingNotificationToasts.push({ userId: sessionUserId, notification: payload.new });
+        } else {
+          showRealtimeNotificationToast(payload.new);
+        }
       }
       void loadNotifications({ reset: true, preserveItems: payload?.eventType !== 'DELETE' });
       void loadFriendsCounts();
       if (friendsDialog.open && friendsActiveTab !== 'search') void loadFriendsList();
-      if (['gift_received', 'gift_thanks'].includes(payload?.new?.type)) void loadGamification();
+      if (['gift_received', 'gift_thanks'].includes(payload?.new?.type)) refreshSocialGamification();
     })
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED' && currentSession?.user?.id === sessionUserId) {
+      if (notificationsChannel === channel && status === 'SUBSCRIBED' && currentSession?.user?.id === sessionUserId) {
         const isReconnect = notificationsChannelConnected;
         notificationsChannelConnected = true;
         if (isReconnect) void loadFriendsCounts();
         void loadNotifications({ reset: true, preserveItems: true });
-        if (isReconnect) void loadGamification();
+        if (isReconnect) void loadGamification({ notifyAchievements: true });
       }
     });
 }
@@ -2479,6 +2546,7 @@ function clearNotifications() {
   notificationReadRequests.clear();
   notificationReadErrors.clear();
   notificationToastIds.clear();
+  pendingNotificationToasts = [];
   notificationsTrigger = null;
   notificationsList.replaceChildren();
   notificationsStatus.textContent = '';
@@ -2486,6 +2554,45 @@ function clearNotifications() {
   notificationsMarkAllButton.parentElement.hidden = true;
   setNotificationsUnreadCount(0);
   if (notificationsDialog.open) notificationsDialog.close();
+}
+
+function invalidateClientStateForGamificationVersion() {
+  let previousVersion;
+  try {
+    previousVersion = window.localStorage.getItem(GAMIFICATION_UI_VERSION_KEY);
+    window.localStorage.setItem(GAMIFICATION_UI_VERSION_KEY, GAMIFICATION_UI_VERSION);
+  } catch {
+    return false;
+  }
+  if (previousVersion === null || previousVersion === GAMIFICATION_UI_VERSION) return false;
+
+  achievementQueue = [];
+  isShowingAchievement = false;
+  toastRegion.replaceChildren();
+  ownGamification = null;
+  ownDnaState = null;
+  dnaRequestSequence += 1;
+  rankingRequestId += 1;
+  weeklyRankingRequestId += 1;
+  rankingEntries = [];
+  defaultRankingEntries = [];
+  weeklyRankingEntries = [];
+  expandedRankingUserId = null;
+  expandedWeeklyRankingUserId = null;
+  globalRankingList.replaceChildren();
+  weeklyRankingList.replaceChildren();
+  if (publicProfileDialog.open) publicProfileDialog.close();
+  clearPublicProfile();
+  publicProfileTrigger = null;
+  clearNotifications();
+  if (currentSession?.user?.id) {
+    startNotificationsRealtime();
+    void loadNotifications({ reset: true });
+  }
+  void loadGlobalRanking({ showState: rankingDialog.open });
+  void loadWeeklyRanking({ showState: weeklyRankingDialog.open });
+  void loadGamificationDna(dnaDialog.open);
+  return true;
 }
 
 function renderFriendRows(rows, type) {
@@ -2771,6 +2878,7 @@ async function removeFriend(userId, type) {
     renderFriendRows([...friendsRows.friends.values()], 'friends');
     renderFriendRows([...friendsRows.search.values()], 'search');
     document.querySelector('#friends-status-friends').textContent = friendsRows.friends.size ? '' : 'Todavía no tienes amigos.';
+    refreshSocialGamification();
     void loadFriendsCounts();
     void loadNotifications({ reset: true });
     friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
@@ -2797,6 +2905,7 @@ async function sendFriendRequest(userId) {
     if (sessionUserId !== currentSession?.user?.id) return;
     const friend = friendsRows.search.get(userId);
     if (friend) friend.relationshipStatus = 'request_sent';
+    refreshSocialGamification();
     void loadFriendsCounts();
   } catch {
     if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo enviar la solicitud.');
@@ -2819,6 +2928,7 @@ async function changeFriendRequest(requestId, action) {
     if (!response.ok) throw new Error('request unavailable');
     if (sessionUserId !== currentSession?.user?.id) return;
     friend.status = action === 'accept' ? 'accepted' : 'rejected';
+    refreshSocialGamification();
     void loadFriendsCounts();
     if (action === 'accept') void loadNotifications({ reset: true });
   } catch {
@@ -4037,11 +4147,12 @@ minifiguraForm.addEventListener('submit', async (event) => {
     const result = await response.json();
     if (!isCurrent()) return;
     showGamificationToasts(result.gamificacion);
+    if (result.gamificacion?.state) ownGamification = result.gamificacion.state;
     upsertCached(result);
     applyFilters({ preservePage: true });
     closeFormDialog();
     showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
-    void revalidate();
+    void revalidate({ notifyAchievements: isEdit });
   } catch {
     if (!isCurrent()) return;
     const connError = 'No se pudo conectar con el servidor. Intentalo de nuevo.';
@@ -4131,7 +4242,7 @@ deleteConfirmButton.addEventListener('click', async () => {
     removeCached(id);
     applyFilters({ preservePage: true });
     showToast('Minifigura eliminada correctamente.', 'success');
-    void revalidate();
+    void revalidate({ notifyAchievements: true });
   } catch {
     showToast('No se pudo conectar con el servidor. Intentalo de nuevo.', 'error');
   } finally {
@@ -4183,6 +4294,10 @@ function clearUserData() {
   profileDialogTrigger = null;
   if (profileDialog.open) profileDialog.close();
   requestSequence += 1;
+  gamificationRequestSequence += 1;
+  achievementQueue = [];
+  isShowingAchievement = false;
+  toastRegion.replaceChildren();
   clearNotifications();
   clearFriends();
   clearPublicProfile();

@@ -109,6 +109,22 @@ test('el mock del ranking semanal usa reloj inyectado, base dominical exacta y n
   assert.deepEqual(supabase.adminCalls(), []);
 });
 
+test('el mock persiste la activación semanal V2 al lunes siguiente aunque avance el reloj', async () => {
+  let currentTime = '2026-10-26T12:00:00Z';
+  const supabase = createSupabaseMock({
+    users: { [TEST_TOKEN]: TEST_USER, [OTHER_TOKEN]: OTHER_USER },
+    now: () => new Date(currentTime),
+  });
+  const client = createTestClient(supabase);
+
+  const deployedMonday = await client.rpc('ranking_semanal');
+  assert.equal(deployedMonday.data.availableFrom, '2026-11-02');
+  currentTime = '2026-10-27T12:00:00Z';
+  const restartedNextDay = await client.rpc('ranking_semanal');
+  assert.equal(restartedNextDay.data.availableFrom, '2026-11-02');
+  assert.equal(restartedNextDay.data.available, false);
+});
+
 test('el repositorio normaliza el semanal y convierte resultados o fallos invalidos en error controlado', async () => {
   const entry = {
     userId: OTHER_USER.id, avatarUrl: null, displayName: 'Grace', bricks: '200', nivel: '4',
@@ -139,6 +155,17 @@ test('el repositorio normaliza el semanal y convierte resultados o fallos invali
     assert.equal(error.code, 'RANKING_SEMANAL_NO_DISPONIBLE');
     assert.equal(error.message.includes('private storage detail'), false);
     return true;
+  });
+});
+
+test('el repositorio admite ranking V2 no activado sin inventar availableFrom', async () => {
+  const repository = new RankingRepository({ client: { async rpc() {
+    return { data: {
+      available: false, availableFrom: null, weekStart: '2026-10-26', weekEnd: '2026-11-01', entries: [],
+    }, error: null };
+  } } });
+  assert.deepEqual(await repository.weekly(), {
+    available: false, availableFrom: null, weekStart: '2026-10-26', weekEnd: '2026-11-01', entries: [],
   });
 });
 

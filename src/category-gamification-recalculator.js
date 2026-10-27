@@ -1,42 +1,56 @@
 import { createHash } from 'node:crypto';
 import { watch } from 'node:fs';
 import { basename, dirname } from 'node:path';
-import { calcularGamificacion, OBJETIVOS } from './gamificacion.js';
+import { calcularGamificacion, DNA_PONDERACIONES, OBJETIVOS } from './gamificacion.js';
 
 const PAGE_SIZE = 1000;
-const THANKS_COUNT_PAGE_SIZE = 1000;
-const VERSION_TABLE = 'gamificacion_categoria_version';
+const SOURCES_RPC = 'leer_recalculo_gamificacion_categorias';
 const APPLY_RPC = 'aplicar_recalculo_gamificacion_categorias';
-const THANKS_COUNT_RPC = 'recalcular_agradecimientos_regalo_count';
 
-async function readAll(client, table, columns) {
-  const rows = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await client.from(table).select(columns).range(offset, offset + PAGE_SIZE - 1);
-    if (error || !Array.isArray(data)) {
-      throw new Error(`No se pudo leer ${table} para recalcular gamificación`);
-    }
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return rows;
-  }
+export function fingerprint(categorias) {
+  const pesosDna = [...DNA_PONDERACIONES].sort(([left], [right]) => left.localeCompare(right));
+  return createHash('sha256').update(JSON.stringify({ version: 'v2', categorias, objetivos: OBJETIVOS, pesosDna })).digest('hex');
 }
 
-function fingerprint(categorias) {
-  return createHash('sha256').update(JSON.stringify({ categorias, objetivos: OBJETIVOS })).digest('hex');
-}
+async function readRecalculationSources(client, currentFingerprint) {
+  const users = [];
+  const figures = [];
+  const socialSources = [];
+  let cursor = null;
+  let appliedFingerprint = null;
+  let firstPage = true;
 
-async function readThanksCounts(client, userIds) {
-  const counts = [];
-  for (let offset = 0; offset < userIds.length; offset += THANKS_COUNT_PAGE_SIZE) {
-    const { data, error } = await client.rpc(THANKS_COUNT_RPC, {
-      p_user_ids: userIds.slice(offset, offset + THANKS_COUNT_PAGE_SIZE),
+  while (true) {
+    const { data, error } = await client.rpc(SOURCES_RPC, {
+      p_after_user_id: cursor,
+      p_limit: PAGE_SIZE,
     });
-    if (error || !Array.isArray(data)) {
-      throw new Error('No se pudieron leer los agradecimientos para recalcular gamificación');
+    if (error || !data || typeof data !== 'object' || Array.isArray(data)
+      || data.version !== 'v2' || typeof data.fingerprint !== 'string'
+      || !Array.isArray(data.users) || !Array.isArray(data.figures) || !Array.isArray(data.social_sources)
+      || typeof data.has_more !== 'boolean') {
+      throw new Error('No se pudieron leer las fuentes mínimas para recalcular gamificación');
     }
-    counts.push(...data);
+
+    if (firstPage) {
+      appliedFingerprint = data.fingerprint;
+      if (appliedFingerprint === currentFingerprint) return { appliedFingerprint, recalculatedSources: false };
+      firstPage = false;
+    } else if (data.fingerprint !== appliedFingerprint) {
+      throw new Error('Cambió la versión aplicada durante la paginación del recálculo');
+    }
+
+    users.push(...data.users);
+    figures.push(...data.figures);
+    socialSources.push(...data.social_sources);
+    if (!data.has_more) break;
+    if (typeof data.next_cursor !== 'string' || data.next_cursor === cursor || data.users.length === 0) {
+      throw new Error('La paginación de fuentes de gamificación no avanzó');
+    }
+    cursor = data.next_cursor;
   }
-  return counts;
+
+  return { appliedFingerprint, recalculatedSources: true, users, figures, socialSources };
 }
 
 export class CategoryGamificationRecalculator {
@@ -57,33 +71,19 @@ export class CategoryGamificationRecalculator {
   async recalculateIfChanged() {
     const categorias = await this.categoriasRepository.read();
     const currentFingerprint = fingerprint(categorias);
-    const { data: version, error: versionError } = await this.client
-      .from(VERSION_TABLE)
-      .select('fingerprint')
-      .eq('singleton', true)
-      .maybeSingle();
-    if (versionError) throw new Error('No se pudo leer la versión de categorías aplicada en Supabase');
-    if (version?.fingerprint === currentFingerprint) {
+    const sources = await readRecalculationSources(this.client, currentFingerprint);
+    if (!sources.recalculatedSources) {
       return { recalculated: false, users: 0, fingerprint: currentFingerprint };
     }
 
-    const [gamificationRows, figureRows, gifts] = await Promise.all([
-      readAll(this.client, 'gamificacion', 'user_id'),
-      readAll(this.client, 'minifiguras', 'user_id,id,categoria,subcategoria,anio,estado_coleccion,precio,precio_compra'),
-      readAll(this.client, 'regalos_enviados', 'receptor_id,semana'),
-    ]);
-
-    const userIds = new Set([
-      ...gamificationRows.map(({ user_id }) => user_id),
-      ...figureRows.map(({ user_id }) => user_id),
-      ...gifts.map(({ receptor_id }) => receptor_id),
-    ].filter((userId) => typeof userId === 'string' && userId !== ''));
-    const thanksByUser = new Map((await readThanksCounts(this.client, [...userIds])).map((row) => [row.user_id, row]));
+    const userIds = new Set(sources.users.filter((userId) => typeof userId === 'string' && userId !== ''));
+    const socialByUser = new Map(sources.socialSources.map((source) => [source.user_id, source]));
     const figuresByUser = new Map();
-    for (const figure of figureRows) {
+    for (const figure of sources.figures) {
       if (!figuresByUser.has(figure.user_id)) figuresByUser.set(figure.user_id, []);
       figuresByUser.get(figure.user_id).push({
         id: figure.id,
+        nombreCompleto: figure.nombreCompleto ?? undefined,
         categoria: figure.categoria,
         subcategoria: figure.subcategoria ?? undefined,
         anio: figure.anio ?? undefined,
@@ -92,19 +92,16 @@ export class CategoryGamificationRecalculator {
         precioCompra: figure.precio_compra ?? undefined,
       });
     }
-    const giftsByUser = new Map();
-    const weeklyGiftsByUser = new Map();
-    for (const { receptor_id: userId, semana } of gifts) {
-      const counts = semana && semana !== '0001-01-01' ? weeklyGiftsByUser : giftsByUser;
-      counts.set(userId, (counts.get(userId) || 0) + 1);
-    }
 
     const states = [...userIds].sort().map((userId) => {
-      const thanks = thanksByUser.get(userId);
+      const socialSources = socialByUser.get(userId);
+      if (!socialSources) throw new Error('Falta el contexto social de un usuario paginado');
       const state = calcularGamificacion(
-        figuresByUser.get(userId) || [], categorias, giftsByUser.get(userId) || 0,
-        thanks?.received_count ?? 0,
-        weeklyGiftsByUser.get(userId) || 0,
+        figuresByUser.get(userId) || [], categorias,
+        socialSources.global_gifts_received,
+        socialSources.thanks_received,
+        socialSources.weekly_gifts_received,
+        socialSources,
       );
       return {
         user_id: userId,
@@ -119,6 +116,7 @@ export class CategoryGamificationRecalculator {
     const { data: applied, error } = await this.client.rpc(APPLY_RPC, {
       p_fingerprint: currentFingerprint,
       p_estados: states,
+      p_version: 'v2',
     });
     if (error) throw new Error('No se pudo guardar el recálculo global de gamificación');
     return { recalculated: applied === true, users: applied === true ? states.length : 0, fingerprint: currentFingerprint };

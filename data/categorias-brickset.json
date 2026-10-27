@@ -105,27 +105,34 @@
     "subcategorias": [
       {
         "subcategoria": "Collectible Minifigures Other",
-        "total": 42
+        "total": 42,
+        "anioInicio": 2012,
+        "anioInicioEstimado": true
       },
       {
         "subcategoria": "Deutscher Fussball-Bund (DFB)",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2016
       },
       {
         "subcategoria": "Disney / Disney 100",
-        "total": 18
+        "total": 18,
+        "anioInicio": 2023
       },
       {
         "subcategoria": "Disney / Disney Series 1",
-        "total": 18
+        "total": 18,
+        "anioInicio": 2016
       },
       {
         "subcategoria": "Disney / Disney Series 2",
-        "total": 18
+        "total": 18,
+        "anioInicio": 2019
       },
       {
         "subcategoria": "Dungeons & Dragons",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2024
       },
       {
         "subcategoria": "General",
@@ -133,215 +140,271 @@
       },
       {
         "subcategoria": "Harry Potter / Harry Potter Series 1",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2018
       },
       {
-        "subcategoria": "Harry Potter / Harry Potter Series 1 Fantastic Beasts",
-        "total": 6
+        "subcategoria": "Harry Potter / Harry Potter Series 1 / Fantastic Beasts",
+        "total": 6,
+        "anioInicio": 2018
       },
       {
         "subcategoria": "Harry Potter / Harry Potter Series 2",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2020
       },
       {
         "subcategoria": "Jurassic World",
-        "total": 3
+        "total": 3,
+        "anioInicio": 2018
       },
       {
         "subcategoria": "Looney Tunes",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2021
       },
       {
         "subcategoria": "Promotional",
-        "total": 2
+        "total": 2,
+        "anioInicio": 2013
       },
       {
         "subcategoria": "Series 1 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2010
       },
       {
         "subcategoria": "Series 2 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2010
       },
       {
         "subcategoria": "Series 3 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2011
       },
       {
         "subcategoria": "Series 4 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2011
       },
       {
         "subcategoria": "Series 5 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2011
       },
       {
         "subcategoria": "Series 6 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2012
       },
       {
         "subcategoria": "Series 7 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2012
       },
       {
         "subcategoria": "Series 8 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2012
       },
       {
         "subcategoria": "Series 9 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2013
       },
       {
         "subcategoria": "Series 10 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2013
       },
       {
         "subcategoria": "Series 11 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2013
       },
       {
         "subcategoria": "Series 12 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2014
       },
       {
         "subcategoria": "Series 13 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2015
       },
       {
         "subcategoria": "Series 14 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2015
       },
       {
         "subcategoria": "Series 15 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2016
       },
       {
         "subcategoria": "Series 16 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2016
       },
       {
         "subcategoria": "Series 17 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2017
       },
       {
         "subcategoria": "Series 18 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2018
       },
       {
         "subcategoria": "Series 19 Minifigures",
-        "total": 17
+        "total": 17,
+        "anioInicio": 2019,
+        "anioInicioEstimado": true
       },
       {
         "subcategoria": "Series 20 Minifigures",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2020
       },
       {
         "subcategoria": "Series 21 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2021
       },
       {
         "subcategoria": "Series 22 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2022
       },
       {
         "subcategoria": "Series 23 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2022
       },
       {
         "subcategoria": "Series 24 Minifigures",
-        "total": 13
+        "total": 13,
+        "anioInicio": 2023
       },
       {
         "subcategoria": "Series 25 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2024
       },
       {
         "subcategoria": "Series 26 Minifigures",
-        "total": 14
+        "total": 14,
+        "anioInicio": 2024,
+        "anioInicioEstimado": true
       },
       {
         "subcategoria": "Series 27 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2025
       },
       {
         "subcategoria": "Series 28 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2026
       },
       {
         "subcategoria": "Series 29 Minifigures",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2026
       },
       {
         "subcategoria": "Shrek",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2026
       },
       {
         "subcategoria": "Super Heroes / Avengers Infinity War",
-        "total": 4
+        "total": 4,
+        "anioInicio": 2018
       },
       {
         "subcategoria": "Super Heroes / DC Super Heroes",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2020
       },
       {
         "subcategoria": "Super Heroes / Marvel Studios Series 1",
-        "total": 9
+        "total": 9,
+        "anioInicio": 2021,
+        "anioInicioEstimado": true
       },
       {
-        "subcategoria": "Super Heroes / Marvel Studios Series 1 What If",
-        "total": 4
+        "subcategoria": "Super Heroes / Marvel Studios Series 1 / What If...?",
+        "total": 4,
+        "anioInicio": 2021
       },
       {
         "subcategoria": "Super Heroes / Marvel Studios Series 2",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2023
       },
       {
         "subcategoria": "Super Heroes / Spider-Man Across the Spider-Verse",
-        "total": 14
+        "total": 14,
+        "anioInicio": 2025
       },
       {
         "subcategoria": "Super Heroes / The LEGO Batman Movie",
-        "total": 4
+        "total": 4,
+        "anioInicio": 2017
       },
       {
         "subcategoria": "Super Heroes / The LEGO Batman Movie / The LEGO Batman Movie Series 1",
-        "total": 20
+        "total": 20,
+        "anioInicio": 2017
       },
       {
         "subcategoria": "Super Heroes / The LEGO Batman Movie / The LEGO Batman Movie Series 2",
-        "total": 20
+        "total": 20,
+        "anioInicio": 2018
       },
       {
         "subcategoria": "Team GB",
-        "total": 9
+        "total": 9,
+        "anioInicio": 2012
       },
       {
         "subcategoria": "The LEGO Movie",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2014
       },
       {
         "subcategoria": "The LEGO Movie 2",
-        "total": 20
+        "total": 20,
+        "anioInicio": 2019
       },
       {
         "subcategoria": "The LEGO NINJAGO Movie",
-        "total": 20
+        "total": 20,
+        "anioInicio": 2017
       },
       {
         "subcategoria": "The Muppets",
-        "total": 12
+        "total": 12,
+        "anioInicio": 2022
       },
       {
         "subcategoria": "The Simpsons / The Simpsons Series 1",
-        "total": 16
+        "total": 16,
+        "anioInicio": 2014
       },
       {
         "subcategoria": "The Simpsons / The Simpsons Series 2",
-        "total": 15
+        "total": 15,
+        "anioInicio": 2015
       },
       {
         "subcategoria": "Town / City / Jungle",
-        "total": 4
+        "total": 4,
+        "anioInicio": 2017
       }
     ]
   },

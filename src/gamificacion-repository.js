@@ -29,6 +29,22 @@ export class GamificacionDnaNoDisponibleError extends Error {
 const DNA_PERCENTAGE_KEYS = ['rarityHunter', 'explorer', 'collector', 'fan'];
 const DNA_PRINCIPALS = new Set(['Newbie', 'Rarity Hunter', 'Explorer', 'Collector', 'Fan']);
 const LOGRO_FIELDS = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+const SOCIAL_SOURCE_FIELDS = [
+  'friends', 'sent_pending', 'accepted_sent', 'accepted_received',
+  'global_gifts_received', 'weekly_gifts_received', 'thanks_sent', 'thanks_received',
+];
+
+function validateSocialSources(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || SOCIAL_SOURCE_FIELDS.some((field) => !Number.isInteger(value[field]) || value[field] < 0)
+    || typeof value.source_revision !== 'string' || !/^[\da-f]{32}$/.test(value.source_revision)) {
+    throw new GamificacionNoDisponibleError();
+  }
+  return {
+    ...Object.fromEntries(SOCIAL_SOURCE_FIELDS.map((field) => [field, value[field]])),
+    source_revision: value.source_revision,
+  };
+}
 
 function validateDna(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !DNA_PRINCIPALS.has(value.principal)
@@ -146,26 +162,47 @@ export class GamificacionRepository {
     }, { onConflict: 'user_id' }));
   }
 
-  async calculate(catalogo) {
-    const categorias = this.categoriasRepository ? await this.categoriasRepository.read() : [];
-    const [regalos, agradecimientos, regalosSemanales] = await Promise.all([
-      this.run(this.client.rpc('regalos_recibidos_count')),
-      this.run(this.client.rpc('agradecimientos_regalo_count')),
-      this.run(this.client.rpc('regalos_semanales_recibidos_count')),
+  async readSocialSources() {
+    return validateSocialSources(await this.run(this.client.rpc('gamificacion_social_fuentes')));
+  }
+
+  async calculateWithSources(catalogo) {
+    const [categorias, socialSources] = await Promise.all([
+      this.categoriasRepository ? this.categoriasRepository.read() : Promise.resolve([]),
+      this.readSocialSources(),
     ]);
-    return calcularGamificacion(catalogo, categorias, regalos ?? 0, agradecimientos?.received ?? 0, regalosSemanales ?? 0);
+    return {
+      state: calcularGamificacion(
+        catalogo,
+        categorias,
+        socialSources.global_gifts_received,
+        socialSources.thanks_received,
+        socialSources.weekly_gifts_received,
+        socialSources,
+      ),
+      sourceRevision: socialSources.source_revision,
+    };
+  }
+
+  async calculate(catalogo) {
+    return (await this.calculateWithSources(catalogo)).state;
   }
 
   async recalculate(catalogo) {
     const previous = await this.read();
-    const state = await this.calculate(catalogo);
-    await this.persist(state);
-    this.initialization = Promise.resolve(state);
-    return {
-      state,
-      logrosNuevos: nuevosLogros(previous, state),
-      nivelesAlcanzados: nivelesAlcanzados(previous, state),
-    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { state, sourceRevision } = await this.calculateWithSources(catalogo);
+      const currentSources = await this.readSocialSources();
+      if (sourceRevision !== currentSources.source_revision) continue;
+      await this.persist(state);
+      this.initialization = Promise.resolve(state);
+      return {
+        state,
+        logrosNuevos: nuevosLogros(previous, state),
+        nivelesAlcanzados: nivelesAlcanzados(previous, state),
+      };
+    }
+    throw new GamificacionNoDisponibleError();
   }
 
   async ensure(catalogReader = this.catalogReader) {

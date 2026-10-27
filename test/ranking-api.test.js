@@ -12,7 +12,7 @@ function rankingSupabase({ now } = {}) {
     [OTHER_TOKEN]: { ...OTHER_RANKING_USER, user_metadata: { name: 'Grace Google', avatar_url: 'https://example.com/grace.png' } },
   }, ...(now ? { now } : {}) });
   supabase.seed('gamificacion', RANKING_USER.id, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
-  supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] }]);
+  supabase.seed('gamificacion', OTHER_RANKING_USER.id, [{ bricks: 200, nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'jedi-master', bricks: 200, repetible: false, cantidad: 1, total: 200 }] }]);
   supabase.seed('perfiles_publicos', OTHER_RANKING_USER.id, [{ display_name: 'Grace', avatar_url: 'https://example.com/grace.png' }]);
   supabase.seed('user_profiles', OTHER_RANKING_USER.id, [{ username: 'Grace' }]);
   supabase.seed('user_profiles', RANKING_USER.id, [{ username: 'AdaCollector' }]);
@@ -25,11 +25,12 @@ function rankingSupabase({ now } = {}) {
 }
 
 test('el regalo semanal concede 5, notifica, admite gracias y se renueva independientemente del global', async () => {
-  let instant = '2026-10-12T12:00:00Z';
+  let instant = '2026-10-08T12:00:00Z';
   const supabase = createSupabaseMock({ now: () => instant, users: {
     [TEST_TOKEN]: RANKING_USER, [OTHER_TOKEN]: OTHER_RANKING_USER,
   } });
   for (const user of [RANKING_USER, OTHER_RANKING_USER]) supabase.seed('gamificacion', user.id, [{ bricks: 0, nivel: { id: 0 }, logros: [] }]);
+  instant = '2026-10-12T12:00:00Z';
   supabase.seed('user_daily_snapshots', OTHER_RANKING_USER.id,
     ['2026-10-11', '2026-10-12', '2026-10-18', '2026-10-19'].map((snapshot_date) => ({ snapshot_date, bricks: 10 })));
   const context = await startTestServer({ supabase });
@@ -47,7 +48,7 @@ test('el regalo semanal concede 5, notifica, admite gracias y se renueva indepen
     assert.equal((await send({ receptorId: '00000000-0000-4000-8000-000000000099' })).status, 404);
     assert.equal((await send()).status, 200);
     assert.equal((await send()).status, 409);
-    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 5);
+    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 25);
     const notification = supabase.rows('notificaciones', OTHER_RANKING_USER.id).find(({ type }) => type === 'gift_received');
     assert.equal(notification.payload.amount, 5);
     assert.match(notification.payload.message, /Ranking Semanal/);
@@ -55,10 +56,10 @@ test('el regalo semanal concede 5, notifica, admite gracias y se renueva indepen
     assert.equal((await receiver(thanksUrl, { method: 'POST' })).status, 200);
     assert.equal((await receiver(thanksUrl, { method: 'POST' })).status, 409);
     const recalculated = await (await receiver(`${context.baseUrl}/gamificacion`)).json();
-    assert.equal(recalculated.logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 5);
+    assert.equal(recalculated.logros.find(({ id }) => id === 'oh-you-shouldnt-have').total, 20);
     for (let index = 100; index < 110; index += 1) supabase.seed('gamificacion', `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, [{ bricks: 1000, nivel: { id: 9 }, logros: [] }]);
     const achievements = await (await donor(`${context.baseUrl}/api/ranking/${OTHER_RANKING_USER.id}/logros`)).json();
-    assert.equal(achievements.logros.find(({ id }) => id === 'youre-on-fire-this-week').nombre, "You're on fire this week!");
+    assert.equal(achievements.logros.find(({ id }) => id === 'oh-you-shouldnt-have').nombre, "Oh! you shouldn't have!");
     const globalGift = await donor(`${context.baseUrl}/api/ranking/regalar`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receptorId: OTHER_RANKING_USER.id }),
     });
@@ -68,7 +69,7 @@ test('el regalo semanal concede 5, notifica, admite gracias y se renueva indepen
     assert.equal(ranking.weekStart, '2026-10-19');
     assert.equal(ranking.entries[0].regaloEnviado, false);
     assert.equal((await send()).status, 200);
-    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].logros.find(({ id }) => id === 'youre-on-fire-this-week').total, 10);
+    assert.equal(supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].logros.find(({ id }) => id === 'oh-you-shouldnt-have').total, 20);
   } finally {
     await context.close();
   }
@@ -77,7 +78,8 @@ test('el regalo semanal concede 5, notifica, admite gracias y se renueva indepen
 test('el ranking valida los seis criterios y selecciona el Top 10 antes de proyectar datos publicos', async () => {
   const supabase = rankingSupabase();
   const ids = Array.from({ length: 12 }, (_, index) => `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`);
-  const candidateAchievements = { 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' };
+  const candidateAchievements = { 9: 'unicorn', 8: 'solid-investment', 7: 'the-cornerstone', 6: 'youngling' };
+  const expectedDnaPercentages = { rarityHunter: 100, collector: 80, explorer: 90, fan: 95 };
   for (const [index, userId] of ids.entries()) {
     supabase.seed('gamificacion', userId, [{ bricks: index < 10 ? 1000 - index : 10,
       nivel: { id: index < 10 ? 5 : index === 10 ? 2 : 1 },
@@ -108,7 +110,7 @@ test('el ranking valida los seis criterios y selecciona el Top 10 antes de proye
       if (['rarityHunter', 'collector', 'explorer', 'fan'].includes(criterio)) {
         const winner = { rarityHunter: 9, collector: 8, explorer: 7, fan: 6 }[criterio];
         assert.equal(ranking[0].userId, ids[winner]);
-        assert.equal(ranking[0].dnaRasgos[0].porcentaje, 100);
+        assert.equal(ranking[0].dnaRasgos[0].porcentaje, expectedDnaPercentages[criterio]);
       }
       assert.ok(ranking.every((row) => !('porcentajes' in row) && row.dnaRasgos.length <= 2));
     }
@@ -130,9 +132,9 @@ test('GET /api/ranking exige autenticación y devuelve solo el contrato público
     assert.equal(response.status, 200);
     const ranking = await response.json();
     assert.equal(ranking[0].userId, OTHER_RANKING_USER.id);
-    assert.equal(ranking[0].dnaPrincipal, 'Rarity Hunter');
+    assert.equal(ranking[0].dnaPrincipal, 'Fan');
     assert.equal(ranking[1].dnaPrincipal, 'Newbie');
-    assert.deepEqual(ranking[0].dnaRasgos, [{ nombre: 'Rarity Hunter', porcentaje: 50 }, { nombre: 'Collector', porcentaje: 20 }]);
+    assert.deepEqual(ranking[0].dnaRasgos, [{ nombre: 'Fan', porcentaje: 95 }, { nombre: 'Collector', porcentaje: 5 }]);
     assert.deepEqual(ranking[1].dnaRasgos, []);
     assert.equal('porcentajes' in ranking[0], false);
     assert.equal('dnaPonderaciones' in ranking[0], false);
@@ -208,7 +210,7 @@ test('GET logros exige sesion, valida UUID y proyecta datos sin modificar gamifi
     const response = await get(path);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { userId: OTHER_RANKING_USER.id, displayName: 'Grace', bricks: 200,
-      nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'woah', cantidad: 1 }] });
+      nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'jedi-master', bricks: 200, repetible: false, cantidad: 1, total: 200 }] });
     assert.deepEqual(context.supabase.rows('gamificacion'), before);
     const invalid = await get(`${context.baseUrl}/api/ranking/invalido/logros`);
     assert.equal(invalid.status, 400);
@@ -237,7 +239,7 @@ test('POST /api/ranking/regalar aplica validación y errores de dominio sin supl
   });
   try {
     assert.deepEqual(await (await post({ receptorId: OTHER_RANKING_USER.id })).json(), { ok: true });
-    assert.equal(context.supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 250);
+    assert.equal(context.supabase.rows('gamificacion', OTHER_RANKING_USER.id)[0].bricks, 270);
     assert.equal(context.supabase.rows('gamificacion', RANKING_USER.id)[0].bricks, 100);
 
     const duplicate = await post({ receptorId: OTHER_RANKING_USER.id });

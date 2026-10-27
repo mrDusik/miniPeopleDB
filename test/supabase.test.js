@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
-import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS } from '../src/gamificacion.js';
+import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS, proyectarPesosDnaSql } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
@@ -189,6 +189,18 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
     await db.exec('set role authenticated');
   };
+  const socialSourceCounts = async () => {
+    const source = (await db.query('select public.gamificacion_social_fuentes() as data')).rows[0].data;
+    assert.match(source.source_revision, /^[\da-f]{32}$/);
+    const { source_revision, ...counts } = source;
+    return counts;
+  };
+  const readGamificationLogros = async (userId) => {
+    await db.exec('reset role');
+    const logros = (await db.query('select logros from public.gamificacion where user_id = $1', [userId])).rows[0].logros;
+    await db.exec('set role authenticated');
+    return logros;
+  };
   try {
     await db.exec(`
       create schema auth;
@@ -242,8 +254,32 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await db.query('insert into public.gamificacion(user_id, bricks) values ($1, 20), ($2, 40)', [userA, userB]);
 
     assert.equal((await db.query("select has_function_privilege('anon', 'public.amigos_enviar(uuid)', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_function_privilege('anon', 'public.gamificacion_social_fuentes()', 'EXECUTE') as allowed")).rows[0].allowed, false);
     await setActor(userA);
     assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 0 });
+    assert.deepEqual(await socialSourceCounts(), {
+      friends: 0, sent_pending: 0, accepted_sent: 0, accepted_received: 0,
+      global_gifts_received: 0, weekly_gifts_received: 0, thanks_sent: 0, thanks_received: 0,
+    });
+    await assert.rejects(db.query('select public.gamificacion_social_fuentes($1)', [userB]), /function public\.gamificacion_social_fuentes/);
+    await db.exec('reset role');
+    await db.query('insert into public.regalos_enviados(donante_id, receptor_id, semana) values ($1, $2, $3), ($4, $2, $5)', [
+      userB, userA, '0001-01-01', userC, '2026-10-26',
+    ]);
+    const giftNotifications = (await db.query(`
+      insert into public.notificaciones(user_id, type, payload, gift_donante_id, gift_semana)
+      values ($1, 'gift_received', '{}'::jsonb, $2, '0001-01-01'),
+        ($1, 'gift_received', '{}'::jsonb, $3, '2026-10-26')
+      returning id
+    `, [userA, userB, userC])).rows;
+    await db.query('insert into public.agradecimientos_regalo(gift_notification_id, thanker_id, donor_id) values ($1, $2, $3)', [
+      giftNotifications[0].id, userA, userB,
+    ]);
+    await setActor(userA);
+    assert.deepEqual(await socialSourceCounts(), {
+      friends: 0, sent_pending: 0, accepted_sent: 0, accepted_received: 0,
+      global_gifts_received: 1, weekly_gifts_received: 1, thanks_sent: 1, thanks_received: 0,
+    });
     const summaries = (await db.query("select public.amigos_resumen('search', 'FAN') as data")).rows[0].data;
     assert.equal(summaries[0].total_coleccion, 0);
     assert.equal(summaries[0].dna_principal, 'Newbie');
@@ -267,6 +303,8 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     const sent = (await db.query('select public.amigos_enviar($1) as result', [userB])).rows[0].result;
     const requestId = sent.requestId;
     assert.equal(sent.status, 'pending');
+    assert.equal((await socialSourceCounts()).sent_pending, 1);
+    assert.equal((await readGamificationLogros(userA)).find(({ id }) => id === 'first-contact')?.total, 2);
     assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 1, received: 0 });
     await assert.rejects(db.query('select public.amigos_enviar($1)', [userB]), /SOLICITUD_EXISTENTE/);
     await setActor(userB);
@@ -286,6 +324,11 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await db.query('select public.amigos_rechazar($1)', [requestId]);
     await setActor(userA);
     assert.deepEqual((await db.query('select status from public.friend_requests')).rows, []);
+    assert.equal((await readGamificationLogros(userA)).some(({ id }) => id === 'first-contact'), false);
+    assert.deepEqual(await socialSourceCounts(), {
+      friends: 0, sent_pending: 0, accepted_sent: 0, accepted_received: 0,
+      global_gifts_received: 1, weekly_gifts_received: 1, thanks_sent: 1, thanks_received: 0,
+    });
     assert.deepEqual((await db.query("select status from public.amigos_listar('sent')")).rows, [{ status: 'pending' }]);
     assert.equal((await db.query("select relationship_status from public.amigos_buscar('Brick')")).rows[0].relationship_status, 'request_sent');
     assert.equal((await db.query("select public.amigos_resumen('sent') as data")).rows[0].data[0].status, 'pending');
@@ -296,13 +339,19 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
     await db.query('select public.amigos_aceptar($1)', [requestId]);
     assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 1, sent: 0, received: 0 });
+    assert.equal((await socialSourceCounts()).accepted_received, 1);
+    assert.equal((await readGamificationLogros(userB)).find(({ id }) => id === 'handshake')?.total, 3);
     assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['friends'])).rows, [{ status: 'accepted' }]);
-    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, []);
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
+    await setActor(userB);
+    assert.equal((await socialSourceCounts()).accepted_received, 1);
     assert.deepEqual((await db.query("select social_request_accepted, is_read from public.notificaciones where type = 'friend_request'")).rows, [
       { social_request_accepted: true, is_read: false },
     ]);
     await setActor(userA);
+    assert.equal((await socialSourceCounts()).accepted_sent, 1);
+    assert.equal((await readGamificationLogros(userA)).find(({ id }) => id === 'first-contact')?.total, 2);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, []);
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 1);
     await setActor(userB);
     assert.equal((await db.query('select public.amigos_aceptar($1) as result', [requestId])).rows[0].result.alreadyAccepted, true);
@@ -343,12 +392,18 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     assert.equal((await db.query('select status from public.amigos_listar($1)', ['friends'])).rows.length, 2);
     await db.exec('reset role');
     await db.query(`update public.gamificacion set nivel = '{"id":2,"private":"hidden"}',
-      logros = '[{"id":"collector","cantidad":1}]' where user_id = $1`, [userB]);
-    await db.query(`insert into public.gamificacion(user_id, nivel, bricks) values ($1, '{"id":3}', 1)`, [userC]);
+      logros = '[{"id":"solid-investment","cantidad":1}]' where user_id = $1` , [userB]);
+    await db.query(`update public.gamificacion set nivel = '{"id":3}', bricks = 1 where user_id = $1`, [userC]);
     await db.query("insert into public.minifiguras(user_id, id, nombre, categoria) values ($1, 'SOCIAL-1', 'Figure', 'Space')", [userB]);
     await setActor(userA);
     const enriched = (await db.query("select public.amigos_resumen('search', 'Brick') as data")).rows[0].data[0];
-    assert.equal(enriched.posicion_global, 2);
+    await db.exec('reset role');
+    const expectedPosition = (await db.query(`select position from (
+      select user_id, row_number() over (
+        order by coalesce((nivel->>'id')::numeric, 0) desc, bricks desc, user_id asc
+      ) as position from public.gamificacion
+    ) ranked where user_id = $1`, [userB])).rows[0].position;
+    assert.equal(enriched.posicion_global, expectedPosition);
     assert.equal(enriched.total_coleccion, 1);
     assert.equal(enriched.dna_principal, 'Collector');
     assert.deepEqual(Object.keys(enriched.nivel).sort(), ['id', 'nombre']);
@@ -374,6 +429,13 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await setActor(userB);
     assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userA])).rows[0].data.removed, true);
     assert.equal((await db.query('select public.amigos_eliminar($1) as data', [userA])).rows[0].data.removed, false);
+    await setActor(userA);
+    assert.deepEqual(await socialSourceCounts(), {
+      friends: 1, sent_pending: 0, accepted_sent: 0, accepted_received: 1,
+      global_gifts_received: 1, weekly_gifts_received: 1, thanks_sent: 1, thanks_received: 0,
+    });
+    assert.equal((await readGamificationLogros(userA)).some(({ id }) => id === 'first-contact'), false);
+    assert.equal((await readGamificationLogros(userB)).some(({ id }) => id === 'handshake'), false);
     await assert.rejects(db.query('select public.amigos_aceptar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
     await db.exec('reset role');
     assert.equal((await db.query('select count(*)::integer as total from public.notificaciones where social_request_id = $1', [requestId])).rows[0].total, 0);
@@ -504,15 +566,17 @@ test('los rankings leen username aunque el nombre público de Google siga desact
       create table auth.users (id uuid primary key, email text unique);
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query(`insert into private.gamificacion_v2_activation(singleton, version, activated_at, available_from)
+      values (true, 'v2', '2026-10-08T12:00:00Z', '2026-10-12')`);
     await db.query('insert into auth.users values ($1, $2), ($3, $4)', [viewerId, 'viewer@example.invalid', rankedId, 'ranked@example.invalid']);
     await db.query('insert into public.user_profiles(user_id, username) values ($1, $2), ($3, $4)', [viewerId, 'Viewer_1', rankedId, 'SpaceFan_2']);
     await db.query('insert into public.perfiles_publicos(user_id, display_name) values ($1, $2)', [rankedId, 'Nombre Google antiguo']);
     await db.query("insert into public.gamificacion(user_id, bricks, nivel) values ($1, 100, '{\"id\":1,\"nombre\":\"Stud\"}')", [rankedId]);
     await db.query(`insert into public.user_daily_snapshots (
       user_id, snapshot_date, total_figures, total_value, bricks, level,
-      pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
-    ) values ($1, '2026-10-11', 0, 0, 50, 1, 0, 0, 0, 0),
-      ($1, '2026-10-12', 0, 0, 100, 1, 0, 0, 0, 0)`, [rankedId]);
+      pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
+    ) values ($1, '2026-10-11', 0, 0, 50, 1, 0, 0, 0, 0, 'v2'),
+      ($1, '2026-10-12', 0, 0, 100, 1, 0, 0, 0, 0, 'v2')`, [rankedId]);
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [viewerId]);
     await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
     await db.exec('set role authenticated');
@@ -555,6 +619,13 @@ test('eliminar_cuenta_usuario limita el borrado a auth.uid, aplica cascada y rev
       await db.query('insert into public.gamificacion(user_id) values ($1)', [userId]);
       await db.query("insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, 'Space')", [userId]);
     }
+    await db.query('insert into public.friend_requests(sender_id, recipient_id, status) values ($1, $2, $3)', [userA, userB, 'accepted']);
+    await db.query('insert into public.friendships(user_low_id, user_high_id) values ($1, $2)', [userA, userB]);
+    const survivorAchievements = [
+      { id: 'block-by-block', nombre: 'Block by block', bricks: 1, repetible: true, cantidad: 1, total: 1 },
+      { id: 'handshake', nombre: 'Handshake', bricks: 3, repetible: false, cantidad: 1, total: 3 },
+    ];
+    await db.query('update public.gamificacion set bricks = 4, logros = $2::jsonb where user_id = $1', [userB, JSON.stringify(survivorAchievements)]);
     await db.exec('set role anon');
     await assert.rejects(db.query('select public.eliminar_cuenta_usuario()'), /permission denied/);
     await db.exec('reset role');
@@ -575,6 +646,7 @@ test('eliminar_cuenta_usuario limita el borrado a auth.uid, aplica cascada y rev
     await db.exec('reset role');
     assert.equal((await db.query('select count(*)::integer as total from auth.users')).rows[0].total, 2);
     assert.equal((await db.query('select count(*)::integer as total from public.minifiguras')).rows[0].total, 2);
+    assert.deepEqual((await db.query('select logros from public.gamificacion where user_id = $1', [userB])).rows[0].logros, survivorAchievements);
     await db.exec('drop trigger zz_test_refuse_deletion on auth.users');
     await db.exec('set role authenticated');
     await db.query('select public.eliminar_cuenta_usuario()');
@@ -584,12 +656,17 @@ test('eliminar_cuenta_usuario limita el borrado a auth.uid, aplica cascada y rev
       assert.equal((await db.query(`select count(*)::integer as total from public.${table} where user_id = $1`, [userA])).rows[0].total, 0);
       assert.equal((await db.query(`select count(*)::integer as total from public.${table} where user_id = $1`, [userB])).rows[0].total, 1);
     }
+    const survivorState = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [userB])).rows[0];
+    assert.equal(survivorState.bricks, 1);
+    assert.deepEqual(survivorState.logros, [survivorAchievements[0]]);
+    assert.equal((await db.query('select count(*)::integer as total from public.friendships')).rows[0].total, 0);
+    assert.equal((await db.query('select count(*)::integer as total from public.friend_requests')).rows[0].total, 0);
   } finally {
     await db.close();
   }
 });
 
-test('schema migra la constraint heredada de DNA antes de insertar el logro de agradecimiento', async () => {
+test('schema amplía la constraint heredada de DNA antes de insertar un logro V2 sin ponderación', async () => {
   const db = new PGlite();
   try {
     await db.exec(`
@@ -617,9 +694,109 @@ test('schema migra la constraint heredada de DNA antes de insertar el logro de a
       );
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
-    assert.deepEqual((await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'thanks-for-the-gift'")).rows[0], {
+    assert.deepEqual((await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'curiosity-driven'")).rows[0], {
       rarity_hunter: 0, collector: 0, explorer: 0, fan: 0,
     });
+  } finally {
+    await db.close();
+  }
+});
+
+test('el helper privado reconstruye estado social V2 con paridad, idempotencia y permisos cerrados', async () => {
+  const db = new PGlite();
+  const senderId = '00000000-0000-4000-8000-0000000000a1';
+  const recipientId = '00000000-0000-4000-8000-0000000000b1';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id) values ($1), ($2)', [senderId, recipientId]);
+    await db.query('insert into public.friend_requests(sender_id, recipient_id, status) values ($1, $2, $3)', [senderId, recipientId, 'pending']);
+
+    assert.equal((await db.query("select has_function_privilege('anon', 'private.gamificacion_reconstruir_social(uuid[])', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_function_privilege('authenticated', 'private.gamificacion_reconstruir_social(uuid[])', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    await db.query('select private.gamificacion_reconstruir_social(array[$1::uuid, $2::uuid])', [recipientId, senderId]);
+
+    const stored = (await db.query('select bricks, nivel, siguiente_nivel, progreso, logros from public.gamificacion where user_id = $1', [senderId])).rows[0];
+    const expected = calcularGamificacion([], [], 0, 0, 0, {
+      friends: 0, sent_pending: 1, accepted_sent: 0, accepted_received: 0,
+      global_gifts_received: 0, weekly_gifts_received: 0, thanks_sent: 0, thanks_received: 0,
+    });
+    assert.equal(stored.bricks, expected.bricks);
+    assert.deepEqual(stored.nivel, expected.nivel);
+    assert.deepEqual(stored.siguiente_nivel, expected.siguienteNivel);
+    assert.deepEqual(stored.progreso, expected.progreso);
+    assert.deepEqual(stored.logros, expected.logros);
+
+    const beforeRetry = (await db.query('select to_jsonb(state) as row from public.gamificacion state where user_id = $1', [senderId])).rows[0].row;
+    await db.query('select private.gamificacion_reconstruir_social(array[$1::uuid, $2::uuid])', [senderId, recipientId]);
+    const afterRetry = (await db.query('select to_jsonb(state) as row from public.gamificacion state where user_id = $1', [senderId])).rows[0].row;
+    assert.deepEqual(afterRetry, beforeRetry);
+  } finally {
+    await db.close();
+  }
+});
+
+test('el helper V2 aplica y retira hitos de amistades en 10, 20, 50 y 100', async () => {
+  const db = new PGlite();
+  const targetId = '15000000-0000-4000-8000-000000000001';
+  const friendId = (ordinal) => `15000000-0000-4000-8000-${String(ordinal).padStart(12, '0')}`;
+  const addFriends = async (start, count) => db.query(`
+    insert into public.friendships(user_low_id, user_high_id)
+    select $1::uuid, ('15000000-0000-4000-8000-' || lpad(ordinal::text, 12, '0'))::uuid
+    from generate_series($2::integer, ($2 + $3 - 1)::integer) ordinal
+  `, [targetId, start, count]);
+  const rebuild = () => db.query('select private.gamificacion_reconstruir_social(array[$1::uuid])', [targetId]);
+  const state = async () => (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [targetId])).rows[0];
+  const earnedIds = async () => (await state()).logros.map(({ id }) => id);
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
+      create function auth.role() returns text language sql as $$ select 'postgres'::text $$;
+      create table auth.users(id uuid primary key);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query(`insert into auth.users(id) select ('15000000-0000-4000-8000-' || lpad(ordinal::text, 12, '0'))::uuid
+      from generate_series(1, 101) ordinal`);
+    await addFriends(2, 10);
+    await rebuild();
+    assert.deepEqual((await earnedIds()).filter((id) => ['crew', 'brick-alliance', 'full-house', 'community'].includes(id)), ['crew']);
+    assert.equal((await state()).bricks, 20);
+
+    await addFriends(12, 10);
+    await rebuild();
+    assert.deepEqual((await earnedIds()).filter((id) => ['crew', 'brick-alliance', 'full-house', 'community'].includes(id)), ['crew', 'brick-alliance']);
+    assert.equal((await state()).bricks, 60);
+
+    await addFriends(22, 30);
+    await rebuild();
+    assert.deepEqual((await earnedIds()).filter((id) => ['crew', 'brick-alliance', 'full-house', 'community'].includes(id)), ['crew', 'brick-alliance', 'full-house']);
+    assert.equal((await state()).bricks, 160);
+
+    await addFriends(52, 50);
+    await rebuild();
+    assert.deepEqual((await earnedIds()).filter((id) => ['crew', 'brick-alliance', 'full-house', 'community'].includes(id)), ['crew', 'brick-alliance', 'full-house', 'community']);
+    assert.equal((await state()).bricks, 460);
+
+    await db.query('delete from public.friendships where user_low_id = $1 and user_high_id = $2', [targetId, friendId(101)]);
+    await rebuild();
+    assert.equal((await earnedIds()).includes('community'), false);
+    assert.equal((await state()).bricks, 160);
   } finally {
     await db.close();
   }
@@ -758,10 +935,9 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
   }
 });
 
-test('schema migra el logro de agradecimiento del autor al donante y es idempotente', async () => {
+test('reaplicar schema no instala ni recrea recompensas V1 de agradecimiento', async () => {
   const db = new PGlite();
-  const donorId = '00000000-0000-4000-8000-0000000000d1';
-  const thankerId = '00000000-0000-4000-8000-0000000000d2';
+  const userId = '00000000-0000-4000-8000-0000000000d1';
   try {
     await db.exec(`
       create schema auth;
@@ -778,40 +954,23 @@ test('schema migra el logro de agradecimiento del autor al donante y es idempote
     `);
     const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
     await db.exec(schema);
-    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
-      donorId, 'donor@example.invalid', thankerId, 'thanker@example.invalid',
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [userId, 'v2@example.invalid']);
+    const v2Achievement = {
+      id: 'gratitude-is-the-sign-of-noble-souls', type: 'regalo',
+      nombre: 'Gratitude is the sign of noble souls', descripcion: 'Has dado las gracias por primera vez',
+      bricks: 5, repetible: false, cantidad: 1, total: 5,
+    };
+    await db.query(`insert into public.gamificacion(user_id, bricks, nivel, siguiente_nivel, progreso, logros)
+      values ($1, 5, '{"id":0,"nombre":"Duplo"}', '{"id":1,"nombre":"Stud"}', '{"actual":5,"desde":0,"hasta":20,"porcentaje":25}', $2::jsonb)`, [
+      userId, JSON.stringify([v2Achievement]),
     ]);
-    await db.query(`
-      insert into public.gamificacion(user_id, bricks, nivel, siguiente_nivel, progreso, logros) values
-        ($1, 10, '{"id":0,"nombre":"Duplo"}', '{"id":1,"nombre":"Stud"}', '{"actual":10,"desde":0,"hasta":20,"porcentaje":50}', '[]'),
-        ($2, 5, '{"id":0,"nombre":"Duplo"}', '{"id":1,"nombre":"Stud"}', '{"actual":5,"desde":0,"hasta":20,"porcentaje":25}',
-          '[{"id":"thanks-for-the-gift","type":"regalo","nombre":"Agradeciste un regalo","descripcion":"Agradeciste un regalo.","bricks":5,"repetible":true,"cantidad":1,"total":5}]')
-    `, [donorId, thankerId]);
-    await db.query('insert into public.regalos_enviados(donante_id, receptor_id) values ($1, $2)', [donorId, thankerId]);
-    const giftNotification = (await db.query(`
-      insert into public.notificaciones(user_id, type, payload, gift_donante_id)
-      values ($1, 'gift_received', '{"amount":50}'::jsonb, $2) returning id
-    `, [thankerId, donorId])).rows[0];
-    await db.query(`
-      insert into public.agradecimientos_regalo(gift_notification_id, thanker_id, donor_id)
-      values ($1, $2, $3)
-    `, [giftNotification.id, thankerId, donorId]);
-    await db.query('update private.thanks_reward_ownership_migration set applied = false where singleton = true');
-
     await db.exec(schema);
-    await db.query('update public.gamificacion set logros = $2::jsonb where user_id = $1', [donorId, JSON.stringify([{
-      id: 'thanks-for-the-gift', type: 'regalo', nombre: 'Someone thanked you',
-      descripcion: 'A collector thanked you for your gift.', bricks: 5, repetible: true, cantidad: 1, total: 5,
-    }])]);
-    await db.exec(schema);
-
-    const donor = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [donorId])).rows[0];
-    const thanker = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [thankerId])).rows[0];
-    assert.equal(donor.bricks, 15);
-    assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift').nombre, 'Gratitude is the sign of noble souls');
-    assert.equal(donor.logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
-    assert.equal(thanker.bricks, 0);
-    assert.equal(thanker.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+    const state = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [userId])).rows[0];
+    assert.equal(state.bricks, 5);
+    assert.deepEqual(state.logros, [v2Achievement]);
+    assert.equal((await db.query("select to_regclass('private.thanks_reward_ownership_migration') is null as missing")).rows[0].missing, true);
+    assert.equal((await db.query("select to_regprocedure('private.migrar_propiedad_logro_agradecimiento()') is null as missing")).rows[0].missing, true);
+    assert.equal(state.logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
   } finally {
     await db.close();
   }
@@ -889,7 +1048,7 @@ test('reset de miniPeopleDB_prueba vacía todas las tablas de datos de aplicaci�
       'public.user_profiles', 'public.user_profile_favorite_categories', 'public.perfiles_publicos',
       'private.daily_sync_users', 'private.daily_sync_prices',
       'private.daily_sync_runs', 'private.daily_sync_figure_prices',
-      'private.thanks_reward_ownership_migration', 'private.ranking_top10_reconciliation_state',
+      'private.ranking_top10_reconciliation_state',
     ]) {
       assert.equal((await db.query(`select count(*)::integer as total from ${table}`)).rows[0].total, 0, table);
     }
@@ -1111,6 +1270,32 @@ test('el mock social deriva identidad del JWT, limita lecturas y revierte acepta
   assert.deepEqual((await stranger.from('friendships').select('*')).data, []);
 });
 
+test('el mock recalcula al superviviente al eliminar una cuenta y preserva logros de colección', async () => {
+  const mock = createSupabaseMock({ users: {
+    'token-deleted': { id: 'deleted-user' }, 'token-survivor': { id: 'survivor-user' },
+  } });
+  const deletedClient = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-deleted' } } });
+  mock.seed('friend_requests', undefined, [{
+    id: 'accepted-request', sender_id: 'deleted-user', recipient_id: 'survivor-user', status: 'accepted',
+  }]);
+  mock.seed('friendships', undefined, [{ user_low_id: 'deleted-user', user_high_id: 'survivor-user' }]);
+  mock.seed('gamificacion', 'survivor-user', [{
+    bricks: 4,
+    nivel: { id: 0, nombre: 'Duplo' },
+    logros: [
+      { id: 'block-by-block', nombre: 'Block by block', bricks: 1, repetible: true, cantidad: 1, total: 1 },
+      { id: 'handshake', nombre: 'Handshake', bricks: 3, repetible: false, cantidad: 1, total: 3 },
+    ],
+  }]);
+
+  assert.equal((await deletedClient.rpc('eliminar_cuenta_usuario')).error, null);
+  const survivor = mock.rows('gamificacion', 'survivor-user')[0];
+  assert.equal(survivor.bricks, 1);
+  assert.deepEqual(survivor.logros.map(({ id }) => id), ['block-by-block']);
+  assert.deepEqual(mock.rows('friendships'), []);
+  assert.deepEqual(mock.rows('friend_requests'), []);
+});
+
 test('el mock aplica regalos únicos y revierte la transacción si falla gamificación', async () => {
   const mock = createSupabaseMock({ users: {
     'token-a': { id: 'user-a' }, 'token-b': { id: 'user-b' }, 'token-c': { id: 'user-c' },
@@ -1122,13 +1307,13 @@ test('el mock aplica regalos únicos y revierte la transacción si falla gamific
   assert.equal((await clientA.rpc('regalar_bricks', { p_receptor_id: 'user-a' })).error.message, 'AUTORREGALO_NO_PERMITIDO');
   assert.equal((await clientA.rpc('regalar_bricks', { p_receptor_id: 'missing' })).error.message, 'RECEPTOR_NO_ENCONTRADO');
   assert.deepEqual((await clientA.rpc('regalar_bricks', { p_receptor_id: 'user-b' })).data, { ok: true });
-  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 60);
+  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 70);
   assert.equal(mock.rows('gamificacion', 'user-b')[0].logros[0].type, 'regalo');
   assert.equal((await clientA.rpc('regalar_bricks', { p_receptor_id: 'user-b' })).error.message, 'REGALO_YA_ENVIADO');
 
   mock.failNext('gamificacion', { code: 'PGRST000', message: 'fallo' }, 'update');
   assert.ok((await clientC.rpc('regalar_bricks', { p_receptor_id: 'user-b' })).error);
-  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 60);
+  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 70);
   assert.equal(mock.rows('regalos_enviados').length, 1);
 });
 
@@ -1138,7 +1323,7 @@ test('el mock aísla la bandeja y procesa agradecimientos con recompensa única 
   } });
   const sender = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-sender' } } });
   const receiver = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer token-receiver' } } });
-  mock.seed('gamificacion', 'sender', [{ bricks: 10, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
+  mock.seed('gamificacion', 'sender', [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   mock.seed('gamificacion', 'receiver', [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   mock.seed('perfiles_publicos', 'sender', [{ display_name: 'Google Ada' }]);
   mock.seed('perfiles_publicos', 'receiver', [{ display_name: 'Google Grace' }]);
@@ -1159,14 +1344,14 @@ test('el mock aísla la bandeja y procesa agradecimientos con recompensa única 
   mock.failNext('notificaciones', { code: 'PGRST000', message: 'fallo' }, 'insert');
   assert.equal((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).error.message, 'fallo');
   assert.equal(mock.rows('agradecimientos_regalo').length, 0);
-  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 10);
-  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 50);
+  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 0);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 70);
 
   assert.deepEqual((await receiver.rpc('agradecer_regalo', { p_notification_id: gift.id })).data, { ok: true });
-  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 20);
-  assert.equal(mock.rows('gamificacion', 'sender')[0].logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
-  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 50);
-  assert.equal(mock.rows('gamificacion', 'receiver')[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(mock.rows('gamificacion', 'sender')[0].bricks, 5);
+  assert.equal(mock.rows('gamificacion', 'sender')[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].bricks, 75);
+  assert.equal(mock.rows('gamificacion', 'receiver')[0].logros.find(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls')?.total, 5);
   assert.equal(mock.rows('notificaciones', 'receiver')[0].is_read, false);
   assert.equal(mock.rows('notificaciones', 'sender')[0].type, 'gift_thanks');
   assert.equal(mock.rows('notificaciones', 'sender')[0].payload.user, 'GraceCollector');
@@ -1195,7 +1380,7 @@ test('dos regalos concurrentes del mismo donante solo incrementan una vez', asyn
   ]);
   assert.equal(results.filter(({ error }) => error === null).length, 1);
   assert.equal(results.filter(({ error }) => error?.message === 'REGALO_YA_ENVIADO').length, 1);
-  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 50);
+  assert.equal(mock.rows('gamificacion', 'user-b')[0].bricks, 70);
 });
 
 test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su rastro', async () => {
@@ -1263,54 +1448,20 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     await assert.rejects(db.query('delete from public.notificaciones where user_id = $1', [inboxUser]), /permission denied/);
     await db.exec('reset role');
     await db.query('delete from auth.users where id in ($1, $2)', [inboxUser, otherInboxUser]);
-    const expectedDnaWeights = {
-      'new-mini-person': [0, 80, 10, 10],
-      woah: [50, 20, 10, 20],
-      'deal-master': [80, 10, 0, 10],
-      masterpiece: [90, 5, 0, 5],
-      'holy-grail': [80, 10, 0, 10],
-      omgold: [95, 5, 0, 0],
-      'lets-go': [0, 5, 90, 5],
-      collector: [5, 90, 0, 5],
-      'step-by-step': [5, 45, 50, 0],
-      'bricky-potter': [0, 10, 20, 70],
-      'bricky-mouse': [0, 10, 20, 70],
-      'its-a-me-mario': [0, 10, 20, 70],
-      'green-hill-zone': [0, 10, 20, 70],
-      dimensional: [60, 10, 20, 10],
-      warsie: [0, 10, 20, 70],
-      'in-ny-i-was': [80, 10, 0, 10],
-      'welcome-to-the-upsidedown': [60, 30, 0, 10],
-      'chill-nancy-im-fine': [80, 10, 0, 10],
-      'the-legend': [0, 10, 20, 70],
-      'heh-there-is-another-one-for-you': [0, 10, 20, 70],
-      'change-will-not-come-in-a-single-sunrise': [0, 10, 20, 70],
-      'start-poetry': [0, 10, 20, 70],
-      'mental-breakdown': [90, 5, 0, 5],
-      'the-dark-plastic': [90, 5, 0, 5],
-      'concrete-savanna': [90, 5, 0, 5],
-      'youre-shooting-for-the-stars': [20, 40, 0, 40],
-      strike: [20, 40, 0, 40],
-      'retired-police': [90, 5, 5, 0],
-      'retired-firefighter': [90, 5, 5, 0],
-      'retired-doctor': [90, 5, 5, 0],
-      'trio-of-senior-citizens': [90, 5, 0, 5],
-      antiquarian: [80, 10, 0, 10],
-      'to-lay-the-groundwork': [50, 50, 0, 0],
-      investor: [50, 50, 0, 0],
-      'investment-fund': [50, 50, 0, 0],
-      'almost-millionaire': [50, 50, 0, 0],
-      weirdo: [100, 0, 0, 0],
-      hooked: [0, 100, 0, 0],
-      'land-ho': [0, 0, 100, 0],
-      nerd: [0, 0, 0, 100],
-      [LOGRO_REGALO.id]: [0, 0, 0, 0],
-      'thanks-for-the-gift': [0, 0, 0, 0],
-    };
-    assert.deepEqual(Object.fromEntries(DNA_PONDERACIONES), expectedDnaWeights);
+    const projectedDnaWeights = Object.fromEntries(proyectarPesosDnaSql().map(({
+      logro_id, rarity_hunter, collector, explorer, fan,
+    }) => [logro_id, [rarity_hunter, collector, explorer, fan]]));
+    assert.equal(Object.keys(projectedDnaWeights).length, 115);
+    assert.deepEqual(Object.keys(projectedDnaWeights).sort(), OBJETIVOS.map(({ id }) => id).sort());
+    for (const weights of DNA_PONDERACIONES.values()) {
+      const values = Object.values(weights);
+      assert.equal(values.every((weight) => Number.isInteger(weight) && weight >= 0 && weight <= 100), true);
+      assert.equal([0, 100].includes(values.reduce((sum, weight) => sum + weight, 0)), true);
+    }
+    assert.deepEqual(DNA_PONDERACIONES.get('youngling'), { collector: 5, rarityHunter: 0, fan: 95, explorer: 0 });
+    assert.deepEqual(DNA_PONDERACIONES.get('curiosity-driven'), { collector: 0, rarityHunter: 0, fan: 0, explorer: 0 });
     const dnaRows = (await db.query('select logro_id, rarity_hunter, collector, explorer, fan from public.dna_ponderaciones order by logro_id')).rows;
-    assert.deepEqual(Object.fromEntries(dnaRows.map(({ logro_id, rarity_hunter, collector, explorer, fan }) => [logro_id, [rarity_hunter, collector, explorer, fan]])), expectedDnaWeights);
-    assert.deepEqual(Object.keys(expectedDnaWeights).sort(), [...OBJETIVOS.map(({ id }) => id), LOGRO_REGALO.id, 'thanks-for-the-gift'].sort());
+    assert.deepEqual(Object.fromEntries(dnaRows.map(({ logro_id, rarity_hunter, collector, explorer, fan }) => [logro_id, [rarity_hunter, collector, explorer, fan]])), projectedDnaWeights);
     assert.equal((await db.query("select count(*)::integer as total from pg_policies where schemaname = 'public' and tablename = 'dna_ponderaciones'")).rows[0].total, 0);
     for (const role of ['anon', 'authenticated']) {
       for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
@@ -1321,10 +1472,10 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     await assert.rejects(db.query("insert into public.dna_ponderaciones values ('invalid-total', 1, 1, 1, 1)"), /dna_ponderaciones_suma_check/);
     await assert.rejects(db.query("insert into public.dna_ponderaciones values ('invalid-range', 101, 0, 0, 0)"), /dna_ponderaciones_pesos_check/);
     await assert.rejects(db.query("insert into public.dna_ponderaciones values ('someone-liked-your-collection', 0, 0, 0, 1)"), /dna_ponderaciones_suma_check/);
-    await db.query("update public.dna_ponderaciones set rarity_hunter = 0, collector = 100, explorer = 0, fan = 0 where logro_id = 'new-mini-person'");
+    await db.query("update public.dna_ponderaciones set rarity_hunter = 0, collector = 100, explorer = 0, fan = 0 where logro_id = 'solid-investment'");
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
-    const reseeded = (await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'new-mini-person'")).rows[0];
-    assert.deepEqual(Object.values(reseeded), expectedDnaWeights['new-mini-person']);
+    const reseeded = (await db.query("select rarity_hunter, collector, explorer, fan from public.dna_ponderaciones where logro_id = 'solid-investment'")).rows[0];
+    assert.deepEqual(Object.values(reseeded), projectedDnaWeights['solid-investment']);
     const dnaUser = '00000000-0000-4000-8000-0000000000dd';
     const dnaMock = createSupabaseMock();
     await db.query('insert into auth.users(id,email) values ($1,$2)', [dnaUser, 'dna-fixture@example.invalid']);
@@ -1371,19 +1522,22 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
       return sqlResult;
     };
     await verifyDna([
-      { id: 'new-mini-person', cantidad: 2 }, { id: 'woah', cantidad: 1 },
+      { id: 'solid-investment', cantidad: 2 }, { id: 'sweet-find', cantidad: 1 },
       { id: 'unknown-achievement', cantidad: 1000 }, { id: LOGRO_REGALO.id, cantidad: 1000 },
-    ], 'Collector', { rarityHunter: 50 / 3, explorer: 10, collector: 60, fan: 40 / 3 });
-    await verifyDna([{ id: 'collector', cantidad: 3 }], 'Collector', { rarityHunter: 5, explorer: 0, collector: 90, fan: 5 });
-    await verifyDna([{ id: 'omgold', cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 95, explorer: 0, collector: 5, fan: 0 });
-    for (const id of ['the-legend', 'heh-there-is-another-one-for-you', 'change-will-not-come-in-a-single-sunrise', 'start-poetry']) {
-      await verifyDna([{ id, cantidad: 1 }], 'Fan', { rarityHunter: 0, collector: 10, explorer: 20, fan: 70 });
+    ], 'Collector', { rarityHunter: 5, explorer: 5, collector: 80, fan: 10 });
+    await verifyDna([{ id: 'the-cornerstone', cantidad: 3 }], 'Explorer', { rarityHunter: 0, explorer: 90, collector: 10, fan: 0 });
+    await verifyDna([{ id: 'pure-gold-zero-leprechauns-required', cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 100, explorer: 0, collector: 0, fan: 0 });
+    for (const id of ['youngling', 'muggle', 'sidekick', 'mouseketeer']) {
+      await verifyDna([{ id, cantidad: 1 }], 'Fan', { rarityHunter: 0, collector: 5, explorer: 0, fan: 95 });
     }
-    for (const id of ['mental-breakdown', 'the-dark-plastic', 'concrete-savanna']) {
-      await verifyDna([{ id, cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 90, collector: 5, explorer: 0, fan: 5 });
+    for (const id of ['retired-police', 'retired-firefighter', 'retired-courier']) {
+      await verifyDna([{ id, cantidad: 1 }], 'Rarity Hunter', { rarityHunter: 80, collector: 20, explorer: 0, fan: 0 });
     }
-    for (const id of ['youre-shooting-for-the-stars', 'strike']) {
-      await verifyDna([{ id, cantidad: 2 }], 'Collector', { rarityHunter: 20, collector: 40, explorer: 0, fan: 40 });
+    for (const id of ['curator', 'grail-seeker', 'nerd', 'curiosity-driven']) {
+      await verifyDna([{ id, cantidad: 1 }], 'Newbie', { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 });
+    }
+    for (const id of ['category-halfway', 'theme-specialist', 'grand-category-legend']) {
+      await verifyDna([{ id, cantidad: 2 }], 'Collector', { rarityHunter: 0, collector: 60, explorer: 0, fan: 40 });
     }
     await verifyDna([{ id: LOGRO_REGALO.id, cantidad: 99 }], 'Newbie', { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 });
     await db.query('update public.gamificacion set logros = $2 where user_id = $1', [dnaUser, JSON.stringify(originalDnaLogros)]);
@@ -1478,10 +1632,10 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks, donorBricks);
     await db.exec('drop trigger fail_thanks_notification on public.notificaciones; drop function public.fail_thanks_notification()');
     assert.deepEqual((await db.query('select public.agradecer_regalo($1) as result', [giftNotification.id])).rows[0].result, { ok: true });
-    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks, donorBricks + 10);
-    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalA])).rows[0].bricks, receiverBricks + 50);
-    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalB])).rows[0].logros.find(({ id }) => id === 'thanks-for-the-gift').total, 5);
-    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalA])).rows[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalB])).rows[0].bricks, donorBricks + 5);
+    assert.equal((await db.query('select bricks from public.gamificacion where user_id = $1', [originalA])).rows[0].bricks, receiverBricks + 75);
+    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalB])).rows[0].logros.some(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls'), false);
+    assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [originalA])).rows[0].logros.find(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls').total, 5);
     await assert.rejects(db.query('select public.agradecer_regalo($1)', [giftNotification.id]), /REGALO_YA_AGRADECIDO/);
     const ownThanks = (await db.query('select public.agradecimientos_regalo_count() as data')).rows[0].data;
     assert.deepEqual(ownThanks, { sent: 1, received: 0 });
@@ -1508,19 +1662,49 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     assert.equal(users.length, 20);
     assert.ok(users.every((user) => user.encrypted_password === null && user.email.endsWith('@example.invalid')));
     const mock = createSupabaseMock({ users: Object.fromEntries(users.map((user) => [user.id, { id: user.id }])) });
+    for (const table of ['regalos_enviados', 'friend_requests', 'friendships', 'agradecimientos_regalo']) {
+      const rows = (await db.query(`select to_jsonb(item) as data from public.${table} item`)).rows.map(({ data }) => data);
+      mock.seed(table, undefined, rows);
+    }
     const levels = new Set();
     for (const user of users) {
       const rows = (await db.query('select to_jsonb(item) as data from public.minifiguras item where user_id = $1', [user.id])).rows.map(({ data }) => data);
-      const state = (await db.query('select * from public.gamificacion where user_id = $1', [user.id])).rows[0];
-      const gifts = (await db.query('select count(*)::integer as total from public.regalos_enviados where receptor_id = $1', [user.id])).rows[0].total;
+      const sources = (await db.query(`
+        select
+          (select count(*)::integer from public.friendships friendship
+            where $1::uuid in (friendship.user_low_id, friendship.user_high_id)) as friends,
+          (select count(*)::integer from public.friend_requests request
+            where request.sender_id = $1 and request.status = 'pending') as sent_pending,
+          (select count(*)::integer from public.friend_requests request
+            where request.sender_id = $1 and request.status = 'accepted') as accepted_sent,
+          (select count(*)::integer from public.friend_requests request
+            where request.recipient_id = $1 and request.status = 'accepted') as accepted_received,
+          (select count(*)::integer from public.regalos_enviados gift
+            where gift.receptor_id = $1 and gift.semana = '0001-01-01') as global_gifts_received,
+          (select count(*)::integer from public.regalos_enviados gift
+            where gift.receptor_id = $1 and gift.semana <> '0001-01-01') as weekly_gifts_received,
+          (select count(*)::integer from public.agradecimientos_regalo thanks
+            where thanks.thanker_id = $1) as thanks_sent,
+          (select count(*)::integer from public.agradecimientos_regalo thanks
+            where thanks.donor_id = $1) as thanks_received
+      `, [user.id])).rows[0];
       mock.seed('minifiguras', user.id, rows);
-      mock.seed('gamificacion', user.id, [state]);
       const client = mock.createClient('url', 'key', { global: { headers: { Authorization: `Bearer ${user.id}` } } });
       const catalog = await new MinifigurasRepository({ client, userId: user.id, categoriasRepository: { read: async () => categories } }).readCatalog();
+      const expected = calcularGamificacion(
+        catalog, categories, sources.global_gifts_received, sources.thanks_received,
+        sources.weekly_gifts_received, sources,
+      );
+      await db.query(`update public.gamificacion set
+        bricks = $2, nivel = $3::jsonb, siguiente_nivel = $4::jsonb, progreso = $5::jsonb, logros = $6::jsonb
+        where user_id = $1`, [
+        user.id, expected.bricks, JSON.stringify(expected.nivel), JSON.stringify(expected.siguienteNivel),
+        JSON.stringify(expected.progreso), JSON.stringify(expected.logros),
+      ]);
+      const state = (await db.query('select * from public.gamificacion where user_id = $1', [user.id])).rows[0];
+      mock.seed('gamificacion', user.id, [state]);
       const stored = await new GamificacionRepository({ client, userId: user.id }).read();
-      const thanksReceived = (await db.query('select count(*)::integer as total from public.agradecimientos_regalo where donor_id = $1', [user.id])).rows[0].total;
-      const expected = calcularGamificacion(catalog, categories, gifts, thanksReceived);
-      assert.equal(stored.bricks, expected.bricks);
+      assert.equal(stored.bricks, expected.bricks, JSON.stringify({ userId: user.id, stored: stored.bricks, expected: expected.bricks, sources }));
       assert.deepEqual(stored.nivel, expected.nivel);
       assert.deepEqual(stored.siguienteNivel, expected.siguienteNivel);
       assert.deepEqual(stored.progreso, expected.progreso);
@@ -1538,6 +1722,9 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     assert.ok(ranking.every((entry) => typeof entry.dna_principal === 'string'));
     await db.exec('begin');
     await db.exec('delete from public.gamificacion');
+    await db.query(`update public.dna_ponderaciones set collector = 100, rarity_hunter = 0, explorer = 0, fan = 0 where logro_id = 'unicorn'`);
+    await db.query(`update public.dna_ponderaciones set collector = 0, rarity_hunter = 0, explorer = 100, fan = 0 where logro_id = 'the-cornerstone'`);
+    await db.query(`update public.dna_ponderaciones set collector = 0, rarity_hunter = 0, explorer = 0, fan = 100 where logro_id = 'your-adventure-begins'`);
     const orderIds = Array.from({ length: 12 }, (_, index) => `23000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
     for (const [index, userId] of orderIds.entries()) {
       await db.query('insert into auth.users(id) values ($1)', [userId]);
@@ -1545,8 +1732,14 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
         userId, index < 10 ? (index < 2 ? 1000 : 1000 - index) : index === 10 ? 5 : 10,
         JSON.stringify({ id: index < 10 ? 3 : index === 10 ? 2 : 1 }),
         JSON.stringify(index < 10
-          ? ({ 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' }[index] ? [{ id: ({ 9: 'weirdo', 8: 'hooked', 7: 'land-ho', 6: 'nerd' }[index]), cantidad: 1 }] : [])
-          : ['weirdo', 'hooked', 'land-ho', 'nerd'].map((id) => ({ id, cantidad: 1 }))),
+          ? ({
+            9: 'pure-gold-zero-leprechauns-required', 8: 'unicorn',
+            7: 'the-cornerstone', 6: 'your-adventure-begins',
+          }[index] ? [{ id: ({
+            9: 'pure-gold-zero-leprechauns-required', 8: 'unicorn',
+            7: 'the-cornerstone', 6: 'your-adventure-begins',
+          }[index]), cantidad: 1 }] : [])
+          : ['pure-gold-zero-leprechauns-required', 'unicorn', 'the-cornerstone', 'your-adventure-begins'].map((id) => ({ id, cantidad: 1 }))),
       ]);
       if (index === 9 || index >= 10) {
         await db.query("insert into public.minifiguras(user_id,id,nombre,categoria) values ($1,'ONE','One','Space')", [userId]);
@@ -1567,7 +1760,7 @@ test('scripts SQL de prueba insertan 20 usuarios coherentes y revierten solo su 
     for (const criterio of ['nivel', 'coleccion', 'rarityHunter', 'collector', 'explorer', 'fan']) {
       const ordered = (await db.query('select * from public.ranking_global($1)', [criterio])).rows;
       assert.equal(ordered.length, 10);
-      assert.deepEqual(ordered.map(({ user_id }) => user_id), expectedOrders[criterio]);
+      assert.deepEqual(ordered.map(({ user_id }) => user_id), expectedOrders[criterio], criterio);
       assert.ok(ordered.every((row) => !('dna_porcentajes' in row) && row.dna_rasgos.length <= 2));
       if (!['nivel', 'coleccion'].includes(criterio)) {
         const nombre = { rarityHunter: 'Rarity Hunter', collector: 'Collector', explorer: 'Explorer', fan: 'Fan' }[criterio];
