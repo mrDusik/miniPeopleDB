@@ -6,7 +6,7 @@ import test from 'node:test';
 import { BricksetCategoriasError, BricksetCategoriasScraper, parseBricksetCategorias, parseBricksetCollectibleMinifiguresPage, summarizeBricksetCollectibleMinifiguresYears } from '../src/brickset-categorias-scraper.js';
 import { syncCategorias } from '../scripts/sync-brickset-categorias.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasPersistenciaError, CategoriasRepository, validateCategorias } from '../src/categorias-repository.js';
-import { createServer } from '../src/server.js';
+import { createServer, startApplication } from '../src/server.js';
 import { categoriasMock } from '../test-support/fixtures.js';
 
 const validHtml = `
@@ -346,5 +346,56 @@ test('GET /categorias devuelve un error controlado si el JSON esta corrupto', as
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('el modo mantenimiento bloquea la aplicacion y conserva health', async () => {
+  const server = createServer({ supabaseConfig: null, maintenanceMode: true });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const health = await fetch(`${baseUrl}/health`);
+    assert.equal(health.status, 200);
+    assert.equal(await health.text(), 'OK');
+
+    for (const [path, method] of [['/', 'GET'], ['/api/cron/daily-sync', 'POST'], ['/vendor/supabase.js', 'GET']]) {
+      const response = await fetch(`${baseUrl}${path}`, { method });
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get('retry-after'), '300');
+      assert.deepEqual(await response.json(), { error: 'MANTENIMIENTO' });
+    }
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test('el modo mantenimiento no inicia ni recupera workers al arrancar', async () => {
+  const workerCalls = [];
+  const server = await startApplication({
+    adminConfig: { url: 'https://example.supabase.co', serviceRoleKey: 'unused' },
+    supabaseConfig: null,
+    createSupabaseClient: () => ({}),
+    categoriesRepository: {},
+    recalculator: {
+      start: async () => workerCalls.push('recalculator'),
+      close() {},
+    },
+    analyticsRepository: {},
+    analyticsJobs: {
+      recover: async () => workerCalls.push('analytics'),
+      close() {},
+    },
+    scraper: {},
+    port: 0,
+    maintenanceMode: true,
+  });
+
+  try {
+    assert.deepEqual(workerCalls, []);
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/health`);
+    assert.equal(response.status, 200);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });

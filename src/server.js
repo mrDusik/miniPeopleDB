@@ -136,6 +136,10 @@ function isAuthorizedCronRequest(request, secret) {
   return timingSafeEqual(expectedDigest, tokenDigest) && token.length > 0;
 }
 
+function isMaintenanceModeEnabled(value) {
+  return value === true || String(value).trim().toLowerCase() === 'true';
+}
+
 function isCalendarDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -168,6 +172,7 @@ export function createServer({
   fetchImpl,
   scraper,
   minIntervalMs,
+  maintenanceMode = process.env.MAINTENANCE_MODE,
 } = {}) {
   const categoriasRepository = new CategoriasRepository(themesPath);
   const configuredInterval = Number(process.env.BRICKSET_MIN_INTERVAL_MS);
@@ -179,6 +184,16 @@ export function createServer({
   const bricksetSyncJobs = createBricksetSyncJobs({ brickset });
   const app = express();
   const bricksetFullNames = new Map();
+  const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
+
+  app.use((request, response, next) => {
+    if (!maintenanceEnabled || (request.method === 'GET' && request.path === '/health')) {
+      next();
+      return;
+    }
+    response.setHeader('retry-after', '300');
+    sendJson(response, 503, { error: 'MANTENIMIENTO' });
+  });
 
   async function authenticate(request) {
     if (!supabaseConfig) {
@@ -1327,7 +1342,9 @@ export async function startApplication({
   createBricksetScraperImpl = (options) => new BricksetScraper(options),
   fetchImpl,
   port = Number(process.env.PORT || 3000),
+  maintenanceMode = process.env.MAINTENANCE_MODE,
 } = {}) {
+  const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
   if (!adminConfig) {
     throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY para recalcular gamificación tras cambios de categorías');
   }
@@ -1355,7 +1372,9 @@ export async function startApplication({
     categoriasRepository,
   });
   try {
-    await Promise.all([recalculator.start(), dailyAnalyticsJobs.recover()]);
+    if (!maintenanceEnabled) {
+      await Promise.all([recalculator.start(), dailyAnalyticsJobs.recover()]);
+    }
   } catch (error) {
     recalculator.close();
     dailyAnalyticsJobs.close();
@@ -1370,6 +1389,7 @@ export async function startApplication({
     createSupabaseAdminClient: createSupabaseClient,
     scraper: brickset,
     dailyAnalyticsJobs,
+    maintenanceMode: maintenanceEnabled,
   });
   await new Promise((resolveListen, rejectListen) => {
     server.once('error', rejectListen);
