@@ -178,6 +178,7 @@ export function createServer({
   });
   const bricksetSyncJobs = createBricksetSyncJobs({ brickset });
   const app = express();
+  const bricksetFullNames = new Map();
 
   async function authenticate(request) {
     if (!supabaseConfig) {
@@ -230,7 +231,7 @@ export function createServer({
       userProfileRepository,
       notificationsRepository,
         historyRepository,
-      ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readCatalog()),
+      ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readGamificationCatalog()),
       readGamificationDna: () => gamificacionRepository.dna(),
     };
   }
@@ -982,7 +983,10 @@ export function createServer({
         try {
           await ensureGamificacion();
           const payload = await readJsonBody(request);
-          const minifigura = await repository.create(payload);
+          const metadataKey = typeof payload.id === 'string' ? payload.id.trim().toUpperCase() : '';
+          const nombreCompleto = bricksetFullNames.get(metadataKey);
+          const minifigura = await repository.create(payload, { nombreCompleto });
+          if (nombreCompleto) bricksetFullNames.delete(metadataKey);
           const body = request.headers['x-gamificacion'] === 'true'
             ? { ...minifigura, gamificacion: repository.lastGamification }
             : minifigura;
@@ -1097,6 +1101,9 @@ export function createServer({
 
       try {
         const detalles = await brickset.getDetails(id);
+        if (typeof detalles.nombreCompleto === 'string' && detalles.nombreCompleto.trim() !== '') {
+          bricksetFullNames.set(id.trim().toUpperCase(), detalles.nombreCompleto);
+        }
         const categorias = await categoriasRepository.read();
         const normalize = (value) => value.trim().normalize('NFKC').replace(/\s+/g, ' ').toLocaleLowerCase();
         const categoriaEncontrada = categorias.find((categoria) => normalize(categoria.categoria) === normalize(detalles.categoria));

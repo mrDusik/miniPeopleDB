@@ -29,7 +29,7 @@ function isValidSubcategoriaTotal(value) {
   return value === undefined || (Number.isInteger(value) && value >= 0);
 }
 
-function isValidSubcategoria(value) {
+function isValidSubcategoria(value, categoria) {
   return value !== null
     && typeof value === 'object'
     && !Array.isArray(value)
@@ -37,11 +37,16 @@ function isValidSubcategoria(value) {
     && value.subcategoria === value.subcategoria.trim()
     && value.subcategoria.trim() !== ''
     && isValidSubcategoriaTotal(value.total)
-    && Object.keys(value).every((key) => key === 'subcategoria' || key === 'total');
+    && (value.anioInicio === undefined
+      || (categoria === 'Collectible Minifigures' && Number.isInteger(value.anioInicio) && value.anioInicio > 0))
+    && (value.anioInicioEstimado === undefined || typeof value.anioInicioEstimado === 'boolean')
+    && (value.anioInicioEstimado !== true
+      || (categoria === 'Collectible Minifigures' && Number.isInteger(value.anioInicio) && value.anioInicio > 0))
+    && Object.keys(value).every((key) => ['subcategoria', 'total', 'anioInicio', 'anioInicioEstimado'].includes(key));
 }
 
-function isValidSubcategorias(value) {
-  return Array.isArray(value) && value.every(isValidSubcategoria);
+function isValidSubcategorias(value, categoria) {
+  return Array.isArray(value) && value.every((subcategoria) => isValidSubcategoria(subcategoria, categoria));
 }
 
 function isValidCategoria(value) {
@@ -53,7 +58,7 @@ function isValidCategoria(value) {
     && value.categoria.trim() !== ''
     && Number.isInteger(value.total)
     && value.total >= 0
-    && isValidSubcategorias(value.subcategorias)
+    && isValidSubcategorias(value.subcategorias, value.categoria)
     && Object.keys(value).every((key) => key === 'categoria' || key === 'total' || key === 'subcategorias');
 }
 

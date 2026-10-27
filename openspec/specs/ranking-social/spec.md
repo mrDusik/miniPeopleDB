@@ -8,27 +8,25 @@ Permite consultar los logros publicos y el caracter DNA principal de los colecci
 
 ### Requirement: Mostrar solo el caracter DNA principal en ranking
 
-La consulta autenticada del Ranking Global SHALL incluir para cada fila exclusivamente el nombre de su caracter DNA principal, calculado dinamicamente desde sus logros y cantidades con las ponderaciones privadas definidas en el contrato DNA. SHALL usar `Newbie` sin contribuciones de coleccion y Explorer > Collector > Fan > Rarity Hunter para empates exactos, antes de cualquier redondeo. El logro de regalos SHALL NOT contribuir al DNA aunque siga influyendo en los Bricks y nivel del ranking. La ampliacion SHALL NOT cambiar Top 10, ordenaciones, regalos ni destacados.
+La consulta autenticada del ranking SHALL calcular el caracter principal desde cantidades y ponderaciones privadas V2 vigentes. SHALL usar Newbie con contribucion cero, incluidos usuarios con solo logros de coleccion o sociales de pesos cero, y Explorer > Collector > Fan > Rarity Hunter para empates exactos antes del redondeo. Ningun logro de pesos cero ni pago directo SHALL diluir el denominador. La lectura SHALL NOT escribir porcentajes ni recalcular gamificacion ajena.
 
-La fila SHALL representar el caracter como texto sin porcentajes DNA, sin boton, enlace, tooltip con porcentajes ni accion de abrir DNA. La expansion habitual de la fila SHALL conservarse, pero el texto del caracter SHALL NOT tener un manejador o accion independiente. Ninguna respuesta publica de ranking o logros SHALL incluir proporciones DNA ajenas o ponderaciones individuales. La lectura SHALL ser retroactiva, sin escribir porcentajes ni recalcular logros ajenos.
+La proyeccion de rasgos SHALL respetar el contrato vigente de `ranking-global`: principal y como maximo dos rasgos agregados en Nivel/Coleccion, o solo el rasgo seleccionado al ordenar por DNA. Este requisito SHALL NOT restaurar la restriccion antigua de ocultar todos los porcentajes, ya superada por ese contrato. El texto DNA SHALL seguir sin accion para abrir un modal DNA ajeno; expansion, logros, regalos, miembros Top 10 y destacados SHALL conservar su comportamiento. Las respuestas publicas de logros SHALL NOT incluir pesos ni distribucion completa.
 
 #### Scenario: Caracter principal de usuarios clasificados
-- **WHEN** se carga el ranking con usuarios con logros historicos de coleccion
-- **THEN** cada fila muestra su caracter principal como texto no interactivo sin porcentajes
-- **AND** la respuesta contiene el nombre principal, no las proporciones ni pesos usados para obtenerlo
+- **WHEN** se carga el ranking tras la migracion V2
+- **THEN** cada fila usa el DNA vigente y solo los rasgos publicos permitidos por el criterio seleccionado
 
 #### Scenario: Usuario clasificado solo por regalos
-- **WHEN** un usuario del Top 10 tiene Bricks de regalos pero ninguna contribucion de coleccion
-- **THEN** su fila muestra `Newbie` sin alterar posicion, nivel o Bricks
+- **WHEN** una cuenta tiene Bricks de regalos y solo logros de pesos cero
+- **THEN** muestra Newbie, conservando Bricks, nivel y posicion derivados V2
 
 #### Scenario: Empates consistentes con el panel propio
-- **WHEN** el usuario activo figura en el ranking y su DNA tiene un empate exacto
-- **THEN** el panel propio y su fila muestran el mismo caracter segun la prioridad establecida
+- **WHEN** hay empate exacto en el DNA del usuario activo clasificado
+- **THEN** panel y ranking usan el mismo caracter principal segun la prioridad vigente
 
 #### Scenario: Texto sin accion DNA
-- **WHEN** se renderiza o se interactua con el texto del caracter de una fila propia o ajena
-- **THEN** no hay control DNA enfocable ni se abre un modal DNA desde ese texto
-- **AND** las acciones existentes de expansion, logros y regalos mantienen sus comportamientos
+- **WHEN** se interactua con el texto DNA de una fila
+- **THEN** no abre el modal DNA ajeno ni concede acceso a sus pesos, y siguen disponibles las acciones existentes
 
 ### Requirement: Consultar logros publicos de usuarios del ranking
 

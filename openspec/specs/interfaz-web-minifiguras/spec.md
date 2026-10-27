@@ -519,11 +519,12 @@ El control de regalo SHALL indicar que envía 50 Bricks y SHALL quedar permanent
 
 ### Requirement: Diferenciar los logros de regalo
 
-El modal de Logros SHALL mostrar un icono de regalo `🎁` para los logros de tipo `regalo` y SHALL conservar la copa habitual para los demás logros.
+El modal de Logros SHALL mostrar el icono de regalo existente para los cuatro hitos V2 de regalos y agradecimientos emitidos, de tipo `regalo`, y SHALL conservar la copa habitual para los demas. No SHALL mostrar los antiguos logros repetibles de regalos/agradecimientos ni crear logros artificiales para justificar Bricks directos. Este tipo de presentacion SHALL NOT introducir los grupos editoriales del PDF como secciones de la aplicacion.
 
 #### Scenario: Mostrar un logro de regalo
-- **WHEN** el estado de gamificación contiene un logro con tipo `regalo`
-- **THEN** el logro se representa con `🎁` en lugar de la copa
+- **WHEN** el estado V2 contiene Oh! you shouldn't have! o un hito V2 de agradecimiento emitido
+- **THEN** conserva el icono de regalo y solo muestra cantidad y recompensa del hito
+- **AND** el saldo global incluye aparte los Bricks directos que correspondan
 
 ### Requirement: Mostrar en rojo los indicadores de obligatoriedad
 
@@ -539,106 +540,55 @@ La interfaz SHALL mostrar en rojo cada asterisco visible que identifica un campo
 
 ### Requirement: Derivar todos los logros de colección del estado vigente
 
-Todos los logros de colección SHALL representar requisitos cumplidos por las minifiguras actuales en `COLECCIÓN` y los totales conocidos actuales, no concesiones históricas permanentes. El recálculo SHALL reconstruir cantidades y Bricks de todos los objetivos y ajustar nivel y progreso tanto al alza como a la baja. SHALL ganar, perder o recuperar logros tras altas, ediciones, eliminaciones, cambios entre `COLECCIÓN` y `BUSCADA`, cambios válidos de totales de categorías/subcategorías y despliegues de nuevos objetivos. Las siguientes consultas de DNA y ranking SHALL reflejar el estado recalculado. `repetible: false` SHALL limitar a una concesión vigente, sin impedir su pérdida y recuperación. Los regalos persistidos SHALL conservarse independientemente del inventario y SHALL NOT contribuir al DNA.
+Todos los logros de coleccion SHALL representar requisitos cumplidos por las minifiguras actuales en `COLECCIÓN` y los totales conocidos actuales, no concesiones historicas permanentes. El catalogo y condiciones SHALL ser exclusivamente las de `logros-v2`. El recalcule SHALL reconstruir cantidades y Bricks, ajustar nivel y progreso tanto al alza como a la baja y conservar los umbrales de nivel vigentes. SHALL ganar, perder o recuperar logros tras altas, ediciones, eliminaciones, cambios entre COLECCIÓN y BUSCADA, cambios validos de metadatos de figuras, totales y anio de serie, y despliegues de objetivos. `repetible: false` SHALL limitar a una concesion vigente sin impedir perdida o recuperacion. Los logros sociales SHALL seguir igualmente sus fuentes vigentes V2. Las siguientes consultas de DNA, logros publicos, perfil y ranking SHALL reflejar el estado confirmado.
+
+Los regalos y agradecimientos V2 persistidos SHALL conservar su contribucion vigente independientemente del inventario; la migracion unica autorizada SHALL retirar las fuentes V1. La UI SHALL mantener su presentacion y orden existentes, sin grupos editoriales nuevos ni importar la columna Total. El saldo de Bricks SHALL admitir contribuciones directas que no se representan como logros repetibles.
 
 #### Scenario: Aumento del total conocido
-- **WHEN** el total de una categoría o subcategoría aumenta y la colección deja de alcanzar un umbral de completitud
-- **THEN** el recálculo automático retira o reduce el logro correspondiente y sus Bricks, ajusta nivel y progreso y conserva regalos
+- **WHEN** el total de una categoria o subcategoria aumenta y deja de cumplirse un hito
+- **THEN** se retiran o reducen los logros y sus Bricks, ajustando nivel y progreso sin borrar regalos V2
 
 #### Scenario: Pérdida y recuperación por estado de figura
-- **WHEN** una figura necesaria pasa de `COLECCIÓN` a `BUSCADA`
-- **THEN** pierde las contribuciones y logros cuyos requisitos ya no cumple, incluidos los no repetibles
-- **AND** al volver a `COLECCIÓN` recupera los que vuelve a cumplir
+- **WHEN** una figura necesaria pasa a BUSCADA y posteriormente vuelve a COLECCIÓN
+- **THEN** se pierden y recuperan los logros cuyos requisitos cambian, incluidos los no repetibles
 
 #### Scenario: Concesión retroactiva sin nueva adquisición
-- **WHEN** baja un total conocido o se despliega un nuevo objetivo cuyos requisitos ya cumple el inventario
-- **THEN** el recálculo concede automáticamente los logros correspondientes sin exigir una nueva alta de figura
+- **WHEN** se aplica V2 y el inventario conservado ya cumple requisitos nuevos
+- **THEN** el recalcule los concede sin exigir altas nuevas y sin mantener el catalogo V1
 
-### Requirement: Conceder nuevos logros de categorías, figuras y completitud
-
-El sistema SHALL conceder los siguientes logros desde las figuras actuales en `COLECCIÓN`, excluyendo `BUSCADA`. Las descripciones SHALL ser `Añadir la primera minifigura de la categoría <categoría>.` para los cuatro primeros y `Añadir la minifigura <ID>.` para los tres siguientes.
-
-| ID | Nombre | Condición | Bricks | Repetible |
-| --- | --- | --- | --- | --- |
-| the-legend | The Legend. | Primera figura de The Legend of Zelda | 10 | false |
-| heh-there-is-another-one-for-you | Heh! There is another one for you! | Primera figura de Pokémon | 10 | false |
-| change-will-not-come-in-a-single-sunrise | Change will not come in a single sunrise. | Primera figura de Horizon | 10 | false |
-| start-poetry | Start Poetry. | Primera figura de Minecraft | 10 | false |
-| mental-breakdown | Mental Breakdown. | SH0129 | 3000 | false |
-| the-dark-plastic | The Dark Plastic. | SH0002 | 1000 | false |
-| concrete-savanna | Concrete Savanna. | SH0604 | 700 | false |
-| youre-shooting-for-the-stars | You're shooting for the stars. | Al menos 50% del total conocido de una categoría | 500 | true |
-| strike | Strike!! | Al menos 100% del total conocido de una categoría | 1200 | true |
-
-Los dos hitos SHALL tener como descripción `Añadir una minifigura que suponga el 50% del total conocido de minifiguras de una categoría.` y `Añadir una minifigura que suponga el 100% del total conocido de minifiguras de una categoría.`, respectivamente. SHALL contar una concesión por categoría con total conocido positivo, acumular ambos al completar una categoría y no multiplicarse por figuras adicionales en esa misma categoría. Un recálculo SHALL retirar los hitos que ya no cumplan el umbral.
-
-#### Scenario: Superar la mitad de una categoría con total impar
-- **WHEN** la colección contiene dos figuras de una categoría con total conocido de tres
-- **THEN** obtiene una concesión de You're shooting for the stars. y ninguna de Strike!!
-
-#### Scenario: Completar varias categorías
-- **WHEN** la colección alcanza el total conocido positivo de dos categorías
-- **THEN** obtiene dos concesiones de cada hito, sin contar categorías con total cero o desconocido
+#### Scenario: Revalidacion tras accion social
+- **WHEN** se confirma un regalo, agradecimiento, envio, rechazo, aceptacion o eliminacion de amistad
+- **THEN** el panel y los modales afectados revalidan Bricks, nivel, logros y DNA sin conservar resultados obsoletos de otra sesion
 
 ### Requirement: Calcular DNA propio dinamico y retroactivo
 
-El sistema SHALL calcular DNA actual en Supabase mediante una consulta dinamica sobre los logros obtenidos y sus cantidades actuales, sin almacenar porcentajes derivados como fuente del estado actual ni calcular pesos en el cliente. La unica excepcion de almacenamiento SHALL ser la medicion diaria privada de `analitica-historica`, que conserva porcentajes agregados a la fecha de captura, no sustituye la consulta dinamica y no se reescribe retroactivamente por cambios de ponderaciones. Cada contribucion SHALL ser cantidad por peso del caracter, sin multiplicar por Bricks o total de Bricks. Las proporciones SHALL ser 100 por la suma de contribuciones de un caracter dividida por la suma de contribuciones de los cuatro caracteres. Los logros de coleccion SHALL tener los siguientes pesos privados, con suma 100 por fila; `someone-liked-your-collection` SHALL ser la unica excepcion confirmada con pesos cero y SHALL NOT contribuir a sumas ni denominador. Un identificador desconocido SHALL NOT recibir pesos inventados ni diluir el denominador. Nuevos logros de coleccion SHALL requerir una ponderacion de suma 100 antes de habilitarse para DNA.
+El sistema SHALL calcular DNA actual en Supabase mediante consulta dinamica de los logros obtenidos y sus cantidades vigentes, sin persistir porcentajes como fuente actual ni publicar o calcular pesos en el cliente. La medicion diaria privada SHALL conservar porcentajes de la fecha, no sustituir el calculo dinamico ni reescribirse con nuevas ponderaciones, salvo el reset unico V2 definido en `analitica-historica`.
 
-| Logro | Rarity Hunter | Collector | Explorer | Fan |
-| --- | --- | --- | --- | --- |
-| new-mini-person | 0 | 80 | 10 | 10 |
-| woah | 50 | 20 | 10 | 20 |
-| deal-master | 80 | 10 | 0 | 10 |
-| masterpiece | 90 | 5 | 0 | 5 |
-| holy-grail | 80 | 10 | 0 | 10 |
-| omgold | 95 | 5 | 0 | 0 |
-| lets-go | 0 | 5 | 90 | 5 |
-| collector | 5 | 90 | 0 | 5 |
-| step-by-step | 5 | 45 | 50 | 0 |
-| bricky-potter | 0 | 10 | 20 | 70 |
-| bricky-mouse | 0 | 10 | 20 | 70 |
-| its-a-me-mario | 0 | 10 | 20 | 70 |
-| green-hill-zone | 0 | 10 | 20 | 70 |
-| dimensional | 60 | 10 | 20 | 10 |
-| warsie | 0 | 10 | 20 | 70 |
-| in-ny-i-was | 80 | 10 | 0 | 10 |
-| welcome-to-the-upsidedown | 60 | 30 | 0 | 10 |
-| chill-nancy-im-fine | 80 | 10 | 0 | 10 |
-| the-legend | 0 | 10 | 20 | 70 |
-| heh-there-is-another-one-for-you | 0 | 10 | 20 | 70 |
-| change-will-not-come-in-a-single-sunrise | 0 | 10 | 20 | 70 |
-| start-poetry | 0 | 10 | 20 | 70 |
-| mental-breakdown | 90 | 5 | 0 | 5 |
-| the-dark-plastic | 90 | 5 | 0 | 5 |
-| concrete-savanna | 90 | 5 | 0 | 5 |
-| youre-shooting-for-the-stars | 20 | 40 | 0 | 40 |
-| strike | 20 | 40 | 0 | 40 |
-| someone-liked-your-collection | 0 | 0 | 0 | 0 |
+Cada contribucion SHALL ser cantidad por peso del rasgo, sin multiplicar por Bricks. Los pesos privados SHALL ser los definidos en `logros-v2`, enteros de 0 a 100 cuya suma por logro sea **0 o 100**. Todos los pesos cero SHALL excluirse del numerador y denominador, tanto si son de coleccion como sociales o hitos DNA. Un ID desconocido SHALL NOT recibir pesos inventados ni diluir el denominador. Las proporciones SHALL ser 100 por la contribucion del rasgo dividida por la suma de las cuatro contribuciones. Cero contribuciones SHALL devolver cuatro ceros y Newbie. Los cuatro logros de umbral DNA SHALL tener pesos cero y comprobar porcentajes exactos >= 50 sin realimentacion.
 
-El resultado SHALL reflejar los registros historicos de pruebas y produccion desde la primera consulta tras aplicar el esquema, sin requerir nuevas altas ni reotorgar logros. Las consultas posteriores y los refrescos tras mutaciones confirmadas de la coleccion SHALL reflejar las cantidades vigentes. La lectura DNA SHALL NOT modificar logros, Bricks, nivel ni minifiguras.
+La lectura propia SHALL reflejar el estado confirmado y pesos privados vigentes sin modificar logros, Bricks, nivel ni minifiguras. Cambios de pesos que alteren la elegibilidad de hitos DNA SHALL actualizar dichos hitos mediante recalcule autorizado, nunca mediante una lectura publica ajena. El reset inicial SHALL reconstruir el estado V2 antes de atender lecturas ordinarias, sin avisos masivos.
 
 #### Scenario: Cantidades sin ponderacion por Bricks
-- **WHEN** hay dos `new-mini-person` y un `woah`
-- **THEN** DNA contiene Rarity Hunter 50/3%, Collector 60%, Explorer 10% y Fan 40/3%, con tolerancia de representacion numerica
-- **AND** el caracter principal es Collector aunque `woah` conceda mas Bricks por unidad
+- **WHEN** las contribuciones son una unidad Sweet find y una Hidden gem
+- **THEN** el DNA es Collector 65%, Rarity Hunter 12.5%, Fan 15% y Explorer 7.5%, antes de evaluar hitos DNA
+- **AND** los diferentes Bricks de cada logro no alteran esa distribucion
 
 #### Scenario: Retroactividad
-- **WHEN** se instala el esquema DNA en pruebas o produccion con logros historicos existentes
-- **THEN** la primera consulta calcula DNA desde sus cantidades sin nuevas acciones del usuario
-- **AND** no cambia los registros historicos ni concede notificaciones de nuevos logros
+- **WHEN** se confirma la migracion V2
+- **THEN** la primera consulta refleja logros y pesos V2 de la coleccion conservada sin nuevas altas ni notificaciones sinteticas
 
 #### Scenario: Regalos no alteran personalidad
-- **WHEN** aumenta la cantidad de `someone-liked-your-collection` sin cambios de logros de coleccion
-- **THEN** sus Bricks y nivel mantienen las reglas de regalos vigentes y su DNA no cambia
+- **WHEN** aumenta Block by block o un hito social de pesos cero sin cambiar las contribuciones restantes
+- **THEN** sus Bricks pueden cambiar pero DNA no cambia
+- **AND** un usuario con solo esos logros permanece Newbie aunque tenga coleccion y Bricks
 
 #### Scenario: Actualizar cantidades
-- **WHEN** una alta, edicion, eliminacion, cambio de estado o sincronizacion modifica logros de coleccion y se confirma el recalculo
-- **THEN** el siguiente refresco muestra el DNA correspondiente sin reutilizar porcentajes calculados previamente como fuente del estado actual
+- **WHEN** una mutacion confirmada o sincronizacion cambia cantidades de logros
+- **THEN** el siguiente refresco calcula DNA desde las cantidades vigentes, sin reutilizar porcentajes anteriores
 
 #### Scenario: Cambios en las ponderaciones
-- **WHEN** se inserta, modifica o elimina una fila de `dna_ponderaciones`
-- **THEN** la siguiente consulta DNA y Ranking Global de todos los usuarios refleja las ponderaciones vigentes sin backfill ni recalculo de logros
-- **AND** las mediciones de dias anteriores conservan los porcentajes capturados
+- **WHEN** se modifica una ponderacion privada valida y se confirma el recalcule necesario de hitos DNA
+- **THEN** DNA y Ranking Global reflejan los pesos actuales y los dias V2 anteriores conservan sus porcentajes capturados
 
 ### Requirement: Seleccionar caracter principal sin ambiguedad
 
@@ -811,17 +761,16 @@ El modal SHALL cargar notificaciones en paginas de 15 y solicitar la pagina sigu
 
 ### Requirement: Representar las tarjetas sociales y el progreso diario
 
-La tarjeta diaria SHALL poder desplegarse y SHALL reutilizar los iconos locales existentes para colección, valor, Bricks y rasgos DNA. Los cuatro cambios DNA SHALL presentarse en una cuadrícula compacta 2x2 alineada con los colores vigentes: Collector azul, Explorer rojo, Rarity Hunter amarillo y Fan verde. El nivel diario SHALL llevar el emoji `👉`, y las variaciones de ranking SHALL ir bajo una linea separadora. Los regalos SHALL mostrar el nombre del donante en negrita, sin el prefijo `El usuario` ni la palabra `Bricks`, y con el icono local de Brick. El boton de agradecimiento SHALL usar el mismo estilo que el boton de regalo del Ranking Global y mostrar `¡Gracias! +5` seguido del icono local. Las tarjetas de agradecimiento SHALL mostrar el nombre en negrita y `{user} agradeció tu regalo con 5` seguido del icono. Las entradas SHALL llevar `🌐` (Global) o `🗓️` (Semanal), y las salidas SHALL empezar por `❌`.
+La tarjeta diaria SHALL poder desplegarse y reutilizar los iconos locales de coleccion, valor, Bricks y DNA. Los cuatro cambios DNA SHALL presentarse en una cuadricula compacta 2x2: Collector azul, Explorer rojo, Rarity Hunter amarillo y Fan verde. El nivel diario SHALL llevar el emoji existente y las variaciones de ranking SHALL ir bajo una linea separadora. Los regalos SHALL mostrar el username del donante en negrita, sin prefijo El usuario ni la palabra Bricks, y con el icono local de Brick. El boton de agradecimiento SHALL conservar el estilo del boton de regalo y representar fielmente el importe directo vigente del contrato social, sin prometer un logro V1 al receptor de las gracias. Las tarjetas de agradecimiento SHALL identificar quien agradecio y el importe directo concedido. Las entradas y salidas de ranking SHALL conservar sus iconos actuales. El reset V2 SHALL vaciar la bandeja anterior y la migracion inicial SHALL NOT crear tarjetas de progreso o transiciones ficticias.
 
 #### Scenario: Cuadricula DNA diaria
-- **WHEN** se muestra un resumen diario
-- **THEN** aparecen los cuatro cambios DNA en una cuadrícula 2x2 con nombre, porcentaje y color correspondiente
+- **WHEN** se muestra un resumen diario V2
+- **THEN** aparecen los cuatro cambios con nombre, porcentaje y color correspondiente
 
 #### Scenario: Agradecimiento pendiente y completado
-- **WHEN** se muestra un regalo sin agradecer
-- **THEN** aparece `¡Gracias! +5` seguido del icono local de Brick
-- **WHEN** la API confirma el agradecimiento
-- **THEN** el control queda deshabilitado y no permite repetir la recompensa
+- **WHEN** se muestra un regalo V2 sin agradecer y se confirma la accion
+- **THEN** el control queda deshabilitado y los textos distinguen importe directo de los hitos obtenidos por quien agradece
+- **AND** ningun texto anuncia el logro repetible V1 por recibir las gracias
 
 ### Requirement: Gestionar amigos y solicitudes desde un modal
 
@@ -904,3 +853,15 @@ Los ajustes posteriores SHALL limitarse a Smartphone (hasta 600px en portrait o 
 #### Scenario: Error, cierre y respuestas obsoletas
 - **WHEN** falla la consulta, se cierra el modal o cambia la cuenta durante la carga
 - **THEN** no se muestran datos de otra selección o sesión y cerrar devuelve el foco al disparador válido
+
+### Requirement: Notificar logros nuevos con toast
+
+La UI SHALL mostrar un toast por cada logro nuevo obtenido tras una accion confirmada del usuario, incluidas altas, ediciones o eliminaciones de figuras, cambios de precios, regalos, agradecimientos y acciones sociales. Los logros repetibles SHALL generar un toast por el incremento de cantidad, con los Bricks nuevos correspondientes; no SHALL notificarse logros ya existentes durante la carga inicial, ni concesiones sinteticas del reset o la migracion V2.
+
+#### Scenario: Logro social recién obtenido
+- **WHEN** enviar o aceptar una solicitud de amistad concede First contact o Handshake
+- **THEN** se muestra el nombre del logro y los Bricks concedidos en un toast
+
+#### Scenario: Incremento repetible
+- **WHEN** una accion confirmada aumenta la cantidad vigente de un logro repetible
+- **THEN** se muestra un toast por la cantidad nueva y no se repiten las concesiones anteriores

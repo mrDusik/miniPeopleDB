@@ -214,10 +214,11 @@ export function createDailyAnalyticsJobs({
               categoria: figure.categoria,
               subcategoria: figure.subcategoria ?? undefined,
               anio: figure.anio ?? undefined,
+              nombreCompleto: figure.nombreCompleto ?? undefined,
               estadoColeccion: figure.estadoColeccion,
               precio: figure.precio ?? undefined,
               precioCompra: figure.precioCompra ?? undefined,
-            })), categorias, sources.giftsReceived, sources.thanksReceived ?? 0, sources.weeklyGiftsReceived ?? 0);
+            })), categorias, sources.giftsReceived, sources.thanksReceived ?? 0, sources.weeklyGiftsReceived ?? 0, sources.socialSources ?? {});
             ensureLease();
             captured = await retryStorage(() => repository.captureUser(run.jobId, leaseOwner, userId, sources.revision, {
               bricks: state.bricks,

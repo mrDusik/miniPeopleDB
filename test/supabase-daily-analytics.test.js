@@ -30,6 +30,13 @@ test('el schema instala snapshots diarios idempotentes, validados y en cascada',
     const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
     await db.exec(schema);
     await db.exec(schema);
+    const unactivated = (await db.query(
+      "select * from private.ranking_semanal_contexto('2026-10-26T12:00:00Z'::timestamptz)",
+    )).rows[0];
+    assert.equal(unactivated.available, false);
+    assert.equal(unactivated.available_from, null);
+    await db.query(`insert into private.gamificacion_v2_activation(singleton, version, activated_at, available_from)
+      values (true, 'v2', '2026-10-08T12:00:00Z', '2026-10-12')`);
 
     const rankingDates = [
       { instant: '2026-10-11T21:59:59Z', active: false, start: '2026-10-05', end: '2026-10-11' },
@@ -47,13 +54,27 @@ test('el schema instala snapshots diarios idempotentes, validados y en cascada',
       assert.equal(context.week_start.toISOString().slice(0, 10), expected.start);
       assert.equal(context.week_end.toISOString().slice(0, 10), expected.end);
     }
+    await db.query(`update private.gamificacion_v2_activation
+      set activated_at = '2026-10-12T12:00:00Z', available_from = '2026-10-19'
+      where singleton = true`);
+    const deployedMonday = (await db.query(
+      "select * from private.ranking_semanal_contexto('2026-10-12T12:00:00Z'::timestamptz)",
+    )).rows[0];
+    assert.equal(deployedMonday.available, false);
+    assert.equal(deployedMonday.available_from.toISOString().slice(0, 10), '2026-10-19');
+    const nextMonday = (await db.query(
+      "select * from private.ranking_semanal_contexto('2026-10-19T12:00:00Z'::timestamptz)",
+    )).rows[0];
+    assert.equal(nextMonday.available, true);
+    await assert.rejects(db.query(`update private.gamificacion_v2_activation
+      set available_from = '2026-10-12' where singleton = true`), /gamificacion_v2_activation_week_check/);
     assert.equal((await db.query("select to_regprocedure('public.ranking_semanal()') is not null as exists")).rows[0].exists, true);
     await db.query('insert into auth.users(id, email) values ($1, $2)', [userId, 'snapshot@example.invalid']);
     await assert.rejects(db.query('select public.ranking_semanal()'), /NO_AUTENTICADO/);
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
     const emptyWeeklyRanking = (await db.query('select public.ranking_semanal() as result')).rows[0].result;
     assert.equal(emptyWeeklyRanking.available, false);
-    assert.equal(emptyWeeklyRanking.availableFrom, '2026-10-12');
+    assert.equal(emptyWeeklyRanking.availableFrom, '2026-10-19');
     assert.deepEqual(emptyWeeklyRanking.entries, []);
     assert.match(emptyWeeklyRanking.weekStart, /^\d{4}-\d{2}-\d{2}$/);
     assert.match(emptyWeeklyRanking.weekEnd, /^\d{4}-\d{2}-\d{2}$/);
@@ -144,7 +165,10 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
     { index: 4, bricks: 500, delta: -100 },
     ...Array.from({ length: 6 }, (_, index) => ({ index: index + 5, bricks: 1000, delta: 1 })),
   ];
-  const excludedUsers = [{ index: 11, bricks: 75 }, { index: 12, bricks: 80 }];
+  const excludedUsers = [
+    { index: 11, bricks: 75 }, { index: 12, bricks: 80 },
+    { index: 13, bricks: 90 }, { index: 14, bricks: 95 },
+  ];
   const globalOnlyUsers = Array.from({ length: 10 }, (_, index) => ({ index: index + 20, bricks: 30000 - index }));
   const allUsers = [...rankingUsers, ...excludedUsers, ...globalOnlyUsers];
   try {
@@ -167,6 +191,8 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
       );
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query(`insert into private.gamificacion_v2_activation(singleton, version, activated_at, available_from)
+      values (true, 'v2', '2026-10-08T12:00:00Z', '2026-10-12')`);
     await db.query('insert into auth.users(id, email) select $1::uuid, $2', [userId(1), 'weekly@example.invalid']);
     for (const user of allUsers.slice(1)) {
       await db.query('insert into auth.users(id, email) values ($1, $2)', [userId(user.index), `user-${user.index}@example.invalid`]);
@@ -186,20 +212,30 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
         await db.query(`
           insert into public.user_daily_snapshots (
             user_id, snapshot_date, total_figures, total_value, bricks, level,
-            pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
-          ) values ($1, $2, 1, 50, $3, 1, 25, 25, 25, 25)
+            pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
+          ) values ($1, $2, 1, 50, $3, 1, 25, 25, 25, 25, 'v2')
         `, [userId(user.index), snapshot.date, snapshot.bricks]);
       }
     }
     await db.query(`
       insert into public.user_daily_snapshots (
         user_id, snapshot_date, total_figures, total_value, bricks, level,
-        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
       ) values
-        ($1, '2026-10-13', 1, 50, 999, 1, 25, 25, 25, 25),
-        ($2, '2026-10-11', 1, 50, 100, 1, 25, 25, 25, 25),
-        ($2, '2026-10-15', 1, 50, 200, 1, 25, 25, 25, 25)
+        ($1, '2026-10-13', 1, 50, 999, 1, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-11', 1, 50, 100, 1, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-15', 1, 50, 200, 1, 25, 25, 25, 25, 'v2')
     `, [userId(11), userId(12)]);
+    await db.query(`
+      insert into public.user_daily_snapshots (
+        user_id, snapshot_date, total_figures, total_value, bricks, level,
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
+      ) values
+        ($1, '2026-10-11', 1, 50, 100, 1, 25, 25, 25, 25, 'v1'),
+        ($1, '2026-10-13', 1, 50, 9100, 1, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-11', 1, 50, 100, 1, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-13', 1, 50, 9100, 1, 25, 25, 25, 25, 'v1')
+    `, [userId(13), userId(14)]);
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId(1)]);
 
     const beforeLaunch = (await db.query(
@@ -226,6 +262,8 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
     assert.equal(result.weekStart, '2026-10-12');
     assert.equal(result.weekEnd, '2026-10-18');
     assert.equal(result.entries.length, 10);
+    const weeklyMembership = await db.query("select user_id from private.daily_sync_weekly_membership('2026-10-14')");
+    assert.equal(weeklyMembership.rows.some(({ user_id }) => [userId(13), userId(14)].includes(user_id)), false);
     assert.deepEqual(result.entries.map(({ userId: id, bricksSemanales }) => [id, bricksSemanales]), [
       [userId(2), 700], [userId(1), 450],
       ...Array.from({ length: 6 }, (_, index) => [userId(index + 5), 1]),
@@ -249,6 +287,26 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
     const globalIds = (await db.query('select user_id from public.ranking_global()')).rows.map(({ user_id }) => user_id);
     assert.equal(globalIds.length, 10);
     assert.equal(globalIds.includes(userId(2)), false);
+    const weeklyOnlyUser = userId(15);
+    const currentDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
+    const baselineDate = new Date(Date.parse(`${currentDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [weeklyOnlyUser, 'weekly-only@example.invalid']);
+    await db.query("insert into public.gamificacion(user_id, bricks, nivel) values ($1, 5, '{\"id\":0,\"nombre\":\"Duplo\"}')", [weeklyOnlyUser]);
+    await db.query(`update private.gamificacion_v2_activation
+      set activated_at = '2000-01-01T12:00:00Z', available_from = '2000-01-03'`);
+    await db.query(`insert into public.user_daily_snapshots (
+      user_id, snapshot_date, total_figures, total_value, bricks, level,
+      pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
+    ) values
+      ($1, $2::date, 1, 1, 100, 0, 0, 0, 0, 0, 'v2'),
+      ($1, $3::date, 1, 1, 200, 0, 0, 0, 0, 0, 'v2')`, [weeklyOnlyUser, baselineDate, currentDate]);
+    const globalIdsWithWeeklyOnly = (await db.query('select user_id from public.ranking_global()')).rows.map(({ user_id }) => user_id);
+    assert.equal(globalIdsWithWeeklyOnly.includes(weeklyOnlyUser), false);
+    const weeklyAchievements = (await db.query('select public.ranking_logros($1) as result', [weeklyOnlyUser])).rows[0].result;
+    assert.equal(weeklyAchievements.userId, weeklyOnlyUser);
+    assert.deepEqual(weeklyAchievements.logros, []);
+    assert.equal(Object.hasOwn(weeklyAchievements, 'porcentajes'), false);
+    assert.equal((await db.query('select public.ranking_logros($1) as result', [userId(13)])).rows[0].result, null);
 
     assert.equal((await db.query("select has_function_privilege('authenticated', 'public.ranking_semanal()', 'EXECUTE') as allowed")).rows[0].allowed, true);
     assert.equal((await db.query("select has_function_privilege('anon', 'public.ranking_semanal()', 'EXECUTE') as allowed")).rows[0].allowed, false);
@@ -648,14 +706,27 @@ test('captura rechaza revisiones obsoletas de inventario, regalos y fingerprint 
     assert.notEqual(afterFigureEdit.revision, beforeFigureEdit.revision);
     assert.equal(afterFigureEdit.figures[0].precio, 30);
 
-    await db.query('insert into public.regalos_enviados(donante_id, receptor_id) values ($1, $2)', [donorId, userId]);
+    await db.query("update public.minifiguras set nombre_completo = 'Exclusive, Comic-Con 2026' where user_id = $1 and id = 'FIG-1'", [userId]);
+    await db.query('insert into public.friend_requests(sender_id, recipient_id, status) values ($1, $2, $3)', [userId, donorId, 'pending']);
+    const afterSocialSource = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, userId])).rows[0].data;
+    assert.notEqual(afterSocialSource.revision, afterFigureEdit.revision);
+    assert.equal(afterSocialSource.figures[0].nombreCompleto, 'Exclusive, Comic-Con 2026');
+    assert.equal(afterSocialSource.socialSources.sent_pending, 1);
+    assert.equal(afterSocialSource.socialSources.accepted_sent, 0);
+    assert.equal(afterSocialSource.version, 'v2');
     assert.equal((await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb) as captured', [
       started.jobId, leaseOwner, userId, afterFigureEdit.revision, JSON.stringify(oldState),
     ])).rows[0].captured, false);
+
+    await db.query(`insert into public.regalos_enviados(donante_id, receptor_id, semana)
+      values ($1, $2, '0001-01-01'), ($1, $2, '2026-10-26')`, [donorId, userId]);
     const afterGift = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, userId])).rows[0].data;
-    assert.notEqual(afterGift.revision, afterFigureEdit.revision);
+    assert.notEqual(afterGift.revision, afterSocialSource.revision);
     assert.equal(afterGift.giftsReceived, 1);
-    assert.equal((await db.query('select count(*)::integer as count from public.regalos_enviados where receptor_id = $1', [userId])).rows[0].count, 1);
+    assert.equal(afterGift.weeklyGiftsReceived, 1);
+    assert.equal(afterGift.socialSources.global_gifts_received, 1);
+    assert.equal(afterGift.socialSources.weekly_gifts_received, 1);
+    assert.equal((await db.query('select count(*)::integer as count from public.regalos_enviados where receptor_id = $1', [userId])).rows[0].count, 2);
 
     const giftNotification = (await db.query(`
       insert into public.notificaciones(user_id, type, payload, gift_donante_id)
@@ -690,7 +761,7 @@ test('captura rechaza revisiones obsoletas de inventario, regalos y fingerprint 
       nivel: { id: 1, nombre: 'Stud' },
       siguiente_nivel: { id: 2, nombre: 'Plate' },
       progreso: { actual: 50 },
-      logros: [{ id: 'someone-liked-your-collection', cantidad: 1, bricks: 50 }],
+      logros: [{ id: 'oh-you-shouldnt-have', cantidad: 1, bricks: 20, total: 20, type: 'regalo' }],
     };
     assert.equal((await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb) as captured', [
       started.jobId, leaseOwner, userId, currentSources.revision, JSON.stringify(currentState),
@@ -755,8 +826,8 @@ test('captura es atomica y calcula fallback de valor, nivel cero y DNA historico
       siguiente_nivel: { id: 2, nombre: 'Plate' },
       progreso: { actual: 59 },
       logros: [
-        { id: 'new-mini-person', cantidad: 2, bricks: 1 },
-        { id: 'woah', cantidad: 1, bricks: 10 },
+        { id: 'solid-investment', cantidad: 1, bricks: 250 },
+        { id: 'hidden-gem', cantidad: 1, bricks: 25 },
       ],
     };
     const collectorSources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [started.jobId, leaseOwner, collectorId])).rows[0].data;
@@ -791,7 +862,7 @@ test('captura es atomica y calcula fallback de valor, nivel cero y DNA historico
     assert.deepEqual([
       Number(collectorSnapshot.pct_collector), Number(collectorSnapshot.pct_explorer),
       Number(collectorSnapshot.pct_rarity_hunter), Number(collectorSnapshot.pct_fan),
-    ], [60, 10, 16.67, 13.33]);
+    ], [65, 7.5, 12.5, 15]);
 
     const newbieState = {
       bricks: 0,
@@ -827,7 +898,7 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     nivel: { id: 0, nombre: 'Duplo' },
     siguiente_nivel: { id: 1, nombre: 'Stud' },
     progreso: { actual: 0 },
-    logros: [{ id: 'new-mini-person', cantidad: 1, bricks: 1 }],
+    logros: [{ id: 'solid-investment', cantidad: 1, bricks: 250 }],
   };
   try {
     await db.exec(`
@@ -849,6 +920,8 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
       );
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query(`insert into private.gamificacion_v2_activation(singleton, version, activated_at, available_from)
+      values (true, 'v2', '2026-10-08T12:00:00Z', '2026-10-12')`);
     await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
       userA, 'user-a@example.invalid', userB, 'user-b@example.invalid',
     ]);
@@ -864,8 +937,8 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     await db.query(`
       insert into public.user_daily_snapshots (
         user_id, snapshot_date, total_figures, total_value, bricks, level,
-        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
-      ) values ($1, '2026-10-11', 5, 99, 100, 5, 25, 25, 25, 25)
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
+      ) values ($1, '2026-10-11', 5, 99, 100, 5, 25, 25, 25, 25, 'v2')
     `, [userA]);
     const sources = (await db.query('select public.leer_daily_sync_fuentes($1, $2, $3) as data', [firstRun.jobId, leaseOwner, userA])).rows[0].data;
     await db.query('select public.capturar_daily_sync_usuario($1, $2, $3, $4, $5::jsonb)', [
@@ -883,6 +956,7 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'daily_summary'")).rows[0].total, 0);
 
     const savedSnapshot = (await db.query('select pct_collector, pct_explorer, pct_rarity_hunter, pct_fan from public.user_daily_snapshots where user_id = $1', [userA])).rows[0];
+    assert.equal((await db.query('select calculation_version from public.user_daily_snapshots where user_id = $1 and snapshot_date = $2', [userA, '2026-10-12'])).rows[0].calculation_version, 'v2');
     await db.query('delete from auth.users where id = $1', [userB]);
     const afterDelete = (await db.query('select public.consultar_daily_sync($1) as data', [firstRun.jobId])).rows[0].data;
     assert.equal(afterDelete.processedUsers, 1);
@@ -910,7 +984,7 @@ test('finalizacion deriva conteos de checkpoints, omite cuentas borradas y nunca
       bricks: -100,
       level: -5,
       globalPosition: 0,
-      dna: { collector: 55, explorer: -15, rarityHunter: -25, fan: -15 },
+      dna: { collector: 55, explorer: -20, rarityHunter: -20, fan: -15 },
     });
     assert.deepEqual((await db.query("select user_id, position from public.ranking_top10_membership where ranking_type = 'weekly'", [])).rows, [
       { user_id: userA, position: 1 },
@@ -1161,6 +1235,8 @@ test('los resúmenes diarios incluyen movimiento de ranking elegible y preservan
       create table auth.users (id uuid primary key, email text unique);
     `);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query(`insert into private.gamificacion_v2_activation(singleton, version, activated_at, available_from)
+      values (true, 'v2', '2026-10-08T12:00:00Z', '2026-10-12')`);
     await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4), ($5, $6)', [
       userA, 'rank-a@example.invalid', userB, 'rank-b@example.invalid', userC, 'rank-c@example.invalid',
     ]);
@@ -1174,16 +1250,17 @@ test('los resúmenes diarios incluyen movimiento de ranking elegible y preservan
     await db.query(`
       insert into public.user_daily_snapshots (
         user_id, snapshot_date, total_figures, total_value, bricks, level,
-        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan
+        pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
       ) values
-        ($1, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25),
-        ($2, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25),
-        ($1, '2026-10-12', 2, 25, 100, 5, 25, 25, 25, 25),
-        ($2, '2026-10-12', 2, 25, 200, 5, 25, 25, 25, 25)
+        ($1, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-11', 2, 20, 0, 5, 25, 25, 25, 25, 'v2'),
+        ($1, '2026-10-12', 2, 25, 100, 5, 25, 25, 25, 25, 'v2'),
+        ($2, '2026-10-12', 2, 25, 200, 5, 25, 25, 25, 25, 'v2')
     `, [userA, userB]);
 
     const completed = await confirmRun([[userA, state(220, 6)], [userB, state(210, 5)], [userC, state(0, 0)]]);
     assert.equal(completed.status, 'completed');
+    assert.equal((await db.query("select count(*)::integer as count from public.notificaciones where payload->>'ranking' = 'weekly'")).rows[0].count, 0);
     const summaryA = (await db.query("select id, payload, is_read, created_at from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0];
     assert.deepEqual({ global: summaryA.payload.deltas.globalPosition, weekly: summaryA.payload.deltas.weeklyPosition }, { global: 1, weekly: 1 });
     const summaryC = (await db.query("select payload from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userC])).rows[0].payload;
@@ -1191,8 +1268,10 @@ test('los resúmenes diarios incluyen movimiento de ranking elegible y preservan
     assert.equal(Object.hasOwn(summaryC, 'deltas'), false);
 
     await db.query('update public.notificaciones set is_read = true where id = $1', [summaryA.id]);
+  await db.query("update public.user_daily_snapshots set calculation_version = 'v1' where user_id = $1 and snapshot_date = '2026-10-11'", [userB]);
     const rerun = await confirmRun([[userA, state(200, 6)], [userB, state(210, 5)], [userC, state(0, 0)]]);
     assert.equal(rerun.status, 'completed');
+  assert.equal((await db.query("select count(*)::integer as count from public.notificaciones where user_id = $1 and type = 'ranking_exited' and payload->>'ranking' = 'weekly'", [userB])).rows[0].count, 1);
     const updated = (await db.query("select id, payload, is_read, created_at from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0];
     assert.equal(updated.id, summaryA.id);
     assert.equal(updated.is_read, true);
@@ -1201,6 +1280,8 @@ test('los resúmenes diarios incluyen movimiento de ranking elegible y preservan
     assert.equal(updated.payload.deltas.globalPosition, 1);
     assert.equal(updated.payload.deltas.weeklyPosition, 0);
     assert.equal((await db.query("select count(*)::integer as count from public.notificaciones where user_id = $1 and type = 'daily_summary'", [userA])).rows[0].count, 1);
+    await confirmRun([[userA, state(200, 6)], [userB, state(210, 5)], [userC, state(0, 0)]]);
+    assert.equal((await db.query("select count(*)::integer as count from public.notificaciones where user_id = $1 and type = 'ranking_exited' and payload->>'ranking' = 'weekly'", [userB])).rows[0].count, 1);
   } finally {
     await db.close();
   }

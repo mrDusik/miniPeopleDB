@@ -146,9 +146,12 @@ export class RankingRepository {
   async weekly() {
     const failure = () => new RankingSemanalNoDisponibleError();
     const data = await this.run(this.client.rpc('ranking_semanal'), failure);
+    const activationDateValid = data?.availableFrom === null
+      ? data.available === false
+      : isCalendarDate(data?.availableFrom);
     if (!data || typeof data !== 'object'
       || typeof data.available !== 'boolean'
-      || data.availableFrom !== '2026-10-12'
+      || !activationDateValid
       || !isCalendarDate(data.weekStart)
       || !isCalendarDate(data.weekEnd)
       || !Array.isArray(data.entries)

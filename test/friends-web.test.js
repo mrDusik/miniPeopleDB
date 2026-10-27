@@ -39,6 +39,7 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
   const requests = [];
   const storedCatalog = structuredClone(catalog);
   let removed = false;
+  let gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] };
   window.fetch = async (url, init = {}) => {
     requests.push({ url, init });
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
@@ -55,14 +56,17 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     }
     if (url === '/minifiguras' || url.startsWith('/minifiguras?')) return { ok: true, json: async () => structuredClone(storedCatalog) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0, top5: [], top5Antiguas: [] }) };
-    if (url === '/gamificacion') return { ok: true, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (url === '/gamificacion') return { ok: true, json: async () => structuredClone(gamificationState) };
     if (url === '/gamificacion/dna') return { ok: true, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, collector: 0, explorer: 0, fan: 0 } }) };
     if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'idle' }) };
     if (url === '/api/profile') return { ok: true, json: async () => ({ username: 'Viewer', onboardingCompleted: true, favoriteCategories: [], currency: 'EUR', language: 'es', avatarUrl: null }) };
     if (url.startsWith('/api/notificaciones')) return { ok: true, json: async () => ({ notifications: [], unreadCount: 0, nextCursor: null }) };
     if (url === '/api/amigos/contadores') return { ok: true, json: async () => ({ friends: removed ? 0 : 1, sent: 2, received: 3 }) };
     if (init.method === 'DELETE' && url.startsWith('/api/amigos/')) {
-      if (!failActions) removed = true;
+      if (!failActions) {
+        removed = true;
+        gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] };
+      }
       return { ok: !failActions, json: async () => ({ ok: !failActions, removed: !failActions }) };
     }
     if (url.startsWith('/api/amigos?tipo=')) {
@@ -96,7 +100,7 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
   window.eval(withSupabaseSession(script, { session: {
     access_token: 'token-a', user: { id: 'viewer-a', email: 'viewer@example.invalid' },
   } }));
-  return { dom, window, requests };
+  return { dom, window, requests, setGamificationState(value) { gamificationState = structuredClone(value); } };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -127,11 +131,12 @@ test('las solicitudes enviadas y recibidas abren el perfil y devuelven el foco a
 });
 
 test('el buscador no muestra instrucciones de longitud pero mantiene el umbral de búsqueda', async () => {
-  const { dom, window, requests } = createApp();
+  const { dom, window, requests, setGamificationState } = createApp();
   try {
     await tick();
     await tick();
     const document = window.document;
+    assert.equal(document.querySelector('#toast-region').children.length, 0);
     document.querySelector('#open-friends').click();
     document.querySelector('#friends-tab-search').click();
     const search = document.querySelector('#friends-search');
@@ -213,7 +218,7 @@ test('las tarjetas de modales amplian la imagen y superponen la lupa sin reserva
 
 test('elimina amigos desde lista y buscador sin abrir perfil, actualiza contador y evita doble envío', async () => {
   for (const type of ['friends', 'search']) {
-    const { dom, window, requests } = createApp({ searchFriend: true });
+    const { dom, window, requests, setGamificationState } = createApp({ searchFriend: true });
     try {
       await tick();
       await tick();
@@ -229,6 +234,12 @@ test('elimina amigos desde lista y buscador sin abrir perfil, actualiza contador
       await tick();
       const remove = document.querySelector(`#friends-list-${type} .friends-remove`);
       assert.ok(remove);
+      setGamificationState({
+        bricks: 5,
+        nivel: { id: 0, nombre: 'Duplo' },
+        progreso: { porcentaje: 25 },
+        logros: [{ id: 'handshake', nombre: 'Handshake', descripcion: 'Has aceptado la primera solicitud de amistad', bricks: 3, cantidad: 1, total: 3 }],
+      });
       remove.click();
       document.querySelector(`#friends-list-${type} .friends-remove`).click();
       await tick();
@@ -237,6 +248,7 @@ test('elimina amigos desde lista y buscador sin abrir perfil, actualiza contador
       assert.equal(document.querySelector('#public-profile-dialog').open, false);
       assert.equal(document.querySelector('#friends-count').textContent, '0');
       assert.equal(document.querySelector('#friends-tab-friends').textContent, 'Amigos (0)');
+      assert.equal(document.querySelector('#gamification-bricks').textContent, '0');
       if (type === 'friends') assert.equal(document.querySelectorAll('#friends-list-friends .friends-row').length, 0);
       else assert.ok(document.querySelector('#friends-list-search .friends-send-request'));
     } finally {
@@ -412,7 +424,7 @@ test('las listas anuncian errores controlados y las cuatro pestañas consultan s
 });
 
 test('busca solo desde tres caracteres, envía una vez y conserva acciones de rechazo y aceptación', async () => {
-  const { dom, window, requests } = createApp();
+  const { dom, window, requests, setGamificationState } = createApp();
   try {
     await tick();
     await tick();
@@ -437,10 +449,19 @@ test('busca solo desde tres caracteres, envía una vez y conserva acciones de re
     assert.equal(send.querySelector('.notification-friend-plus').textContent, '+');
     assert.equal(send.querySelector('.notification-friend-icon').getAttribute('src'), '/status_images/friends.png');
     assert.equal(send.textContent, '+');
+    setGamificationState({
+      bricks: 2,
+      nivel: { id: 0, nombre: 'Duplo' },
+      progreso: { porcentaje: 10 },
+      logros: [{ id: 'first-contact', nombre: 'First contact', descripcion: 'Has enviado la primera solicitud de amistad', bricks: 2, cantidad: 1, total: 2 }],
+    });
     send.click();
     await tick();
+    await tick();
     assert.equal(document.querySelector('#friends-list-search .friends-request-state').textContent, 'Enviada');
+    assert.equal(document.querySelector('#gamification-bricks').textContent, '2');
     assert.equal(document.querySelector('.friends-send-request'), null);
+    assert.equal(document.querySelector('#toast-region .toast-task')?.textContent.trim(), 'First contact +2 Bricks');
     const sendRequest = requests.find(({ url }) => url === '/api/amigos/solicitudes');
     assert.equal(sendRequest.init.method, 'POST');
     assert.deepEqual(JSON.parse(sendRequest.init.body), { receptorId: 'search-user' });
@@ -453,18 +474,51 @@ test('busca solo desde tres caracteres, envía una vez y conserva acciones de re
     await tick();
     assert.equal(document.querySelector('#friends-list-received .friends-request-state').textContent, 'Rechazada');
     assert.equal(document.querySelector('.friends-reject-request'), null);
+    setGamificationState({
+      bricks: 5,
+      nivel: { id: 0, nombre: 'Duplo' },
+      progreso: { porcentaje: 25 },
+      logros: [
+        { id: 'first-contact', nombre: 'First contact', descripcion: 'Has enviado la primera solicitud de amistad', bricks: 2, cantidad: 1, total: 2 },
+        { id: 'handshake', nombre: 'Handshake', descripcion: 'Has aceptado la primera solicitud de amistad', bricks: 3, cantidad: 1, total: 3 },
+      ],
+    });
     assert.ok(document.querySelector('.friends-accept-request'));
     document.querySelector('.friends-accept-request').click();
+    await tick();
     await tick();
     const accepted = document.querySelector('.friends-accepted-button');
     assert.equal(accepted.textContent, 'Aceptada');
     assert.equal(accepted.disabled, true);
+    assert.equal(document.querySelector('#gamification-bricks').textContent, '5');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.ok([...document.querySelectorAll('#toast-region .toast-task')]
+      .some((toast) => toast.textContent.trim() === 'Handshake +3 Bricks'));
     assert.equal(requests.some(({ url }) => url.endsWith(`/${requestId}/rechazar`)), true);
     assert.equal(requests.some(({ url }) => url.endsWith(`/${requestId}/aceptar`)), true);
 
     document.querySelector('#friends-tab-friends').click();
     await tick();
     assert.equal(document.querySelector('#friends-list-friends .friends-username').textContent, 'BrickFan');
+
+    const setRepeatableGamification = (quantity) => setGamificationState({
+      bricks: 5 + quantity,
+      nivel: { id: 0, nombre: 'Duplo' },
+      progreso: { porcentaje: 35 },
+      logros: [
+        { id: 'first-contact', nombre: 'First contact', bricks: 2, cantidad: 1, total: 2 },
+        { id: 'handshake', nombre: 'Handshake', bricks: 3, cantidad: 1, total: 3 },
+        { id: 'block-by-block', nombre: 'Block by block', bricks: 1, cantidad: quantity, total: quantity },
+      ],
+    });
+    setRepeatableGamification(1);
+    window.eval('refreshSocialGamification()');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    setRepeatableGamification(2);
+    window.eval('refreshSocialGamification()');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.equal([...document.querySelectorAll('#toast-region .toast-task')]
+      .filter((toast) => toast.textContent.trim() === 'Block by block +1 Bricks').length, 2);
   } finally {
     dom.window.close();
   }

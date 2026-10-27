@@ -102,8 +102,9 @@ function parseBricksetDetailFields(html) {
     throw new BricksetPriceError('BRICKSET_DETALLES_NO_DISPONIBLES');
   }
 
+  const nombreCompleto = name ? decodeMinifigEntities(name) : null;
   return {
-    ...(name ? parseBricksetName(decodeMinifigEntities(name)) : {}),
+    ...(nombreCompleto ? { nombreCompleto, ...parseBricksetName(nombreCompleto) } : {}),
     categoria: decodeMinifigEntities(categoria),
     subcategoria: subcategoria ? decodeMinifigEntities(subcategoria) : undefined,
     anio: Number(anioText) || undefined,
@@ -315,11 +316,18 @@ export class BricksetScraper {
   }
 
   async getNames(id, { signal } = {}) {
+    const nombreCompleto = await this.getFullName(id, { signal });
+    const fields = nombreCompleto ? parseBricksetName(nombreCompleto) : null;
+    if (!fields?.nombre) throw new BricksetPriceError('BRICKSET_NOMBRE_NO_DISPONIBLE');
+    return { nombre: fields.nombre, descripcion: fields.descripcion };
+  }
+
+  async getFullName(id, { signal } = {}) {
     const { html } = await this._fetchHtml(id, signal);
     const name = matchDetailField(html, 'Name');
-    const fields = name ? parseBricksetName(decodeMinifigEntities(name)) : null;
-    if (!fields?.nombre) throw new BricksetPriceError('BRICKSET_NOMBRE_NO_DISPONIBLE');
-    return fields;
+    const nombreCompleto = name ? decodeMinifigEntities(name) : null;
+    if (!nombreCompleto) throw new BricksetPriceError('BRICKSET_NOMBRE_NO_DISPONIBLE');
+    return nombreCompleto;
   }
 
   async getPrice(id, { signal } = {}) {

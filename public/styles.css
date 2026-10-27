@@ -743,6 +743,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .toast-success { color: var(--ink); background: var(--surface); border-color: var(--line); }
 .toast-notification { color: white; background: #2e7d32; border-color: #2e7d32; }
 .toast-task { color: white; background: #00449e; border-color: #00449e; }
+.toast-gift { background: #2e7d32; border-color: #2e7d32; }
 .toast-level { color: white; background: var(--accent-dark); border-color: var(--accent-dark); font-weight: 700; }
 .toast-error { color: var(--accent-dark); background: var(--surface); border-color: var(--line); }
 .toast-warning { color: var(--ink); background: var(--surface); border-color: var(--line); }

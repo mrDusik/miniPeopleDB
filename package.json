@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "migrate:gamification-v2": "node scripts/migrate-gamification-v2.js",
     "test": "node --test"
   },
   "dependencies": {
@@ -13,7 +14,8 @@
     "chart.js": "^4.5.1",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
-    "lucide-static": "^1.57.0"
+    "lucide-static": "^1.57.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

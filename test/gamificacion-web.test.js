@@ -98,6 +98,29 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   dom.window.close();
 });
 
+test('ignora una respuesta de gamificacion obsoleta de la misma sesion', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state());
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const originalFetch = window.fetch;
+  const pending = [];
+  window.fetch = (url, options) => url === '/gamificacion'
+    ? new Promise((resolve) => pending.push(resolve))
+    : originalFetch(url, options);
+
+  const olderRequest = window.eval('loadGamification()');
+  const newerRequest = window.eval('loadGamification()');
+  pending[1]({ ok: true, json: async () => state({ bricks: 200 }) });
+  await newerRequest;
+  pending[0]({ ok: true, json: async () => state({ bricks: 100 }) });
+  await olderRequest;
+
+  assert.equal(window.document.querySelector('#gamification-bricks').textContent, '200');
+  dom.window.close();
+});
+
 test('el sobre accesible muestra el badge solo con no leídas y devuelve el foco al cerrar', async () => {
   const dom = createDom();
   const { window } = dom;
@@ -176,21 +199,21 @@ test('usa la imagen disponible de cada nivel y Forestman como fallback', async (
   }
 });
 
-test('usa regalo.jpg en logros de tipo regalo y conserva la copa en los demás', async () => {
+test('usa regalo.png en logros de tipo regalo y conserva la copa en los demás', async () => {
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state({ logros: [
-    { id: 'gift', type: 'regalo', nombre: 'Someone liked your collection', descripcion: 'Regalo', bricks: 50, cantidad: 20, total: 1000 },
+    { id: 'oh-you-shouldnt-have', type: 'regalo', nombre: "Oh! you shouldn't have!", descripcion: 'Has recibido tu primer regalo', bricks: 20, cantidad: 1, total: 20 },
     { id: 'normal', nombre: 'Normal', descripcion: 'Normal', bricks: 1, cantidad: 1, total: 1 },
     { id: 'high', nombre: 'High', descripcion: 'High', bricks: 10, cantidad: 10, total: 100 },
   ] }));
   window.eval(script);
   await new Promise((resolve) => setTimeout(resolve, 0));
   const items = [...window.document.querySelectorAll('.achievement-item')];
-  assert.deepEqual(items.map((item) => item.querySelector('.achievement-name').textContent), ['High', 'Normal', 'Someone liked your collection']);
+  assert.deepEqual(items.map((item) => item.querySelector('.achievement-name').textContent), ['High', 'Normal', "Oh! you shouldn't have!"]);
   const gift = items[2];
   const normal = items[1];
-  assert.equal(gift.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/regalo.jpg');
+  assert.equal(gift.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/regalo.png');
   assert.equal(gift.querySelector('.achievement-icon').alt, 'Regalo');
   assert.equal(normal.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
   dom.window.close();
@@ -311,7 +334,7 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
   assert.match(document.querySelector('#dna-legend').textContent, /Busca piezas raras y valiosas/);
   assert.match(document.querySelector('#dna-legend').textContent, /Descubre categorías y subcategorías/);
   assert.match(document.querySelector('#dna-legend').textContent, /Amplía y completa la colección/);
-  assert.match(document.querySelector('#dna-legend').textContent, /afinidad por temáticas y personajes/);
+  assert.match(document.querySelector('#dna-legend').textContent, /afinidad por temáticas/);
   document.querySelector('#dna-close').click();
   dialog.dispatchEvent(new dom.window.Event('close'));
   assert.equal(dialog.open, false);

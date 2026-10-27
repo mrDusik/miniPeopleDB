@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { DNA_PONDERACIONES, selectLevel } from '../src/gamificacion.js';
+import { calcularGamificacion, DNA_PONDERACIONES, selectLevel } from '../src/gamificacion.js';
 import { collectionHighlights } from '../src/collection-highlights.js';
 
 const PRIMARY_KEYS = {
@@ -34,10 +34,17 @@ const COLUMN_DEFAULTS = {
 
 const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
 const DEFAULT_DAILY_PRICE_CACHE_TTL_HOURS = 24;
+const SOCIAL_ACHIEVEMENT_IDS = new Set([
+  'first-contact', 'handshake', 'crew', 'brick-alliance', 'full-house', 'community',
+  'oh-you-shouldnt-have', 'is-it-my-birthday-or-what',
+  'gratitude-is-the-sign-of-noble-souls', 'great-manners',
+  'someone-liked-your-collection', 'youre-on-fire-this-week', 'thanks-for-the-gift',
+]);
 
 const MINIFIGURA_COLUMNS = [
   ['id', 'id'],
   ['nombre', 'nombre'],
+  ['nombreCompleto', 'nombre_completo'],
   ['descripcion', 'descripcion'],
   ['categoria', 'categoria'],
   ['subcategoria', 'subcategoria'],
@@ -60,16 +67,35 @@ export function minifiguraToRow(minifigura) {
 
 const clone = (value) => structuredClone(value);
 
+function madridDate(value) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(value)).map(({ type, value: part }) => [type, part]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function shiftDate(date, days) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+function nextMonday(date) {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return shiftDate(date, ((8 - weekday) % 7) || 7);
+}
+
 function calculateDna(logros, additionalWeights = {}) {
   const scores = { rarityHunter: 0, collector: 0, explorer: 0, fan: 0 };
   for (const logro of logros || []) {
     const weights = additionalWeights[logro.id] ?? DNA_WEIGHTS[logro.id];
     const cantidad = Number(logro.cantidad);
     if (!weights || logro.id === 'someone-liked-your-collection' || !Number.isFinite(cantidad) || cantidad <= 0) continue;
-    scores.rarityHunter += cantidad * weights[0];
-    scores.collector += cantidad * weights[1];
-    scores.explorer += cantidad * weights[2];
-    scores.fan += cantidad * weights[3];
+    const namedWeights = Array.isArray(weights) ? {
+      rarityHunter: weights[0], collector: weights[1], explorer: weights[2], fan: weights[3],
+    } : weights;
+    scores.rarityHunter += cantidad * namedWeights.rarityHunter;
+    scores.collector += cantidad * namedWeights.collector;
+    scores.explorer += cantidad * namedWeights.explorer;
+    scores.fan += cantidad * namedWeights.fan;
   }
   const total = Object.values(scores).reduce((sum, score) => sum + score, 0);
   const principal = total === 0
@@ -87,6 +113,8 @@ function rlsError() {
   return { code: '42501', message: 'new row violates row-level security policy' };
 }
 
+const canonicalPair = (left, right) => [left, right].sort();
+
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
 export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInError = null, now = () => new Date() } = {}) {
   const tables = {
@@ -95,9 +123,13 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     notificaciones: [], friend_requests: [], friendships: [], agradecimientos_regalo: [], ranking_top10_membership: [],
   };
   const failures = [];
+  const activatedAt = new Date(typeof now === 'function' ? now() : now).toISOString();
   const dailySync = {
     runs: [], users: [], prices: [], snapshots: [], priceCache: new Map(),
     authUsers: new Set(Object.values(users).map(({ id }) => id)),
+    version: 'v2',
+    activatedAt,
+    weeklyAvailableFrom: nextMonday(madridDate(activatedAt)),
   };
   const adminCalls = [];
   const avatarObjects = new Map();
@@ -124,6 +156,61 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
 
   function timestamp() {
     return new Date(typeof now === 'function' ? now() : now).toISOString();
+  }
+
+  function gamificationSocialSources(userId) {
+    const actorRequests = tables.friend_requests.filter(({ sender_id, recipient_id }) => [sender_id, recipient_id].includes(userId));
+    const actorFriendships = tables.friendships.filter(({ user_low_id, user_high_id }) => [user_low_id, user_high_id].includes(userId));
+    const actorGifts = tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === userId);
+    const actorThanks = tables.agradecimientos_regalo.filter(({ thanker_id, donor_id }) => [thanker_id, donor_id].includes(userId));
+    const acceptedRequests = actorRequests.filter((request) => {
+      if (request.status !== 'accepted') return false;
+      const [userLowId, userHighId] = canonicalPair(request.sender_id, request.recipient_id);
+      return actorFriendships.some((friendship) => friendship.user_low_id === userLowId && friendship.user_high_id === userHighId);
+    });
+    const revision = createHash('sha256').update(JSON.stringify({
+      version: dailySync.version,
+      weeklyAvailableFrom: dailySync.weeklyAvailableFrom,
+      requests: actorRequests.map(({ id, sender_id, recipient_id, status, updated_at }) => [id, sender_id, recipient_id, status, updated_at]).sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
+      friendships: actorFriendships.map(({ user_low_id, user_high_id, created_at }) => [user_low_id, user_high_id, created_at]).sort((left, right) => String(left[0]).localeCompare(String(right[0])) || String(left[1]).localeCompare(String(right[1]))),
+      gifts: actorGifts.map(({ donante_id, receptor_id, semana, fecha }) => [donante_id, receptor_id, semana, fecha]).sort((left, right) => String(left[0]).localeCompare(String(right[0])) || String(left[2]).localeCompare(String(right[2]))),
+      thanks: actorThanks.map(({ gift_notification_id, thanker_id, donor_id, created_at }) => [gift_notification_id, thanker_id, donor_id, created_at]).sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
+    })).digest('hex').slice(0, 32);
+    return {
+      friends: actorFriendships.length,
+      sent_pending: actorRequests.filter(({ sender_id, status }) => sender_id === userId && status === 'pending').length,
+      accepted_sent: acceptedRequests.filter(({ sender_id }) => sender_id === userId).length,
+      accepted_received: acceptedRequests.filter(({ recipient_id }) => recipient_id === userId).length,
+      global_gifts_received: actorGifts.filter(({ semana }) => semana === '0001-01-01').length,
+      weekly_gifts_received: actorGifts.filter(({ semana }) => semana !== '0001-01-01').length,
+      thanks_sent: actorThanks.filter(({ thanker_id }) => thanker_id === userId).length,
+      thanks_received: actorThanks.filter(({ donor_id }) => donor_id === userId).length,
+      source_revision: revision,
+    };
+  }
+
+  function rebuildSocialGamification(userId) {
+    const target = tables.gamificacion.find(({ user_id }) => user_id === userId);
+    if (!target) return;
+    const socialSources = gamificationSocialSources(userId);
+    const collectionLogros = (target.logros ?? []).filter(({ id }) => !SOCIAL_ACHIEVEMENT_IDS.has(id));
+    const socialState = calcularGamificacion(
+      [], [], socialSources.global_gifts_received, socialSources.thanks_received,
+      socialSources.weekly_gifts_received, socialSources,
+    );
+    const collectionBricks = collectionLogros.reduce((sum, logro) => {
+      const total = Number.isFinite(logro.total) ? logro.total
+        : Number.isFinite(logro.bricks) && Number.isFinite(logro.cantidad) ? logro.bricks * logro.cantidad : 0;
+      return sum + total;
+    }, 0);
+    const bricks = collectionBricks + socialState.bricks;
+    const { nivel, siguienteNivel, progreso } = selectLevel(bricks);
+    target.logros = [...collectionLogros, ...socialState.logros];
+    target.bricks = bricks;
+    target.nivel = nivel;
+    target.siguiente_nivel = siguienteNivel;
+    target.progreso = progreso;
+    target.updated_at = timestamp();
   }
 
   function insertNotification(row) {
@@ -399,6 +486,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         tables.friend_requests = tables.friend_requests.filter((row) => row !== request);
         tables.notificaciones = tables.notificaciones.filter((row) => row.social_request_id !== request.id);
       }
+      rebuildSocialGamification(uid);
+      rebuildSocialGamification(friendId);
       return { data: { ok: true, removed: true }, error: null };
     }
 
@@ -542,6 +631,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       }
       const senderName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
       insertNotification({ user_id: receiverId, type: 'friend_request', payload: { user: senderName }, social_request_id: requestId });
+      rebuildSocialGamification(uid);
+      rebuildSocialGamification(receiverId);
       return { data: { ok: true, requestId, status: 'pending' }, error: null };
     }
 
@@ -552,6 +643,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         if (request.status === 'accepted') return { data: null, error: { code: '23514', message: 'SOLICITUD_YA_ACEPTADA' } };
         request.status = 'rejected';
         request.updated_at = timestamp();
+        rebuildSocialGamification(request.sender_id);
+        rebuildSocialGamification(uid);
         return { data: { ok: true, status: 'rejected' }, error: null };
       }
       if (request.status === 'accepted') {
@@ -585,19 +678,37 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         insertNotification({ user_id: request.sender_id, type: 'friend_request_accepted',
           payload: { user: accepterName }, social_request_id: request.id });
       }
+      rebuildSocialGamification(request.sender_id);
+      rebuildSocialGamification(request.recipient_id);
       return { data: { ok: true, status: 'accepted', alreadyAccepted: false }, error: null };
     }
 
     if (name === 'eliminar_cuenta_usuario') {
+      const affectedUsers = new Set();
+      const removedRequestIds = new Set();
+      for (const request of tables.friend_requests) {
+        if (request.sender_id === uid) affectedUsers.add(request.recipient_id);
+        if (request.recipient_id === uid) affectedUsers.add(request.sender_id);
+        if (request.sender_id === uid || request.recipient_id === uid) removedRequestIds.add(request.id);
+      }
+      for (const friendship of tables.friendships) {
+        if (friendship.user_low_id === uid) affectedUsers.add(friendship.user_high_id);
+        if (friendship.user_high_id === uid) affectedUsers.add(friendship.user_low_id);
+      }
+      tables.friend_requests = tables.friend_requests.filter(({ sender_id, recipient_id }) => sender_id !== uid && recipient_id !== uid);
+      tables.friendships = tables.friendships.filter(({ user_low_id, user_high_id }) => user_low_id !== uid && user_high_id !== uid);
       for (const table of Object.keys(tables)) {
+        if (table === 'friend_requests' || table === 'friendships') continue;
         tables[table] = tables[table].filter((row) => row.user_id !== uid
           && row.donante_id !== uid && row.receptor_id !== uid
-          && row.thanker_id !== uid && row.donor_id !== uid);
+          && row.thanker_id !== uid && row.donor_id !== uid
+          && !removedRequestIds.has(row.social_request_id));
       }
       for (const [token, user] of Object.entries(users)) {
         if (user.id === uid) delete users[token];
       }
       dailySync.authUsers.delete(uid);
+      for (const survivorId of affectedUsers) rebuildSocialGamification(survivorId);
       return { data: null, error: null };
     }
 
@@ -613,6 +724,13 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         sent: tables.agradecimientos_regalo.filter(({ thanker_id }) => thanker_id === uid).length,
         received: tables.agradecimientos_regalo.filter(({ donor_id }) => donor_id === uid).length,
       }, error: null };
+    }
+
+    if (name === 'gamificacion_social_fuentes') {
+      if (parameters && Object.keys(parameters).length > 0) {
+        return { data: null, error: { code: 'PGRST202', message: 'FUNCTION_PARAMETER_NOT_ALLOWED' } };
+      }
+      return { data: gamificationSocialSources(uid), error: null };
     }
 
     if (name === 'gamificacion_dna') {
@@ -640,15 +758,11 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
 
     if (name === 'ranking_semanal') {
       const instant = new Date(typeof now === 'function' ? now() : now);
-      const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
-      }).formatToParts(instant).map(({ type, value }) => [type, value]));
-      const referenceDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
-      const shiftDate = (date, amount) => new Date(Date.parse(`${date}T00:00:00Z`) + amount * 86400000).toISOString().slice(0, 10);
+      const referenceDate = madridDate(instant);
       const weekday = (new Date(`${referenceDate}T00:00:00Z`).getUTCDay() + 6) % 7;
       const weekStart = shiftDate(referenceDate, -weekday);
       const weekEnd = shiftDate(weekStart, 6);
-      const availableFrom = '2026-10-12';
+      const availableFrom = dailySync.weeklyAvailableFrom;
       const active = referenceDate >= availableFrom;
       const baselines = new Map(tables.user_daily_snapshots
         .filter(({ snapshot_date }) => snapshot_date === shiftDate(weekStart, -1))
@@ -799,7 +913,6 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       const ranking = weekly ? rpc('ranking_semanal', {}, uid).data : null;
       const week = weekly ? ranking?.weekStart : '0001-01-01';
       const amount = weekly ? 5 : 50;
-      const achievementId = weekly ? 'youre-on-fire-this-week' : 'someone-liked-your-collection';
       const receiverId = parameters?.p_receptor_id;
       if (receiverId === uid) return { data: null, error: { code: 'P0001', message: 'AUTORREGALO_NO_PERMITIDO' } };
       if (weekly && !ranking?.entries.some(({ userId }) => userId === receiverId)) {
@@ -819,18 +932,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         tables.regalos_enviados.push(withDefaults('regalos_enviados', { donante_id: uid, receptor_id: receiverId, semana: week }));
         const updateFailure = takeFailure('gamificacion', 'update');
         if (updateFailure) throw updateFailure;
-        const count = tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === receiverId && (semana !== '0001-01-01') === weekly).length;
-        receiver.bricks += amount;
-        const { nivel, siguienteNivel, progreso } = selectLevel(receiver.bricks);
-        receiver.nivel = nivel;
-        receiver.siguiente_nivel = siguienteNivel;
-        receiver.progreso = progreso;
-        receiver.logros = receiver.logros.filter(({ id }) => id !== achievementId);
-        receiver.logros.push({
-          id: achievementId, type: 'regalo', nombre: weekly ? "You're on fire this week!" : 'Your collection is top!',
-          descripcion: `Has aparecido en el ranking ${weekly ? 'semanal' : 'global'} y te han hecho un regalo.`, bricks: amount,
-          repetible: true, cantidad: count, total: count * amount,
-        });
+        rebuildSocialGamification(receiverId);
         const notificationFailure = takeFailure('notificaciones', 'insert');
         if (notificationFailure) throw notificationFailure;
         const donorName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
@@ -878,14 +980,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         giftNotification.gift_thanked_at = timestamp();
         const updateFailure = takeFailure('gamificacion', 'update');
         if (updateFailure) throw updateFailure;
-        addBricks(donor, 10);
-        const count = tables.agradecimientos_regalo.filter(({ donor_id }) => donor_id === donor.user_id).length;
-        donor.logros = donor.logros.filter(({ id }) => id !== 'thanks-for-the-gift');
-        donor.logros.push({
-          id: 'thanks-for-the-gift', type: 'regalo', nombre: 'Gratitude is the sign of noble souls',
-          descripcion: 'Un coleccionista te dio las gracias por tu regalo.', bricks: 5,
-          repetible: true, cantidad: count, total: count * 5,
-        });
+        rebuildSocialGamification(donor.user_id);
+        rebuildSocialGamification(thanker.user_id);
         const notificationFailure = takeFailure('notificaciones', 'insert');
         if (notificationFailure) throw notificationFailure;
         const thankerName = tables.user_profiles.find(({ user_id }) => user_id === uid)?.username ?? 'Coleccionista';
@@ -925,10 +1021,20 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     const figures = tables.minifiguras.filter(({ user_id }) => user_id === userId)
       .sort((left, right) => left.id.localeCompare(right.id));
     const gifts = tables.regalos_enviados.filter(({ receptor_id }) => receptor_id === userId)
-      .sort((left, right) => left.donante_id.localeCompare(right.donante_id));
+      .sort((left, right) => left.donante_id.localeCompare(right.donante_id) || String(left.semana).localeCompare(String(right.semana)));
     const thanks = tables.agradecimientos_regalo.filter(({ thanker_id, donor_id }) => thanker_id === userId || donor_id === userId)
       .sort((left, right) => left.gift_notification_id.localeCompare(right.gift_notification_id));
-    return createHash('sha256').update(JSON.stringify({ figures, gifts, thanks, fingerprint: dailySync.fingerprint ?? '' })).digest('hex');
+    return createHash('sha256').update(JSON.stringify({
+      figures, gifts, thanks,
+      friendRequests: tables.friend_requests.filter(({ sender_id, recipient_id }) => [sender_id, recipient_id].includes(userId))
+        .map(({ id, sender_id, recipient_id, status, updated_at }) => [id, sender_id, recipient_id, status, updated_at])
+        .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
+      friendships: tables.friendships.filter(({ user_low_id, user_high_id }) => [user_low_id, user_high_id].includes(userId))
+        .map(({ user_low_id, user_high_id, created_at }) => [user_low_id, user_high_id, created_at])
+        .sort((left, right) => String(left[0]).localeCompare(String(right[0])) || String(left[1]).localeCompare(String(right[1]))),
+      fingerprint: dailySync.fingerprint ?? '',
+      version: dailySync.version, availableFrom: dailySync.weeklyAvailableFrom,
+    })).digest('hex');
   }
 
   function adminRpc(name, parameters) {
@@ -1055,7 +1161,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       const included = dailySync.users.some(({ run_id, user_id }) => run_id === parameters.p_run_id && user_id === parameters.p_user_id);
       if (!run || !included) return { data: null, error: { code: '42501', message: 'DAILY_SYNC_LEASE_CADUCADO' } };
       const figures = tables.minifiguras.filter(({ user_id }) => user_id === parameters.p_user_id).map((figure) => ({
-        id: figure.id, categoria: figure.categoria, subcategoria: figure.subcategoria, anio: figure.anio,
+        id: figure.id, nombreCompleto: figure.nombre_completo, categoria: figure.categoria, subcategoria: figure.subcategoria, anio: figure.anio,
         estadoColeccion: figure.estado_coleccion, precio: figure.precio, precioCompra: figure.precio_compra,
       }));
       const thankRows = tables.agradecimientos_regalo.filter(({ thanker_id, donor_id }) =>
@@ -1066,6 +1172,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         weeklyGiftsReceived: tables.regalos_enviados.filter(({ receptor_id, semana }) => receptor_id === parameters.p_user_id && semana !== '0001-01-01').length,
         thanksSent: thankRows.filter(({ thanker_id }) => thanker_id === parameters.p_user_id).length,
         thanksReceived: thankRows.filter(({ donor_id }) => donor_id === parameters.p_user_id).length,
+        socialSources: gamificationSocialSources(parameters.p_user_id),
+        version: dailySync.version,
         fingerprint: dailySync.fingerprint ?? '',
       }, error: null };
     }

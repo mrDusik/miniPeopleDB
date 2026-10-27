@@ -14,7 +14,7 @@ function notificationsMock() {
   } });
   mock.seed('user_profiles', DONOR_ID, [{ username: 'AdaCollector' }]);
   mock.seed('user_profiles', RECEIVER_ID, [{ username: 'GraceCollector' }]);
-  mock.seed('gamificacion', DONOR_ID, [{ bricks: 100, nivel: { id: 3, nombre: 'Three-Seven-Five' }, logros: [] }]);
+  mock.seed('gamificacion', DONOR_ID, [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   mock.seed('gamificacion', RECEIVER_ID, [{ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] }]);
   return mock;
 }
@@ -85,10 +85,11 @@ test('el regalo confirmado crea un evento propio, agradecer no limpia lectura y 
     assert.equal(thankNotifications.notifications[0].type, 'gift_thanks');
     assert.equal(thankNotifications.notifications[0].data.user, 'GraceCollector');
     assert.equal('actorUserId' in thankNotifications.notifications[0].data, false);
-    assert.equal(mock.rows('gamificacion', DONOR_ID)[0].bricks, 110);
-    assert.equal(mock.rows('gamificacion', DONOR_ID)[0].logros.find(({ id }) => id === 'thanks-for-the-gift').nombre, 'Gratitude is the sign of noble souls');
-    assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].bricks, 50);
-    assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+    assert.equal(mock.rows('gamificacion', DONOR_ID)[0].bricks, 5);
+    assert.equal(mock.rows('gamificacion', DONOR_ID)[0].logros.some(({ id }) => id === 'thanks-for-the-gift'), false);
+    assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].bricks, 75);
+    assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].logros.find(({ id }) => id === 'oh-you-shouldnt-have')?.total, 20);
+    assert.equal(mock.rows('gamificacion', RECEIVER_ID)[0].logros.find(({ id }) => id === 'gratitude-is-the-sign-of-noble-souls')?.total, 5);
 
     const markedOne = await receiver(`${inboxUrl}/${notification.id}/leer`, { method: 'POST' });
     assert.equal(markedOne.status, 200);
