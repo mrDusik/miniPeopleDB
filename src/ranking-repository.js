@@ -210,7 +210,7 @@ export class RankingRepository {
     const data = await this.run(this.client.rpc('ranking_logros', { p_usuario_id: targetId }), () => new LogrosNoDisponiblesError());
     if (data === null) throw new UsuarioNoEncontradoError();
     if (!data || !Array.isArray(data.logros) || !data.nivel) throw new LogrosNoDisponiblesError();
-    const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+    const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total', 'destacado'];
     return {
       userId: data.userId, displayName: data.displayName, bricks: data.bricks,
       nivel: { id: data.nivel.id, nombre: data.nivel.nombre },

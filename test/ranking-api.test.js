@@ -210,7 +210,7 @@ test('GET logros exige sesion, valida UUID y proyecta datos sin modificar gamifi
     const response = await get(path);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { userId: OTHER_RANKING_USER.id, displayName: 'Grace', bricks: 200,
-      nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'jedi-master', bricks: 200, repetible: false, cantidad: 1, total: 200 }] });
+      nivel: { id: 4, nombre: 'Citizen' }, logros: [{ id: 'jedi-master', bricks: 200, repetible: false, cantidad: 1, total: 200, destacado: false }] });
     assert.deepEqual(context.supabase.rows('gamificacion'), before);
     const invalid = await get(`${context.baseUrl}/api/ranking/invalido/logros`);
     assert.equal(invalid.status, 400);

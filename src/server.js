@@ -13,7 +13,7 @@ import {
   MinifiguraNoEncontradaError,
   MinifigurasRepository,
 } from './minifiguras-repository.js';
-import { GamificacionDnaNoDisponibleError, GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository } from './gamificacion-repository.js';
+import { GamificacionDnaNoDisponibleError, GamificacionInvalidaError, GamificacionNoDisponibleError, GamificacionRepository, LogrosDestacadosError } from './gamificacion-repository.js';
 import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
@@ -65,7 +65,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -248,6 +248,8 @@ export function createServer({
         historyRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readGamificationCatalog()),
       readGamificationDna: () => gamificacionRepository.dna(),
+      readGamificationFeatured: () => gamificacionRepository.featured(),
+      setGamificationFeatured: (id, value) => gamificacionRepository.setFeatured(id, value),
     };
   }
 
@@ -256,6 +258,9 @@ export function createServer({
   });
   app.get('/vendor/chart.js', (request, response) => {
     response.sendFile(chartBundle);
+  });
+  app.get('/vendor/star.svg', (request, response) => {
+    response.sendFile(resolve(projectRoot, 'node_modules', 'lucide-static', 'icons', 'star.svg'));
   });
   // Endpoint de salud para UptimeRobot / Render Keep-Alive
   app.get('/health', (request, response) => {
@@ -393,6 +398,8 @@ export function createServer({
     let notificationsRepository;
     let historyRepository;
     let readGamificationDna;
+    let readGamificationFeatured;
+    let setGamificationFeatured;
     let userProfileRepository;
     if (protectedPath.test(requestUrl.pathname)) {
       const context = await authenticate(request);
@@ -400,7 +407,7 @@ export function createServer({
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, historyRepository, readGamificationDna, userProfileRepository } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, historyRepository, readGamificationDna, readGamificationFeatured, setGamificationFeatured, userProfileRepository } = context);
     }
 
     if (requestUrl.pathname === '/api/amigos' || requestUrl.pathname.startsWith('/api/amigos/')) {
@@ -1037,6 +1044,30 @@ export function createServer({
       return;
     }
 
+    const featuredRoute = /^\/gamificacion\/logros\/([^/]+)\/destacado$/.exec(requestUrl.pathname);
+    if (featuredRoute) {
+      response.setHeader('cache-control', 'no-store');
+      if (request.method !== 'PUT') {
+        response.setHeader('allow', 'PUT');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      try {
+        const payload = await readJsonBody(request);
+        if (requestUrl.search || !payload || Array.isArray(payload) || Object.keys(payload).length !== 1
+          || typeof payload.destacado !== 'boolean') {
+          sendJson(response, 400, { error: 'LOGRO_INVALIDO' });
+          return;
+        }
+        await ensureGamificacion();
+        sendJson(response, 200, await setGamificationFeatured(featuredRoute[1], payload.destacado));
+      } catch (error) {
+        sendJson(response, error instanceof LogrosDestacadosError ? error.status : error instanceof MinifiguraInvalidaError ? 400 : 500,
+          { error: error instanceof LogrosDestacadosError ? error.code : error instanceof MinifiguraInvalidaError ? 'LOGRO_INVALIDO' : 'LOGROS_DESTACADOS_NO_DISPONIBLES' });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === '/gamificacion/dna') {
       if (request.method !== 'GET') {
         response.setHeader('allow', 'GET');
@@ -1059,7 +1090,8 @@ export function createServer({
       }
 
       try {
-        sendJson(response, 200, await ensureGamificacion());
+        await ensureGamificacion();
+        sendJson(response, 200, await readGamificationFeatured());
       } catch (error) {
         if (error instanceof GamificacionNoDisponibleError || error instanceof GamificacionInvalidaError) {
           sendJson(response, 500, { error: error.code });

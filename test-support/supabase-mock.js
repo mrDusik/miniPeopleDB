@@ -5,6 +5,7 @@ import { collectionHighlights } from '../src/collection-highlights.js';
 const PRIMARY_KEYS = {
   minifiguras: ['user_id', 'id'],
   gamificacion: ['user_id'],
+  logros_destacados: ['user_id', 'logro_id'],
   perfiles_publicos: ['user_id'],
   user_profiles: ['user_id'],
   user_profile_favorite_categories: ['user_id', 'category_name'],
@@ -20,6 +21,7 @@ const PRIMARY_KEYS = {
 const COLUMN_DEFAULTS = {
   minifiguras: () => ({ estado_coleccion: 'COLECCIÓN', observada: false, fecha_registro: new Date().toISOString() }),
   gamificacion: () => ({ bricks: 0, nivel: {}, siguiente_nivel: null, progreso: {}, logros: [] }),
+  logros_destacados: () => ({}),
   perfiles_publicos: () => ({ avatar_url: null, updated_at: new Date().toISOString() }),
   user_profiles: () => ({ avatar_url: null, currency: 'EUR', language: 'es', onboarding_completed: false, updated_at: new Date().toISOString() }),
   user_profile_favorite_categories: () => ({ created_at: new Date().toISOString() }),
@@ -118,7 +120,7 @@ const canonicalPair = (left, right) => [left, right].sort();
 // In-memory subset of supabase-js; rows are scoped to the client's bearer user to mimic RLS.
 export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInError = null, now = () => new Date() } = {}) {
   const tables = {
-    minifiguras: [], gamificacion: [], perfiles_publicos: [], user_profiles: [], user_profile_favorite_categories: [],
+    minifiguras: [], gamificacion: [], logros_destacados: [], perfiles_publicos: [], user_profiles: [], user_profile_favorite_categories: [],
     regalos_enviados: [], user_daily_snapshots: [],
     notificaciones: [], friend_requests: [], friendships: [], agradecimientos_regalo: [], ranking_top10_membership: [],
   };
@@ -206,6 +208,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     const bricks = collectionBricks + socialState.bricks;
     const { nivel, siguienteNivel, progreso } = selectLevel(bricks);
     target.logros = [...collectionLogros, ...socialState.logros];
+    pruneFeatured(userId, target.logros);
     target.bricks = bricks;
     target.nivel = nivel;
     target.siguiente_nivel = siguienteNivel;
@@ -341,11 +344,25 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     }
   }
 
+  function pruneFeatured(userId, logros) {
+    tables.logros_destacados = tables.logros_destacados.filter((row) => row.user_id !== userId
+      || logros.some((logro) => logro.id === row.logro_id && logro.cantidad > 0));
+  }
+
+  function publicAchievements(userId) {
+    const target = tables.gamificacion.find(({ user_id }) => user_id === userId);
+    const selected = new Set(tables.logros_destacados.filter(({ user_id }) => user_id === userId).map(({ logro_id }) => logro_id));
+    return (target?.logros ?? []).map((logro) => ({ ...logro, destacado: selected.has(logro.id) }))
+      .sort((left, right) => Number(right.destacado) - Number(left.destacado)
+        || Number(left.type === 'regalo') - Number(right.type === 'regalo') || (right.total ?? 0) - (left.total ?? 0));
+  }
+
   function execute(table, state, uid) {
     const failure = takeFailure(table, state.operation);
     if (failure) return { data: null, error: failure };
     if (!tables[table]) return { data: null, error: { code: '42P01', message: 'relation does not exist' } };
     if (table === 'regalos_enviados') return { data: null, error: rlsError() };
+    if (table === 'logros_destacados' && state.operation !== 'select') return { data: null, error: rlsError() };
     if (['friend_requests', 'friendships'].includes(table) && state.operation !== 'select') return { data: null, error: rlsError() };
     if (['agradecimientos_regalo', 'ranking_top10_membership'].includes(table)) return { data: null, error: rlsError() };
     if (table === 'notificaciones'
@@ -408,6 +425,9 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       tables[table] = rows.filter((row) => !result.includes(row));
     }
 
+    if (table === 'gamificacion' && ['insert', 'upsert', 'update'].includes(state.operation)) {
+      for (const row of result) pruneFeatured(row.user_id, row.logros);
+    }
     const totalCount = result.length;
     for (const [column, ascending] of [...state.orders].reverse()) {
       result = [...result].sort((left, right) => {
@@ -432,6 +452,32 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     if (!uid) return { data: null, error: { code: '42501', message: 'NO_AUTENTICADO' } };
 
     if (name === 'guardar_perfil_usuario') return saveUserProfile(parameters, uid);
+
+    if (name === 'gamificacion_con_destacados') {
+      const row = tables.gamificacion.find(({ user_id }) => user_id === uid);
+      const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+      return { data: row ? clone({ bricks: row.bricks, nivel: row.nivel, siguienteNivel: row.siguiente_nivel,
+        progreso: row.progreso, logros: row.logros.map((logro) => Object.fromEntries(
+          fields.filter((field) => logro[field] != null).map((field) => [field, logro[field]]))),
+        logrosDestacados: tables.logros_destacados.filter(({ user_id }) => user_id === uid).map(({ logro_id }) => logro_id).sort() }) : null, error: null };
+    }
+    if (name === 'establecer_logro_destacado') {
+      const id = parameters.p_logro_id;
+      const featured = parameters.p_destacado;
+      const row = tables.gamificacion.find(({ user_id }) => user_id === uid);
+      if (typeof featured !== 'boolean' || typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,99}$/.test(id)
+        || (featured && !row?.logros.some((logro) => logro.id === id && logro.cantidad > 0))) {
+        return { data: null, error: { message: 'LOGRO_INVALIDO' } };
+      }
+      const own = tables.logros_destacados.filter(({ user_id }) => user_id === uid);
+      if (featured && !own.some(({ logro_id }) => logro_id === id)) {
+        if (own.length >= 5) return { data: null, error: { message: 'LIMITE_LOGROS_DESTACADOS' } };
+        tables.logros_destacados.push({ user_id: uid, logro_id: id });
+      } else if (!featured) {
+        tables.logros_destacados = tables.logros_destacados.filter((entry) => entry.user_id !== uid || entry.logro_id !== id);
+      }
+      return { data: { logrosDestacados: tables.logros_destacados.filter(({ user_id }) => user_id === uid).map(({ logro_id }) => logro_id).sort() }, error: null };
+    }
 
     const canonicalPair = (left, right) => [left, right].sort();
     const requestForPair = (left, right) => {
@@ -580,14 +626,11 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         id, name: nombre, year: anio, price: precio, category: categoria, subcategory: subcategoria,
       });
       const gamification = tables.gamificacion.find(({ user_id }) => user_id === targetId);
-      const achievementFields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
-      const achievements = [...(gamification?.logros ?? [])].map((achievement, index) => ({ achievement, index }))
-        .sort((left, right) => Number(left.achievement.type === 'regalo') - Number(right.achievement.type === 'regalo')
-          || (left.achievement.type === 'regalo' ? 0 : (right.achievement.total ?? 0) - (left.achievement.total ?? 0))
-          || left.index - right.index)
+      const achievementFields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total', 'destacado'];
+      const achievements = publicAchievements(targetId)
         .slice(0, 5)
-        .map(({ achievement }) => Object.fromEntries(achievementFields.filter((field) => achievement[field] != null)
-          .map((field) => [({ nombre: 'name', descripcion: 'description', repetible: 'repeatable', cantidad: 'quantity' }[field] ?? field), achievement[field]])));
+        .map((achievement) => Object.fromEntries(achievementFields.filter((field) => achievement[field] != null)
+          .map((field) => [({ nombre: 'name', descripcion: 'description', repetible: 'repeatable', cantidad: 'quantity', destacado: 'featured' }[field] ?? field), achievement[field]])));
       return { data: {
         userId: targetId,
         username: summary.username,
@@ -748,11 +791,11 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       const target = eligible ? tables.gamificacion.find(({ user_id }) => user_id === parameters.p_usuario_id) : null;
       if (!target) return { data: null, error: null };
       const profile = tables.user_profiles.find(({ user_id }) => user_id === target.user_id);
-      const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total'];
+      const fields = ['id', 'type', 'nombre', 'descripcion', 'bricks', 'repetible', 'cantidad', 'total', 'destacado'];
       return { data: clone({
         userId: target.user_id, displayName: profile?.username ?? 'Coleccionista', bricks: target.bricks,
         nivel: { id: target.nivel?.id ?? 0, nombre: target.nivel?.nombre ?? 'Duplo' },
-        logros: target.logros.map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
+        logros: publicAchievements(target.user_id).map((item) => Object.fromEntries(fields.filter((field) => item[field] != null).map((field) => [field, item[field]]))),
       }), error: null };
     }
 

@@ -1017,6 +1017,30 @@ test('consulta los datos de Brickset para un id todavía no persistido', async (
   });
 });
 
+test('la API reutiliza metadatos publicos recientes entre usuarios sin saltar autenticacion', async () => {
+  let requests = 0;
+  const fetchImpl = async () => {
+    requests += 1;
+    return new Response('<dl><dt>Name</dt><dd>Space Pilot</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2020</dd></dl><p>Current Value - New</p><span>\u20ac5</span>');
+  };
+  await withServerOptions('[]', { fetchImpl, minIntervalMs: 0 }, async (baseUrl, supabase) => {
+    const [own, other] = await Promise.all([
+      fetch(`${baseUrl}/minifiguras/COL079/brickset`),
+      authFetch(OTHER_TOKEN)(`${baseUrl}/minifiguras/col079/brickset`),
+    ]);
+    assert.equal(own.status, 200);
+    assert.equal(other.status, 200);
+    const details = await own.json();
+    assert.equal(details.nombre, 'Space Pilot');
+    assert.equal(details.precio, 5);
+    assert.deepEqual(await other.json(), details);
+    assert.equal((await fetch(`${baseUrl}/minifiguras/col079/brickset`)).status, 200);
+    assert.equal(requests, 1);
+    assert.equal((await globalThis.fetch(`${baseUrl}/minifiguras/col079/brickset`)).status, 401);
+    assert.deepEqual(supabase.rows('minifiguras'), []);
+  });
+});
+
 test('updatePrices conserva los datos originales si falla la persistencia', async () => {
   const { repository, supabase } = repositoryWith([makeMinifigura({ id: 'a', precio: 10 })]);
   supabase.failNext('minifiguras', undefined, 'upsert');

@@ -2,6 +2,8 @@ const BRICKSET_BASE_URL = 'https://brickset.com/minifigs/';
 const ECB_USD_EUR_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const EXCHANGE_RATE_CACHE_MS = 24 * 60 * 60 * 1000;
 const EXCHANGE_RATE_RETRY_MS = 5 * 60 * 1000;
+const DETAILS_CACHE_MS = 5 * 60 * 1000;
+const DETAILS_CACHE_MAX_ENTRIES = 500;
 
 export class BricksetPriceError extends Error {
   constructor(code = 'BRICKSET_PRECIO_NO_DISPONIBLE') {
@@ -128,6 +130,8 @@ export class BricksetScraper {
     exchangeRateFetchImpl = globalThis.fetch,
     exchangeRateCacheMs = EXCHANGE_RATE_CACHE_MS,
     exchangeRateRetryMs = EXCHANGE_RATE_RETRY_MS,
+    detailsCacheMs = DETAILS_CACHE_MS,
+    detailsCacheMaxEntries = DETAILS_CACHE_MAX_ENTRIES,
     timeoutMs = 8000,
     retries = 0,
     minIntervalMs = 9000,
@@ -142,6 +146,10 @@ export class BricksetScraper {
     this.exchangeRateFetchImpl = exchangeRateFetchImpl;
     this.exchangeRateCacheMs = exchangeRateCacheMs;
     this.exchangeRateRetryMs = exchangeRateRetryMs;
+    this.detailsCacheMs = detailsCacheMs;
+    this.detailsCacheMaxEntries = detailsCacheMaxEntries;
+    this.detailsCache = new Map();
+    this.detailsRequests = new Map();
     this.timeoutMs = timeoutMs;
     this.retries = retries;
     this.minIntervalMs = minIntervalMs;
@@ -347,6 +355,37 @@ export class BricksetScraper {
   }
 
   async getDetails(id, { signal } = {}) {
+    if (typeof id !== 'string' || !id.trim()) throw new BricksetPriceError('BRICKSET_ID_INVALIDO');
+    if (signal?.aborted) throw new BricksetPriceError('BRICKSET_CANCELADO');
+    const key = id.trim().toLowerCase();
+    const cached = this.detailsCache.get(key);
+    if (cached && cached.expiresAt > this.now()) {
+      this.detailsCache.delete(key);
+      this.detailsCache.set(key, cached);
+      return { ...cached.details };
+    }
+    this.detailsCache.delete(key);
+    const pending = !signal && this.detailsRequests.get(key);
+    if (pending) return { ...await pending };
+    const operation = this._getDetailsUncached(id.trim(), { signal }).then((details) => {
+      if (signal?.aborted) throw new BricksetPriceError('BRICKSET_CANCELADO');
+      if (this.detailsCacheMs > 0 && this.detailsCacheMaxEntries > 0 && details.nombre?.trim()) {
+        while (this.detailsCache.size >= this.detailsCacheMaxEntries) {
+          this.detailsCache.delete(this.detailsCache.keys().next().value);
+        }
+        this.detailsCache.set(key, { details: { ...details }, expiresAt: this.now() + this.detailsCacheMs });
+      }
+      return details;
+    });
+    if (!signal) this.detailsRequests.set(key, operation);
+    try {
+      return { ...await operation };
+    } finally {
+      if (this.detailsRequests.get(key) === operation) this.detailsRequests.delete(key);
+    }
+  }
+
+  async _getDetailsUncached(id, { signal } = {}) {
     const { html, url } = await this._fetchHtml(id, signal);
     let details;
     let quote;

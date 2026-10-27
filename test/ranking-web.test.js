@@ -59,6 +59,32 @@ function installFetch(window, ranking, orderedRankings = {}, weeklyResult = { av
   return calls;
 }
 
+test('destacados de consulta publica usan al titular sin controles editables ni mezcla del panel propio', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  installFetch(window, [entry()]);
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.eval(`renderGamification({bricks:42,nivel:{id:1,nombre:'Stud'},logros:[{id:'own',nombre:'Own',total:42}],logrosDestacados:['own']});
+    renderAchievements({bricks:5,nivel:{id:0,nombre:'Duplo'},logros:[
+      {id:'high',nombre:'High',total:100},
+      {id:'low',nombre:'Low',total:1},
+      {id:'tie',nombre:'Tie',total:1},
+      {id:'gift',nombre:'Gift',type:'regalo',total:0,destacado:true}
+    ]},'Logros de Grace');
+    document.querySelector('#gamification-dialog').showModal();`);
+  const document = window.document;
+  assert.deepEqual([...document.querySelectorAll('#gamification-achievements .achievement-name')].map((node) => node.textContent), ['Gift', 'High', 'Low', 'Tie']);
+  assert.equal(document.querySelectorAll('#gamification-achievements .achievement-star-toggle').length, 0);
+  assert.equal(document.querySelectorAll('#gamification-achievements .achievement-star.active').length, 1);
+  assert.equal(document.querySelector('#gamification-bricks').textContent, '42');
+  window.eval("renderGamification({bricks:43,nivel:{id:1,nombre:'Stud'},logros:[],logrosDestacados:[]})");
+  assert.equal(document.querySelector('#gamification-dialog-title').textContent, 'Logros de Grace');
+  assert.equal(document.querySelector('.achievement-name').textContent, 'Gift');
+  assert.equal(document.querySelector('#gamification-bricks').textContent, '43');
+  dom.window.close();
+});
+
 test('el acceso y el dialogo semanal tienen semantica propia y reutilizan la estructura visual global', () => {
   const dom = createDom();
   const launcher = dom.window.document.querySelector('#open-weekly-ranking');
@@ -741,8 +767,11 @@ test('alta rapida mantiene errores de duplicado, seguimiento y servidor sin muta
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(document.querySelector('#form-dialog').open, true);
     assert.notEqual(document.querySelector('#form-error').textContent, '');
-    if (status === 409) assert.equal(document.querySelector('.ranking-add-wanted'), null);
-    else assert.ok(document.querySelector('.ranking-add-wanted'));
+    if (status === 409) {
+      assert.equal(document.querySelector('.ranking-add-wanted'), null);
+      assert.equal(document.querySelector('#form-error').textContent, 'Ya la estás buscando');
+      assert.equal(document.querySelector('.toast-error'), null);
+    } else assert.ok(document.querySelector('.ranking-add-wanted'));
     if (error === 'LIMITE_OBSERVADAS') assert.match(document.querySelector('.toast-warning').textContent, /Máximo 10/);
     dom.window.close();
   }

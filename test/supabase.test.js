@@ -173,6 +173,22 @@ test('RPC de perfil ajeno limita campos, ordena resumen y conserva RLS directo',
     await assert.rejects(db.query('select user_id from public.gamificacion'), /permission denied/);
     assert.equal((await db.query('select public.amigos_perfil($1) as result', ['00000000-0000-4000-8000-0000000000c1'])).rows[0].result, null);
     await db.exec('reset role');
+    await db.query(`update public.gamificacion set logros = logros ||
+      '[{"id":"last","nombre":"Last","cantidad":20,"total":0,"dna_weights":{"fan":100}}]'::jsonb
+      where user_id = $1`, [profileId]);
+    await setActor(profileId);
+    await db.query("select public.establecer_logro_destacado('last', true)");
+    await setActor(viewerId);
+    const before = (await db.query('select public.ranking_logros($1) as result', [profileId])).rows[0].result;
+    const featuredProfile = (await db.query('select public.amigos_perfil($1) as result', [profileId])).rows[0].result;
+    assert.equal(featuredProfile.achievements.length, 5);
+    assert.equal(featuredProfile.achievements[0].id, 'last');
+    assert.equal(featuredProfile.achievements[0].featured, true);
+    assert.equal(before.logros[0].destacado, true);
+    assert.deepEqual(featuredProfile.achievements.map(({ id }) => id), before.logros.slice(0, 5).map(({ id }) => id));
+    assert.equal(JSON.stringify(before).includes('dna_weights'), false);
+    assert.deepEqual((await db.query('select public.ranking_logros($1) as result', [profileId])).rows[0].result, before);
+    await db.exec('reset role');
   } finally {
     await db.close();
   }
@@ -1212,7 +1228,7 @@ test('ranking_logros proyecta solo datos publicos del Top 10 sin escrituras ni a
   const result = await client.rpc('ranking_logros', { p_usuario_id: 'user-00' });
   assert.equal(result.error, null);
   assert.deepEqual(result.data, { userId: 'user-00', displayName: 'Ada', bricks: 100,
-    nivel: { id: 3, nombre: 'Nivel' }, logros: [{ id: 'logro', nombre: 'Logro', bricks: 10, repetible: false, cantidad: 1, total: 10 }] });
+    nivel: { id: 3, nombre: 'Nivel' }, logros: [{ id: 'logro', nombre: 'Logro', bricks: 10, repetible: false, cantidad: 1, total: 10, destacado: false }] });
   assert.equal((await client.rpc('ranking_logros', { p_usuario_id: 'user-09' })).data.userId, 'user-09');
   assert.equal((await client.rpc('ranking_logros', { p_usuario_id: 'user-10' })).data, null);
   assert.equal((await client.rpc('ranking_logros', { p_usuario_id: 'missing' })).data, null);

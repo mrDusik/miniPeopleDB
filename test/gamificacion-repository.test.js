@@ -15,6 +15,23 @@ function gamificationWith(supabase) {
   return new GamificacionRepository({ client: createTestClient(supabase), userId: TEST_USER.id, categoriasRepository: categoryRepository() });
 }
 
+test('destacados usa RPC propia y no persiste preferencias en logros derivados', async () => {
+  const supabase = createTestSupabase();
+  const repository = gamificationWith(supabase);
+  const { state } = await repository.recalculate(catalogo);
+  const id = state.logros[0].id;
+  assert.deepEqual(await repository.setFeatured(id, true), { logrosDestacados: [id] });
+  const decorated = await repository.featured();
+  assert.deepEqual(decorated.logrosDestacados, [id]);
+  assert.deepEqual(decorated.logros, state.logros);
+  await repository.recalculate(catalogo);
+  assert.deepEqual((await repository.featured()).logrosDestacados, [id]);
+  await repository.recalculate([]);
+  assert.deepEqual((await repository.featured()).logrosDestacados, []);
+  await repository.recalculate(catalogo);
+  assert.deepEqual((await repository.featured()).logrosDestacados, []);
+});
+
 test('inicializa una sola vez aunque se solicite concurrentemente', async () => {
   const supabase = createTestSupabase();
   const repository = gamificationWith(supabase);

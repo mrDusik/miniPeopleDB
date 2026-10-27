@@ -2,6 +2,22 @@ import { calcularGamificacion, nivelesAlcanzados, nuevosLogros } from './gamific
 
 const TABLE = 'gamificacion';
 
+export class LogrosDestacadosError extends Error {
+  constructor(code = 'LOGROS_DESTACADOS_NO_DISPONIBLES') {
+    super(code);
+    this.code = code;
+    this.status = code === 'LOGRO_INVALIDO' ? 400 : code === 'LIMITE_LOGROS_DESTACADOS' ? 409 : 500;
+  }
+}
+
+function validateFeatured(value) {
+  if (!Array.isArray(value) || value.length > 5 || new Set(value).size !== value.length
+    || value.some((id) => typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,99}$/.test(id))) {
+    throw new LogrosDestacadosError();
+  }
+  return [...value];
+}
+
 export class GamificacionNoDisponibleError extends Error {
   constructor() {
     super('El estado de gamificacion no esta disponible');
@@ -131,6 +147,30 @@ export class GamificacionRepository {
       return validateDna(data);
     } catch {
       throw new GamificacionDnaNoDisponibleError();
+    }
+  }
+
+  async featured() {
+    const data = await this.run(this.client.rpc('gamificacion_con_destacados'));
+    const state = validateState(data);
+    const logrosDestacados = validateFeatured(data.logrosDestacados);
+    if (logrosDestacados.some((id) => !state.logros.some((logro) => logro.id === id))) throw new LogrosDestacadosError();
+    return { ...state, logrosDestacados };
+  }
+
+  async setFeatured(id, destacado) {
+    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,99}$/.test(id) || typeof destacado !== 'boolean') {
+      throw new LogrosDestacadosError('LOGRO_INVALIDO');
+    }
+    try {
+      const { data, error } = await this.client.rpc('establecer_logro_destacado', { p_logro_id: id, p_destacado: destacado });
+      if (error) {
+        throw new LogrosDestacadosError(['LOGRO_INVALIDO', 'LIMITE_LOGROS_DESTACADOS'].includes(error.message)
+          ? error.message : undefined);
+      }
+      return { logrosDestacados: validateFeatured(data?.logrosDestacados) };
+    } catch (error) {
+      throw error instanceof LogrosDestacadosError ? error : new LogrosDestacadosError();
     }
   }
 
