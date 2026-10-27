@@ -75,8 +75,8 @@ function buildInitialStates(users, figures, socialSources, categorias) {
       subcategoria: figure.subcategoria ?? undefined,
       anio: figure.anio ?? undefined,
       estadoColeccion: figure.estado_coleccion,
-      precio: figure.precio ?? undefined,
-      precioCompra: figure.precio_compra ?? undefined,
+      precio: finiteNumber(figure.precio),
+      precioCompra: finiteNumber(figure.precio_compra),
     });
   }
 
@@ -97,6 +97,13 @@ function buildInitialStates(users, figures, socialSources, categorias) {
       logros: state.logros,
     };
   });
+}
+
+function finiteNumber(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 async function readV2Sources(client, categorias) {
