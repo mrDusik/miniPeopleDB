@@ -166,11 +166,14 @@ test('el corte V2 es atomico, reconstruye cuentas sociales y rechaza leases anti
     await db.query(`insert into public.friend_requests(sender_id, recipient_id, status)
       values ($1, $2, 'accepted')`, [userA, userB]);
     await db.query('insert into public.friendships(user_low_id, user_high_id) values ($1, $2)', [userA, userB]);
-    await db.query(`insert into public.minifiguras(user_id, id, nombre, descripcion, categoria, subcategoria, estado_coleccion, nombre_completo)
+    await db.query(`insert into public.minifiguras(
+      user_id, id, nombre, descripcion, categoria, subcategoria, estado_coleccion, nombre_completo, precio, precio_compra
+    )
       values
-        ($1, 'MIGRATION-1', 'Kept figure', 'Visible description', 'Other', null, 'COLECCIÓN', null),
-        ($2, 'HP-ALIAS', 'Wizard', 'Fantastic Beasts', 'Collectible Minifigures', 'Harry Potter / Harry Potter Series 1 Fantastic Beasts', 'COLECCIÓN', 'Wizard, Fantastic Beasts'),
-        ($2, 'WHATIF-ALIAS', 'What If figure', null, 'Collectible Minifigures', 'Super Heroes / Marvel Studios Series 1 What If', 'COLECCIÓN', 'What If figure')`, [userA, userB]);
+        ($1, 'MIGRATION-1', 'Kept figure', 'Visible description', 'Other', null, 'COLECCIÓN', null, null, null),
+        ($1, 'MIGRATION-2', 'Valuable figure', null, 'Other', null, 'COLECCIÓN', 'Valuable figure', 2500, 1200),
+        ($2, 'HP-ALIAS', 'Wizard', 'Fantastic Beasts', 'Collectible Minifigures', 'Harry Potter / Harry Potter Series 1 Fantastic Beasts', 'COLECCIÓN', 'Wizard, Fantastic Beasts', null, null),
+        ($2, 'WHATIF-ALIAS', 'What If figure', null, 'Collectible Minifigures', 'Super Heroes / Marvel Studios Series 1 What If', 'COLECCIÓN', 'What If figure', null, null)`, [userA, userB]);
     await db.query(`insert into public.regalos_enviados(donante_id, receptor_id, semana)
       values ($1, $2, '0001-01-01')`, [userA, userB]);
     const giftNotification = (await db.query(`insert into public.notificaciones(
@@ -187,12 +190,26 @@ test('el corte V2 es atomico, reconstruye cuentas sociales y rechaza leases anti
     ) values ($1, '2026-10-01', 'running', 'users', $2, clock_timestamp() + interval '1 hour', 2)`, [runId, leaseOwner]);
 
     const fullNamesById = new Map([['MIGRATION-1', 'Kept figure, Comic-Con 2022']]);
+    const pgClient = {
+      async query(...args) {
+        const result = await db.query(...args);
+        if (typeof args[0] !== 'string' || !args[0].includes('from public.minifiguras order by user_id, id')) return result;
+        return {
+          ...result,
+          rows: result.rows.map((figure) => ({
+            ...figure,
+            precio: figure.precio === null ? null : String(figure.precio),
+            precio_compra: figure.precio_compra === null ? null : String(figure.precio_compra),
+          })),
+        };
+      },
+    };
     const categories = [{ categoria: 'Collectible Minifigures', total: 845, subcategorias: [
       { subcategoria: 'Harry Potter / Harry Potter Series 1 / Fantastic Beasts', total: 6, anioInicio: 2018 },
       { subcategoria: 'Super Heroes / Marvel Studios Series 1 / What If...?', total: 4, anioInicio: 2021 },
     ] }];
     const migrate = (options = {}) => migrateGamificationV2({
-      client: db, projectRef, categorias: categories, confirmBackup: true, confirmMaintenance: true,
+      client: pgClient, projectRef, categorias: categories, confirmBackup: true, confirmMaintenance: true,
       confirmCatalogCoverage: true, fullNamesById, ...options,
     });
     await assert.rejects(migrate({ confirmBackup: false }), /GAMIFICACION_V2_BACKUP_NO_CONFIRMADO/);
@@ -227,12 +244,16 @@ test('el corte V2 es atomico, reconstruye cuentas sociales y rechaza leases anti
     const expectedUserA = calcularGamificacion([{
       id: 'MIGRATION-1', nombre: 'Kept figure', descripcion: 'Visible description',
       nombreCompleto: 'Kept figure, Comic-Con 2022', categoria: 'Other', estadoColeccion: 'COLECCIÓN',
+    }, {
+      id: 'MIGRATION-2', nombre: 'Valuable figure', nombreCompleto: 'Valuable figure',
+      categoria: 'Other', estadoColeccion: 'COLECCIÓN', precio: 2500, precioCompra: 1200,
     }], categories, 0, 0, 0, {
       friends: 1, sent_pending: 0, accepted_sent: 1, accepted_received: 0,
       global_gifts_received: 0, weekly_gifts_received: 0, thanks_sent: 0, thanks_received: 0,
     });
     assert.equal(userAState.bricks, expectedUserA.bricks);
     assert.deepEqual(userAState.logros, expectedUserA.logros);
+    assert.equal(userAState.logros.some(({ id }) => id === 'crown-jewel'), true);
     assert.equal(userAState.logros.some(({ id }) => id === 'someone-liked-your-collection'), false);
     const userBState = (await db.query('select bricks, logros from public.gamificacion where user_id = $1', [userB])).rows[0];
     const userBFigures = (await db.query(`select id, nombre, descripcion, nombre_completo, categoria, subcategoria,
@@ -250,7 +271,7 @@ test('el corte V2 es atomico, reconstruye cuentas sociales y rechaza leases anti
     assert.equal(userBState.bricks, expectedUserB.bricks);
     assert.deepEqual(userBState.logros, expectedUserB.logros);
     assert.equal(userBState.logros.some(({ id }) => id === 'handshake'), true);
-    assert.equal((await db.query('select count(*)::integer as count from public.minifiguras where user_id = $1', [userA])).rows[0].count, 1);
+    assert.equal((await db.query('select count(*)::integer as count from public.minifiguras where user_id = $1', [userA])).rows[0].count, 2);
     assert.deepEqual((await db.query(`select id, nombre, descripcion, categoria, subcategoria, nombre_completo
       from public.minifiguras where user_id = $1 order by id`, [userB])).rows, [
       { id: 'HP-ALIAS', nombre: 'Wizard', descripcion: 'Fantastic Beasts', categoria: 'Collectible Minifigures',

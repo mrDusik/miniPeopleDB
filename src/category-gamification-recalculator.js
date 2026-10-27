@@ -6,10 +6,16 @@ import { calcularGamificacion, DNA_PONDERACIONES, OBJETIVOS } from './gamificaci
 const PAGE_SIZE = 1000;
 const SOURCES_RPC = 'leer_recalculo_gamificacion_categorias';
 const APPLY_RPC = 'aplicar_recalculo_gamificacion_categorias';
+const GAMIFICATION_FINGERPRINT_VERSION = 'v2.1';
 
 export function fingerprint(categorias) {
   const pesosDna = [...DNA_PONDERACIONES].sort(([left], [right]) => left.localeCompare(right));
-  return createHash('sha256').update(JSON.stringify({ version: 'v2', categorias, objetivos: OBJETIVOS, pesosDna })).digest('hex');
+  return createHash('sha256').update(JSON.stringify({
+    version: GAMIFICATION_FINGERPRINT_VERSION,
+    categorias,
+    objetivos: OBJETIVOS,
+    pesosDna,
+  })).digest('hex');
 }
 
 async function readRecalculationSources(client, currentFingerprint) {

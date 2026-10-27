@@ -15,7 +15,7 @@ import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
 function categoryFingerprint(categorias) {
   const pesosDna = [...DNA_PONDERACIONES].sort(([left], [right]) => left.localeCompare(right));
-  return createHash('sha256').update(JSON.stringify({ version: 'v2', categorias, objetivos: OBJETIVOS, pesosDna })).digest('hex');
+  return createHash('sha256').update(JSON.stringify({ version: 'v2.1', categorias, objetivos: OBJETIVOS, pesosDna })).digest('hex');
 }
 
 function createAdminClient({
@@ -253,6 +253,31 @@ test('no recalcula cuando el fingerprint de categorías y objetivos ya está apl
   assert.equal(result.recalculated, false);
   assert.equal(result.users, 0);
   assert.equal(applications.length, 0);
+});
+
+test('una nueva version del motor recalcula logros de valor ya persistidos', async () => {
+  const categories = [{ categoria: 'Other', total: 1, subcategorias: [] }];
+  const pesosDna = [...DNA_PONDERACIONES].sort(([left], [right]) => left.localeCompare(right));
+  const oldFingerprint = createHash('sha256').update(JSON.stringify({
+    version: 'v2', categorias: categories, objetivos: OBJETIVOS, pesosDna,
+  })).digest('hex');
+  const { client, applications } = createAdminClient({
+    version: oldFingerprint,
+    gamificacion: [{ user_id: 'user-a' }],
+    minifiguras: [{
+      user_id: 'user-a', id: 'VALUABLE-1', nombre: 'Valuable figure', categoria: 'Other',
+      estado_coleccion: 'COLECCIÓN', precio: 2500, precio_compra: 1200,
+    }],
+  });
+  const recalculator = new CategoryGamificationRecalculator({
+    client, categoriasRepository: { filePath: 'categories.json', read: async () => categories },
+  });
+
+  const result = await recalculator.reconcile();
+
+  assert.equal(result.recalculated, true);
+  const state = applications[0].parameters.p_estados[0];
+  assert.equal(state.logros.some(({ id }) => id === 'crown-jewel'), true);
 });
 
 test('una huella anterior recalcula los nuevos logros de usuarios actuales aunque no cambien las categorías', async () => {
