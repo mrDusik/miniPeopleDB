@@ -13,12 +13,17 @@ La última consulta Brickset verificó las 17 páginas y los 845 registros, sin 
 - `supabase/prepare-gamification-v2.sql` crea el marcador durable `prepared`; no borra ni recalcula datos.
 - `scripts/migrate-gamification-v2.js` ejecuta la transacción única. No está conectado a Express, `npm start`, el cron ni el arranque del worker.
 - No hay ruta HTTP para resetear, elegir usuarios ni iniciar el corte.
+- `MAINTENANCE_MODE=true` bloquea todas las rutas salvo `GET /health` con `503 MANTENIMIENTO` y evita iniciar el recálculo de categorías o recuperar jobs diarios. Es la alternativa al modo de mantenimiento de pago de Render.
 
 ## Antes del corte
 
 1. Completar y aprobar la cobertura Brickset y conservar el reporte, fixtures y discrepancias resueltas.
 2. Confirmar el project ref de 20 caracteres en el dashboard y que coincida con `SUPABASE_URL` y el host/usuario de `SUPABASE_DB_URL`.
-3. Acordar una ventana de mantenimiento. Pausar el cron diario y el recálculo por cambios de categorías; detener escrituras ordinarias y esperar o invalidar los workers en curso.
+3. Acordar una ventana de mantenimiento.
+    - Desactivar temporalmente el job diario en cron-job.org; no borrarlo.
+    - En el servicio de Render, añadir `MAINTENANCE_MODE=true` en **Environment** y desplegar una versión que incluya esta compuerta. El binario anterior ignora el flag: no continuar hasta que termine el despliegue de la versión compatible.
+    - Verificar que `GET /health` responde 200 y que `GET /` y `POST /api/cron/daily-sync` responden `503` con `{ "error": "MANTENIMIENTO" }`. La versión compatible tampoco inicia el recálculo de categorías ni recupera jobs diarios.
+    - Esperar a que termine el despliegue y cualquier trabajo en curso. Mantener el flag activo durante todo el corte; no cambiar el catálogo ni reactivar cron.
 4. En producción y en cualquier proyecto no desechable, crear un backup completo de base y Auth y ensayar su restauración en un entorno aislado compatible. Mantener el archivo fuera del repositorio y de logs:
 
 ```powershell
@@ -96,7 +101,7 @@ where categoria = 'Collectible Minifigures'
 
 Revisar que las cuentas Auth tengan estado, las filas conservadas coincidan con los recuentos previos, no queden IDs de logros retirados, el ledger/bandeja/snapshots estén vacíos y la membership global exista sin eventos sintéticos. Consultar el ranking semanal debe devolver `available: false` y `entries: []` hasta que haya una base dominical V2 y una captura V2 de semana real.
 
-Después, desplegar el binario V2, confirmar `GET /health`, probar una lectura propia y la bandeja vacía, y reactivar el cron diario a las 04:00 de Madrid. Vigilar el primer resumen diario y confirmar que su snapshot lleva `calculation_version = 'v2'`. El primer ranking semanal no se habilita solo por llegar a `availableFrom`: necesita las dos capturas V2 comparables.
+Después, cambiar `MAINTENANCE_MODE` a `false` en Render y esperar a que el binario V2 complete su despliegue. Confirmar `GET /health`, probar una lectura propia y la bandeja vacía, y solo entonces reactivar el cron diario a las 04:00 de Madrid. Vigilar el primer resumen diario y confirmar que su snapshot lleva `calculation_version = 'v2'`. El primer ranking semanal no se habilita solo por llegar a `availableFrom`: necesita las dos capturas V2 comparables.
 
 ## Reintento y rollback
 

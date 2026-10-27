@@ -289,7 +289,10 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
     assert.equal(globalIds.includes(userId(2)), false);
     const weeklyOnlyUser = userId(15);
     const currentDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
-    const baselineDate = new Date(Date.parse(`${currentDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    const baselineDate = new Date(`${currentDate}T00:00:00.000Z`);
+    const daysSinceMonday = (baselineDate.getUTCDay() + 6) % 7;
+    baselineDate.setUTCDate(baselineDate.getUTCDate() - daysSinceMonday - 1);
+    const weeklyBaselineDate = baselineDate.toISOString().slice(0, 10);
     await db.query('insert into auth.users(id, email) values ($1, $2)', [weeklyOnlyUser, 'weekly-only@example.invalid']);
     await db.query("insert into public.gamificacion(user_id, bricks, nivel) values ($1, 5, '{\"id\":0,\"nombre\":\"Duplo\"}')", [weeklyOnlyUser]);
     await db.query(`update private.gamificacion_v2_activation
@@ -299,7 +302,7 @@ test('el ranking semanal calcula deltas netos privados antes del Top 10 y public
       pct_collector, pct_explorer, pct_rarity_hunter, pct_fan, calculation_version
     ) values
       ($1, $2::date, 1, 1, 100, 0, 0, 0, 0, 0, 'v2'),
-      ($1, $3::date, 1, 1, 200, 0, 0, 0, 0, 0, 'v2')`, [weeklyOnlyUser, baselineDate, currentDate]);
+      ($1, $3::date, 1, 1, 200, 0, 0, 0, 0, 0, 'v2')`, [weeklyOnlyUser, weeklyBaselineDate, currentDate]);
     const globalIdsWithWeeklyOnly = (await db.query('select user_id from public.ranking_global()')).rows.map(({ user_id }) => user_id);
     assert.equal(globalIdsWithWeeklyOnly.includes(weeklyOnlyUser), false);
     const weeklyAchievements = (await db.query('select public.ranking_logros($1) as result', [weeklyOnlyUser])).rows[0].result;
