@@ -7,6 +7,7 @@ const DATA_FIELDS = {
   gift_thanks: ['user', 'amount', 'message'],
   ranking_entered: ['ranking', 'position', 'message'],
   ranking_exited: ['ranking', 'message'],
+  weekly_ranking_available: ['weekStart', 'message'],
   daily_summary: ['snapshotDate', 'hasPrevious', 'deltas'],
   friend_request: ['user'],
   friend_request_accepted: ['user'],

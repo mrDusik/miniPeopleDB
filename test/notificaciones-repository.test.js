@@ -14,10 +14,12 @@ test('pagina por fecha e id estable, cuenta solo las no leidas propias y proyect
   const clientA = mock.createClient('url', 'key', { global: { headers: { Authorization: 'Bearer tokenA' } } });
   mock.seed('notificaciones', 'user-a', Array.from({ length: 16 }, (_, index) => ({
     id: notificationId(index + 1),
-    type: index === 15 ? 'daily_summary' : 'gift_received',
+    type: index === 15 ? 'daily_summary' : index === 13 ? 'weekly_ranking_available' : 'gift_received',
     payload: index === 15
       ? { snapshotDate: '2026-10-09', hasPrevious: false, privateId: 'hidden' }
-      : { user: `User ${index}`, amount: 50, message: 'Gift', privateId: 'hidden' },
+      : index === 13
+        ? { weekStart: '2026-10-05', message: 'Weekly ranking available', privateId: 'hidden' }
+        : { user: `User ${index}`, amount: 50, message: 'Gift', privateId: 'hidden' },
     is_read: index === 3,
     created_at: '2026-10-09T10:00:00.000Z',
   })));
@@ -30,6 +32,7 @@ test('pagina por fecha e id estable, cuenta solo las no leidas propias y proyect
   assert.equal(first.nextCursor !== null, true);
   assert.deepEqual(first.notifications.map(({ id }) => id), Array.from({ length: 15 }, (_, index) => notificationId(16 - index)));
   assert.deepEqual(first.notifications[0].data, { snapshotDate: '2026-10-09', hasPrevious: false });
+  assert.deepEqual(first.notifications[2].data, { weekStart: '2026-10-05', message: 'Weekly ranking available' });
   assert.equal(first.notifications[0].canThank, undefined);
   assert.equal(first.notifications[1].canThank, true);
 

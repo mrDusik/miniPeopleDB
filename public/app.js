@@ -2268,6 +2268,14 @@ function renderNotificationMessage(notification) {
     message.append(marker, document.createTextNode(` ${data.message ?? 'Tienes una notificación de ranking.'}`));
     return message;
   }
+  if (notification.type === 'weekly_ranking_available') {
+    const marker = document.createElement('span');
+    marker.className = 'notification-leading-emoji';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = '🗓️';
+    message.append(marker, document.createTextNode(` ${data.message ?? 'El Ranking Semanal de esta semana ya está disponible.'}`));
+    return message;
+  }
   message.textContent = data.message ?? 'Tienes una notificación.';
   return message;
 }
@@ -2309,6 +2317,14 @@ function renderNotifications() {
     }
     const actions = document.createElement('div');
     actions.className = 'notification-actions';
+    if (notification.type === 'weekly_ranking_available') {
+      const openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'button button-secondary notification-open-weekly-ranking';
+      openButton.setAttribute('aria-label', 'Ver Ranking Semanal');
+      openButton.textContent = 'Ver Ranking Semanal';
+      actions.append(openButton);
+    }
     if (notification.type === 'friend_request') {
       const acceptButton = document.createElement('button');
       const isPending = notificationFriendAcceptRequests.has(notification.id);
@@ -3387,6 +3403,11 @@ notificationsList.addEventListener('scroll', () => {
 });
 
 notificationsList.addEventListener('click', (event) => {
+  const openWeeklyRankingButton = event.target.closest('.notification-open-weekly-ranking');
+  if (openWeeklyRankingButton) {
+    weeklyRankingOpenButton.click();
+    return;
+  }
   const acceptFriendButton = event.target.closest('.notification-accept-friend');
   if (acceptFriendButton) {
     void acceptFriendNotification(acceptFriendButton.dataset.notificationId);

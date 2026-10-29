@@ -45,6 +45,7 @@ function startApp({ initialPage = null } = {}) {
     if (url === '/gamificacion') return { ok: true, json: async () => gamificationState };
     if (url === '/gamificacion/dna') return { ok: true, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, collector: 0, explorer: 0, fan: 0 } }) };
     if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'idle' }) };
+    if (url === '/api/ranking/semanal') return { ok: true, json: async () => ({ available: true, entries: [] }) };
     if (url.startsWith('/api/notificaciones')) {
       const user = init.headers.Authorization.endsWith('token-b') ? 'B' : 'A';
       if (url === '/api/notificaciones/leer-todas') return { ok: true, json: async () => ({ unreadCount: 0 }) };
@@ -299,16 +300,20 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
       createNotification('weekly-entry-1', 'Ada', false, { type: 'ranking_entered', data: { ranking: 'weekly', position: 3 } }),
       createNotification('exited-1', 'Ada', false, { type: 'ranking_exited', data: { ranking: 'weekly' } }),
       daily,
+      createNotification('weekly-available-1', 'Ada', false, {
+        type: 'weekly_ranking_available',
+        data: { weekStart: '2026-10-05', message: 'El Ranking Semanal de esta semana ya está disponible.' },
+      }),
     ],
-    unreadCount: 7,
+    unreadCount: 8,
     nextCursor: null,
   };
-  const { dom, window, holdThank, releaseThank, thankRequests } = startApp({ initialPage: page });
+  const { dom, window, requests, holdThank, releaseThank, thankRequests } = startApp({ initialPage: page });
   try {
     await tick();
     await tick();
     const list = window.document.querySelector('#notifications-list');
-    assert.equal(list.querySelectorAll('.notification-item').length, 7);
+    assert.equal(list.querySelectorAll('.notification-item').length, 8);
     const giftMessage = list.querySelector('[data-notification-id="gift-1"] .notification-message');
     assert.equal(giftMessage.querySelector('strong').textContent, 'Grace');
     assert.equal(giftMessage.textContent.includes('El usuario'), false);
@@ -334,6 +339,18 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.equal(list.querySelector('[data-notification-id="entered-1"] .notification-message').textContent.includes('puesto 8'), true);
     assert.equal(list.querySelector('[data-notification-id="weekly-entry-1"] .notification-leading-emoji').textContent, '🗓️');
     assert.equal(list.querySelector('[data-notification-id="exited-1"] .notification-leading-emoji').textContent, '❌');
+    const availabilityItem = list.querySelector('[data-notification-id="weekly-available-1"]');
+    assert.equal(availabilityItem.querySelector('.notification-message').textContent,
+      '🗓️ El Ranking Semanal de esta semana ya está disponible.');
+    const openWeeklyRankingButton = availabilityItem.querySelector('.notification-open-weekly-ranking');
+    assert.equal(openWeeklyRankingButton.getAttribute('aria-label'), 'Ver Ranking Semanal');
+    openWeeklyRankingButton.click();
+    await tick();
+    await tick();
+    assert.equal(window.document.querySelector('#weekly-ranking-dialog').open, true);
+    assert.equal(requests.filter(({ url }) => url === '/api/ranking/semanal').length, 1);
+    assert.equal(availabilityItem.classList.contains('is-read'), false);
+    assert.equal(requests.some(({ url }) => url === '/api/notificaciones/weekly-available-1/leer'), false);
 
     const details = list.querySelector('[data-notification-id="daily-1"] details');
     assert.ok(details);
