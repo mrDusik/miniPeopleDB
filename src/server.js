@@ -187,6 +187,41 @@ export function createServer({
   const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
 
   app.use((request, response, next) => {
+    const origin = request.get('origin');
+    if (origin !== 'https://localhost') {
+      next();
+      return;
+    }
+
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.vary('Origin');
+    if (request.method !== 'OPTIONS') {
+      next();
+      return;
+    }
+
+    const allowedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+    const allowedHeaders = new Set(['authorization', 'content-type', 'x-gamificacion']);
+    const requestedMethod = request.get('access-control-request-method')?.toUpperCase();
+    const requestedHeaders = (request.get('access-control-request-headers') ?? '')
+      .split(',')
+      .map((header) => header.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!allowedMethods.has(requestedMethod) || requestedHeaders.some((header) => !allowedHeaders.has(header))) {
+      sendJson(response, 403, { error: 'SOLICITUD_CORS_NO_PERMITIDA' });
+      return;
+    }
+
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Gamificacion');
+    response.setHeader('Access-Control-Max-Age', '600');
+    response.vary('Access-Control-Request-Method');
+    response.vary('Access-Control-Request-Headers');
+    response.status(204).end();
+  });
+
+  app.use((request, response, next) => {
     if (!maintenanceEnabled || (request.method === 'GET' && request.path === '/health')) {
       next();
       return;
