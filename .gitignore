@@ -4,3 +4,4 @@ supProd.env
 node_modules/
 /dist/
 /supabase/.temp/
+android/app/google-services.json

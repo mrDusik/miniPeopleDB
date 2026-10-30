@@ -4,6 +4,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { categoriasMockRaw } from '../test-support/fixtures.js';
 import { withSupabaseSession } from '../test-support/browser-auth.js';
+import { validatePushAction } from '../src/android-push-client.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
@@ -23,7 +24,7 @@ function createNotification(id, user, isRead = false, options = {}) {
   };
 }
 
-function startApp({ initialPage = null } = {}) {
+function startApp({ initialPage = null, nativePush = null } = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
@@ -37,6 +38,7 @@ function startApp({ initialPage = null } = {}) {
   let gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, logros: [] };
   const thankRequests = [];
   const friendAcceptRequests = [];
+  if (nativePush) window.NativePush = nativePush;
   window.fetch = async (url, init = {}) => {
     requests.push({ url, init });
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(categoriasMockRaw) };
@@ -92,6 +94,56 @@ function startApp({ initialPage = null } = {}) {
 function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+test('el toque push ignora payload externo y abre la fila autenticada sin marcarla leída', async () => {
+  const notificationId = '20000000-0000-4000-8000-0000000000a1';
+  const listeners = new Map();
+  const nativePush = {
+    isNative: () => true,
+    createRegistrationLifecycle: () => ({
+      register: async () => true,
+      revoke: async () => true,
+    }),
+    validateAction: validatePushAction,
+    addListener: async (event, listener) => { listeners.set(event, listener); },
+    checkPermissions: async () => ({ receive: 'prompt' }),
+  };
+  const { dom, window, requests, setNotificationPage } = startApp({ nativePush });
+  try {
+    await tick();
+    await tick();
+    setNotificationPage({
+      notifications: [createNotification(notificationId, 'Ada', false, {
+        type: 'friend_request', data: { user: 'Ada', message: 'Contenido recuperado desde la API.' },
+      })],
+      unreadCount: 1,
+      nextCursor: null,
+    });
+    listeners.get('pushNotificationActionPerformed')({
+      notification: { data: {
+        notification_id: notificationId,
+        category: 'friend_request',
+        message: 'NO_MOSTRAR_PAYLOAD_EXTERNO',
+        route: 'javascript:alert(1)',
+      } },
+    });
+    await tick();
+    await tick();
+    assert.equal(window.document.querySelector('#notifications-dialog').open, true);
+    assert.equal(window.document.querySelector(`[data-notification-id="${notificationId}"]`)?.textContent.includes('Ada quiere ser tu amigo.'), true);
+    assert.equal(window.document.querySelector('#notifications-list').textContent.includes('NO_MOSTRAR_PAYLOAD_EXTERNO'), false);
+    assert.equal(requests.some(({ url }) => url.endsWith(`/${notificationId}/leer`)), false);
+
+    const inboxRequestsBefore = requests.filter(({ url }) => url.startsWith('/api/notificaciones')).length;
+    const foregroundPush = { data: { notification_id: notificationId, category: 'friend_request' } };
+    listeners.get('pushNotificationReceived')(foregroundPush);
+    listeners.get('pushNotificationReceived')(foregroundPush);
+    await tick();
+    assert.equal(requests.filter(({ url }) => url.startsWith('/api/notificaciones')).length, inboxRequestsBefore + 1);
+  } finally {
+    dom.window.close();
+  }
+});
 
 test('comparte el indicador animado del ranking y oculta la limpieza durante carga, vacío y error', async () => {
   const { dom, window } = startApp();

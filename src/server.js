@@ -22,6 +22,8 @@ import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from './serv
 import { createDailyAnalyticsJobs } from './daily-analytics-jobs.js';
 import { createDailyAnalyticsRepository } from './daily-analytics-repository.js';
 import { DailyAnalyticsHistoryRepository } from './daily-analytics-history-repository.js';
+import { AndroidPushRepository, AndroidPushRegistrationError } from './android-push-repository.js';
+import { createAndroidPushJobs, createFcmSender } from './android-push-jobs.js';
 import {
   AmigosNoDisponiblesError,
   AmigosRepository,
@@ -65,7 +67,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/push\/registrations(?:\/[^/]+)?|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendJson(response, statusCode, body) {
@@ -99,9 +101,12 @@ function isCategoriasError(error) {
   return error instanceof CategoriasNoDisponiblesError || error instanceof CategoriasInvalidosError;
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request, maxBytes = Number.POSITIVE_INFINITY) {
   const chunks = [];
+  let bytes = 0;
   for await (const chunk of request) {
+    bytes += chunk.length;
+    if (bytes > maxBytes) throw new MinifiguraInvalidaError();
     chunks.push(chunk);
   }
 
@@ -168,6 +173,8 @@ export function createServer({
   createSupabaseClient = createClient,
   createSupabaseAdminClient = createClient,
   dailyAnalyticsJobs,
+  androidPushJobs,
+  pushEnabled = false,
   now = () => new Date(),
   fetchImpl,
   scraper,
@@ -185,6 +192,7 @@ export function createServer({
   const app = express();
   const bricksetFullNames = new Map();
   const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
+  const isPushEnabled = () => typeof pushEnabled === 'function' ? pushEnabled() : Boolean(pushEnabled);
 
   app.use((request, response, next) => {
     const origin = request.get('origin');
@@ -222,7 +230,7 @@ export function createServer({
   });
 
   app.use((request, response, next) => {
-    if (!maintenanceEnabled || (request.method === 'GET' && request.path === '/health')) {
+    if (!maintenanceEnabled || (request.method === 'GET' && ['/health', '/health/push'].includes(request.path))) {
       next();
       return;
     }
@@ -261,6 +269,7 @@ export function createServer({
     const userProfileRepository = new UserProfileRepository({ client, userId, categoriasRepository });
       const historyRepository = new DailyAnalyticsHistoryRepository({ client });
     const notificationsRepository = new NotificacionesRepository({ client });
+    const androidPushRepository = new AndroidPushRepository({ client, userId });
     try {
       await rankingRepository.syncProfile(user);
     } catch {
@@ -280,6 +289,7 @@ export function createServer({
       friendsRepository,
       userProfileRepository,
       notificationsRepository,
+      androidPushRepository,
         historyRepository,
       ensureGamificacion: () => gamificacionRepository.ensure(() => repository.readGamificationCatalog()),
       readGamificationDna: () => gamificacionRepository.dna(),
@@ -300,6 +310,11 @@ export function createServer({
   // Endpoint de salud para UptimeRobot / Render Keep-Alive
   app.get('/health', (request, response) => {
     response.status(200).send('OK');
+  });
+  app.get('/health/push', (request, response) => {
+    response.set('cache-control', 'no-store');
+    const enabled = isPushEnabled();
+    response.status(200).json({ enabled, status: enabled ? 'enabled' : 'disabled' });
   });
   app.all('/api/auth/login', (request, response) => {
     response.setHeader('cache-control', 'no-store');
@@ -431,6 +446,7 @@ export function createServer({
     let rankingRepository;
     let friendsRepository;
     let notificationsRepository;
+    let androidPushRepository;
     let historyRepository;
     let readGamificationDna;
     let readGamificationFeatured;
@@ -442,11 +458,63 @@ export function createServer({
         sendJson(response, context.status, { error: context.error });
         return;
       }
-      ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, historyRepository, readGamificationDna, readGamificationFeatured, setGamificationFeatured, userProfileRepository } = context);
+      ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, androidPushRepository, historyRepository, readGamificationDna, readGamificationFeatured, setGamificationFeatured, userProfileRepository } = context);
     }
 
     if (requestUrl.pathname === '/api/amigos' || requestUrl.pathname.startsWith('/api/amigos/')) {
       response.setHeader('cache-control', 'no-store');
+    }
+
+    if (requestUrl.pathname === '/api/push/registrations') {
+      response.setHeader('cache-control', 'no-store');
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        const body = await readJsonBody(request, 8192);
+        if (Object.keys(body).some((key) => !['installationId', 'token', 'permissionState'].includes(key))
+          || !Object.hasOwn(body, 'installationId') || !Object.hasOwn(body, 'permissionState')) {
+          throw new AndroidPushRegistrationError();
+        }
+        await androidPushRepository.register(body);
+        sendJson(response, 200, { ok: true });
+      } catch (error) {
+        if (error instanceof AndroidPushRegistrationError || error instanceof MinifiguraInvalidaError) {
+          sendJson(response, 400, { error: 'ANDROID_PUSH_REGISTRATION_INVALID' });
+        } else {
+          sendJson(response, 500, { error: 'ANDROID_PUSH_REGISTRATION_UNAVAILABLE' });
+        }
+      }
+      return;
+    }
+
+    const pushRegistrationRoute = /^\/api\/push\/registrations\/([^/]+)$/.exec(requestUrl.pathname);
+    if (pushRegistrationRoute) {
+      response.setHeader('cache-control', 'no-store');
+      if (request.method !== 'DELETE') {
+        response.setHeader('allow', 'DELETE');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(pushRegistrationRoute[1]) || requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'ANDROID_PUSH_REGISTRATION_INVALID' });
+        return;
+      }
+      try {
+        await androidPushRepository.revoke(pushRegistrationRoute[1]);
+        sendJson(response, 200, { ok: true });
+      } catch (error) {
+        sendJson(response, error instanceof AndroidPushRegistrationError ? 400 : 500, {
+          error: error instanceof AndroidPushRegistrationError ? error.code : 'ANDROID_PUSH_REGISTRATION_UNAVAILABLE',
+        });
+      }
+      return;
     }
 
     if (requestUrl.pathname === '/api/amigos/contadores') {
@@ -1410,6 +1478,8 @@ export async function startApplication({
   fetchImpl,
   port = Number(process.env.PORT || 3000),
   maintenanceMode = process.env.MAINTENANCE_MODE,
+  androidPushJobs: injectedAndroidPushJobs,
+  fcmSender: injectedFcmSender,
 } = {}) {
   const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
   if (!adminConfig) {
@@ -1438,13 +1508,20 @@ export async function startApplication({
     brickset,
     categoriasRepository,
   });
+  const fcmSender = injectedFcmSender ?? createFcmSender();
+  const androidPushJobs = injectedAndroidPushJobs ?? createAndroidPushJobs({
+    client: adminClient,
+    sender: fcmSender.enabled ? fcmSender : null,
+  });
   try {
     if (!maintenanceEnabled) {
       await Promise.all([recalculator.start(), dailyAnalyticsJobs.recover()]);
+      androidPushJobs.start();
     }
   } catch (error) {
     recalculator.close();
     dailyAnalyticsJobs.close();
+    androidPushJobs.close();
     throw error;
   }
 
@@ -1456,6 +1533,8 @@ export async function startApplication({
     createSupabaseAdminClient: createSupabaseClient,
     scraper: brickset,
     dailyAnalyticsJobs,
+    androidPushJobs,
+    pushEnabled: () => androidPushJobs.enabled,
     maintenanceMode: maintenanceEnabled,
   });
   await new Promise((resolveListen, rejectListen) => {
@@ -1465,6 +1544,7 @@ export async function startApplication({
   server.once('close', () => {
     recalculator.close();
     dailyAnalyticsJobs.close();
+    androidPushJobs.close();
   });
   console.log(`Servidor escuchando en http://localhost:${server.address().port}`);
   return server;

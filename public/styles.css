@@ -129,6 +129,7 @@ body {
 .notification-controls { grid-column: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
 .notification-actions { display: flex; justify-content: flex-start; margin-top: 2px; }
 .notification-item.is-read { opacity: 0.72; }
+.notification-item.is-push-target { outline: 2px solid var(--accent, #8b5cf6); outline-offset: 4px; scroll-margin: 20px; }
 .notification-message { margin: 0; color: var(--ink); line-height: 1.4; }
 .notification-message strong { color: var(--ink); font-weight: 700; }
 .notification-message img { display: inline-block; width: auto; height: 1.15rem; margin-left: 4px; object-fit: contain; vertical-align: text-bottom; }
