@@ -60,6 +60,23 @@ Antes de probar OAuth real, configura en Supabase Auth la URL de retorno permiti
 
 El APK no contiene la clave `service_role`, secretos del backend ni credenciales de despliegue. El cliente obtiene la configuración pública de Supabase desde el backend. La interfaz y sus recursos estáticos se abren localmente, pero consultas, autenticación y cambios de datos requieren el backend y Supabase accesibles.
 
+## Notificaciones push
+
+La integración Capacitor incluye recepción FCM, un canal Android estable y permiso contextual. La bandeja autenticada y Realtime siguen funcionando aunque no se configure Firebase. Para habilitar push:
+
+1. El propietario debe crear o elegir su propio proyecto Firebase y registrar `com.mrdusik.minipeopledb`.
+2. Descarga el archivo cliente `google-services.json` para ese registro y colócalo localmente en `android/app/google-services.json`. El archivo está ignorado por Git. No contiene la credencial de servidor.
+3. Configura el secreto `FIREBASE_SERVICE_ACCOUNT_JSON` del proyecto Firebase únicamente en el gestor de secretos del backend. Nunca lo pongas en el APK, assets, navegador ni `sup.env`.
+4. Aplica la migración push mediante el procedimiento de `docs/android-push-runbook.md`, despliega el backend y luego compila:
+
+```sh
+npm run android:apk
+```
+
+La petición de permiso Android 13+ aparece solo después de pulsar «Activar avisos push» dentro de Notificaciones. Si se deniega o revoca, la bandeja continúa disponible. Los mensajes de sistema son genéricos; al tocarlos, la app valida el identificador, consulta la notificación propia con JWT y abre la bandeja sin marcarla como leída.
+
+El TTL máximo es de 24 horas. FCM es de mejor esfuerzo; el modo force-stop de Android, una app desinstalada, restricciones del sistema o el vencimiento del TTL pueden impedir una alerta. La app refresca la bandeja al reanudarse o reconectar. Prueba en un dispositivo real con Firebase configurado: foreground, background, proceso terminado normalmente, sesión cerrada, permiso denegado/revocado, offline/reconexión, duplicado, vencimiento y token inválido. No consideres la integración end-to-end verificada solo porque el backend acepta el mensaje.
+
 ## Limitaciones de esta fase
 
 - Es un APK debug para instalación directa; no se genera AAB ni se publica en Play Store.

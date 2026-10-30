@@ -1,5 +1,6 @@
 const configuredApiBaseUrl = window.MINIPEOPLEDB_API_BASE_URL ?? '';
 let apiBaseUrl = '';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 if (configuredApiBaseUrl !== '') {
   let parsedApiBaseUrl;
   try {
@@ -169,6 +170,9 @@ const notificationsCloseButton = document.querySelector('#notifications-close');
 const notificationsMarkAllButton = document.querySelector('#notifications-mark-all');
 const notificationsStatus = document.querySelector('#notifications-status');
 const notificationsList = document.querySelector('#notifications-list');
+const notificationsPushControls = document.querySelector('#notifications-push-controls');
+const notificationsPushEnableButton = document.querySelector('#notifications-push-enable');
+const notificationsPushStatus = document.querySelector('#notifications-push-status');
 const dnaDialog = document.querySelector('#dna-dialog');
 const dnaDialogCloseButton = document.querySelector('#dna-close');
 const dnaDialogStatus = document.querySelector('#dna-status');
@@ -301,6 +305,17 @@ let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
 const nativeAuth = window.NativeAuth?.isNative() ? window.NativeAuth : null;
+const nativePush = window.NativePush?.isNative() ? window.NativePush : null;
+let nativePushRegistration = null;
+let pendingPushNotificationId = null;
+let nativePushListenersRegistered = false;
+const receivedPushNotificationIds = new Set();
+const pushRevocationAttempts = new Set();
+try {
+  nativePushRegistration = nativePush?.createRegistrationLifecycle() ?? null;
+} catch {
+  nativePushRegistration = null;
+}
 const nativeOAuthRedirectUrl = 'com.mrdusik.minipeopledb://auth/callback';
 let pendingNativeOAuthCallbackUrl = null;
 let nativeOAuthPending = false;
@@ -2643,6 +2658,122 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
   }
 }
 
+async function syncNativePushPermission() {
+  if (!nativePush || !nativePushRegistration || !currentSession) return;
+  try {
+    const permissions = await nativePush.checkPermissions();
+    if (permissions.receive === 'denied') {
+      await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
+      notificationsPushStatus.textContent = 'Los avisos están desactivados en Android. La bandeja sigue disponible.';
+      return;
+    }
+    if (permissions.receive !== 'granted') return;
+    await nativePush.createChannel();
+    await nativePush.register();
+    notificationsPushStatus.textContent = '';
+  } catch {
+    notificationsPushStatus.textContent = 'No se pudo sincronizar el permiso de avisos.';
+  }
+}
+
+async function revokeNativePushSession(session) {
+  const accessToken = session?.access_token;
+  if (!nativePushRegistration || typeof accessToken !== 'string' || !accessToken
+    || pushRevocationAttempts.has(accessToken)) return false;
+  pushRevocationAttempts.add(accessToken);
+  return nativePushRegistration.revoke(session);
+}
+
+async function enableNativePush() {
+  if (!nativePush || !nativePushRegistration || !currentSession) return;
+  notificationsPushEnableButton.disabled = true;
+  notificationsPushStatus.textContent = 'Preparando los avisos…';
+  try {
+    const permission = await nativePush.requestPermissions();
+    if (permission.receive !== 'granted') {
+      await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
+      notificationsPushStatus.textContent = 'No activaste los avisos. Puedes consultar la bandeja cuando quieras.';
+      return;
+    }
+    await nativePush.createChannel();
+    await nativePush.register();
+    notificationsPushStatus.textContent = 'Avisos activados para esta instalación.';
+  } catch {
+    notificationsPushStatus.textContent = 'No se pudieron activar los avisos. La bandeja sigue disponible.';
+  } finally {
+    notificationsPushEnableButton.disabled = false;
+  }
+}
+
+async function openPushNotification(notificationId) {
+  if (!currentSession?.user?.id || !UUID_PATTERN.test(notificationId)) return;
+  if (!notificationsDialog.open) openNotifications(notificationsOpenButton, { load: false });
+  await loadNotifications({ reset: true });
+  let pages = 0;
+  while (!notificationsItems.some(({ id }) => id === notificationId) && notificationsHasMore && pages < 20) {
+    await loadNotifications();
+    pages += 1;
+  }
+  const row = [...notificationsList.querySelectorAll('[data-notification-id]')]
+    .find((element) => element.dataset.notificationId === notificationId);
+  if (!row) {
+    notificationsPushStatus.textContent = 'No se encontró esa notificación en tu bandeja.';
+    return;
+  }
+  row.classList.add('is-push-target');
+  row.focus();
+  row.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+}
+
+function resumePendingPushOpen() {
+  if (!pendingPushNotificationId || !currentSession?.user?.id || !appStarted) return;
+  const notificationId = pendingPushNotificationId;
+  pendingPushNotificationId = null;
+  void openPushNotification(notificationId);
+}
+
+async function initializeNativePushListeners() {
+  if (!nativePush || nativePushListenersRegistered) return;
+  nativePushListenersRegistered = true;
+  notificationsPushControls.hidden = false;
+  try {
+    await nativePush.addListener('registration', ({ value }) => {
+      const session = currentSession;
+      if (!session || typeof value !== 'string' || !nativePushRegistration) return;
+      void nativePushRegistration.register(session, { token: value, permissionState: 'granted' })
+        .then((registered) => {
+          if (currentSession?.user?.id === session.user.id && !registered) {
+            notificationsPushStatus.textContent = 'No se pudo registrar esta instalación. La bandeja sigue disponible.';
+          }
+        });
+    });
+    await nativePush.addListener('registrationError', () => {
+      notificationsPushStatus.textContent = 'No se pudieron preparar los avisos push.';
+    });
+    await nativePush.addListener('pushNotificationReceived', (notification) => {
+      const action = nativePush.validateAction(notification?.data);
+      if (!action || receivedPushNotificationIds.has(action.notificationId)) return;
+      receivedPushNotificationIds.add(action.notificationId);
+      if (receivedPushNotificationIds.size > 256) receivedPushNotificationIds.delete(receivedPushNotificationIds.values().next().value);
+      if (currentSession) void loadNotifications({ reset: true, preserveItems: true });
+    });
+    await nativePush.addListener('pushNotificationActionPerformed', (action) => {
+      const validated = nativePush.validateAction(action?.notification?.data);
+      if (!validated) return;
+      pendingPushNotificationId = validated.notificationId;
+      resumePendingPushOpen();
+    });
+    await nativeAuth?.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) return;
+      void syncNativePushPermission();
+      if (currentSession) void loadNotifications({ reset: true, preserveItems: true });
+      resumePendingPushOpen();
+    });
+  } catch {
+    // Push remains optional; authentication and the durable inbox keep working.
+  }
+}
+
 function stopNotificationsRealtime() {
   if (!notificationsChannel) return;
   try {
@@ -3280,11 +3411,11 @@ function openPublicProfile(userId, trigger) {
   void loadPublicProfile(userId, requestId);
 }
 
-function openNotifications(trigger) {
+function openNotifications(trigger, { load = true } = {}) {
   notificationsTrigger = trigger;
-  notificationsDialog.showModal();
+  if (!notificationsDialog.open) notificationsDialog.showModal();
   notificationsCloseButton.focus();
-  void loadNotifications({ reset: true });
+  if (load) void loadNotifications({ reset: true });
 }
 
 function restoreRankingFocus(trigger) {
@@ -3418,6 +3549,7 @@ gamificationDialog.addEventListener('close', () => {
 });
 
 notificationsCloseButton.addEventListener('click', () => notificationsDialog.close());
+notificationsPushEnableButton.addEventListener('click', () => void enableNativePush());
 notificationsDialog.addEventListener('cancel', (event) => {
   event.preventDefault();
   notificationsDialog.close();
@@ -4628,6 +4760,8 @@ function startApplicationForCurrentProfile() {
     startNotificationsRealtime();
     initialize();
   }
+  void syncNativePushPermission();
+  resumePendingPushOpen();
 }
 
 function providerAvatarUrl(user) {
@@ -4905,6 +5039,13 @@ function checkUserProfile(session) {
 }
 
 function handleSession(session, message = '') {
+  if (!session && currentSession?.user?.id && nativePushRegistration) {
+    void revokeNativePushSession(currentSession);
+  }
+  if (currentSession?.user?.id && session?.user?.id && currentSession.user.id !== session.user.id
+    && nativePushRegistration) {
+    void revokeNativePushSession(currentSession);
+  }
   if (appStarted && currentSession?.user?.id && session?.user?.id && currentSession.user.id !== session.user.id) {
     clearUserData();
     appStarted = false;
@@ -4934,7 +5075,9 @@ function handleSession(session, message = '') {
   checkUserProfile(session);
 }
 
-async function endSession(message = '') {
+async function endSession(message = '', { skipPushRevocation = false } = {}) {
+  const endingSession = currentSession;
+  if (!skipPushRevocation && endingSession && nativePushRegistration) await revokeNativePushSession(endingSession);
   currentSession = null;
   try {
     await supabaseClient.auth.signOut({ scope: 'local' });
@@ -5324,7 +5467,8 @@ deleteAccountConfirmButton.addEventListener('click', async () => {
     const response = await apiFetch('/api/profile', { method: 'DELETE' });
     if (currentSession?.user?.id !== deletingUserId) return;
     if (response.status !== 204) throw new Error('CUENTA_NO_ELIMINADA');
-    await endSession('Tu cuenta se ha eliminado correctamente.');
+    nativePushRegistration?.accountDeleted(deletingUserId);
+    await endSession('Tu cuenta se ha eliminado correctamente.', { skipPushRevocation: true });
   } catch {
     if (currentSession?.user?.id === deletingUserId) {
       deleteAccountError.textContent = 'No se pudo eliminar la cuenta. Inténtalo de nuevo.';
@@ -5353,6 +5497,7 @@ profileDialog.addEventListener('close', () => {
 
 logoutButton.addEventListener('click', async () => {
   logoutButton.disabled = true;
+  if (currentSession && nativePushRegistration) await revokeNativePushSession(currentSession);
   try {
     await supabaseClient.auth.signOut();
   } catch {
@@ -5363,4 +5508,8 @@ logoutButton.addEventListener('click', async () => {
 });
 
 setCategoriaControlsEnabled(false);
-initializeAuth();
+if (nativePush) {
+  void initializeNativePushListeners().finally(() => initializeAuth());
+} else {
+  void initializeAuth();
+}

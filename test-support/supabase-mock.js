@@ -16,6 +16,7 @@ const PRIMARY_KEYS = {
   friendships: ['user_low_id', 'user_high_id'],
   agradecimientos_regalo: ['gift_notification_id'],
   ranking_top10_membership: ['user_id', 'ranking_type'],
+  android_push_installations: ['installation_id'],
 };
 
 const COLUMN_DEFAULTS = {
@@ -32,6 +33,10 @@ const COLUMN_DEFAULTS = {
   friendships: () => ({ created_at: new Date().toISOString() }),
   agradecimientos_regalo: () => ({ created_at: new Date().toISOString() }),
   ranking_top10_membership: () => ({ updated_at: new Date().toISOString() }),
+  android_push_installations: () => ({
+    fcm_token: null, permission_state: 'unknown', active: false, created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }),
 };
 
 const DNA_WEIGHTS = Object.fromEntries(DNA_PONDERACIONES);
@@ -123,6 +128,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     minifiguras: [], gamificacion: [], logros_destacados: [], perfiles_publicos: [], user_profiles: [], user_profile_favorite_categories: [],
     regalos_enviados: [], user_daily_snapshots: [],
     notificaciones: [], friend_requests: [], friendships: [], agradecimientos_regalo: [], ranking_top10_membership: [],
+    android_push_installations: [],
   };
   const failures = [];
   const activatedAt = new Date(typeof now === 'function' ? now() : now).toISOString();
@@ -370,6 +376,9 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         || (state.operation === 'update' && Object.keys(state.values ?? {}).some((column) => column !== 'is_read')))) {
       return { data: null, error: rlsError() };
     }
+    if (table === 'android_push_installations' && state.operation === 'select') {
+      return { data: null, error: rlsError() };
+    }
 
     const rows = tables[table];
     const visible = (row) => uid !== null && (table === 'friend_requests'
@@ -400,7 +409,13 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       for (const value of values) {
         const row = { user_id: uid, ...clone(value) };
         if (row.user_id !== uid) return { data: null, error: rlsError() };
+        if (table === 'android_push_installations' && row.fcm_token
+          && rows.some((candidate) => candidate.fcm_token === row.fcm_token
+            && candidate.installation_id !== row.installation_id)) {
+          return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
+        }
         const existing = rows.find((candidate) => samePrimaryKey(table, candidate, row));
+        if (table === 'android_push_installations' && existing && existing.user_id !== uid) return { data: null, error: rlsError() };
         if (existing && state.operation === 'insert') {
           return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
         }

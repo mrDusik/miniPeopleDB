@@ -4,5 +4,10 @@
   "webDir": "dist/android",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": []
+    }
   }
 }
