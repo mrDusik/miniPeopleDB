@@ -6,10 +6,17 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "android:web": "node scripts/build-android-web.js",
+    "android:sync": "npm run android:web && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "migrate:gamification-v2": "node scripts/migrate-gamification-v2.js",
     "test": "node --test"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/core": "^8.6.0",
     "@supabase/supabase-js": "^2.117.2",
     "chart.js": "^4.5.1",
     "dotenv": "^18.0.4",
@@ -18,7 +25,9 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@electric-sql/pglite": "^0.5.8",
+    "esbuild": "^0.28.2",
     "jsdom": "^22.1.0"
   }
 }

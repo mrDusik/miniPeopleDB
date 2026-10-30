@@ -1,0 +1,8 @@
+{
+  "appId": "com.mrdusik.minipeopledb",
+  "appName": "MiniPeopleDB",
+  "webDir": "dist/android",
+  "server": {
+    "androidScheme": "https"
+  }
+}

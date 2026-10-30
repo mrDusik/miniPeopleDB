@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/vendor/supabase.js" defer></script>
   <script src="/vendor/chart.js" defer></script>
+  <script src="/runtime-config.js" defer></script>
   <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
@@ -86,6 +87,7 @@
       </form>
       <button type="button" id="profile-check-retry" class="button button-secondary" hidden>Reintentar</button>
       <p id="auth-message" class="status error" role="alert"></p>
+      <button type="button" id="auth-retry" class="auth-text-button" hidden>Reintentar conexión</button>
     </div>
   </section>
   <dialog id="user-profile-dialog" class="modal user-profile-dialog" aria-labelledby="user-profile-dialog-title">

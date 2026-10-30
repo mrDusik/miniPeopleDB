@@ -2,4 +2,5 @@ sup.env
 supProd.env
 .env*
 node_modules/
+/dist/
 /supabase/.temp/
