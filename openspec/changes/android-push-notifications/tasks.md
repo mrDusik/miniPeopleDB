@@ -20,7 +20,7 @@
 
 ## 4. Native Android behavior
 
-- [ ] 4.1 Add Capacitor-compatible FCM receipt, notification-channel creation, and Android 13+ contextual permission flow; verify granted, denied, revoked, foreground, background, and normally terminated process behavior on supported Android versions.
+- [x] 4.1 Add Capacitor-compatible FCM receipt, notification-channel creation, and Android 13+ contextual permission flow; verify granted, denied, revoked, foreground, background, and normally terminated process behavior on supported Android versions.
 - [x] 4.2 Implement authenticated token registration, refresh, permission synchronization, logout/account-switch revocation, and offline pending revocation; verify owner changes never leave two active owners and revocation retries before new-account registration.
 - [x] 4.3 Implement privacy-minimized display, foreground duplicate suppression, notification-ID deduplication, and validated tap routing through the authenticated inbox; verify no payload business data is shown before fetch, no arbitrary route is accepted, and opening does not mark read or execute actions.
 - [x] 4.4 Document Firebase configuration, permission behavior, force-stop/TTL limitations, and local-device test steps; verify the instructions build the APK without server credentials in packaged assets.
