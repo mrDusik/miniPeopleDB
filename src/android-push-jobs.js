@@ -112,7 +112,7 @@ export function createAndroidPushJobs({
                   schema_version: '1',
                 },
                 android: {
-                  ttl: `${ttlMs}ms`,
+                  ttl: ttlMs,
                   priority: 'high',
                   notification: { tag: event.notification_id, channelId: 'mini-people-notifications' },
                 },
