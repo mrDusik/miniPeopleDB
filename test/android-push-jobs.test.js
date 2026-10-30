@@ -50,7 +50,7 @@ test('el worker usa exclusivamente las tres RPC allowlisted y envía payload gen
   });
   assert.deepEqual(sentMessages[0].notification, { title: 'MiniPeopleDB', body: 'Tienes una nueva notificación.' });
   assert.equal(sentMessages[0].android.notification.tag, NOTIFICATION_ID);
-  assert.equal(sentMessages[0].android.ttl, '3600000ms');
+  assert.equal(sentMessages[0].android.ttl, 3600000);
   assert.equal(JSON.stringify(sentMessages).includes('secret'), false);
   assert.equal(JSON.stringify(logs).includes(TOKEN), false);
   assert.deepEqual(client.calls.at(-1).parameters, {
@@ -80,6 +80,7 @@ test('los errores transitorios aplican backoff acotado y errores de token se des
   const invalidWorker = createAndroidPushJobs({
     client: invalidClient,
     sender: { async send() { throw Object.assign(new Error(TOKEN), { code: 'messaging/registration-token-not-registered' }); } },
+    now: () => new Date('2026-10-30T09:00:00.000Z'),
     logger: { info() {}, warn() {} },
   });
   await invalidWorker.runOnce();
@@ -135,6 +136,7 @@ test('una credencial FCM rechazada deshabilita el worker sin registrar detalles 
         throw Object.assign(new Error('private credential response'), { code: 'fcm/configuration-disabled' });
       },
     },
+    now: () => new Date('2026-10-30T09:00:00.000Z'),
     logger: { info(...values) { logs.push(values); }, warn(...values) { logs.push(values); } },
   });
   assert.deepEqual(await worker.runOnce(), { status: 'disabled', processed: 0 });
