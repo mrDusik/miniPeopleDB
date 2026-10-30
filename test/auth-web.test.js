@@ -1141,26 +1141,26 @@ test('el toggle de notificaciones del sistema refleja Android y solo aparece en 
     $('#open-user-settings').click();
     await waitFor(() => $('#user-profile-dialog').open && !$('#system-notifications-setting').hidden);
     await waitFor(() => $('#system-notifications-enabled').checked
-      && $('#system-notifications-status').textContent.includes('Activadas'));
-    assert.equal($('#system-notifications-enabled').closest('label').textContent.trim(), 'Notificaciones del sistema activadas');
+      && $('#system-notifications-status').textContent.includes('permitidas'));
+    assert.equal($('#system-notifications-enabled').closest('label').textContent.trim(), 'Notificaciones del sistema');
     assert.ok($('#system-notifications-status').classList.contains('visually-hidden'));
-    assert.match($('#system-notifications-status').textContent, /Activadas/);
+    assert.doesNotMatch($('#user-profile-dialog').textContent, /activadas/i);
 
     $('#system-notifications-enabled').click();
     await waitFor(() => settingsOpened === 1);
     assert.equal($('#system-notifications-enabled').checked, true);
-    assert.match($('#system-notifications-status').textContent, /Desactívalas desde los ajustes/);
+    assert.match($('#system-notifications-status').textContent, /Gestiona el permiso desde los ajustes/);
 
     notificationsEnabled = false;
     $('#user-profile-close').click();
     $('#user-menu-toggle').click();
     $('#open-user-settings').click();
     await waitFor(() => $('#user-profile-dialog').open && !$('#system-notifications-enabled').checked);
-    assert.match($('#system-notifications-status').textContent, /Desactivadas/);
+    assert.match($('#system-notifications-status').textContent, /bloqueadas/);
 
     $('#system-notifications-enabled').click();
     await waitFor(() => $('#system-notifications-enabled').checked
-      && $('#system-notifications-status').textContent === 'Notificaciones del sistema activadas.');
+      && $('#system-notifications-status').textContent === 'Notificaciones permitidas.');
   } finally {
     dom.window.close();
   }

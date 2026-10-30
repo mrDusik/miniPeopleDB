@@ -34,3 +34,4 @@
 
 - [x] 6.1 Mostrar en Preferencias Android un toggle que refleje permiso y canal nativos, y retirar el control del modal Notificaciones; activar solicita permiso/registro y desactivar abre los ajustes nativos.
 - [x] 6.2 Añadir tests de interfaz y verificar el plugin Android que consulta el estado real de permiso/canal y abre los ajustes de notificaciones.
+- [x] 6.3 Usar textos push específicos por categoría sin botones ni datos privados, aplicar el icono web del ladrillo rojo a Android y quitar «activadas» del rótulo de Preferencias; añadir pruebas.

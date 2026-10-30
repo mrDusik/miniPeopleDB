@@ -9,14 +9,14 @@ const RESOLVE_RPC = 'android_push_resolve_event_tokens';
 const RECORD_RPC = 'android_push_record_attempt';
 
 const COPY = Object.freeze({
-  gift_received: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  gift_thanks: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  ranking_entered: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  ranking_exited: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  daily_summary: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  friend_request: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  friend_request_accepted: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
-  weekly_ranking_available: ['MiniPeopleDB', 'Tienes una nueva notificación.'],
+  gift_received: ['Nuevo regalo', 'Has recibido un regalo.'],
+  gift_thanks: ['Regalo agradecido', 'Han agradecido un regalo que enviaste.'],
+  ranking_entered: ['Ranking', 'Has entrado en un ranking.'],
+  ranking_exited: ['Ranking', 'Ya no apareces en el ranking.'],
+  daily_summary: ['Resumen diario', 'Tu resumen diario está disponible.'],
+  friend_request: ['Solicitud de amistad', 'Tienes una nueva solicitud de amistad.'],
+  friend_request_accepted: ['Solicitud aceptada', 'Han aceptado tu solicitud de amistad.'],
+  weekly_ranking_available: ['Ranking semanal', 'El nuevo ranking semanal está disponible.'],
 });
 const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
@@ -101,7 +101,7 @@ export function createAndroidPushJobs({
             errorCode = 'MAX_ATTEMPTS';
           } else {
             const ttlMs = Math.max(0, Math.min(MAX_TTL_MS, new Date(target.expires_at).getTime() - now().getTime()));
-            const [title, body] = COPY[target.category] ?? COPY.friend_request;
+            const [title, body] = COPY[target.category] ?? ['MiniPeopleDB', 'Tienes una novedad.'];
             try {
               await sender.send({
                 token: target.fcm_token,
@@ -114,7 +114,12 @@ export function createAndroidPushJobs({
                 android: {
                   ttl: ttlMs,
                   priority: 'high',
-                  notification: { tag: event.notification_id, channelId: 'mini-people-notifications' },
+                  notification: {
+                    tag: event.notification_id,
+                    channelId: 'mini-people-notifications',
+                    icon: 'ic_notification',
+                    color: '#E3000B',
+                  },
                 },
               });
               outcome = 'sent';

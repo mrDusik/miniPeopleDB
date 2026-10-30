@@ -2699,8 +2699,8 @@ async function refreshSystemNotificationsSetting() {
     if (typeof state?.enabled !== 'boolean') throw new Error('ANDROID_PUSH_STATE_UNAVAILABLE');
     systemNotificationsEnabled.checked = state.enabled;
     systemNotificationsStatus.textContent = state.enabled
-      ? 'Activadas en los ajustes de Android.'
-      : 'Desactivadas en los ajustes de Android.';
+      ? 'Notificaciones permitidas en los ajustes de Android.'
+      : 'Notificaciones bloqueadas en los ajustes de Android.';
   } catch {
     systemNotificationsStatus.textContent = 'No se pudo comprobar el estado de las notificaciones.';
   } finally {
@@ -2718,7 +2718,7 @@ async function enableNativePush() {
     const permissions = await nativePush.checkPermissions();
     if (permissions.receive === 'granted' && currentState.enabled !== true) {
       await nativePush.openNotificationSettings();
-      systemNotificationsStatus.textContent = 'Activa las notificaciones en los ajustes de Android y vuelve a la app.';
+      systemNotificationsStatus.textContent = 'Permite las notificaciones en los ajustes de Android y vuelve a la app.';
       return;
     }
     const permission = permissions.receive === 'granted'
@@ -2727,16 +2727,16 @@ async function enableNativePush() {
     if (permission.receive !== 'granted') {
       await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
       systemNotificationsEnabled.checked = false;
-      systemNotificationsStatus.textContent = 'El permiso está denegado en Android. La bandeja sigue disponible.';
+      systemNotificationsStatus.textContent = 'Permiso denegado en Android. La bandeja sigue disponible.';
       return;
     }
     await nativePush.register();
     await refreshSystemNotificationsSetting();
     if (systemNotificationsEnabled.checked) {
-      systemNotificationsStatus.textContent = 'Notificaciones del sistema activadas.';
+      systemNotificationsStatus.textContent = 'Notificaciones permitidas.';
     } else {
       await nativePush.openNotificationSettings();
-      systemNotificationsStatus.textContent = 'Activa las notificaciones en los ajustes de Android y vuelve a la app.';
+      systemNotificationsStatus.textContent = 'Permite las notificaciones en los ajustes de Android y vuelve a la app.';
     }
   } catch {
     systemNotificationsEnabled.checked = false;
@@ -2758,7 +2758,7 @@ async function toggleSystemNotifications() {
     const state = await nativePush.getNotificationState();
     systemNotificationsEnabled.checked = state.enabled === true;
     if (state.enabled === true) {
-      systemNotificationsStatus.textContent = 'Desactívalas desde los ajustes de Android.';
+      systemNotificationsStatus.textContent = 'Gestiona el permiso desde los ajustes de Android.';
       await nativePush.openNotificationSettings();
     } else {
       await syncNativePushPermission();
