@@ -344,8 +344,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .profile-two-column-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
 .profile-field { display: grid; gap: 6px; min-width: 0; }
 .profile-field > label { color: var(--ink); font-size: 0.88rem; font-weight: 700; }
-.profile-system-notifications { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line); }
-.profile-system-notifications > label { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
+.profile-system-notifications { padding: 10px; border: 1px solid var(--line); }
+.profile-system-notifications > label { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
 .user-profile-form .profile-system-notifications input { appearance: none; position: relative; flex: 0 0 42px; width: 42px; min-height: 24px; height: 24px; margin: 0; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: #d3d2cb; cursor: pointer; transition: background-color 120ms ease; }
 .user-profile-form .profile-system-notifications input::before { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform 120ms ease; }
 .user-profile-form .profile-system-notifications input:checked { border-color: var(--blue); background: var(--blue); }

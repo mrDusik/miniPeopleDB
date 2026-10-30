@@ -1143,6 +1143,7 @@ test('el toggle de notificaciones del sistema refleja Android y solo aparece en 
     await waitFor(() => $('#system-notifications-enabled').checked
       && $('#system-notifications-status').textContent.includes('Activadas'));
     assert.equal($('#system-notifications-enabled').closest('label').textContent.trim(), 'Notificaciones del sistema activadas');
+    assert.ok($('#system-notifications-status').classList.contains('visually-hidden'));
     assert.match($('#system-notifications-status').textContent, /Activadas/);
 
     $('#system-notifications-enabled').click();
