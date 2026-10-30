@@ -49,6 +49,7 @@ Nombre y descripción se autocompletan desde `Name` de Brickset y permanecen des
 * **Despliegue y monitorización:** el servidor escucha en `PORT` (3000 por defecto) y ofrece `GET /health` para comprobaciones de salud, por ejemplo desde Render o UptimeRobot. No hay manifiesto de despliegue ni pipeline CI de tests en este repositorio.
 * **Calidad:** `node:test` y `node:assert` para pruebas, JSDOM para flujos DOM y PGlite para validar SQL/RPC localmente. Los tests de API usan `test-support/supabase-mock.js`; no requieren credenciales ni red real.
 * **Especificación:** OpenSpec mantiene las capacidades en `openspec/specs/`, junto con propuestas activas/archivadas en `openspec/changes/`. GitHub Actions contiene los pasos de preparación de OpenSpec para Copilot, no un workflow de CI de la aplicación.
+* **Android de prueba:** Capacitor empaqueta localmente la interfaz, mientras Express y Supabase continúan siendo servicios HTTPS remotos. La [guía de instalación Android](docs/android-installation.md) detalla requisitos, compilación del APK debug, OAuth y límites de esta versión.
 
 ### Seguridad y privacidad
 

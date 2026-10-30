@@ -1,0 +1,1 @@
+window.MINIPEOPLEDB_API_BASE_URL = '';

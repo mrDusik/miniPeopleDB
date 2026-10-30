@@ -1,3 +1,26 @@
+const configuredApiBaseUrl = window.MINIPEOPLEDB_API_BASE_URL ?? '';
+let apiBaseUrl = '';
+if (configuredApiBaseUrl !== '') {
+  let parsedApiBaseUrl;
+  try {
+    parsedApiBaseUrl = new URL(configuredApiBaseUrl);
+  } catch {
+    throw new Error('La URL base de la API no es válida.');
+  }
+  if (parsedApiBaseUrl.protocol !== 'https:' || parsedApiBaseUrl.username || parsedApiBaseUrl.password
+    || parsedApiBaseUrl.pathname !== '/' || parsedApiBaseUrl.search || parsedApiBaseUrl.hash) {
+    throw new Error('La URL base de la API debe ser un origen HTTPS sin credenciales ni ruta.');
+  }
+  apiBaseUrl = parsedApiBaseUrl.origin;
+}
+
+function apiUrl(path) {
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
+    throw new Error('La ruta de la API no es válida.');
+  }
+  return apiBaseUrl ? new URL(path, apiBaseUrl).toString() : path;
+}
+
 const form = document.querySelector('#filters-form');
 const showAllButton = document.querySelector('#show-all');
 const statusMessage = document.querySelector('#status');
@@ -181,6 +204,7 @@ const analyticsHistoryProgressionTableBody = document.querySelector('#analytics-
 const pageShell = document.querySelector('.page-shell');
 const authScreen = document.querySelector('#auth-screen');
 const authMessage = document.querySelector('#auth-message');
+const authRetryButton = document.querySelector('#auth-retry');
 const loginButton = document.querySelector('#login-google');
 const authAccessPanel = document.querySelector('#auth-access-panel');
 const authModeLoginButton = document.querySelector('#auth-mode-login');
@@ -276,6 +300,13 @@ let achievementQueue = [];
 let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
+const nativeAuth = window.NativeAuth?.isNative() ? window.NativeAuth : null;
+const nativeOAuthRedirectUrl = 'com.mrdusik.minipeopledb://auth/callback';
+let pendingNativeOAuthCallbackUrl = null;
+let nativeOAuthPending = false;
+let nativeOAuthFinishTimer = null;
+let nativeAppUrlListenerRegistered = false;
+let nativeBrowserFinishedListenerRegistered = false;
 let appStarted = false;
 let lastCollectionTotal = null;
 let profileRequestSequence = 0;
@@ -432,7 +463,7 @@ subcategoriaInput.addEventListener('change', renderYearOptions);
 
 async function loadCategorias() {
   try {
-    const response = await fetch('/categorias');
+    const response = await fetch(apiUrl('/categorias'));
     if (!response.ok) {
       throw new Error('CATEGORIAS_NO_DISPONIBLES');
     }
@@ -4426,7 +4457,7 @@ async function initialize() {
 
 async function apiFetch(url, init = {}) {
   const requestSession = currentSession;
-  const response = await fetch(url, {
+  const response = await fetch(apiUrl(url), {
     ...init,
     headers: { ...init.headers, Authorization: `Bearer ${requestSession?.access_token ?? ''}` },
   });
@@ -4529,6 +4560,7 @@ function showAuthScreen(message = '') {
   passwordRecoveryForm.hidden = true;
   passwordUpdateForm.hidden = true;
   profileCheckRetryButton.hidden = true;
+  authRetryButton.hidden = true;
   if (deleteAccountDialog.open) deleteAccountDialog.close();
   if (profileDialog.open) profileDialog.close();
   currentUserProfile = null;
@@ -4912,11 +4944,86 @@ async function endSession(message = '') {
   handleSession(null, message);
 }
 
+function authRedirectUrl() {
+  return nativeAuth ? nativeOAuthRedirectUrl : `${window.location.origin}${window.location.pathname}`;
+}
+
+function showNativeOAuthError() {
+  nativeOAuthPending = false;
+  clearTimeout(nativeOAuthFinishTimer);
+  loginButton.disabled = false;
+  setAuthMessage('No se pudo completar el acceso con Google. Vuelve a intentarlo.', { error: true });
+}
+
+async function processNativeOAuthCallback(rawUrl) {
+  let callbackUrl;
+  try {
+    callbackUrl = new URL(rawUrl);
+  } catch {
+    showNativeOAuthError();
+    return;
+  }
+
+  const allowedParameters = new Set(['code', 'error', 'error_code', 'error_description']);
+  const codes = callbackUrl.searchParams.getAll('code');
+  if (callbackUrl.protocol !== 'com.mrdusik.minipeopledb:' || callbackUrl.hostname !== 'auth'
+    || callbackUrl.pathname !== '/callback' || callbackUrl.port || callbackUrl.username || callbackUrl.password
+    || callbackUrl.hash || [...callbackUrl.searchParams.keys()].some((key) => !allowedParameters.has(key))
+    || ['error', 'error_code', 'error_description'].some((key) => callbackUrl.searchParams.has(key))
+    || codes.length !== 1 || !codes[0] || !supabaseClient) {
+    showNativeOAuthError();
+    return;
+  }
+
+  nativeOAuthPending = false;
+  clearTimeout(nativeOAuthFinishTimer);
+  try {
+    const { data, error } = await supabaseClient.auth.exchangeCodeForSession(codes[0]);
+    if (error || !data?.session) throw new Error('OAUTH_CALLBACK_INVALIDO');
+    await nativeAuth.closeBrowser();
+    handleSession(data.session);
+  } catch {
+    showNativeOAuthError();
+  }
+}
+
+async function receiveNativeOAuthCallback(rawUrl) {
+  if (!supabaseClient) {
+    pendingNativeOAuthCallbackUrl = rawUrl;
+    return;
+  }
+  await processNativeOAuthCallback(rawUrl);
+}
+
 async function initializeAuth() {
   showAuthScreen();
   setAuthMessage('Preparando el acceso...', { loading: true });
+  if (nativeAuth) {
+    try {
+      if (!nativeAppUrlListenerRegistered) {
+        await nativeAuth.addListener('appUrlOpen', ({ url }) => {
+          void receiveNativeOAuthCallback(url);
+        });
+        nativeAppUrlListenerRegistered = true;
+      }
+      if (!nativeBrowserFinishedListenerRegistered) {
+        await nativeAuth.addBrowserFinishedListener(() => {
+          if (!nativeOAuthPending) return;
+          clearTimeout(nativeOAuthFinishTimer);
+          nativeOAuthFinishTimer = setTimeout(() => {
+            if (nativeOAuthPending) showNativeOAuthError();
+          }, 500);
+        });
+        nativeBrowserFinishedListenerRegistered = true;
+      }
+    } catch {
+      setAuthMessage('No se pudo preparar el acceso seguro. Inténtalo de nuevo.', { error: true });
+      authRetryButton.hidden = false;
+      return;
+    }
+  }
   try {
-    const response = await fetch('/config/supabase');
+    const response = await fetch(apiUrl('/config/supabase'));
     if (!response.ok) {
       throw new Error('CONFIGURACION_NO_DISPONIBLE');
     }
@@ -4927,6 +5034,7 @@ async function initializeAuth() {
   } catch {
     supabaseClient = null;
     showAuthScreen('No se pudo iniciar el servicio de autenticación.');
+    authRetryButton.hidden = false;
     return;
   }
 
@@ -4939,6 +5047,15 @@ async function initializeAuth() {
     if (session || currentSession) handleSession(session);
   });
   try {
+    if (nativeAuth) {
+      const launch = await nativeAuth.getLaunchUrl();
+      pendingNativeOAuthCallbackUrl ??= launch?.url ?? null;
+      if (pendingNativeOAuthCallbackUrl) {
+        const callbackUrl = pendingNativeOAuthCallbackUrl;
+        pendingNativeOAuthCallbackUrl = null;
+        await processNativeOAuthCallback(callbackUrl);
+      }
+    }
     const { data } = await supabaseClient.auth.getSession();
     handleSession(data?.session ?? null);
   } catch {
@@ -4946,20 +5063,37 @@ async function initializeAuth() {
   }
 }
 
+authRetryButton.addEventListener('click', async () => {
+  authRetryButton.disabled = true;
+  try {
+    await initializeAuth();
+  } finally {
+    authRetryButton.disabled = false;
+  }
+});
+
 loginButton.addEventListener('click', async () => {
   if (!supabaseClient) return;
   setAuthMessage('Conectando con Google...', { loading: true });
   loginButton.disabled = true;
   try {
-    const { error } = await supabaseClient.auth.signInWithOAuth({
+    const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}${window.location.pathname}`,
+        redirectTo: authRedirectUrl(),
+        ...(nativeAuth ? { skipBrowserRedirect: true } : {}),
         // Google reutiliza la cuenta activa del navegador si no se fuerza el selector.
         queryParams: { prompt: 'select_account' },
       },
     });
     if (error) throw error;
+    if (nativeAuth) {
+      if (typeof data?.url !== 'string' || !data.url.startsWith('https://')) {
+        throw new Error('OAUTH_URL_INVALIDA');
+      }
+      nativeOAuthPending = true;
+      await nativeAuth.openBrowser(data.url);
+    }
   } catch {
     setAuthMessage('No se pudo iniciar sesión con Google. Inténtalo de nuevo.', { error: true });
     loginButton.disabled = false;
@@ -5079,7 +5213,10 @@ classicAuthForm.addEventListener('submit', async (event) => {
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
-        options: { data: { username } },
+        options: {
+          data: { username },
+          ...(nativeAuth ? { emailRedirectTo: nativeOAuthRedirectUrl } : {}),
+        },
       });
       if (error) throw error;
       pendingRegistrationUsername = username;
@@ -5087,7 +5224,7 @@ classicAuthForm.addEventListener('submit', async (event) => {
         ? 'Cuenta creada. Completa tu perfil para continuar.'
         : 'Si el email puede registrarse, recibirás instrucciones para confirmar la cuenta.');
     } else {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -5121,7 +5258,7 @@ passwordRecoveryForm.addEventListener('submit', async (event) => {
   setAuthMessage('Enviando enlace de recuperación...', { loading: true });
   try {
     const { error } = await supabaseClient.auth.resetPasswordForEmail(recoveryEmailInput.value.trim(), {
-      redirectTo: `${window.location.origin}${window.location.pathname}`,
+      redirectTo: authRedirectUrl(),
     });
     if (error) throw error;
     setAuthMessage('Si el email puede recuperarse, recibirás un enlace para cambiar la contraseña.');

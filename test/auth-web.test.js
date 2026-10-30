@@ -26,9 +26,13 @@ async function waitFor(predicate) {
   assert.equal(predicate(), true);
 }
 
-function startApp({ session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', ...authOptions } = {}) {
+function startApp({
+  session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', apiBaseUrl = '', nativeAuth, ...authOptions
+} = {}) {
   const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const { window } = dom;
+  window.MINIPEOPLEDB_API_BASE_URL = apiBaseUrl;
+  if (nativeAuth) window.NativeAuth = nativeAuth;
   window.crypto.randomUUID ??= () => '00000000-0000-4000-8000-000000000001';
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() {
@@ -42,22 +46,52 @@ function startApp({ session, fetchImpl, profileData = completeProfile, url = 'ht
       const response = await fetchImpl(url, init);
       if (response !== undefined) return response;
     }
-    if (url === '/api/auth/login') return {
+    const requestPath = new URL(url, window.location.href).pathname;
+    if (requestPath === '/api/auth/login') return {
       ok: !authOptions.passwordSignInError,
       status: authOptions.passwordSignInError ? 401 : 200,
       json: async () => ({ access_token: authOptions.passwordSession?.access_token ?? 'token-classic', refresh_token: 'refresh-classic' }),
     };
-    if (url === '/api/profile') return { ok: true, status: 200, json: async () => profileData };
-    if (url === '/categorias') return { ok: true, status: 200, json: async () => JSON.parse(categoriasMockRaw) };
-    if (url === '/minifiguras') return { ok: true, status: 200, json: async () => catalog };
-    if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
-    if (url === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
-    if (url === '/gamificacion/dna') return { ok: true, status: 200, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }) };
+    if (requestPath === '/api/profile') return { ok: true, status: 200, json: async () => profileData };
+    if (requestPath === '/categorias') return { ok: true, status: 200, json: async () => JSON.parse(categoriasMockRaw) };
+    if (requestPath === '/minifiguras') return { ok: true, status: 200, json: async () => catalog };
+    if (requestPath === '/valoracion') return { ok: true, status: 200, json: async () => ({ total: 0, enColeccion: 1, buscadas: 0, top5: [], top5Antiguas: [] }) };
+    if (requestPath === '/gamificacion') return { ok: true, status: 200, json: async () => ({ bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, siguienteNivel: null, progreso: { porcentaje: 0 }, logros: [] }) };
+    if (requestPath === '/gamificacion/dna') return { ok: true, status: 200, json: async () => ({ principal: 'Newbie', porcentajes: { rarityHunter: 0, explorer: 0, collector: 0, fan: 0 } }) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
-  window.eval(withSupabaseSession(appScript, { session, profileFallback: false, ...authOptions }));
+  try {
+    window.eval(withSupabaseSession(appScript, { session, profileFallback: false, ...authOptions }));
+  } catch (error) {
+    dom.window.close();
+    throw error;
+  }
   const $ = (selector) => window.document.querySelector(selector);
   return { dom, window, requests, $ };
+}
+
+function makeNativeAuth({ launchUrl = null } = {}) {
+  const listeners = new Map();
+  const openedUrls = [];
+  let closedBrowserCount = 0;
+  return {
+    openedUrls,
+    isNative: () => true,
+    addListener: async (event, listener) => {
+      listeners.set(event, listener);
+      return { remove: async () => listeners.delete(event) };
+    },
+    addBrowserFinishedListener: async (listener) => {
+      listeners.set('browserFinished', listener);
+      return { remove: async () => listeners.delete('browserFinished') };
+    },
+    getLaunchUrl: async () => ({ url: launchUrl }),
+    openBrowser: async (url) => openedUrls.push(url),
+    closeBrowser: async () => { closedBrowserCount += 1; },
+    emitUrlOpen: (url) => listeners.get('appUrlOpen')?.({ url }),
+    finishBrowser: () => listeners.get('browserFinished')?.(),
+    get closedBrowserCount() { return closedBrowserCount; },
+  };
 }
 
 test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', async () => {
@@ -78,6 +112,7 @@ test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', asy
   assert.equal($('#login-google img').getAttribute('height'), '20');
   assert.ok((await readFile(new URL('../public/logo_images/google-2.png', import.meta.url))).length > 0);
   assert.equal($('#login-google').disabled, false);
+  assert.equal($('#auth-retry').hidden, true);
   assert.equal($('#auth-username-field').hidden, false);
   assert.equal($('#auth-email-field').hidden, true);
   assert.equal($('#auth-email').disabled, true);
@@ -153,6 +188,182 @@ test('iniciar sesion usa Google con PKCE y redirige al origen de la aplicacion',
   assert.equal(stub.signInWithOAuth[0].options.redirectTo, 'http://localhost/');
   assert.equal(stub.signInWithOAuth[0].options.queryParams.prompt, 'select_account');
   dom.window.close();
+});
+
+test('Android abre OAuth en navegador externo y recupera la sesión desde el callback PKCE', async () => {
+  const nativeAuth = makeNativeAuth();
+  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    $('#login-google').click();
+    await waitFor(() => nativeAuth.openedUrls.length === 1);
+
+    const oauthOptions = window.__supabaseStub.calls.signInWithOAuth[0].options;
+    assert.equal(oauthOptions.redirectTo, 'com.mrdusik.minipeopledb://auth/callback');
+    assert.equal(oauthOptions.skipBrowserRedirect, true);
+    assert.equal(nativeAuth.openedUrls[0], 'https://accounts.google.test/oauth');
+
+    nativeAuth.emitUrlOpen('com.mrdusik.minipeopledb://auth/callback?code=code-valido');
+    await waitFor(() => window.__supabaseStub.calls.exchangeCodeForSession.length === 1);
+    await waitFor(() => $('#auth-screen').hidden);
+    assert.equal(window.__supabaseStub.calls.exchangeCodeForSession.length, 1);
+    assert.equal(window.__supabaseStub.calls.exchangeCodeForSession[0], 'code-valido');
+    assert.equal(nativeAuth.closedBrowserCount, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('Android procesa el deep link OAuth al arrancar y limita el intercambio a PKCE', async () => {
+  const nativeAuth = makeNativeAuth({
+    launchUrl: 'com.mrdusik.minipeopledb://auth/callback?code=code-inicial',
+  });
+  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.exchangeCodeForSession.length === 1);
+    await waitFor(() => $('#auth-screen').hidden);
+    assert.equal(window.__supabaseStub.calls.exchangeCodeForSession[0], 'code-inicial');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('Android rechaza callbacks OAuth ajenos o fallidos sin mostrar datos del proveedor', async () => {
+  const nativeAuth = makeNativeAuth();
+  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    nativeAuth.emitUrlOpen('https://attacker.example/auth/callback?code=secreto');
+    await waitFor(() => $('#auth-message').textContent === 'No se pudo completar el acceso con Google. Vuelve a intentarlo.');
+    assert.equal(window.__supabaseStub.calls.exchangeCodeForSession.length, 0);
+    assert.equal($('#login-google').disabled, false);
+
+    nativeAuth.emitUrlOpen('com.mrdusik.minipeopledb://auth/callback?error=access_denied&error_description=informacion_privada');
+    await waitFor(() => $('#auth-message').textContent === 'No se pudo completar el acceso con Google. Vuelve a intentarlo.');
+    assert.equal(window.__supabaseStub.calls.exchangeCodeForSession.length, 0);
+    assert.equal($('#auth-message').textContent.includes('informacion_privada'), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el registro Android asigna el callback de la app a la confirmación de email', async () => {
+  const nativeAuth = makeNativeAuth();
+  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    $('#auth-mode-register').click();
+    $('#auth-username').value = 'SpaceFan';
+    $('#auth-email').value = 'space@example.com';
+    $('#auth-password').value = 'Password1';
+    $('#auth-password-repeat').value = 'Password1';
+    $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => window.__supabaseStub.calls.signUp.length === 1);
+    assert.equal(window.__supabaseStub.calls.signUp[0].options.emailRedirectTo,
+      'com.mrdusik.minipeopledb://auth/callback');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('cancelar OAuth Android vuelve a habilitar el acceso y permite reintentar', async () => {
+  const nativeAuth = makeNativeAuth();
+  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    $('#login-google').click();
+    await waitFor(() => nativeAuth.openedUrls.length === 1);
+    nativeAuth.finishBrowser();
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    assert.equal($('#login-google').disabled, false);
+    assert.equal($('#auth-message').textContent, 'No se pudo completar el acceso con Google. Vuelve a intentarlo.');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la URL HTTPS configurada se aplica a la API sin alterar las rutas relativas de web', async () => {
+  const { dom, requests, window, $ } = startApp({
+    session: null,
+    apiBaseUrl: 'https://minipeopledb.onrender.com',
+  });
+  try {
+    await tick();
+    $('#auth-username').value = 'SpaceFan';
+    $('#auth-password').value = 'Password1';
+    $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await tick();
+    assert.equal(requests.find(({ url }) => url.endsWith('/api/auth/login'))?.url,
+      'https://minipeopledb.onrender.com/api/auth/login');
+    assert.equal(window.__supabaseStub.calls.createClient[0].clientOptions.auth.flowType, 'pkce');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la configuración Android rechaza destinos HTTP y URLs con rutas', () => {
+  for (const apiBaseUrl of ['http://minipeopledb.onrender.com', 'https://example.test/api']) {
+    assert.throws(
+      () => startApp({ session: null, apiBaseUrl }),
+      /La URL base de la API debe ser un origen HTTPS sin credenciales ni ruta/,
+    );
+  }
+});
+
+test('Android conserva el bearer JWT al consultar la API remota', async () => {
+  const { dom, requests } = startApp({
+    session: { access_token: 'jwt-android', user: { id: 'user-android', user_metadata: {} } },
+    apiBaseUrl: 'https://minipeopledb.onrender.com',
+    profileFallback: false,
+  });
+  try {
+    await waitFor(() => requests.some(({ url }) => new URL(url).pathname === '/api/profile'));
+    const profileRequest = requests.find(({ url }) => new URL(url).pathname === '/api/profile');
+    assert.equal(profileRequest.url, 'https://minipeopledb.onrender.com/api/profile');
+    assert.equal(profileRequest.init.headers.Authorization, 'Bearer jwt-android');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('un fallo de red al iniciar sesión no se presenta como operación completada', async () => {
+  const { dom, requests, window, $ } = startApp({
+    session: null,
+    apiBaseUrl: 'https://minipeopledb.onrender.com',
+    fetchImpl: async (url) => {
+      if (new URL(url).pathname === '/api/auth/login') throw new TypeError('network unavailable');
+    },
+  });
+  try {
+    await tick();
+    $('#auth-username').value = 'SpaceFan';
+    $('#auth-password').value = 'Password1';
+    $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await tick();
+    assert.equal(requests[0].url, 'https://minipeopledb.onrender.com/api/auth/login');
+    assert.equal($('#auth-message').textContent, 'No se pudo iniciar sesión. Revisa el username y la contraseña.');
+    assert.equal($('.page-shell').hidden, true);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la autenticación vuelve a intentarse tras recuperar la conexión', async () => {
+  const { dom, window, $ } = startApp({ session: null, configError: true });
+  try {
+    await tick();
+    assert.equal($('#auth-message').textContent, 'No se pudo iniciar el servicio de autenticación.');
+    assert.equal($('#login-google').disabled, true);
+    assert.equal($('#auth-retry').hidden, false);
+
+    window.__supabaseStub.setConfigError(false);
+    $('#auth-retry').click();
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    assert.equal($('#auth-retry').hidden, true);
+    assert.equal($('#login-google').disabled, false);
+  } finally {
+    dom.window.close();
+  }
 });
 
 for (const url of ['http://localhost:3000/', 'http://127.0.0.1:3000/', 'http://localhost:3001/', 'https://minipeopledb.onrender.com/']) {

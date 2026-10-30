@@ -17,26 +17,32 @@ export function supabaseStubScript({
   updatePasswordError = null,
   avatarUploadError = null,
   passwordSession = null,
+  oauthSession = null,
+  oauthCallbackError = null,
+  configError = false,
   recoverySession = null,
   profileData = DEFAULT_PROFILE,
   profileFallback = true,
 } = {}) {
   return `(() => {
-  const options = ${JSON.stringify({ session, signInError, passwordSignInError, signUpError, recoveryError, updatePasswordError, avatarUploadError, passwordSession, recoverySession, profileData, profileFallback })};
+  const options = ${JSON.stringify({ session, signInError, passwordSignInError, signUpError, recoveryError, updatePasswordError, avatarUploadError, passwordSession, oauthSession, oauthCallbackError, configError, recoverySession, profileData, profileFallback })};
   let session = options.session;
+  let configError = options.configError;
   const listeners = [];
   const calls = {
     createClient: [], signInWithOAuth: [], signInWithPassword: [], setSession: [], signUp: [],
-    resetPasswordForEmail: [], updateUser: [], signOut: [], channel: [], removeChannel: [],
+    resetPasswordForEmail: [], updateUser: [],     signOut: [], exchangeCodeForSession: [], channel: [], removeChannel: [],
     avatarUploads: [], avatarRemovals: [],
   };
   const channels = [];
   const appFetch = window.fetch;
   window.fetch = async (url, init) => {
-    if (url === '/config/supabase') {
+    const requestPath = new URL(url, window.location.href).pathname;
+    if (requestPath === '/config/supabase') {
+      if (configError) return { ok: false, status: 500, json: async () => ({ error: 'CONFIGURACION_NO_DISPONIBLE' }) };
       return { ok: true, status: 200, json: async () => ({ url: 'https://proyecto.supabase.test', anonKey: 'anon-key-publica' }) };
     }
-    if (url === '/api/profile' && options.profileFallback) {
+    if (requestPath === '/api/profile' && options.profileFallback) {
       return { ok: true, status: 200, json: async () => options.profileData };
     }
     const response = await appFetch(url, init);
@@ -46,6 +52,7 @@ export function supabaseStubScript({
   window.__supabaseStub = {
     calls,
     channels,
+    setConfigError(value) { configError = value; },
     setSession(event, next) { session = next; emit(event); },
   };
   window.supabase = {
@@ -101,7 +108,19 @@ export function supabaseStubScript({
           },
           async signInWithOAuth(args) {
             calls.signInWithOAuth.push(args);
-            return options.signInError ? { data: null, error: { message: options.signInError } } : { data: {}, error: null };
+            return options.signInError
+              ? { data: null, error: { message: options.signInError } }
+              : { data: { url: 'https://accounts.google.test/oauth' }, error: null };
+          },
+          async exchangeCodeForSession(code) {
+            calls.exchangeCodeForSession.push(code);
+            if (options.oauthCallbackError) return { data: null, error: { message: options.oauthCallbackError } };
+            session = options.oauthSession ?? {
+              access_token: 'token-oauth',
+              user: { id: 'oauth-user', email: 'oauth@example.com', user_metadata: {} },
+            };
+            emit('SIGNED_IN');
+            return { data: { session }, error: null };
           },
           async signInWithPassword(args) {
             calls.signInWithPassword.push(args);
