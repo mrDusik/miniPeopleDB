@@ -73,7 +73,7 @@ La integración Capacitor incluye recepción FCM, un canal Android estable y per
 npm run android:apk
 ```
 
-La petición de permiso Android 13+ aparece solo después de pulsar «Activar avisos push» dentro de Notificaciones. Si se deniega o revoca, la bandeja continúa disponible. Los mensajes de sistema son genéricos; al tocarlos, la app valida el identificador, consulta la notificación propia con JWT y abre la bandeja sin marcarla como leída.
+En Android, Preferencias muestra el toggle «Notificaciones del sistema activadas» según el permiso de la app y el canal nativo. Activarlo solicita el permiso Android 13+ si hace falta; desactivarlo abre los ajustes nativos, donde el usuario puede revocarlo. El modal Notificaciones conserva solo la bandeja. Si se deniega o revoca el permiso, la bandeja continúa disponible. Los mensajes de sistema son genéricos; al tocarlos, la app valida el identificador, consulta la notificación propia con JWT y abre la bandeja sin marcarla como leída.
 
 El TTL máximo es de 24 horas. FCM es de mejor esfuerzo; el modo force-stop de Android, una app desinstalada, restricciones del sistema o el vencimiento del TTL pueden impedir una alerta. La app refresca la bandeja al reanudarse o reconectar. Prueba en un dispositivo real con Firebase configurado: foreground, background, proceso terminado normalmente, sesión cerrada, permiso denegado/revocado, offline/reconexión, duplicado, vencimiento y token inválido. No consideres la integración end-to-end verificada solo porque el backend acepta el mensaje.
 

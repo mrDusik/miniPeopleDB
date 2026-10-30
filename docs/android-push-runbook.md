@@ -33,7 +33,7 @@ Los tests automatizados PGlite de `test/android-push-supabase.test.js` ejercitan
 
 Consulta `docs/android-installation.md`. Hace falta un proyecto Firebase controlado por el propietario y registrar exactamente `com.mrdusik.minipeopledb`. El archivo cliente `android/app/google-services.json` es opcional para compilar pero necesario para obtener tokens FCM; permanece local e ignorado por Git. No contiene la clave privada de servidor.
 
-En Android se solicita `POST_NOTIFICATIONS` solo cuando el usuario pulsa «Activar avisos push». Denegar o revocar el permiso conserva la bandeja. La app actualiza el permiso al reanudarse; la revocación de sesión se intenta antes de cerrar sesión. Si el dispositivo estaba offline, conserva un marcador local sin credenciales y bloquea el registro de otra cuenta hasta que el propietario anterior pueda revocar el token con su propia sesión. No se intenta borrar una instalación ajena con el JWT de una cuenta nueva.
+En Android, Preferencias muestra el toggle «Notificaciones del sistema activadas» según el permiso de la app y el canal configurado. Activarlo solicita `POST_NOTIFICATIONS` si hace falta; desactivarlo abre los ajustes nativos de notificaciones, y el estado se consulta de nuevo al regresar. Denegar o revocar el permiso conserva la bandeja. La app actualiza el permiso al reanudarse; la revocación de sesión se intenta antes de cerrar sesión. Si el dispositivo estaba offline, conserva un marcador local sin credenciales y bloquea el registro de otra cuenta hasta que el propietario anterior pueda revocar el token con su propia sesión. No se intenta borrar una instalación ajena con el JWT de una cuenta nueva.
 
 ## Rollback
 

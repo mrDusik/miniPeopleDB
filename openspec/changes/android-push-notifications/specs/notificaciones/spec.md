@@ -44,6 +44,24 @@ La app SHALL crear un canal Android estable y solicitar `POST_NOTIFICATIONS` en 
 - **WHEN** el usuario deniega el permiso o lo revoca en ajustes del sistema
 - **THEN** la app no presenta alertas del sistema, conserva la bandeja y sincroniza el estado cuando vuelve a estar activa
 
+### Requirement: Mostrar el estado real de notificaciones del sistema en Preferencias
+En Android, el modal Preferencias SHALL mostrar un control llamado «Notificaciones del sistema activadas» cuyo estado SHALL reflejar el permiso de notificaciones de la aplicación y el canal de notificaciones configurado en Android. Este control SHALL NOT aparecer en el modal Notificaciones ni en clientes web. Al activar, la app SHALL solicitar el permiso nativo cuando sea necesario y registrar o renovar el token si Android permite las notificaciones. Al desactivar, la app SHALL abrir los ajustes nativos de notificaciones de la aplicación, ya que Android controla esa autorización; al volver, SHALL consultar de nuevo el estado real y sincronizar el registro del dispositivo. Si el usuario deniega el permiso o el canal está desactivado, el control SHALL permanecer apagado y la bandeja persistida SHALL seguir disponible.
+
+#### Scenario: Abrir Preferencias con notificaciones activadas en Android
+- **WHEN** la aplicación y el canal de notificaciones están habilitados en los ajustes de Android
+- **THEN** el control en Preferencias aparece activado
+- **AND** el modal Notificaciones no contiene el control
+
+#### Scenario: Activar notificaciones desde Preferencias
+- **WHEN** el usuario activa el control y el permiso aún no está concedido
+- **THEN** la app solicita el permiso de Android y refleja el resultado concedido o denegado
+- **AND** solo registra el token si el estado real de Android permite notificaciones
+
+#### Scenario: Desactivar notificaciones desde Preferencias
+- **WHEN** el usuario desactiva el control
+- **THEN** la app abre los ajustes nativos de notificaciones de MiniPeopleDB
+- **AND** al volver refleja el permiso y canal reales, sin simular que Android ya los revocó
+
 ### Requirement: Minimizar el payload y validar el destino al abrir
 El payload FCM SHALL limitarse a un identificador opaco de notificacion, una categoria permitida y los campos genericos necesarios para presentar la alerta; SHALL NOT incluir nombres, mensajes, importes, payload de negocio, JWT ni tokens FCM. Al tocarla, la app SHALL consultar el registro propio mediante JWT antes de mostrar detalles o ejecutar una accion.
 
