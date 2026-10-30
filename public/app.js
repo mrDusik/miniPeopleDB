@@ -170,9 +170,9 @@ const notificationsCloseButton = document.querySelector('#notifications-close');
 const notificationsMarkAllButton = document.querySelector('#notifications-mark-all');
 const notificationsStatus = document.querySelector('#notifications-status');
 const notificationsList = document.querySelector('#notifications-list');
-const notificationsPushControls = document.querySelector('#notifications-push-controls');
-const notificationsPushEnableButton = document.querySelector('#notifications-push-enable');
-const notificationsPushStatus = document.querySelector('#notifications-push-status');
+const systemNotificationsSetting = document.querySelector('#system-notifications-setting');
+const systemNotificationsEnabled = document.querySelector('#system-notifications-enabled');
+const systemNotificationsStatus = document.querySelector('#system-notifications-status');
 const dnaDialog = document.querySelector('#dna-dialog');
 const dnaDialogCloseButton = document.querySelector('#dna-close');
 const dnaDialogStatus = document.querySelector('#dna-status');
@@ -2661,18 +2661,24 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
 async function syncNativePushPermission() {
   if (!nativePush || !nativePushRegistration || !currentSession) return;
   try {
+    await nativePush.createChannel();
+    const systemState = await nativePush.getNotificationState();
+    systemNotificationsEnabled.checked = systemState.enabled === true;
+    if (systemState.enabled !== true) {
+      await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
+      return;
+    }
     const permissions = await nativePush.checkPermissions();
     if (permissions.receive === 'denied') {
       await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
-      notificationsPushStatus.textContent = 'Los avisos están desactivados en Android. La bandeja sigue disponible.';
       return;
     }
     if (permissions.receive !== 'granted') return;
-    await nativePush.createChannel();
     await nativePush.register();
-    notificationsPushStatus.textContent = '';
   } catch {
-    notificationsPushStatus.textContent = 'No se pudo sincronizar el permiso de avisos.';
+    if (profileDialog.open && profileDialogMode === 'settings') {
+      systemNotificationsStatus.textContent = 'No se pudo comprobar el estado de las notificaciones.';
+    }
   }
 }
 
@@ -2684,24 +2690,84 @@ async function revokeNativePushSession(session) {
   return nativePushRegistration.revoke(session);
 }
 
+async function refreshSystemNotificationsSetting() {
+  if (!nativePush?.isAndroid?.() || !profileDialog.open || profileDialogMode !== 'settings') return;
+  systemNotificationsEnabled.disabled = true;
+  try {
+    await nativePush.createChannel();
+    const state = await nativePush.getNotificationState();
+    if (typeof state?.enabled !== 'boolean') throw new Error('ANDROID_PUSH_STATE_UNAVAILABLE');
+    systemNotificationsEnabled.checked = state.enabled;
+    systemNotificationsStatus.textContent = state.enabled
+      ? 'Activadas en los ajustes de Android.'
+      : 'Desactivadas en los ajustes de Android.';
+  } catch {
+    systemNotificationsStatus.textContent = 'No se pudo comprobar el estado de las notificaciones.';
+  } finally {
+    systemNotificationsEnabled.disabled = false;
+  }
+}
+
 async function enableNativePush() {
   if (!nativePush || !nativePushRegistration || !currentSession) return;
-  notificationsPushEnableButton.disabled = true;
-  notificationsPushStatus.textContent = 'Preparando los avisos…';
+  systemNotificationsEnabled.disabled = true;
+  systemNotificationsStatus.textContent = 'Preparando las notificaciones…';
   try {
-    const permission = await nativePush.requestPermissions();
-    if (permission.receive !== 'granted') {
-      await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
-      notificationsPushStatus.textContent = 'No activaste los avisos. Puedes consultar la bandeja cuando quieras.';
+    await nativePush.createChannel();
+    const currentState = await nativePush.getNotificationState();
+    const permissions = await nativePush.checkPermissions();
+    if (permissions.receive === 'granted' && currentState.enabled !== true) {
+      await nativePush.openNotificationSettings();
+      systemNotificationsStatus.textContent = 'Activa las notificaciones en los ajustes de Android y vuelve a la app.';
       return;
     }
-    await nativePush.createChannel();
+    const permission = permissions.receive === 'granted'
+      ? permissions
+      : await nativePush.requestPermissions();
+    if (permission.receive !== 'granted') {
+      await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
+      systemNotificationsEnabled.checked = false;
+      systemNotificationsStatus.textContent = 'El permiso está denegado en Android. La bandeja sigue disponible.';
+      return;
+    }
     await nativePush.register();
-    notificationsPushStatus.textContent = 'Avisos activados para esta instalación.';
+    await refreshSystemNotificationsSetting();
+    if (systemNotificationsEnabled.checked) {
+      systemNotificationsStatus.textContent = 'Notificaciones del sistema activadas.';
+    } else {
+      await nativePush.openNotificationSettings();
+      systemNotificationsStatus.textContent = 'Activa las notificaciones en los ajustes de Android y vuelve a la app.';
+    }
   } catch {
-    notificationsPushStatus.textContent = 'No se pudieron activar los avisos. La bandeja sigue disponible.';
+    systemNotificationsEnabled.checked = false;
+    systemNotificationsStatus.textContent = 'No se pudieron activar las notificaciones. La bandeja sigue disponible.';
   } finally {
-    notificationsPushEnableButton.disabled = false;
+    systemNotificationsEnabled.disabled = false;
+  }
+}
+
+async function toggleSystemNotifications() {
+  if (!nativePush?.isAndroid?.()) return;
+  const requestedState = systemNotificationsEnabled.checked;
+  systemNotificationsEnabled.disabled = true;
+  if (requestedState) {
+    await enableNativePush();
+    return;
+  }
+  try {
+    const state = await nativePush.getNotificationState();
+    systemNotificationsEnabled.checked = state.enabled === true;
+    if (state.enabled === true) {
+      systemNotificationsStatus.textContent = 'Desactívalas desde los ajustes de Android.';
+      await nativePush.openNotificationSettings();
+    } else {
+      await syncNativePushPermission();
+      await refreshSystemNotificationsSetting();
+    }
+  } catch {
+    systemNotificationsStatus.textContent = 'No se pudieron abrir los ajustes de notificaciones.';
+  } finally {
+    systemNotificationsEnabled.disabled = false;
   }
 }
 
@@ -2717,7 +2783,7 @@ async function openPushNotification(notificationId) {
   const row = [...notificationsList.querySelectorAll('[data-notification-id]')]
     .find((element) => element.dataset.notificationId === notificationId);
   if (!row) {
-    notificationsPushStatus.textContent = 'No se encontró esa notificación en tu bandeja.';
+    notificationsStatus.textContent = 'No se encontró esa notificación en tu bandeja.';
     return;
   }
   row.classList.add('is-push-target');
@@ -2735,20 +2801,22 @@ function resumePendingPushOpen() {
 async function initializeNativePushListeners() {
   if (!nativePush || nativePushListenersRegistered) return;
   nativePushListenersRegistered = true;
-  notificationsPushControls.hidden = false;
   try {
     await nativePush.addListener('registration', ({ value }) => {
       const session = currentSession;
       if (!session || typeof value !== 'string' || !nativePushRegistration) return;
       void nativePushRegistration.register(session, { token: value, permissionState: 'granted' })
         .then((registered) => {
-          if (currentSession?.user?.id === session.user.id && !registered) {
-            notificationsPushStatus.textContent = 'No se pudo registrar esta instalación. La bandeja sigue disponible.';
+          if (currentSession?.user?.id === session.user.id && !registered
+            && profileDialog.open && profileDialogMode === 'settings') {
+            systemNotificationsStatus.textContent = 'No se pudo registrar esta instalación.';
           }
         });
     });
     await nativePush.addListener('registrationError', () => {
-      notificationsPushStatus.textContent = 'No se pudieron preparar los avisos push.';
+      if (profileDialog.open && profileDialogMode === 'settings') {
+        systemNotificationsStatus.textContent = 'No se pudieron preparar las notificaciones.';
+      }
     });
     await nativePush.addListener('pushNotificationReceived', (notification) => {
       const action = nativePush.validateAction(notification?.data);
@@ -2766,6 +2834,7 @@ async function initializeNativePushListeners() {
     await nativeAuth?.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return;
       void syncNativePushPermission();
+      void refreshSystemNotificationsSetting();
       if (currentSession) void loadNotifications({ reset: true, preserveItems: true });
       resumePendingPushOpen();
     });
@@ -3549,7 +3618,7 @@ gamificationDialog.addEventListener('close', () => {
 });
 
 notificationsCloseButton.addEventListener('click', () => notificationsDialog.close());
-notificationsPushEnableButton.addEventListener('click', () => void enableNativePush());
+systemNotificationsEnabled.addEventListener('change', () => void toggleSystemNotifications());
 notificationsDialog.addEventListener('cancel', (event) => {
   event.preventDefault();
   notificationsDialog.close();
@@ -4915,6 +4984,7 @@ function openProfileDialog(profile, onboarding) {
   profileDialogMode = onboarding ? 'onboarding' : 'settings';
   profileDialogTrigger = onboarding ? null : document.activeElement;
   profileDialogTitle.textContent = onboarding ? 'Completa tu perfil' : 'Preferencias';
+  systemNotificationsSetting.hidden = onboarding || !nativePush?.isAndroid?.();
   profileDialogCloseButton.hidden = onboarding;
   openDeleteAccountButton.hidden = onboarding;
   profileUsernameInput.disabled = !onboarding;
@@ -4932,6 +5002,7 @@ function openProfileDialog(profile, onboarding) {
   profileSaveButton.textContent = onboarding ? 'Completar perfil' : 'Guardar cambios';
   renderProfileFavoriteOptions();
   if (!profileDialog.open) profileDialog.showModal();
+  void refreshSystemNotificationsSetting();
   (onboarding ? profileUsernameInput : profileAvatarLoadButton).focus();
 }
 

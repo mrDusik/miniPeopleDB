@@ -133,6 +133,13 @@
           </select>
         </div>
       </div>
+      <div id="system-notifications-setting" class="profile-system-notifications" hidden>
+        <label for="system-notifications-enabled">
+          <input id="system-notifications-enabled" type="checkbox" role="switch" disabled>
+          <span>Notificaciones del sistema activadas</span>
+        </label>
+        <p id="system-notifications-status" class="status" role="status" aria-live="polite"></p>
+      </div>
       <fieldset class="profile-favorites-fieldset">
         <legend>Categorías favoritas</legend>
         <div class="profile-favorite-toolbar">
@@ -514,10 +521,6 @@ Esta acción no se puede deshacer.</p>
       </div>
       <div class="notifications-toolbar" hidden>
         <button type="button" id="notifications-mark-all" class="button button-secondary" disabled>Marcar todas como leídas</button>
-      </div>
-      <div id="notifications-push-controls" class="notifications-toolbar" hidden>
-        <button type="button" id="notifications-push-enable" class="button button-secondary">Activar avisos push</button>
-        <span id="notifications-push-status" class="status" role="status" aria-live="polite"></span>
       </div>
       <p id="notifications-status" class="status loading-message" role="status" aria-live="polite">Cargando notificaciones...</p>
       <ul id="notifications-list" class="achievements-list notifications-list"></ul>

@@ -1,8 +1,10 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { createPushRegistrationLifecycle, validatePushAction } from '../src/android-push-client.js';
+
+const NotificationSettings = registerPlugin('NotificationSettings');
 
 window.NativeAuth = Object.freeze({
   isNative: () => Capacitor.isNativePlatform(),
@@ -15,12 +17,15 @@ window.NativeAuth = Object.freeze({
 
 window.NativePush = Object.freeze({
   isNative: () => Capacitor.isNativePlatform(),
+  isAndroid: () => Capacitor.getPlatform() === 'android',
   createRegistrationLifecycle: () => createPushRegistrationLifecycle({
     apiUrl: (path) => {
       const base = window.MINIPEOPLEDB_API_BASE_URL;
       return base ? new URL(path, base).toString() : path;
     },
   }),
+  getNotificationState: () => NotificationSettings.getState(),
+  openNotificationSettings: () => NotificationSettings.openSettings(),
   validateAction: validatePushAction,
   addListener: (event, listener) => PushNotifications.addListener(event, listener),
   checkPermissions: () => PushNotifications.checkPermissions(),

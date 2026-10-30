@@ -27,12 +27,13 @@ async function waitFor(predicate) {
 }
 
 function startApp({
-  session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', apiBaseUrl = '', nativeAuth, ...authOptions
+  session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', apiBaseUrl = '', nativeAuth, nativePush, ...authOptions
 } = {}) {
   const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const { window } = dom;
   window.MINIPEOPLEDB_API_BASE_URL = apiBaseUrl;
   if (nativeAuth) window.NativeAuth = nativeAuth;
+  if (nativePush) window.NativePush = nativePush;
   window.crypto.randomUUID ??= () => '00000000-0000-4000-8000-000000000001';
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() {
@@ -1104,12 +1105,64 @@ test('Preferencias solo ofrece Cerrar para descartar cambios y restaura el foco'
   assert.equal($('#user-profile-dialog-title').textContent, 'Preferencias');
   assert.equal($('#profile-username').value, 'SpaceFan');
   assert.equal($('#profile-username').disabled, true);
+  assert.equal($('#system-notifications-setting').hidden, true);
   assert.equal($('#user-profile-cancel'), null);
   assert.equal($('#user-profile-close').hidden, false);
   $('#user-profile-close').click();
   assert.equal($('#user-profile-dialog').open, false);
   assert.equal(dom.window.document.activeElement, settingsButton);
   dom.window.close();
+});
+
+test('el toggle de notificaciones del sistema refleja Android y solo aparece en Preferencias', async () => {
+  let notificationsEnabled = true;
+  let settingsOpened = 0;
+  const nativePush = {
+    isNative: () => true,
+    isAndroid: () => true,
+    createRegistrationLifecycle: () => ({ register: async () => true, revoke: async () => true }),
+    addListener: async () => ({ remove: async () => {} }),
+    getNotificationState: async () => ({ enabled: notificationsEnabled }),
+    checkPermissions: async () => ({ receive: notificationsEnabled ? 'granted' : 'denied' }),
+    requestPermissions: async () => {
+      notificationsEnabled = true;
+      return { receive: 'granted' };
+    },
+    createChannel: async () => {},
+    register: async () => {},
+    openNotificationSettings: async () => { settingsOpened += 1; },
+  };
+  const { dom, $ } = startApp({ nativePush });
+  try {
+    await waitFor(() => $('.page-shell').hidden === false);
+    assert.equal($('#system-notifications-setting').hidden, true);
+    assert.equal($('#notifications-dialog #system-notifications-enabled'), null);
+    $('#user-menu-toggle').click();
+    $('#open-user-settings').click();
+    await waitFor(() => $('#user-profile-dialog').open && !$('#system-notifications-setting').hidden);
+    await waitFor(() => $('#system-notifications-enabled').checked
+      && $('#system-notifications-status').textContent.includes('Activadas'));
+    assert.equal($('#system-notifications-enabled').closest('label').textContent.trim(), 'Notificaciones del sistema activadas');
+    assert.match($('#system-notifications-status').textContent, /Activadas/);
+
+    $('#system-notifications-enabled').click();
+    await waitFor(() => settingsOpened === 1);
+    assert.equal($('#system-notifications-enabled').checked, true);
+    assert.match($('#system-notifications-status').textContent, /Desactívalas desde los ajustes/);
+
+    notificationsEnabled = false;
+    $('#user-profile-close').click();
+    $('#user-menu-toggle').click();
+    $('#open-user-settings').click();
+    await waitFor(() => $('#user-profile-dialog').open && !$('#system-notifications-enabled').checked);
+    assert.match($('#system-notifications-status').textContent, /Desactivadas/);
+
+    $('#system-notifications-enabled').click();
+    await waitFor(() => $('#system-notifications-enabled').checked
+      && $('#system-notifications-status').textContent === 'Notificaciones del sistema activadas.');
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('la espera del perfil reutiliza el indicador de los modales y lo retira al fallar', async () => {
