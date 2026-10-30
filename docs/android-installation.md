@@ -1,6 +1,6 @@
 # Instalación Android de prueba
 
-Esta versión empaqueta la interfaz localmente con Capacitor. La API Express y Supabase siguen siendo servicios remotos y requieren conexión HTTPS. No es un paquete de publicación ni incluye firma de lanzamiento, icono de marca o configuración de Play Store.
+Esta versión empaqueta la interfaz localmente con Capacitor. La API Express y Supabase siguen siendo servicios remotos y requieren conexión HTTPS. No es un paquete de publicación ni incluye firma de lanzamiento ni configuración de Play Store.
 
 ## Requisitos
 
@@ -73,13 +73,13 @@ La integración Capacitor incluye recepción FCM, un canal Android estable y per
 npm run android:apk
 ```
 
-En Android, Preferencias muestra el toggle «Notificaciones del sistema activadas» según el permiso de la app y el canal nativo. Activarlo solicita el permiso Android 13+ si hace falta; desactivarlo abre los ajustes nativos, donde el usuario puede revocarlo. El modal Notificaciones conserva solo la bandeja. Si se deniega o revoca el permiso, la bandeja continúa disponible. Los mensajes de sistema son genéricos; al tocarlos, la app valida el identificador, consulta la notificación propia con JWT y abre la bandeja sin marcarla como leída.
+En Android, Preferencias muestra el toggle «Notificaciones del sistema» según el permiso de la app y el canal nativo. Activarlo solicita el permiso Android 13+ si hace falta; desactivarlo abre los ajustes nativos, donde el usuario puede revocarlo. El modal Notificaciones conserva solo la bandeja. Si se deniega o revoca el permiso, la bandeja continúa disponible. Las alertas usan textos específicos por categoría sin nombres ni datos privados y no incluyen botones de acción. El icono de la app y la silueta de notificación usan el ladrillo rojo del favicon web. Al tocar una alerta, la app valida el identificador, consulta la notificación propia con JWT y abre la bandeja sin marcarla como leída.
 
 El TTL máximo es de 24 horas. FCM es de mejor esfuerzo; el modo force-stop de Android, una app desinstalada, restricciones del sistema o el vencimiento del TTL pueden impedir una alerta. La app refresca la bandeja al reanudarse o reconectar. Prueba en un dispositivo real con Firebase configurado: foreground, background, proceso terminado normalmente, sesión cerrada, permiso denegado/revocado, offline/reconexión, duplicado, vencimiento y token inválido. No consideres la integración end-to-end verificada solo porque el backend acepta el mensaje.
 
 ## Limitaciones de esta fase
 
 - Es un APK debug para instalación directa; no se genera AAB ni se publica en Play Store.
-- El nombre e identificador están confirmados, pero no se incorporan iconos de marca ni recursos de ficha comercial.
+- El nombre e identificador están confirmados; no se incluyen recursos de ficha comercial.
 - La validación OAuth completa requiere los allowlists configurados en Supabase y Google, además de un dispositivo Android con una cuenta autorizada.
 - La app no permite consultar ni modificar datos sin conexión.

@@ -8,17 +8,17 @@ const INSTALLATION_ID = '10000000-0000-4000-8000-0000000000a1';
 const TOKEN = 'opaque-private-token-never-log-this';
 const EXPIRES_AT = '2026-10-30T10:00:00.000Z';
 
-function fakePushClient({ attempts = 0 } = {}) {
+function fakePushClient({ attempts = 0, category = 'gift_received' } = {}) {
   const calls = [];
   return {
     calls,
     async rpc(name, parameters) {
       calls.push({ name, parameters });
       if (name === 'android_push_claim_events') {
-        return { data: [{ event_id: EVENT_ID, notification_id: NOTIFICATION_ID, category: 'gift_received', expires_at: EXPIRES_AT, lease_token: 'lease-private' }] };
+        return { data: [{ event_id: EVENT_ID, notification_id: NOTIFICATION_ID, category, expires_at: EXPIRES_AT, lease_token: 'lease-private' }] };
       }
       if (name === 'android_push_resolve_event_tokens') {
-        return { data: [{ installation_id: INSTALLATION_ID, fcm_token: TOKEN, category: 'gift_received', expires_at: EXPIRES_AT, attempts }] };
+        return { data: [{ installation_id: INSTALLATION_ID, fcm_token: TOKEN, category, expires_at: EXPIRES_AT, attempts }] };
       }
       if (name === 'android_push_record_attempt') return { data: 'completed', error: null };
       return { data: null, error: { message: 'unexpected rpc' } };
@@ -48,8 +48,14 @@ test('el worker usa exclusivamente las tres RPC allowlisted y envía payload gen
     category: 'gift_received',
     schema_version: '1',
   });
-  assert.deepEqual(sentMessages[0].notification, { title: 'MiniPeopleDB', body: 'Tienes una nueva notificación.' });
-  assert.equal(sentMessages[0].android.notification.tag, NOTIFICATION_ID);
+  assert.deepEqual(sentMessages[0].notification, { title: 'Nuevo regalo', body: 'Has recibido un regalo.' });
+  assert.deepEqual(sentMessages[0].android.notification, {
+    tag: NOTIFICATION_ID,
+    channelId: 'mini-people-notifications',
+    icon: 'ic_notification',
+    color: '#E3000B',
+  });
+  assert.equal('actions' in sentMessages[0].android.notification, false);
   assert.equal(sentMessages[0].android.ttl, 3600000);
   assert.equal(JSON.stringify(sentMessages).includes('secret'), false);
   assert.equal(JSON.stringify(logs).includes(TOKEN), false);
@@ -61,6 +67,33 @@ test('el worker usa exclusivamente las tres RPC allowlisted y envía payload gen
     p_error_code: null,
     p_retry_delay_seconds: 0,
   });
+});
+
+test('el texto push representa cada categoría sin exponer datos privados ni acciones', async () => {
+  const expectedCopy = {
+    gift_received: ['Nuevo regalo', 'Has recibido un regalo.'],
+    gift_thanks: ['Regalo agradecido', 'Han agradecido un regalo que enviaste.'],
+    ranking_entered: ['Ranking', 'Has entrado en un ranking.'],
+    ranking_exited: ['Ranking', 'Ya no apareces en el ranking.'],
+    daily_summary: ['Resumen diario', 'Tu resumen diario está disponible.'],
+    friend_request: ['Solicitud de amistad', 'Tienes una nueva solicitud de amistad.'],
+    friend_request_accepted: ['Solicitud aceptada', 'Han aceptado tu solicitud de amistad.'],
+    weekly_ranking_available: ['Ranking semanal', 'El nuevo ranking semanal está disponible.'],
+  };
+  for (const [category, expected] of Object.entries(expectedCopy)) {
+    const sentMessages = [];
+    const worker = createAndroidPushJobs({
+      client: fakePushClient({ category }),
+      sender: { async send(message) { sentMessages.push(message); } },
+      now: () => new Date('2026-10-30T09:00:00.000Z'),
+      logger: { info() {}, warn() {} },
+    });
+    await worker.runOnce();
+    assert.deepEqual([sentMessages[0].notification.title, sentMessages[0].notification.body], expected);
+    assert.equal('actions' in sentMessages[0].android.notification, false);
+    assert.equal('clickAction' in sentMessages[0].android.notification, false);
+    assert.deepEqual(Object.keys(sentMessages[0].data).sort(), ['category', 'notification_id', 'schema_version']);
+  }
 });
 
 test('los errores transitorios aplican backoff acotado y errores de token se desactivan sin reintento', async () => {

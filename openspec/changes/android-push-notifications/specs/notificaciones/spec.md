@@ -3,11 +3,12 @@
 ## ADDED Requirements
 
 ### Requirement: Entregar notificaciones Android en segundo plano
-Una notificacion persistida SHALL generar una entrega FCM a cada instalacion Android activa y autorizada del destinatario cuando la app este en segundo plano o su proceso haya terminado normalmente. La bandeja persistida SHALL seguir siendo la fuente de verdad; la entrega FCM SHALL NOT reemplazar ni alterar el contrato web, la persistencia o la recepcion foreground mediante Realtime.
+Una notificacion persistida SHALL generar una entrega FCM a cada instalacion Android activa y autorizada del destinatario cuando la app este en segundo plano o su proceso haya terminado normalmente. El titulo y cuerpo visibles SHALL representar la categoria de la notificacion sin incluir nombres ni datos de negocio, y la alerta nativa SHALL NOT incluir botones de accion. La bandeja persistida SHALL seguir siendo la fuente de verdad; la entrega FCM SHALL NOT reemplazar ni alterar el contrato web, la persistencia o la recepcion foreground mediante Realtime.
 
 #### Scenario: Notificacion nueva con la app cerrada
 - **WHEN** se confirma una notificacion y el destinatario tiene una instalacion Android activa con permiso
 - **THEN** el servidor solicita a FCM una alerta para esa instalacion aunque el proceso de la app no este ejecutandose
+- **AND** el texto visible identifica el tipo de aviso y la alerta no presenta botones de accion
 - **AND** la fila persistida conserva su estado de lectura hasta una accion explicita
 
 #### Scenario: Notificacion mientras la app esta visible
@@ -45,12 +46,21 @@ La app SHALL crear un canal Android estable y solicitar `POST_NOTIFICATIONS` en 
 - **THEN** la app no presenta alertas del sistema, conserva la bandeja y sincroniza el estado cuando vuelve a estar activa
 
 ### Requirement: Mostrar el estado real de notificaciones del sistema en Preferencias
-En Android, el modal Preferencias SHALL mostrar un control llamado «Notificaciones del sistema activadas» cuyo estado visual SHALL reflejar el permiso de notificaciones de la aplicación y el canal de notificaciones configurado en Android. El texto SHALL preceder visualmente al toggle y no SHALL mostrarse un texto adicional de estado junto a él. Este control SHALL NOT aparecer en el modal Notificaciones ni en clientes web. Al activar, la app SHALL solicitar el permiso nativo cuando sea necesario y registrar o renovar el token si Android permite las notificaciones. Al desactivar, la app SHALL abrir los ajustes nativos de notificaciones de la aplicación, ya que Android controla esa autorización; al volver, SHALL consultar de nuevo el estado real y sincronizar el registro del dispositivo. Si el usuario deniega el permiso o el canal está desactivado, el control SHALL permanecer apagado y la bandeja persistida SHALL seguir disponible.
+En Android, el modal Preferencias SHALL mostrar un control llamado «Notificaciones del sistema» cuyo estado visual SHALL reflejar el permiso de notificaciones de la aplicación y el canal de notificaciones configurado en Android. El texto SHALL preceder visualmente al toggle y no SHALL mostrarse un texto adicional de estado junto a él. Este control SHALL NOT aparecer en el modal Notificaciones ni en clientes web. Al activar, la app SHALL solicitar el permiso nativo cuando sea necesario y registrar o renovar el token si Android permite las notificaciones. Al desactivar, la app SHALL abrir los ajustes nativos de notificaciones de la aplicación, ya que Android controla esa autorización; al volver, SHALL consultar de nuevo el estado real y sincronizar el registro del dispositivo. Si el usuario deniega el permiso o el canal está desactivado, el control SHALL permanecer apagado y la bandeja persistida SHALL seguir disponible.
 
 #### Scenario: Abrir Preferencias con notificaciones activadas en Android
 - **WHEN** la aplicación y el canal de notificaciones están habilitados en los ajustes de Android
 - **THEN** el control en Preferencias aparece activado
 - **AND** el modal Notificaciones no contiene el control
+
+#### Scenario: Usar el icono común de ladrillo rojo
+- **WHEN** Android muestra el icono de la aplicación o una notificación nativa
+- **THEN** ambos usan la marca de ladrillo rojo definida por el favicon del cliente web
+
+#### Scenario: Aviso push representativo sin acciones
+- **WHEN** FCM entrega una notificación de cualquier categoría soportada
+- **THEN** el título y el cuerpo describen esa categoría sin datos privados
+- **AND** no se envían botones ni acciones; la interacción se realiza desde el modal de notificaciones
 
 #### Scenario: Activar notificaciones desde Preferencias
 - **WHEN** el usuario activa el control y el permiso aún no está concedido
