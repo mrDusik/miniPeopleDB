@@ -1,0 +1,107 @@
+
+> mi-proyecto@1.0.0 test
+> node --test test/profile-descriptions-jobs.test.js
+
+TAP version 13
+# Subtest: Profile Descriptions Worker: Task 3.1
+    # Subtest: Worker: run() processes users from claims
+    ok 1 - Worker: run() processes users from claims
+      ---
+      duration_ms: 3.8813
+      type: 'test'
+      ...
+    # Subtest: Worker: run() returns correct statistics
+    ok 2 - Worker: run() returns correct statistics
+      ---
+      duration_ms: 2.2315
+      type: 'test'
+      ...
+    # Subtest: Worker: processes users with pagination
+    ok 3 - Worker: processes users with pagination
+      ---
+      duration_ms: 0.8515
+      type: 'test'
+      ...
+    # Subtest: Worker: respects batch size option
+    ok 4 - Worker: respects batch size option
+      ---
+      duration_ms: 0.6021
+      type: 'test'
+      ...
+    # Subtest: Worker: respects lease duration option
+    ok 5 - Worker: respects lease duration option
+      ---
+      duration_ms: 0.4572
+      type: 'test'
+      ...
+    # Subtest: Worker: handles pagination correctly
+    ok 6 - Worker: handles pagination correctly
+      ---
+      duration_ms: 0.3803
+      type: 'test'
+      ...
+    # Subtest: Worker: skips regeneration when no meaningful changes
+    ok 7 - Worker: skips regeneration when no meaningful changes
+      ---
+      duration_ms: 0.3622
+      type: 'test'
+      ...
+    # Subtest: Worker: handles transient errors with graceful degradation
+    ok 8 - Worker: handles transient errors with graceful degradation
+      ---
+      duration_ms: 0.5042
+      type: 'test'
+      ...
+# Profile descriptions worker telemetry: {"duration_minutes":0,"processed":100,"succeeded":95,"skipped":10,"failed":5,"error_count":2,"started_at":"2026-11-02T12:16:05.157Z","completed_at":"2026-11-02T12:16:05.157Z"}
+# Errors by phase: {"read_context":1,"save":1}
+    # Subtest: Worker: exhausts retries and reports error
+    ok 9 - Worker: exhausts retries and reports error
+      ---
+      duration_ms: 83.1912
+      type: 'test'
+      ...
+    # Subtest: Worker: handles lease expiration gracefully
+    ok 10 - Worker: handles lease expiration gracefully
+      ---
+      duration_ms: 0.6984
+      type: 'test'
+      ...
+    # Subtest: logWorkerTelemetry: returns summary without private data
+    ok 11 - logWorkerTelemetry: returns summary without private data
+      ---
+      duration_ms: 0.4778
+      type: 'test'
+      ...
+    # Subtest: Repository: claimWork calls RPC correctly
+    ok 12 - Repository: claimWork calls RPC correctly
+      ---
+      duration_ms: 0.137
+      type: 'test'
+      ...
+    # Subtest: Repository: readContext calls RPC correctly
+    ok 13 - Repository: readContext calls RPC correctly
+      ---
+      duration_ms: 0.0928
+      type: 'test'
+      ...
+    # Subtest: Repository: saveDescriptions calls RPC correctly
+    ok 14 - Repository: saveDescriptions calls RPC correctly
+      ---
+      duration_ms: 0.0895
+      type: 'test'
+      ...
+    1..14
+ok 1 - Profile Descriptions Worker: Task 3.1
+  ---
+  duration_ms: 97.8121
+  type: 'test'
+  ...
+1..1
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 428.079
