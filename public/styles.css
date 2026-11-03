@@ -564,7 +564,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .dna-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
 .dna-dialog-heading h2 { margin: 0; }
 .dna-dialog-body { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); align-items: center; gap: 24px; }
-.dna-legend-panel { display: grid; gap: 16px; min-width: 0; }
+.dna-legend-panel { display: grid; gap: 8px; min-width: 0; }
 .dna-chart { position: relative; width: 100%; max-width: 240px; aspect-ratio: 1; }
 .dna-chart[hidden] { display: none; }
 .dna-chart canvas { position: relative; z-index: 1; display: block; width: 100% !important; height: 100% !important; }
@@ -584,6 +584,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .dna-swatch-fan { background: var(--dna-fan); }
 .dna-legend-item > strong { color: var(--ink); font: 700 0.88rem Arial, sans-serif; }
 .dna-percentage { grid-column: 3; grid-row: 1; }
+.dna-description { grid-column: 2 / -1; color: var(--muted); font: 0.78rem/1.35 Arial, sans-serif; }
 .modal-dna > #dna-retry { display: block; margin: 18px auto 0; }
 .modal-dna > #dna-retry[hidden] { display: none; }
 .achievements-heading { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 4px solid var(--blue); }
@@ -1110,6 +1111,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
   .dna-legend { gap: 10px; }
   .dna-legend-item { gap: 3px 5px; margin-right: 12px; }
   .dna-legend-item > strong { font-size: 0.8rem; }
+  .dna-description { grid-column: 1 / -1; font-size: 0.68rem; white-space: nowrap; }
   .global-ranking-list { gap: 6px; }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
   .ranking-summary { grid-column: 1; grid-row: 1; }
