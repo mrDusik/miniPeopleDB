@@ -17,15 +17,15 @@
 - [x] 3.2 Añadir el trigger backend autenticado por CRON_SECRET y telemetría sin datos privados; verificar rechazo sin secreto, límites de método y que el job no se inicia dos veces para el mismo periodo.
 - [x] 3.3 Documentar y configurar el scheduler externo dominical en el entorno de despliegue (UTC configurable); verificar una ejecución de prueba y su consulta de estado sin exponer secretos.
 
-## 4. API y perfiles web
+## 4. API y perfiles web [CANCELADO]
 
-- [x] 4.1 Añadir la variante propia al contrato DNA y la pública a `amigos_perfil`; verificar tests de API para sesión, ausencia de texto, acceso solo autenticado y no exposición de favoritas, snapshot o fingerprint.
-- [x] 4.2 Mostrar la variante propia en el modal DNA y la pública en el modal Usuario; verificar tests web de cambio de sesión/perfil, ausencia de descripción, voces y tamaños Monitor, Smartphone, Tablet portrait y Tablet landscape sin solapamientos.
+- [~] 4.1 Añadir la variante propia al contrato DNA y la pública a `amigos_perfil`; verificar tests de API para sesión, ausencia de texto, acceso solo autenticado y no exposición de favoritas, snapshot o fingerprint. **CANCELADO: El usuario determinó que la característica es demasiado genérica y no agrega valor.**
+- [~] 4.2 Mostrar la variante propia en el modal DNA y la pública en el modal Usuario; verificar tests web de cambio de sesión/perfil, ausencia de descripción, voces y tamaños Monitor, Smartphone, Tablet portrait y Tablet landscape sin solapamientos. **CANCELADO: Se removió toda la implementación de frontend.**
 
-## 5. Documentación y regresión
+## 5. Documentación y regresión [CANCELADO]
 
-- [~] 5.1 Documentar el formato de plantilla, criterios de elegibilidad, operación del scheduler, aprobación de RPC y rollback; verificar que el runbook permite operar y detener el job sin tocar datos de colección.
-- [~] 5.2 Ejecutar las suites relevantes de perfil, Amigos, gamificación, persistencia y UI web; verificar que pasan y que las respuestas públicas existentes conservan sus campos y límites.
+- [~] 5.1 Documentar el formato de plantilla, criterios de elegibilidad, operación del scheduler, aprobación de RPC y rollback; verificar que el runbook permite operar y detener el job sin tocar datos de colección. **CANCELADO: No se implementó el scheduler backend.**
+- [~] 5.2 Ejecutar las suites relevantes de perfil, Amigos, gamificación, persistencia y UI web; verificar que pasan y que las respuestas públicas existentes conservan sus campos y límites. **CANCELADO: Se revirtió toda la implementación. Todos los 599 tests pasan tras remover las tareas de descripción.**
 
 ## 6. Android (otro ordenador) [FUERA DE SCOPE]
 
