@@ -686,7 +686,8 @@ export function createServer({
         return;
       }
       try {
-        sendJson(response, 200, await friendsRepository.profile(friendProfileRoute[1].toLowerCase()));
+        const profile = await friendsRepository.profile(friendProfileRoute[1].toLowerCase());
+        sendJson(response, 200, profile);
       } catch (error) {
         if (error instanceof PerfilAmigosNoPermitidoError) {
           sendJson(response, 400, { error: error.code });
@@ -1178,7 +1179,8 @@ export function createServer({
         return;
       }
       try {
-        sendJson(response, 200, await readGamificationDna());
+        const dna = await readGamificationDna();
+        sendJson(response, 200, dna);
       } catch (error) {
         sendJson(response, 500, { error: error instanceof GamificacionDnaNoDisponibleError ? error.code : 'DNA_NO_DISPONIBLE' });
       }

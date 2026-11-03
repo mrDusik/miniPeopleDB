@@ -19,15 +19,15 @@
 
 ## 4. API y perfiles web
 
-- [ ] 4.1 Añadir la variante propia al contrato DNA y la pública a `amigos_perfil`; verificar tests de API para sesión, ausencia de texto, acceso solo autenticado y no exposición de favoritas, snapshot o fingerprint.
-- [ ] 4.2 Mostrar la variante propia en el modal DNA y la pública en el modal Usuario; verificar tests web de cambio de sesión/perfil, ausencia de descripción, voces y tamaños Monitor, Smartphone, Tablet portrait y Tablet landscape sin solapamientos.
+- [x] 4.1 Añadir la variante propia al contrato DNA y la pública a `amigos_perfil`; verificar tests de API para sesión, ausencia de texto, acceso solo autenticado y no exposición de favoritas, snapshot o fingerprint.
+- [x] 4.2 Mostrar la variante propia en el modal DNA y la pública en el modal Usuario; verificar tests web de cambio de sesión/perfil, ausencia de descripción, voces y tamaños Monitor, Smartphone, Tablet portrait y Tablet landscape sin solapamientos.
 
 ## 5. Documentación y regresión
 
-- [ ] 5.1 Documentar el formato de plantilla, criterios de elegibilidad, operación del scheduler, aprobación de RPC y rollback; verificar que el runbook permite operar y detener el job sin tocar datos de colección.
-- [ ] 5.2 Ejecutar las suites relevantes de perfil, Amigos, gamificación, persistencia y UI web; verificar que pasan y que las respuestas públicas existentes conservan sus campos y límites.
+- [~] 5.1 Documentar el formato de plantilla, criterios de elegibilidad, operación del scheduler, aprobación de RPC y rollback; verificar que el runbook permite operar y detener el job sin tocar datos de colección.
+- [~] 5.2 Ejecutar las suites relevantes de perfil, Amigos, gamificación, persistencia y UI web; verificar que pasan y que las respuestas públicas existentes conservan sus campos y límites.
 
-## 6. Android (otro ordenador)
+## 6. Android (otro ordenador) [FUERA DE SCOPE]
 
 - [ ] 6.1 En un entorno con Android SDK, regenerar recursos, sincronizar Capacitor y compilar un APK debug; verificar que el APK se construye con el backend aprobado y sin secretos.
 - [ ] 6.2 Instalar el APK en un dispositivo y comprobar la variante propia en DNA y la pública en el perfil ajeno, incluidos ausencia de texto y vista estrecha; registrar resultado y fallos antes de marcar completado el grupo Android.
