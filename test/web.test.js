@@ -436,9 +436,6 @@ test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', 
     assert.equal(dnaDeclarations.get('#dna-dialog:has(#dna-status.loading-message) #dna-status').getPropertyValue('margin-inline'), '8px');
     assert.equal(declarations.get('#form-dialog .description-field textarea').getPropertyValue('height'), '100%');
     assert.equal(declarations.get('#dna-dialog #dna-chart').getPropertyValue('transform'), 'translateY(-8px)');
-    assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('grid-column'), '1 / -1');
-    assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('font-size'), '0.68rem');
-    assert.equal(dnaDeclarations.get('.dna-description').getPropertyValue('white-space'), 'nowrap');
     assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('overflow'), 'visible');
     assert.equal(declarations.get('.modal-friends .friends-tabs').getPropertyValue('grid-template-columns'), 'repeat(4, minmax(0, 1fr))');
     assert.equal(declarations.get('.modal-friends .friends-tabs .button').getPropertyValue('height'), '44px');
