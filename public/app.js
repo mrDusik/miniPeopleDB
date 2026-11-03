@@ -1130,10 +1130,10 @@ function renderGamificationDna(state) {
 }
 
 const DNA_TRAITS = [
-  { key: 'rarityHunter', name: 'Rarity Hunter', description: 'Busca piezas raras y valiosas.', color: 'rarity' },
-  { key: 'explorer', name: 'Explorer', description: 'Descubre categorías y subcategorías.', color: 'explorer' },
-  { key: 'collector', name: 'Collector', description: 'Amplía y completa la colección.', color: 'collector' },
-  { key: 'fan', name: 'Fan', description: 'Muestra afinidad por temáticas.', color: 'fan' },
+  { key: 'collector', name: 'Collector', description: 'Amplías tu colección y completas series.', color: 'collector' },
+  { key: 'explorer', name: 'Explorer', description: 'Abres nuevas rutas entre categorías.', color: 'explorer' },
+  { key: 'fan', name: 'Fan', description: 'Sigues tus temáticas favoritas.', color: 'fan' },
+  { key: 'rarityHunter', name: 'Rarity Hunter', description: 'Persigues piezas raras y valiosas.', color: 'rarity' },
 ];
 
 let dnaChartInstance = null;
