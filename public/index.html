@@ -14,6 +14,10 @@
 <body>
   <svg class="auth-icon-definitions" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false">
     <defs>
+      <symbol id="observation-eye-icon" viewBox="0 0 24 24">
+        <path d="M2 12C4 8 7 5 12 5s8 3 10 7c-2 4-5 7-10 7S4 16 2 12Z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </symbol>
       <symbol id="auth-eye-icon" viewBox="0 0 24 24">
         <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
         <circle cx="12" cy="12" r="3" />
@@ -30,7 +34,7 @@
     <div class="auth-card">
       <h1 id="auth-title"><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
       <div id="auth-access-panel" class="auth-access-panel">
-        <p>¡Empieza a gestionar tu colección y consigue Bricks para ganar a tus amigos!</p>
+        <p>¡Empieza a gestionar tu colección y consigue Bricks para conquistar el ranking!</p>
         <button type="button" id="login-google" class="button button-primary"><img src="/logo_images/google-2.png" alt="" width="20" height="20" aria-hidden="true"><span id="auth-google-label">Inicia sesión con Google</span></button>
         <p id="auth-divider" class="auth-divider" aria-hidden="true">o con tu usuario de MiniPeopleDB</p>
         <div class="auth-mode-toggle" role="group" aria-label="Tipo de acceso">
@@ -66,7 +70,7 @@
             <li data-rule="lowercase">Al menos una letra minúscula</li>
             <li data-rule="number">Al menos un número</li>
           </ul>
-          <button type="submit" id="classic-auth-submit" class="button button-secondary">Iniciar sesión</button>
+          <button type="submit" id="classic-auth-submit" class="button button-primary">Iniciar sesión</button>
         </form>
         <button type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
       </div>
@@ -115,6 +119,15 @@
           <input id="profile-avatar-url" name="avatarUrl" type="hidden">
         </div>
       </div>
+      <div id="profile-account-settings" class="profile-two-column-row" hidden>
+        <div class="profile-field">
+          <label for="profile-email">Email registrado</label>
+          <input id="profile-email" type="email" autocomplete="email" readonly>
+        </div>
+        <div class="profile-field profile-password-action">
+          <button type="button" id="open-change-password" class="button button-secondary" aria-haspopup="dialog" aria-controls="change-password-dialog">Cambiar contraseña</button>
+        </div>
+      </div>
       <div class="profile-two-column-row">
         <div class="profile-field">
           <label for="profile-language">Idioma</label>
@@ -158,6 +171,36 @@
       <button type="button" id="open-delete-account" class="logout-link" hidden>Eliminar cuenta</button>
     </div>
   </dialog>
+  <dialog id="change-password-dialog" class="modal" aria-labelledby="change-password-title">
+    <h2 id="change-password-title">Cambiar contraseña</h2>
+    <form id="change-password-form" class="auth-form">
+      <div class="auth-password-field">
+        <label for="settings-password">Nueva contraseña</label>
+        <div class="auth-password-control">
+          <input id="settings-password" type="password" autocomplete="new-password" aria-describedby="settings-password-rules" required>
+          <button type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+        </div>
+      </div>
+      <div class="auth-password-field">
+        <label for="settings-password-confirm">Confirmar nueva contraseña</label>
+        <div class="auth-password-control">
+          <input id="settings-password-confirm" type="password" autocomplete="new-password" required>
+          <button type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+        </div>
+      </div>
+      <ul id="settings-password-rules" class="auth-password-rules" aria-live="polite">
+        <li data-rule="length">Al menos 5 caracteres</li>
+        <li data-rule="uppercase">Al menos una letra mayúscula</li>
+        <li data-rule="lowercase">Al menos una letra minúscula</li>
+        <li data-rule="number">Al menos un número</li>
+      </ul>
+      <p id="settings-password-message" class="status error" role="alert"></p>
+      <div class="form-actions">
+        <button type="submit" id="settings-password-save" class="button button-primary">Cambiar contraseña</button>
+        <button type="button" id="settings-password-cancel" class="button button-secondary">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="delete-account-dialog" class="modal" aria-labelledby="delete-account-title" aria-describedby="delete-account-message">
     <h2 id="delete-account-title">Eliminar cuenta</h2>
     <p id="delete-account-message">Se eliminarán tu cuenta y todos sus datos de colección, preferencias e histórico.
@@ -176,12 +219,6 @@ Esta acción no se puede deshacer.</p>
           <h1><img class="brand-logo" src="/logo_images/Gemini_Generated_Image_kkpu95kkpu95kkpu.png" alt="MiniPeopleDB"></h1>
         </div>
         <div class="notifications-entry-row">
-            <div class="ranking-session">
-              <button type="button" id="ranking-main-globe" class="ranking-main-globe" aria-label="En Top Global" aria-haspopup="dialog" aria-controls="ranking-dialog" title="En Top Global" hidden>
-                <span aria-hidden="true">🌐</span>
-                <span id="ranking-main-position" class="ranking-main-position" aria-hidden="true"></span>
-              </button>
-            </div>
             <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
               <img src="/status_images/sobre.png" alt="">
               <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
@@ -192,8 +229,13 @@ Esta acción no se puede deshacer.</p>
             </button>
             <div class="user-session">
               <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
-                <img id="user-avatar" class="user-avatar" alt="" hidden>
-                <span class="user-avatar-fallback" aria-hidden="true">👤</span>
+                <span class="user-avatar-frame">
+                  <img id="user-avatar" class="user-avatar" alt="" hidden>
+                  <span class="user-avatar-fallback" aria-hidden="true">👤</span>
+                  <span id="ranking-main-globe" class="ranking-avatar-badge" role="img" aria-label="En Top Global" title="En Top Global" hidden>
+                    <span id="ranking-main-position" aria-hidden="true"></span>
+                  </span>
+                </span>
                 <span class="user-menu-chevron" aria-hidden="true">▾</span>
               </button>
               <div id="user-profile" class="user-profile" hidden>
@@ -222,9 +264,9 @@ Esta acción no se puede deshacer.</p>
                   <strong id="gamification-bricks">0</strong>
                   <img class="gamification-brick-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="Bricks">
                 </span>
-                <div class="collection-counts-panel" aria-label="Recuento de minifiguras">
-                  <span><img class="count-icon status-icon-image" src="/status_images/caja.png" alt="Colección" title="Colección"><strong id="collection-count">0</strong></span>
-                  <span><img class="count-icon status-icon-image" src="/status_images/lupa.png" alt="Búsqueda" title="Búsqueda"><strong id="wanted-count">0</strong></span>
+                <div class="collection-counts-panel" aria-label="Recuento de minipersonas">
+                  <span><span class="count-icon status-icon-image box-icon" role="img" aria-label="Colección" title="Colección">📦</span><strong id="collection-count">0</strong></span>
+                  <span><span class="count-icon status-icon-image magnifier-icon" role="img" aria-label="Búsqueda" title="Búsqueda">🔍</span><strong id="wanted-count">0</strong></span>
                 </div>
               </div>
               <button type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
@@ -302,11 +344,11 @@ Esta acción no se puede deshacer.</p>
       <form id="filters-form" class="filters-form">
         <label>
           Nombre
-          <input id="nombre" name="nombre" placeholder="Ej. Demogorgon">
+          <input id="nombre" name="nombre">
         </label>
         <label>
           Id
-          <input id="id" name="id" placeholder="Ej. col079">
+          <input id="id" name="id">
         </label>
         <label>
           Categoría
@@ -331,17 +373,17 @@ Esta acción no se puede deshacer.</p>
             <legend class="visually-hidden">Estado</legend>
             <label class="filter-toggle" title="Colección">
               <input id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
-              <img class="filter-symbol status-icon-image" src="/status_images/caja.png" title="Colección" alt="">
+              <span class="filter-symbol status-icon-image box-icon" title="Colección" aria-hidden="true">📦</span>
             </label>
             <label class="filter-toggle" title="Búsqueda">
               <input id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
-              <img class="filter-symbol status-icon-image" src="/status_images/lupa.png" title="Búsqueda" alt="">
+              <span class="filter-symbol status-icon-image magnifier-icon" title="Búsqueda" aria-hidden="true">🔍</span>
             </label>
           </fieldset>
           <label class="filter-toggle">
             <span class="visually-hidden">Observadas</span>
             <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
-            <span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️</span>
+            <span class="eye-symbol" title="Seguimiento" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" focusable="false"><use href="#observation-eye-icon"/></svg></span>
           </label>
         </div>
         <button type="button" id="show-all" class="button button-secondary">Reestablecer</button>
@@ -358,7 +400,7 @@ Esta acción no se puede deshacer.</p>
         </div>
         <div class="results-heading-actions">
           <p id="result-count" class="result-count" aria-live="polite"></p>
-          <button type="button" id="new-minifigura" class="button button-primary button-icon" aria-label="Nueva minifigura" title="Nueva minifigura">
+          <button type="button" id="new-minifigura" class="button button-primary button-icon" aria-label="Nueva minipersona" title="Nueva minipersona">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
           </button>
         </div>
@@ -369,11 +411,11 @@ Esta acción no se puede deshacer.</p>
           <thead>
             <tr>
               <th scope="col" aria-label="Imagen"></th>
-              <th scope="col" aria-label="Observar"></th>
-              <th scope="col">ID</th>
-              <th scope="col">Nombre</th>
-              <th scope="col">Categoría</th>
-              <th scope="col">Subcategoría</th>
+              <th scope="col">Seguimiento</th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="id">ID</button></th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="nombre">Nombre</button></th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="categoria">Categoría</button></th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="subcategoria">Subcategoría</button></th>
               <th scope="col"><button type="button" class="table-sort" data-sort="anio">Año</button></th>
               <th scope="col">Estado</th>
               <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
@@ -394,13 +436,13 @@ Esta acción no se puede deshacer.</p>
     <dialog id="first-minifigura-dialog" class="modal first-minifigura-dialog" aria-labelledby="first-minifigura-title">
       <img src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt="" class="first-minifigura-icon">
       <h2 id="first-minifigura-title" tabindex="-1">Tu colección empieza aquí</h2>
-      <p>Añade tu primera minifigura para ganar unos Bricks</p>
+      <p>Añade tu primera minipersona para ganar unos Bricks</p>
       <button type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
     </dialog>
 
     <dialog id="form-dialog" class="modal" aria-labelledby="form-dialog-title">
       <div class="form-dialog-heading modal-dialog-heading">
-        <h2 id="form-dialog-title">Nueva minifigura</h2>
+        <h2 id="form-dialog-title">Nueva minipersona</h2>
         <button type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
       </div>
       <form id="minifigura-form" novalidate>
@@ -408,7 +450,7 @@ Esta acción no se puede deshacer.</p>
           <div class="modal-row modal-row-identity">
             <div class="modal-identity-fields">
               <label id="form-id-label" class="required-label" for="form-id"><span>ID</span><input id="form-id" name="id" required></label>
-              <label id="form-nombre-label" class="required-label" for="form-nombre"><span>Nombre</span><input id="form-nombre" name="nombre" class="input-readonly" readonly disabled required></label>
+              <label id="form-nombre-label" for="form-nombre"><span>Nombre</span><input id="form-nombre" name="nombre" class="input-readonly" readonly disabled required></label>
             </div>
             <label class="description-field">
               <span>Descripción</span>
@@ -424,11 +466,11 @@ Esta acción no se puede deshacer.</p>
                   <option value="BUSCADA">Búsqueda</option>
                 </select>
                 <div id="form-state-toggles" class="form-state-toggles" role="group" aria-label="Estado">
-                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección"><img class="status-icon-image" src="/status_images/caja.png" alt=""></button>
-                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda"><img class="status-icon-image" src="/status_images/lupa.png" alt=""></button>
+                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección"><span class="status-icon-image box-icon" aria-hidden="true">📦</span></button>
+                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda"><span class="status-icon-image magnifier-icon" aria-hidden="true">🔍</span></button>
                 </div>
               </div>
-              <button type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false">👁️</button>
+              <button type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><use href="#observation-eye-icon"/></svg></button>
             </div>
             <div class="modal-row modal-row-purchase">
               <label>
@@ -442,7 +484,7 @@ Esta acción no se puede deshacer.</p>
             </div>
             <div class="modal-row modal-row-category">
               <label>
-                <span class="required-label">Categoría</span>
+                <span>Categoría</span>
                 <input id="form-categoria" name="categoria" class="input-readonly" readonly required>
               </label>
               <label>
@@ -452,11 +494,11 @@ Esta acción no se puede deshacer.</p>
             </div>
             <div class="modal-row modal-row-brickset">
               <label>
-                <span class="required-label">Año</span>
+                <span>Año</span>
                 <input id="form-anio" name="anio" type="number" class="input-readonly" readonly required>
               </label>
               <label>
-                <span class="required-label">Precio Brickset (€)</span>
+                <span>Precio Brickset (€)</span>
                 <input id="form-precio" name="precio" type="number" min="0" step="0.01" class="input-readonly" readonly required>
               </label>
             </div>
@@ -486,7 +528,7 @@ Esta acción no se puede deshacer.</p>
     </dialog>
 
     <dialog id="delete-dialog" class="modal">
-      <h2>Eliminar minifigura</h2>
+      <h2>Eliminar minipersona</h2>
       <p id="delete-message"></p>
       <div class="form-actions">
         <button type="button" id="delete-confirm" class="button button-danger">Eliminar</button>
@@ -571,8 +613,8 @@ Esta acción no se puede deshacer.</p>
         <section class="public-profile-stats" aria-label="Resumen">
           <div role="group" aria-label="Bricks" title="Bricks"><img class="public-profile-stat-icon" src="/toast_images/hero_2026-01-05_16-38-47-871.webp" alt=""><strong id="public-profile-bricks"></strong></div>
           <div role="group" aria-label="Nivel" title="Nivel"><img id="public-profile-level-image" class="public-profile-stat-icon" alt=""><strong id="public-profile-level"></strong></div>
-          <div role="group" aria-label="En colección" title="En colección"><img class="public-profile-stat-icon" src="/status_images/caja.png" alt=""><strong id="public-profile-collection-count"></strong></div>
-          <div role="group" aria-label="En búsqueda" title="En búsqueda"><img class="public-profile-stat-icon" src="/status_images/lupa.png" alt=""><strong id="public-profile-wanted-count"></strong></div>
+          <div role="group" aria-label="En colección" title="En colección"><span class="public-profile-stat-icon box-icon" aria-hidden="true">📦</span><strong id="public-profile-collection-count"></strong></div>
+          <div role="group" aria-label="En búsqueda" title="En búsqueda"><span class="public-profile-stat-icon magnifier-icon" aria-hidden="true">🔍</span><strong id="public-profile-wanted-count"></strong></div>
         </section>
         <div class="public-profile-overview">
         <section class="public-profile-section public-profile-dna-section" aria-label="DNA">
@@ -640,7 +682,7 @@ Esta acción no se puede deshacer.</p>
       <div class="ranking-order-toolbar">
         <div id="ranking-order" class="analytics-history-ranges ranking-criteria" role="group" aria-label="Ordenar ranking por">
           <button type="button" class="button button-secondary" data-ranking-criterion="nivel" aria-pressed="true">Nivel</button>
-          <button type="button" class="button button-secondary" data-ranking-criterion="coleccion" aria-label="Colección" title="Colección" aria-pressed="false"><img class="ranking-criterion-icon status-icon-image" src="/status_images/caja.png" alt=""></button>
+          <button type="button" class="button button-secondary" data-ranking-criterion="coleccion" aria-label="Colección" title="Colección" aria-pressed="false"><span class="ranking-criterion-icon status-icon-image box-icon" aria-hidden="true">📦</span></button>
           <button type="button" class="button button-secondary" data-ranking-criterion="rarityHunter" aria-pressed="false">Rarity Hunter</button>
           <button type="button" class="button button-secondary" data-ranking-criterion="collector" aria-pressed="false">Collector</button>
           <button type="button" class="button button-secondary" data-ranking-criterion="explorer" aria-pressed="false">Explorer</button>

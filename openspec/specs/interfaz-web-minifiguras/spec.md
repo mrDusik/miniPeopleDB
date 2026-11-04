@@ -6,6 +6,102 @@ Esta capacidad permite consultar y gestionar el catálogo desde un navegador med
 
 ## Requirements
 
+Los toasts con fondo de color (logros ordinarios y niveles) SHALL mostrar texto blanco, incluidos sus textos hijos. Los toasts con fondo neutro SHALL conservar texto oscuro legible; una franja lateral de color SHALL NOT implicar texto blanco.
+
+Los toasts de logros recien conseguidos con `type: regalo` SHALL usar el emoji `🎁` en lugar de la imagen de Bricks, conservando nombre, importe, orden y cadencia de la cola. Los demas logros SHALL conservar su icono de Bricks y los niveles su trofeo.
+
+El marcador de notificaciones SHALL mostrar el numero de avisos sin leer en la esquina superior derecha, compartiendo estilo, tamano y posicion con el contador de Amigos. SHALL actualizar su texto con el contador real, ocultarse y vaciarse cuando sea cero y conservar el recuento en la etiqueta accesible del boton.
+
+Los contadores de Bricks de ambos rankings SHALL mantener sus iconos alineados con una columna numerica estable de 5ch para cuatro digitos y signo semanal. Los numeros SHALL alinearse hacia su icono con separacion constante de 8px y cifras tabulares.
+
+Los contadores de coleccion de los rankings global y semanal SHALL reservar un ancho estable por fila (85px normal, 70px compacto), suficiente para cuatro digitos, con cajas alineadas en una misma columna independientemente de las cifras. Los numeros SHALL alinearse a la izquierda con cifras tabulares y separacion constante de 8px respecto al emoji, sin ampliar el hueco cuando haya menos digitos.
+
+El registro clasico SHALL pedir solo email, contraseña y confirmacion. SHALL ocultar y deshabilitar Username y SHALL NOT enviarlo como metadata de registro; se elegira durante onboarding. El acceso clasico SHALL mantener Username obligatorio y habilitarlo al volver desde registro.
+
+Los campos de contraseña del acceso y registro SHALL tener la misma altura y tipografia que Username y Email, independientemente de sus contenedores y toggles de visibilidad.
+
+### Requirement: Terminologia visible minipersona
+
+La interfaz SHALL usar `minipersona` y `minipersonas` en lugar de `minifigura` y `minifiguras` en textos de acciones, dialogos, estados vacios, errores, confirmaciones, accesibilidad, logros, notificaciones y toasts. SHALL conservar mayusculas y plurales. Los mensajes de sistema y logros recibidos del backend SHALL adaptarse exclusivamente al renderizar, sin mutar los objetos originales.
+
+Esta terminologia SHALL NOT renombrar rutas API, identificadores DOM, campos, codigos de error, datos persistidos ni contratos internos.
+
+### Requirement: Ordenacion de todas las columnas de datos
+
+La tabla principal SHALL permitir ordenar ID, Nombre, Categoria, Subcategoria, Anio, Precio y Diferencia en ambos sentidos mediante botones de cabecera. Imagen, Seguimiento, Estado y Acciones SHALL quedar excluidas, sin botones ni flechas de ordenacion. Cada nombre ordenable SHALL mostrar a su derecha una flecha roja sin saltos de linea; el sentido activo SHALL comunicarse tambien mediante `aria-sort`.
+
+Los textos SHALL ordenarse con comparacion espanola sin distinguir acentos ni mayusculas y con orden numerico natural para IDs. Categoria y subcategoria SHALL ordenarse por sus etiquetas visuales sin modificar valores canonicos. Los numeros SHALL ordenarse por valor numerico y los valores ausentes SHALL quedar al final en ambos sentidos. Restablecer SHALL recuperar el orden original y limpiar los indicadores de ordenacion.
+
+El avatar de la cabecera principal y su alternativa sin imagen SHALL tener las mismas dimensiones que los botones Notificaciones y Amigos: 52px en escritorio y 44px en disposiciones compactas, sin escalado visual adicional y sin invadir el chevron o controles vecinos.
+
+### Requirement: Preferencias sin desplazamiento exterior
+
+El modal Cambiar contraseña SHALL reutilizar los estilos, reglas y controles de visibilidad del registro: lista de requisitos que cambia de estado en cada entrada, dos campos apilados verticalmente, toggles sincronizados que muestran u ocultan ambos secretos y botones debajo de campos y requisitos. La confirmacion SHALL indicar desacuerdo tras perder foco. Al cerrar o reabrir SHALL limpiar valores, indicadores y visibilidad, sin afectar a los controles del registro.
+
+Preferencias SHALL mostrar el email registrado de `session.user.email` en un campo de solo lectura y un boton Cambiar contraseña. Este boton SHALL abrir un modal con nueva contraseña y confirmacion, validando coincidencia y las mismas reglas del registro. SHALL enviar el secreto exclusivamente a Supabase Auth `updateUser`, sin modificar email ni perfil, y mantener abierta Preferencias. SHALL impedir envios duplicados, mostrar errores genericos, permitir cancelar y limpiar secretos al cerrar o terminar sesion. Estos controles SHALL estar ocultos durante onboarding.
+
+El email registrado de solo lectura SHALL compartir el fondo sombreado y color de texto del Username no editable, manteniendo la posibilidad de seleccionar y copiar el email. La fila Email registrado y Cambiar contraseña SHALL aparecer debajo de Username y Avatar y encima de la fila Idioma y Moneda.
+
+El modal de preferencias SHALL ajustarse a la altura disponible sin scroll vertical exterior. SHALL mantener accesibles campos, mensajes, guardar, cerrar y eliminar cuenta; solo la lista de categorias favoritas SHALL disponer de desplazamiento interno y reducir su altura segun el espacio disponible.
+
+La lista SHALL ocupar todo el espacio restante de su recuadro sin un limite fijo de 108px ni huecos inferiores innecesarios, manteniendo las opciones alineadas al inicio cuando haya pocos resultados.
+
+Preferencias SHALL conservar los margenes normales de los modales y 12px entre grupos de campos cuando la altura de pantalla supere 700px. La reduccion de espacios SHALL limitarse a pantallas de altura igual o inferior a 700px para mantener visibles las acciones sin scroll exterior.
+
+### Requirement: Alias visuales de categorias CMF
+
+La interfaz SHALL mostrar `Collectible Minifigures` como `CMF` y eliminar la palabra completa `Minifigures` de sus subcategorias (por ejemplo, `Series 4 Minifigures` como `Series 4`). SHALL aplicar estos alias a tabla, filtros, formularios de minifigura y preferencias de categorias favoritas. Las subcategorias de otras categorias SHALL conservar su nombre.
+
+Los alias SHALL ser exclusivamente de presentacion: cache, valores de opciones, favoritos seleccionados, validacion y payloads enviados al backend SHALL conservar los nombres canonicos completos. Los formularios SHALL mantener separados los nombres canonicos de su texto visible al crear, editar, consultar, autocompletar y reiniciar. La busqueda de favoritas SHALL aceptar tanto `CMF` como el nombre canonico.
+
+#### Scenario: Filtrar o guardar una figura CMF
+- **WHEN** se muestra `CMF` y `Series 4` en los controles
+- **THEN** el filtrado utiliza `Collectible Minifigures` y `Series 4 Minifigures`
+- **AND** crear o editar envia estos mismos nombres completos sin modificar los datos originales
+
+### Requirement: Sistema visual geometrico de bloques
+
+La interfaz web y Android SHALL compartir esquinas rectas con `border-radius: 0` en todos los elementos y pseudo-elementos, incluidos tarjetas, botones, dialogos, avatares, inputs, toggles, progreso y tooltips. SHALL usar rojo `#E3000B` para acciones principales, amarillo `#FFD500` para acentos, azul `#006CB7` para navegacion y enlaces, verde `#009639` para indicadores de exito y gris `#222222` o `#333333` para bordes tecnicos. Los fondos de lectura SHALL ser blancos o marfil sutil. Las superficies y controles SHALL tener bordes geometricos contrastados de 1 a 2px, con separadores de color y relieves cuadrados decorativos en cabeceras; SHALL NOT usar degradados ni sombras difusas. Los titulos y acciones SHALL usar Montserrat Bold/Black servida localmente con licencia OFL, y los codigos de inventario SHALL usar monospace.
+
+Este cambio visual SHALL conservar los flujos, contenido, rejillas responsive, foco, estados ocultos y semantica accesible existentes. Las barras y tooltips de Chart.js SHALL tener radio cero y sus marcadores SHALL ser cuadrados; los sectores DNA SHALL conservar su representacion proporcional circular.
+
+Las tarjetas de minifiguras SHALL permanecer sin marco ni borde en toda la aplicacion, incluidos seguimiento, destacados, rankings y perfiles publicos. SHALL conservar el foco visible por teclado y la respuesta visual al pasar el raton, sin alterar los bordes de paneles o dialogos.
+
+La lupa de accion para anadir a buscadas en tarjetas SHALL mostrarse a la mitad de su tamano anterior: 11px en escritorio y 9px en las tarjetas compactas de movil, conservando el area pulsable y la accesibilidad del control. Las lupas de estado o filtros SHALL conservar sus dimensiones.
+
+La cabecera principal SHALL permanecer sin marco exterior, fondo amarillo ni franja de relieves. La tarjeta de acceso SHALL permanecer sin barra amarilla ni franja de relieves decorativos, conservando el resto de sus bordes y estilos.
+
+El modal de logros SHALL alinear los multiplicadores de todas sus filas mediante columnas compartidas, independientemente de las cifras de cantidad o Bricks y de la presencia de estrella de destacado. En Smartphone los multiplicadores SHALL compartir la alineacion izquierda en la segunda linea sin alterar los perfiles publicos.
+
+El texto de cada logro SHALL mantener separacion visible respecto al trofeo, reservando espacio para el padding de la fila. Los importes de Bricks SHALL alinearse a la derecha y sus imagenes SHALL compartir una columna de ancho fijo tanto en movil como en escritorio.
+
+El perfil publico SHALL aplicar columnas compartidas tambien a sus logros destacados para alinear multiplicadores e importes de Bricks entre filas, con la misma distribucion responsive del modal de logros. Los iconos de estado y sus contadores SHALL ocupar columnas contiguas en la misma fila, independientemente de si el icono es imagen o emoji.
+
+Las filas de logros del modal y de perfiles publicos SHALL mostrar el emoji de trofeo `🏆` en lugar de la imagen de logro, conservando el espacio y alineacion del icono. Los logros de regalo y los toasts de regalos y agradecimientos SHALL usar el emoji `🎁` en lugar de la imagen de regalo, manteniendo sus dimensiones y accesibilidad. Los iconos de importes de Bricks SHALL conservar su imagen.
+
+Los toasts de nivel y el resumen diario SHALL usar tambien `🏆`; la interfaz SHALL NOT referenciar la imagen de trofeo `75206.png`.
+
+Toda la interfaz SHALL usar el emoji `🔍` en lugar de `lupa.png`, incluidos filtros, contadores, estados, seguimiento, perfiles y acciones de anadir a buscadas. Los controles SHALL conservar sus nombres accesibles y estados de seleccion.
+
+El estado Coleccion SHALL usar `📦` en lugar de `caja.png` en toda la interfaz, incluidos filtros, tabla, modal, contadores, rankings, perfiles y resumen diario, conservando accesibilidad y estados pulsados.
+
+Los emojis de estado de las tarjetas de seguimiento SHALL tener las mismas dimensiones y tamano de fuente que los filtros de Consulta, tanto en movil como en escritorio.
+
+Las tarjetas de seguimiento de una misma fila SHALL alinear sus bordes e imagenes y mostrar icono, codigo y precio en una unica linea sin saltos ni recortes. El ancho SHALL adaptarse al contenido y el panel SHALL permitir desplazamiento horizontal en movil en lugar de comprimir o dividir el texto.
+
+La tipografia SHALL ser coherente en textos, tablas, formularios, controles nativos, avisos, perfiles, rankings y graficos: Montserrat para lectura y enfasis, con pesos Bold/Black para titulos y acciones. Los estilos SHALL centralizar la familia en `--font-body` y `--font-display`, sin sobrescrituras locales con Arial Rounded o Trebuchet. `--font-code` SHALL reservar monospace para IDs y referencias de inventario, no para leyendas de ranking o importes aislados.
+
+#### Scenario: Consultar la coleccion desde movil
+- **WHEN** se abre la interfaz en una pantalla de 320px o superior
+- **THEN** los componentes conservan sus esquinas rectas, paleta y jerarquia tipografica sin desbordamiento horizontal de la pagina
+- **AND** los campos de filtros ofrecen al menos 44px de alto en Smartphone
+- **AND** la fuente se carga desde la propia aplicacion, sin depender de un proveedor externo
+
+#### Scenario: Abrir un modal o recibir un aviso
+- **WHEN** se muestra un dialogo, avatar, toast, toggle o tooltip de un grafico
+- **THEN** no aparecen esquinas redondeadas ni sombras difusas
+- **AND** los estados siguen siendo distinguibles por sus etiquetas, iconos o bordes ademas del color
+
 ### Requirement: Servir la interfaz web estática
 
 El sistema SHALL servir una interfaz web estática desde la ruta raíz del servidor Express, incluyendo HTML, CSS y JavaScript.
@@ -21,6 +117,22 @@ El sistema SHALL servir una interfaz web estática desde la ruta raíz del servi
 - **THEN** cada recurso responde con HTTP `200` y su tipo de contenido correspondiente
 
 ### Requirement: Filtrar el catálogo desde el panel de búsqueda
+
+El icono de ojo del filtro de observacion SHALL ser vectorial y simetrico, centrado horizontal y verticalmente en su recuadro, tanto en movil como en escritorio, sin depender de los margenes del emoji o de la altura de linea. Las imagenes de los accesos a Notificaciones y Amigos SHALL ajustarse al espacio interior disponible de sus botones para mantener el centrado sin desbordar por padding y bordes.
+
+Todos los controles de seguimiento (filtro, tabla y modal) SHALL reutilizar el mismo simbolo SVG `observation-eye-icon`, nunca el emoji de ojo. En tabla y modal, `aria-pressed` y el aspecto pulsado SHALL reflejar `observada` del registro cargado; el estado confirmado SHALL actualizarse tras respuesta correcta y conservarse ante errores. En creacion/edicion el toggle SHALL reflejar el valor del formulario que se enviara al guardar. El filtro SHALL conservar su estado local de seleccion, sin modificar registros.
+
+El ojo SHALL mostrarse negro al estar pulsado y gris atenuado al no estarlo, sin recuadro, fondo de color ni sombra en ninguno de los controles de seguimiento. El contorno de foco por teclado SHALL conservarse.
+
+Los filtros de icono de Consulta SHALL permanecer sin borde ni fondo tanto seleccionados como deseleccionados. Los iconos de Coleccion y Busqueda SHALL distinguir la seleccion mediante opacidad completa al activarse y atenuada al desactivarse, conservando el foco visible por teclado y la semantica de checkbox.
+
+Los campos Nombre e Id de Consulta SHALL mostrarse vacios sin ejemplos como placeholder, conservando sus etiquetas visibles.
+
+Los botones del acordeon del panel de nivel SHALL centrar iconos y textos vertical y horizontalmente. Los dos botones de ranking SHALL compartir una misma fila y sus etiquetas SHALL permanecer en una sola linea, con tipografia y espaciado compactos para no desbordar el panel.
+
+En los rankings global y semanal, el emoji de coleccion SHALL tener las mismas dimensiones que la imagen de Bricks y ajustar su fuente a la columna reservada. Ambos indicadores SHALL mantener 8px de separacion respecto al numero, tambien en movil, sin superposiciones.
+
+Los campos del modal de minifigura SHALL compartir el mismo borde de 1px y color `--line`, incluidos los deshabilitados en creacion, edicion y consulta. El fondo y texto SHALL conservar la distincion de campos no editables.
 
 La interfaz SHALL mostrar controles para `id`, `nombre`, `categoria`, `subcategoria`, `anio`, `estadoColeccion` y observación, y SHALL ofrecer `Buscar` y `Mostrar todo`. El filtrado SHALL resolverse en el navegador sobre la caché local del catálogo, sin realizar peticiones al servidor, y SHALL producir los mismos resultados que `GET /minifiguras` con los mismos filtros: coincidencia parcial sin distinguir mayúsculas ni acentos para `id` y `nombre`, y coincidencia exacta sin distinguir mayúsculas ni acentos para `categoria`, `subcategoria` y `estadoColeccion`, y exacta para `anio` y observación. El estado SHALL filtrarse con dos toggles de icono `📦` y `🔍`: activar solo uno filtra por ese estado; activar ambos o ninguno no restringe por estado. En escritorio los controles SHALL conservar la disposición en una sola fila cuando el ancho lo permita. Las opciones de categoría y subcategoría SHALL derivarse de las figuras presentes en el catálogo y subcategoría SHALL depender de la categoría seleccionada. Cuando exista un total conocido positivo de Brickset, la etiqueta SHALL mostrar `Nombre: X de Total (P%)`, con P igual a X por 100 dividido por Total, formato español y como máximo un decimal. El denominador SHALL ser el total conocido, no el inventario del usuario ni la suma visible del desplegable. Para totales cero o desconocidos SHALL conservar `Nombre (X)` sin inventar porcentajes. `Mostrar todo` SHALL restaurar `Todas (Total)`, limpiar nombre y desactivar los toggles.
 
@@ -119,6 +231,8 @@ La interfaz SHALL comunicar cargas, errores locales y errores de Brickset sin bo
 - **AND** muestra un Toast o resumen identificando los fallos
 
 ### Requirement: Gestionar datos de compra y precio Brickset
+
+Cuando los campos de compra sean editables, la fecha de compra SHALL NOT superar la fecha actual local del navegador y el precio de compra SHALL ser finito y mayor o igual a cero. Ambos SHALL seguir siendo opcionales. El calendario SHALL limitar su fecha maxima a hoy al actualizar el modal; una entrada invalida SHALL mostrar un error, deshabilitar Guardar y bloquear el envio incluso mediante submit programatico. Los campos deshabilitados SHALL conservar su comportamiento existente.
 
 La interfaz SHALL incluir `precioCompra` y `fechaCompra` editables cuando el modo lo permita, y `nombre`, `descripcion`, `categoria`, `subcategoria`, `anio` y `precio` como campos provenientes de Brickset con estilo `.input-readonly`. Nombre y descripcion SHALL permanecer siempre deshabilitados y sombreados en todos los modos. SHALL sincronizar individualmente de forma automática al cargar correctamente la imagen de un ID introducido. El backend SHALL conservar la sincronización masiva autenticada mediante `/sincronizacion/brickset`, pero el dashboard SHALL NOT mostrar un disparador manual; la lógica y el endpoint se conservan para reactivarlos en el futuro. La sincronización individual SHALL aplicar el año actual como fallback cuando Brickset devuelva `0` o no lo devuelva.
 
@@ -475,25 +589,27 @@ Cada fila del modal SHALL mostrar avatar de Google, nombre visible, Bricks, imag
 
 ### Requirement: Indicar la presencia del usuario autenticado en el Top 10
 
-Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar un botón con icono de globo junto a su avatar en el panel de nivel principal y SHALL NOT mostrar una estrella junto a su fila del ranking. El botón SHALL abrir el modal Ranking Global y SHALL mostrar el tooltip `En Top Global`. Debajo del globo SHALL mostrar la medalla 🥇, 🥈 o 🥉 para las posiciones 1, 2 o 3 respectivamente, o la posición con formato `#4` desde la cuarta posición. Si no figura, el botón SHALL estar ausente.
+Si el usuario autenticado figura en el Top 10, la interfaz SHALL mostrar una insignia no interactiva en la esquina superior derecha de su avatar, tanto con imagen como sin ella, y SHALL NOT mostrar una estrella junto a su fila del ranking. La insignia SHALL compartir el estilo del contador de amigos y SHALL mostrar la medalla 🥇, 🥈 o 🥉 para las posiciones 1, 2 o 3 respectivamente, o la posición con formato `#4` desde la cuarta posición. Su tooltip y descripcion accesible SHALL indicar `En Top Global, posición N`. SHALL NOT ser un boton, recibir foco ni abrir el ranking. El avatar SHALL conservar su accion de menu habitual. Si no figura o cierra sesion, la insignia SHALL estar oculta y su descripcion accesible eliminada del avatar. La cabecera SHALL NOT reservar una columna para el antiguo boton.
+
+La insignia SHALL conservar las dimensiones del contador de amigos pero SHALL usar fondo blanco, borde amarillo `#FFD500` y texto oscuro legible.
 
 #### Scenario: Usuario dentro del Top 10
 - **WHEN** la respuesta del ranking contiene el `userId` de la sesión
-- **THEN** se muestra el icono de globo en el panel de nivel y no se muestra ninguna estrella junto a la fila del ranking
+- **THEN** se muestra la insignia en el avatar y no se muestra ninguna estrella junto a la fila del ranking
 
 #### Scenario: Usuario fuera del Top 10
 - **WHEN** la respuesta del ranking no contiene el `userId` de la sesión
-- **THEN** no se muestra el icono de globo en el panel de nivel ni una estrella junto a la fila del ranking
+- **THEN** no se muestra la insignia en el avatar ni una estrella junto a la fila del ranking
 
-#### Scenario: Abrir el ranking desde el globo
-- **WHEN** el usuario activa el globo del panel de nivel
+#### Scenario: Abrir el ranking desde el panel de nivel
+- **WHEN** el usuario activa Ranking Global en el panel de nivel
 - **THEN** se abre el modal Ranking Global sin abrir el menú de usuario
-- **AND** al cerrar el modal el foco vuelve al globo si sigue visible
+- **AND** al cerrar el modal el foco vuelve a Ranking Global
 
 #### Scenario: Mostrar posición en el panel de nivel
 - **WHEN** el usuario figura en el ranking
-- **THEN** debajo del globo se muestra la medalla correspondiente si ocupa una de las tres primeras posiciones, o su posición con prefijo `#` en los demás casos
-- **AND** el tooltip del globo indica `En Top Global`
+- **THEN** la insignia del avatar muestra la medalla correspondiente si ocupa una de las tres primeras posiciones, o su posición con prefijo `#` en los demás casos
+- **AND** el tooltip indica `En Top Global, posición N`
 
 ### Requirement: Desplegar destacados en acordeón exclusivo
 
@@ -545,6 +661,8 @@ El modal de Logros SHALL mostrar el icono de regalo existente para los cuatro hi
 ### Requirement: Mostrar en rojo los indicadores de obligatoriedad
 
 La interfaz SHALL mostrar en rojo cada asterisco visible que identifica un campo obligatorio en cualquier formulario de la aplicación. El color SHALL aplicarse al asterisco, no a toda la etiqueta, y SHALL NOT cambiar las reglas de validación ni añadir obligatoriedad a campos opcionales. En visualización SHALL mantenerse la ocultación de estos indicadores.
+
+En el modal de creacion y edicion de minifiguras, incluido el alta desde ranking, solo ID SHALL conservar el indicador de obligatoriedad. Nombre, Categoria, Anio y Precio Brickset SHALL NOT mostrar asteriscos porque se autocompletan y no admiten edicion manual. Esta presentacion SHALL NOT cambiar las reglas de validacion, autocompletado ni habilitacion existentes.
 
 #### Scenario: Formularios con campos requeridos
 - **WHEN** se muestra un formulario con etiquetas de campos obligatorios, incluida el alta rápida desde ranking
@@ -618,7 +736,7 @@ El sistema SHALL mostrar `Newbie` y cuatro proporciones cero cuando la suma de c
 - **THEN** bajo el nivel aparece `40% Fan / 30% Collector` con el estilo visual original y acceso al modal DNA
 - **AND** los rasgos se alinean horizontalmente con el numero de nivel, con numero y nombre en la primera fila y rasgos en la segunda, compartiendo la altura reservada para la imagen que abarca ambas filas
 - **AND** ambas filas tienen una separacion de 4px y la linea de rasgos conserva su propio destino de clic, se ilumina en rojo al pasar el raton y abre el modal DNA sin abrir el modal de nivel
-- **AND** las filas del ranking muestran los dos rasgos publicos con sus porcentajes y el mismo estilo tipografico y color, conservando su tamaño de 0.68rem, y el numero y nombre de nivel aparecen en negro
+- **AND** las filas de los rankings global y semanal muestran solo el primer rasgo publico con su porcentaje (o Newbie sin porcentaje), conservando el estilo tipografico, color y tamaño de 0.68rem; el criterio DNA seleccionado sigue determinando el rasgo mostrado y el numero y nombre de nivel aparecen en negro
 
 #### Scenario: Usuario Newbie
 - **WHEN** el usuario no tiene logros de coleccion que contribuyan a DNA

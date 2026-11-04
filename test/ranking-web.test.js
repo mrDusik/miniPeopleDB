@@ -120,6 +120,9 @@ test('abre y cierra el dialogo semanal de forma independiente y restaura el foco
   assert.equal(dom.window.document.activeElement.id, 'weekly-ranking-close');
   assert.equal(dom.window.document.querySelector('#weekly-ranking-status').textContent, '');
   assert.equal(dom.window.document.querySelector('#weekly-ranking-list .ranking-bricks strong').textContent, '+125');
+  for (const dna of dialog.querySelectorAll('.ranking-dna-principal')) {
+    assert.equal(dna.textContent, '60,5% Explorer');
+  }
   assert.equal(dom.window.document.querySelectorAll('#weekly-ranking-dialog [data-ranking-criterion]').length, 0);
 
   dom.window.document.querySelector('#weekly-ranking-close').click();
@@ -334,7 +337,7 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   const collectionButton = criteriaButtons.find(({ dataset }) => dataset.rankingCriterion === 'coleccion');
   assert.equal(collectionButton.getAttribute('aria-label'), 'Colección');
   assert.equal(collectionButton.title, 'Colección');
-  assert.equal(collectionButton.querySelector('.ranking-criterion-icon').getAttribute('src'), '/status_images/caja.png');
+  assert.equal(collectionButton.querySelector('.ranking-criterion-icon').textContent, '📦');
   assert.match(styles, /\.ranking-criterion-icon \{ width: 1\.25rem; height: 1\.25rem; \}/);
   assert.deepEqual(criteriaButtons.map((button) => button.getAttribute('aria-pressed')), ['true', 'false', 'false', 'false', 'false', 'false']);
   assert.equal(criteriaGroup.parentElement.nextElementSibling.id, 'global-ranking-list');
@@ -349,7 +352,7 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
     assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
     assert.deepEqual([...dom.window.document.querySelectorAll('.ranking-dna-principal')].map(({ textContent }) => textContent),
       traitNames[criterio] ? [`12,5% ${traitNames[criterio]}`, `0% ${traitNames[criterio]}`]
-        : ['60,5% Explorer / 30% Collector', '60,5% Explorer / 30% Collector']);
+        : ['60,5% Explorer', '60,5% Explorer']);
   }
   dom.window.close();
 });
@@ -384,7 +387,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
   assert.match(styles, /\.gamification-details \.button, \.user-profile \.button \{ min-height: 36px; padding: 0 12px; \}/);
   assert.match(styles, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
-  assert.match(styles, /\.summary-ranking-row \.summary-ranking-link \{ flex: 1 1 0; min-width: 0; white-space: normal; \}/);
+  assert.match(styles, /\.summary-ranking-row \.summary-ranking-link \{ flex: 1 1 0; min-width: 0; white-space: nowrap; \}/);
   assert.match(styles, /\.achievements-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
   assert.match(styles, /\.achievements-heading \{ display: flex; align-items: center;/);
   assert.match(styles, /\.achievements-heading-text \{ min-width: 0; \}/);
@@ -402,7 +405,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-bricks strong \{ justify-self: end;/);
   assert.match(styles, /\.ranking-collection-count \{ grid-column: 5; grid-row: 1 \/ 3; grid-template-columns: 1\.55rem minmax\(0, 1fr\); width: 85px; \}/);
   assert.match(styles, /\.ranking-bricks \.gamification-brick-icon \{ width: 1\.55rem; height: 1\.55rem; object-fit: contain; \}/);
-  assert.match(styles, /\.ranking-collection-count \.ranking-collection-icon \{ width: 1\.55rem; height: 1\.55rem; object-fit: contain; transform: none; \}/);
+  assert.match(styles, /\.ranking-collection-count \.ranking-collection-icon \{ width: 1\.55rem; height: 1\.55rem; font-size: 1\.55rem; object-fit: contain; transform: none; \}/);
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
@@ -418,9 +421,9 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-summary \.ranking-avatar-wrap \{ grid-column: 2; grid-row: 1; justify-self: center; align-self: center; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-level-info \{ grid-column: 2 \/ 4; grid-row: 2 \/ 5; grid-template-columns: 40px auto minmax\(0, 1fr\); grid-template-rows: subgrid;/);
   assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start;/);
-  assert.match(styles, /\.ranking-summary \.ranking-bricks strong \{ justify-self: start; \}/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks strong \{ justify-self: end; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end;/);
-  assert.match(styles, /\.ranking-summary \.ranking-bricks, \.ranking-summary \.ranking-collection-count \{ column-gap: 1px; \}/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks, \.ranking-summary \.ranking-collection-count \{ column-gap: 8px; \}/);
   assert.doesNotMatch(styles, /\.ranking-summary \.ranking-expand \.ranking-bricks \{ grid-column: 3 \/ 5;/);
   assert.match(styles, /\.ranking-level-number \{[^}]*color: var\(--ink\); font-size: 0\.9rem; line-height: 1;/);
   assert.doesNotMatch(styles, /\.ranking-level-name, \.ranking-collection-count \{ display: none;/);
@@ -439,7 +442,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.equal(details.querySelector('#open-global-ranking').textContent.trim(), '🌐 Ranking Global');
   assert.equal(details.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
   assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, false);
-  assert.equal(dom.window.document.querySelector('#ranking-main-globe > span').textContent, '🌐');
+  assert.equal(dom.window.document.querySelector('#ranking-main-globe').closest('.user-avatar-frame') !== null, true);
   assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '🥇');
   dom.window.document.querySelector('#gamification-toggle').click();
   assert.equal(details.hidden, false);
@@ -459,7 +462,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.equal(firstEntry.querySelector('.ranking-level-info .gamification-level-image').getAttribute('src'), '/level_images/4_citizen.png');
   assert.equal(firstEntry.querySelector('.ranking-level-name').textContent, 'Citizen');
   assert.equal(firstEntry.querySelector('.ranking-collection-count strong').textContent, '2');
-  assert.equal(firstEntry.querySelector('.ranking-collection-icon').getAttribute('src'), '/status_images/caja.png');
+  assert.equal(firstEntry.querySelector('.ranking-collection-icon').textContent, '📦');
   assert.deepEqual([...firstEntry.querySelector('.ranking-expand').children].map((element) => element.className), [
     'ranking-position', 'ranking-avatar-wrap', 'ranking-name', 'ranking-level-info',
     'gamification-bricks-value ranking-bricks', 'ranking-collection-count', 'ranking-row-chevron',
@@ -473,7 +476,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.match(styles, /\.ranking-level-name \{[^}]*overflow-wrap: anywhere; white-space: normal;/);
   assert.match(styles, /\.ranking-dna-principal \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
   assert.match(styles, /\.ranking-dna-principal \{[^}]*color: var\(--ink\); font: italic 700 0\.68rem[^}]*text-transform: uppercase;/);
-  assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, '60,5% Explorer / 30% Collector');
+  assert.equal(firstEntry.querySelector('.ranking-dna-principal').textContent, '60,5% Explorer');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tagName, 'SPAN');
   assert.equal(firstEntry.querySelector('.ranking-dna-principal').tabIndex, -1);
   const otherEntry = dom.window.document.querySelector('[data-user-id="user-b"]');
@@ -486,8 +489,11 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.match(styles, /\.ranking-summary \.ranking-avatar-wrap \{ grid-column: 2; grid-row: 1; justify-self: center; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 4; justify-self: center; align-self: center; width: 48px; height: 48px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-name \{ grid-column: 3; grid-row: 1; \}/);
-  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: max-content 1\.55rem; width: auto;/);
-  assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end; width: auto;/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.55rem; width: auto;/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.2rem; width: auto;/);
+  assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end; width: 85px;/);
+  assert.match(styles, /\.ranking-collection-count strong \{ text-align: left;/);
+  assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end; width: 70px; grid-template-columns: 1\.2rem minmax\(0, 1fr\);/);
   assert.match(styles, /\.ranking-summary \.ranking-level-name, \.ranking-summary \.ranking-dna-principal \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-expand \{ grid-template-columns: 28px 46px minmax\(0, 1fr\) 16px; grid-template-rows: 40px minmax\(24px, auto\) minmax\(16px, auto\) minmax\(26px, auto\); padding: 6px 8px; \}/);
   assert.equal(firstEntry.querySelector('.ranking-gift-space').parentElement, firstEntry.querySelector('.global-ranking-row'));
@@ -568,14 +574,14 @@ test('el modal mantiene Top 5 y permite desplazar horizontalmente cada ranking',
   const mobileImage = smartphoneRules.find((rule) => rule.selectorText === '.ranking-user-details .ranking-highlight-group .ranking-card-static .ranking-img');
   const mobileRow = smartphoneRules.find((rule) => rule.selectorText === '.ranking-user-details .ranking-highlight-group .ranking-row');
   const mobileAction = smartphoneRules.find((rule) => rule.selectorText === '.ranking-user-details .ranking-highlight-group .ranking-add-wanted');
-  const mobileMagnifier = smartphoneRules.find((rule) => rule.selectorText === '.ranking-user-details .ranking-highlight-group .ranking-add-wanted img');
+  const mobileMagnifier = smartphoneRules.find((rule) => rule.selectorText === '.ranking-user-details .ranking-highlight-group .ranking-add-wanted .magnifier-icon');
   assert.equal(mobileRow.style.getPropertyValue('gap'), '4px');
   assert.equal(mobileCard.style.getPropertyValue('flex'), '0 0 calc((100% - 16px) / 5)');
   assert.equal(mobileCard.style.getPropertyValue('height'), '90px');
   assert.equal(mobileCard.style.getPropertyValue('grid-template-rows'), '48px minmax(0, 1fr)');
   assert.equal(mobileImage.style.getPropertyValue('height'), '48px');
   assert.equal(mobileAction.style.getPropertyValue('inset'), '-1px');
-  assert.equal(mobileMagnifier.style.getPropertyValue('width'), '18px');
+  assert.equal(mobileMagnifier.style.getPropertyValue('width'), '9px');
   assert.equal(allRules.some((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)'), false);
   styleDom.window.close();
   assert.match(styles, /\.modal-dialog-heading \{ margin-bottom: 12px; \}/);
@@ -631,7 +637,7 @@ test('alta rapida obtiene nombre y descripcion de Brickset, los bloquea y fija B
   document.querySelector('.ranking-expand').click();
   document.querySelector('.ranking-add-wanted').click();
   assert.equal(document.querySelector('#form-dialog').open, true);
-  assert.equal(document.querySelector('#form-dialog-title').textContent, 'Editar minifigura');
+  assert.equal(document.querySelector('#form-dialog-title').textContent, 'Editar minipersona');
   assert.equal(document.querySelector('#form-id').disabled, true);
   assert.equal(document.querySelector('#form-id').value, 'HIGH');
   assert.equal(document.querySelector('#form-nombre').value, '');
@@ -807,7 +813,7 @@ test('cancelar alta rapida restaura foco y permisos ordinarios e ignora fallback
   dom.window.close();
 });
 
-test('el globo abre el ranking, muestra medallas o posición y actualiza su presencia', async () => {
+test('el avatar muestra una insignia no interactiva con medalla o posición y actualiza su presencia', async () => {
   const dom = createDom();
   const ranking = [entry({ userId: 'user-a' })];
   installFetch(dom.window, ranking);
@@ -815,15 +821,24 @@ test('el globo abre el ranking, muestra medallas o posición y actualiza su pres
   await new Promise((resolve) => setTimeout(resolve, 10));
   const document = dom.window.document;
   const globe = document.querySelector('#ranking-main-globe');
-  assert.equal(globe.tagName, 'BUTTON');
-  assert.equal(globe.closest('#user-menu-toggle'), null);
-  assert.equal(globe.title, 'En Top Global');
-  assert.equal(globe.getAttribute('aria-haspopup'), 'dialog');
-  assert.equal(globe.getAttribute('aria-controls'), 'ranking-dialog');
+  assert.equal(globe.tagName, 'SPAN');
+  assert.equal(globe.closest('.user-avatar-frame').querySelector('#user-avatar') !== null, true);
+  assert.equal(globe.getAttribute('role'), 'img');
+  assert.equal(globe.hasAttribute('tabindex'), false);
+  assert.equal(globe.hasAttribute('aria-haspopup'), false);
+  assert.equal(globe.hasAttribute('aria-controls'), false);
+  assert.equal(document.querySelector('button#ranking-main-globe, .ranking-session'), null);
+  assert.equal(document.querySelector('#user-menu-toggle').getAttribute('aria-describedby'), globe.id);
+  assert.match(styles, /\.user-avatar-frame \{[^}]*position: relative/);
+  assert.match(styles, /\.ranking-avatar-badge \{[^}]*position: absolute; top: -7px; right: -7px;[^}]*pointer-events: none;/);
+  assert.match(styles, /\.ranking-avatar-badge \{[^}]*border: 2px solid var\(--yellow\); color: var\(--ink\); background: #fff;/);
+  assert.match(styles, /\.ranking-avatar-badge\[hidden\] \{ display: none; \}/);
+  globe.click();
+  assert.equal(document.querySelector('#ranking-dialog').open, false);
 
   for (const [index, marker] of ['🥇', '🥈', '🥉', '#4'].entries()) {
     if (index > 0) ranking.unshift(entry({ userId: `other-${index}` }));
-    globe.click();
+    document.querySelector('#open-global-ranking').click();
     await new Promise((resolve) => setTimeout(resolve, 10));
     assert.equal(document.querySelector('#ranking-dialog').open, true);
     assert.equal(document.activeElement.id, 'ranking-close');
@@ -831,15 +846,17 @@ test('el globo abre el ranking, muestra medallas o posición y actualiza su pres
     assert.equal(document.querySelector('#user-menu-toggle').getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('#ranking-main-position').textContent, marker);
     assert.ok(globe.getAttribute('aria-label').includes(`posición ${index + 1}`));
+    assert.equal(globe.title, `En Top Global, posición ${index + 1}`);
     document.querySelector('#ranking-close').click();
-    assert.equal(document.activeElement, globe);
+    assert.equal(document.activeElement.id, 'open-global-ranking');
   }
 
   ranking.pop();
-  globe.click();
+  document.querySelector('#open-global-ranking').click();
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(globe.hidden, true);
   assert.equal(document.querySelector('#ranking-main-position').textContent, '');
+  assert.equal(document.querySelector('#user-menu-toggle').hasAttribute('aria-describedby'), false);
   document.querySelector('#ranking-close').click();
   assert.equal(document.activeElement.id, 'open-global-ranking');
   dom.window.close();
@@ -866,6 +883,7 @@ test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(dom.window.document.querySelector('#ranking-main-globe').hidden, true);
   assert.equal(dom.window.document.querySelector('#ranking-main-position').textContent, '');
+  assert.equal(dom.window.document.querySelector('#user-menu-toggle').hasAttribute('aria-describedby'), false);
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 0);
   assert.equal(dom.window.document.querySelector('#ranking-dialog').open, false);
   dom.window.close();

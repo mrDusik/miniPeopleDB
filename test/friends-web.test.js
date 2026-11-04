@@ -242,14 +242,14 @@ test('las tarjetas de modales amplian la imagen y superponen la lupa sin reserva
     const profileCards = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-card-static');
     const profileImages = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-card-static .ranking-img');
     const profileAction = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-add-wanted');
-    const profileActionImage = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-add-wanted img');
+    const profileActionImage = smartphoneRules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures .ranking-add-wanted .magnifier-icon');
     assert.equal(profileRow.style.getPropertyValue('gap'), '4px');
     assert.equal(profileItems.style.getPropertyValue('flex-basis'), 'calc((100% - 16px) / 5)');
     assert.equal(profileCards.style.getPropertyValue('height'), '90px');
     assert.equal(profileCards.style.getPropertyValue('grid-template-rows'), '48px minmax(0, 1fr)');
     assert.equal(profileImages.style.getPropertyValue('height'), '48px');
     assert.equal(profileAction.style.getPropertyValue('inset'), '-1px');
-    assert.equal(profileActionImage.style.getPropertyValue('width'), '18px');
+    assert.equal(profileActionImage.style.getPropertyValue('width'), '9px');
     for (const rule of rules.filter((entry) => entry.cssRules)) {
       for (const nested of rule.cssRules) {
         if (nested.selectorText?.includes('.ranking-card')) {
@@ -397,7 +397,7 @@ test('el launcher abre el modal accesible de cuatro pestañas y la lista muestra
     assert.equal(friendRow.querySelector('.ranking-bricks strong').textContent, '240');
     assert.equal(friendRow.querySelector('.ranking-position').textContent, '#3');
     assert.ok(friendRow.querySelector('.gamification-level-image'));
-    assert.ok(friendRow.querySelector('.ranking-collection-count img'));
+    assert.equal(friendRow.querySelector('.ranking-collection-count .box-icon').textContent, '📦');
     assert.ok(friendRow.querySelector('.friends-remove'));
     assert.equal(requests.some(({ url }) => url === '/api/amigos?tipo=friends'), true);
 
@@ -698,10 +698,10 @@ test('el perfil reutiliza gráfico, iconos y tarjetas y destruye el gráfico al 
     assert.equal(document.querySelectorAll('#public-profile-content .ranking-card').length, 4);
     assert.equal(document.querySelectorAll('#public-profile-content [data-action], #public-profile-content [data-gift-user]').length, 0);
     assert.equal(document.querySelectorAll('#public-profile-content .ranking-add-wanted').length, 4);
-    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted img').getAttribute('src'), '/status_images/lupa.png');
-    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted').textContent, '');
+    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted .magnifier-icon').textContent, '🔍');
+    assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted').textContent, '🔍');
     assert.equal(document.querySelector('#public-profile-content .ranking-add-wanted').getAttribute('aria-label'), 'Añadir a buscadas');
-    assert.equal(document.querySelector('#public-profile-achievements .achievement-icon').getAttribute('src'), '/toast_images/75206.png');
+    assert.equal(document.querySelector('#public-profile-achievements .achievement-icon').textContent, '🏆');
     assert.equal(document.querySelector('#public-profile-achievements .achievement-count').textContent, 'x5');
     const overview = document.querySelector('.public-profile-overview');
     assert.deepEqual([...overview.children].map((section) => section.className), [

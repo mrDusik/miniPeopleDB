@@ -290,6 +290,8 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(chart.options.scales.x.ticks.callback(Date.parse('2026-10-02T00:00:00.000Z'), 0, []), '02/10');
     assert.equal(valueDataset.tension, 0);
     assert.equal(deltaDataset.maxBarThickness, 18);
+    assert.equal(deltaDataset.borderRadius, 0);
+    assert.equal(chart.options.plugins.tooltip.cornerRadius, 0);
     assert.equal(chart.options.scales.figures.suggestedMin, -9);
     assert.equal(valueDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-fan').trim());
     assert.equal(deltaDataset.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim());
@@ -412,8 +414,12 @@ test('Bricks y nivel usan ejes separados, admiten descensos y destruyen charts a
     assert.deepEqual(Array.from(onePoint.data.datasets[1].data, ({ y }) => y), [2]);
     assert.equal(onePoint.data.datasets[0].borderColor, '#e3000b');
     assert.equal(onePoint.data.datasets[0].backgroundColor, '#e3000b');
-    assert.equal(onePoint.data.datasets[1].borderColor, '#0055bf');
-    assert.equal(onePoint.data.datasets[1].backgroundColor, '#0055bf');
+    assert.equal(onePoint.data.datasets[1].borderColor, '#006cb7');
+    assert.equal(onePoint.data.datasets[1].backgroundColor, '#006cb7');
+    assert.equal(onePoint.options.plugins.tooltip.cornerRadius, 0);
+    assert.equal(onePoint.options.plugins.tooltip.titleFont.family, 'Montserrat');
+    assert.equal(onePoint.options.plugins.legend.labels.pointStyle, 'rect');
+    assert.equal(onePoint.data.datasets[0].pointStyle, 'rect');
     assert.equal(onePoint.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Nivel: Sin datos');
     assert.equal(onePoint.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: 0 } }), 'Nivel: 0');
     assert.equal(onePoint.data.datasets[1].stepped, 'after');

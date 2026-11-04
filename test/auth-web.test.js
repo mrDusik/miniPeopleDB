@@ -130,6 +130,9 @@ test('los textos y los ojos de contraseña reflejan el modo y restablecen su est
     style.textContent = styles;
     dom.window.document.head.append(style);
     const passwordRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '.auth-password-control input');
+    const authInputRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '.auth-form input');
+    assert.equal(authInputRule.style.getPropertyValue('font'), '700 0.88rem var(--font-body)');
+    assert.equal(authInputRule.style.getPropertyValue('padding'), '9px 10px');
     assert.equal(passwordRule.style.getPropertyValue('padding-left'), '48px');
     assert.equal(passwordRule.style.getPropertyValue('padding-right'), '48px');
     assert.equal(passwordRule.style.getPropertyValue('text-align'), 'center');
@@ -392,12 +395,13 @@ test('un error del proveedor OAuth mantiene la pantalla de acceso con un aviso',
   dom.window.close();
 });
 
-test('registro clásico valida username y delega email y contraseña en Supabase Auth', async () => {
+test('registro clásico pide solo email y contraseñas y reserva el username para onboarding', async () => {
   const { dom, window, requests, $ } = startApp({ session: null });
   await tick();
   $('#auth-mode-register').click();
-  assert.equal($('#auth-username-field').hidden, false);
-  assert.equal($('#auth-username').required, true);
+  assert.equal($('#auth-username-field').hidden, true);
+  assert.equal($('#auth-username').required, false);
+  assert.equal($('#auth-username').disabled, true);
   assert.equal($('#auth-email-field').hidden, false);
   assert.equal($('#auth-email').required, true);
   $('#auth-username').value = 'invalid username';
@@ -406,18 +410,17 @@ test('registro clásico valida username y delega email y contraseña en Supabase
   $('#auth-password-repeat').value = 'Safe-password1';
   $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await tick();
-  assert.equal(window.__supabaseStub.calls.signUp.length, 0);
-
-  $('#auth-username').value = 'Space_Fan7';
-  $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-  await tick();
   assert.equal(JSON.stringify(window.__supabaseStub.calls.signUp), JSON.stringify([{
-    email: 'new@example.com', password: 'Safe-password1', options: { data: { username: 'Space_Fan7' } },
+    email: 'new@example.com', password: 'Safe-password1', options: {},
   }]));
   assert.match($('#auth-message').textContent, /confirmar la cuenta/);
   assert.equal($('#auth-message').classList.contains('loading-message'), false);
   assert.equal($('#auth-message').getAttribute('aria-busy'), 'false');
   assert.deepEqual(requests, []);
+  $('#auth-mode-login').click();
+  assert.equal($('#auth-username-field').hidden, false);
+  assert.equal($('#auth-username').required, true);
+  assert.equal($('#auth-username').disabled, false);
   dom.window.close();
 });
 
@@ -602,6 +605,118 @@ test('cambio de contraseña envía el nuevo secreto solo a Supabase Auth', async
   dom.window.close();
 });
 
+test('preferencias muestra el email de Auth y cambia la contraseña solo mediante Supabase', async () => {
+  const session = { access_token: 'token-settings', user: { id: 'settings-user', email: 'registered@example.com', user_metadata: { email: 'not-the-account@example.com' } } };
+  const { dom, window, requests, $ } = startApp({ session });
+  await waitFor(() => !$('.page-shell').hidden);
+  $('#open-user-settings').click();
+  await tick();
+  assert.equal($('#profile-account-settings').hidden, false);
+  assert.equal($('#profile-email').value, session.user.email);
+  assert.equal($('#profile-email').readOnly, true);
+  assert.match(styles, /\.user-profile-form input:disabled, \.user-profile-form input\[readonly\] \{ color: var\(--muted\); background: #ecebe6; opacity: 1; \}/);
+  $('#open-change-password').click();
+  assert.equal($('#change-password-dialog').open, true);
+  assert.equal(window.document.activeElement, $('#settings-password'));
+  $('#settings-password').value = 'weak';
+  $('#settings-password-confirm').value = 'weak';
+  const submit = () => $('#change-password-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  submit();
+  assert.equal(window.__supabaseStub.calls.updateUser.length, 0);
+  $('#settings-password').value = 'ValidNew1';
+  $('#settings-password-confirm').value = 'Different1';
+  submit();
+  assert.equal(window.__supabaseStub.calls.updateUser.length, 0);
+  assert.equal($('#settings-password-confirm').validationMessage, 'Las contraseñas no coinciden.');
+  $('#settings-password-confirm').value = 'ValidNew1';
+  submit();
+  submit();
+  await tick();
+  assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'ValidNew1' }]));
+  assert.equal($('#change-password-dialog').open, false);
+  assert.equal($('#user-profile-dialog').open, true);
+  assert.equal($('#settings-password').value, '');
+  assert.equal(window.document.activeElement, $('#open-change-password'));
+  assert.ok(window.document.body.textContent.includes('La contraseña se actualizó correctamente.'));
+  assert.equal(requests.some(({ init }) => init.body?.includes('ValidNew1')), false);
+  $('#open-change-password').click();
+  $('#settings-password').value = 'Canceled1';
+  $('#settings-password-cancel').click();
+  assert.equal($('#settings-password').value, '');
+  dom.window.close();
+});
+
+test('cambiar contraseña reutiliza requisitos en vivo y ojos sincronizados del registro', async () => {
+  const { dom, window, $ } = startApp();
+  try {
+    await waitFor(() => !$('.page-shell').hidden);
+    $('#open-user-settings').click();
+    await tick();
+    $('#open-change-password').click();
+    const rules = [...window.document.querySelectorAll('#settings-password-rules li')];
+    assert.deepEqual(rules.map((rule) => rule.textContent),
+      [...window.document.querySelectorAll('#auth-password-rules li')].map((rule) => rule.textContent));
+    assert.equal($('#settings-password-rules').getAttribute('aria-live'), 'polite');
+    for (const [value, expected] of [['a', ['lowercase']], ['aB', ['uppercase', 'lowercase']], ['aB1', ['uppercase', 'lowercase', 'number']], ['aB123', ['length', 'uppercase', 'lowercase', 'number']], ['', []]]) {
+      $('#settings-password').value = value;
+      $('#settings-password').dispatchEvent(new window.Event('input', { bubbles: true }));
+      assert.deepEqual(rules.filter((rule) => rule.classList.contains('is-met')).map((rule) => rule.dataset.rule), expected);
+    }
+    const toggles = [...window.document.querySelectorAll('#change-password-form .auth-password-visibility')];
+    assert.equal(toggles.length, 2);
+    toggles[0].click();
+    for (const input of [$('#settings-password'), $('#settings-password-confirm')]) assert.equal(input.type, 'text');
+    for (const toggle of toggles) {
+      assert.equal(toggle.title, 'Ocultar contraseñas');
+      assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+      assert.equal(toggle.querySelector('use').getAttribute('href'), '#auth-eye-icon');
+    }
+    assert.equal($('#auth-password').type, 'password');
+    toggles[1].click();
+    assert.equal($('#settings-password').type, 'password');
+    $('#settings-password').value = 'Valid1';
+    $('#settings-password-confirm').value = 'Other1';
+    $('#settings-password-confirm').dispatchEvent(new window.Event('blur'));
+    assert.equal($('#settings-password-confirm').getAttribute('aria-invalid'), 'true');
+    $('#settings-password-confirm').value = 'Valid1';
+    $('#settings-password-confirm').dispatchEvent(new window.Event('input'));
+    assert.equal($('#settings-password-confirm').getAttribute('aria-invalid'), 'false');
+    toggles[0].click();
+    $('#settings-password-cancel').click();
+    $('#open-change-password').click();
+    assert.equal($('#settings-password').value, '');
+    assert.equal($('#settings-password-confirm').value, '');
+    assert.equal($('#settings-password').type, 'password');
+    assert.equal($('#settings-password-confirm').type, 'password');
+    assert.equal(rules.some((rule) => rule.classList.contains('is-met')), false);
+    assert.equal(toggles.every((toggle) => toggle.getAttribute('aria-pressed') === 'false'), true);
+    assert.match(styles, /#change-password-form > \* \{ grid-column: 1; \}/);
+    assert.match(styles, /#change-password-form \.form-actions \{ grid-column: 1; grid-row: auto;/);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el cambio de contraseña muestra errores genericos y limpia secretos al cerrar sesion', async () => {
+  const { dom, window, $ } = startApp({ updatePasswordError: 'private auth error' });
+  await waitFor(() => !$('.page-shell').hidden);
+  $('#open-user-settings').click();
+  await tick();
+  $('#open-change-password').click();
+  $('#settings-password').value = 'ValidNew1';
+  $('#settings-password-confirm').value = 'ValidNew1';
+  $('#change-password-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal($('#settings-password-message').textContent, 'No se pudo cambiar la contraseña. Inténtalo de nuevo.');
+  assert.equal($('#settings-password-save').disabled, false);
+  assert.equal($('#change-password-dialog').open, true);
+  window.__supabaseStub.setSession('SIGNED_OUT', null);
+  assert.equal($('#change-password-dialog').open, false);
+  assert.equal($('#profile-email').value, '');
+  assert.equal($('#settings-password').value, '');
+  dom.window.close();
+});
+
 test('sin foto la sesion muestra el nombre y envia el token a la API', async () => {
   const { dom, requests, $ } = startApp();
   await tick();
@@ -611,8 +726,7 @@ test('sin foto la sesion muestra el nombre y envia el token a la API', async () 
   assert.equal($('#user-name').hidden, false);
   assert.equal($('#user-avatar').hidden, true);
   assert.equal($('#user-profile').hidden, true);
-  assert.equal($('.notifications-entry-row').firstElementChild, $('.ranking-session'));
-  assert.equal($('.ranking-session').nextElementSibling, $('#open-notifications'));
+  assert.equal($('.notifications-entry-row').firstElementChild, $('#open-notifications'));
   assert.equal($('#open-notifications').nextElementSibling, $('#open-friends'));
   assert.equal($('#open-friends').nextElementSibling, $('.user-session'));
   assert.equal($('.gamification-summary #user-menu-toggle'), null);
@@ -782,7 +896,7 @@ test('el avatar propio tiene prioridad y quitarlo recupera el de Google en la vi
     assert.match(styles, /\.profile-avatar-preview \{[^}]*border: 2px solid var\(--blue\);/);
     const avatarStyles = new JSDOM('<style></style>');
     avatarStyles.window.document.querySelector('style').textContent = styles;
-    const avatarRule = [...avatarStyles.window.document.styleSheets[0].cssRules].find((rule) => rule.selectorText === '.user-avatar:not([hidden]), .user-avatar-fallback, .profile-avatar-preview');
+    const avatarRule = [...avatarStyles.window.document.styleSheets[0].cssRules].find((rule) => rule.selectorText === '.profile-avatar-preview' && rule.style.getPropertyValue('transform'));
     assert.equal(avatarRule.style.getPropertyValue('transform'), 'scale(1.15)');
     assert.equal(avatarRule.style.getPropertyValue('transform-origin'), 'right center');
     for (const property of ['width', 'height', 'margin', 'padding', 'gap', 'flex-basis']) {
@@ -839,7 +953,7 @@ for (const [source, user] of [
   });
 }
 
-test('Preferencias agrupa tres filas y mantiene visibles hasta tres categorías seleccionadas', async () => {
+test('Preferencias agrupa identidad, cuenta e idioma y mantiene hasta tres categorías seleccionadas', async () => {
   const { dom, window, $ } = startApp();
   try {
     await tick();
@@ -847,11 +961,13 @@ test('Preferencias agrupa tres filas y mantiene visibles hasta tres categorías 
     $('#open-user-settings').click();
     await waitFor(() => $('#user-profile-dialog').open);
     const rows = window.document.querySelectorAll('.profile-two-column-row');
-    assert.equal(rows.length, 2);
+    assert.equal(rows.length, 3);
     assert.ok(rows[0].querySelector('#profile-username'));
     assert.ok(rows[0].querySelector('#profile-avatar-file'));
-    assert.equal(rows[1].querySelector('select').id, 'profile-language');
-    assert.equal(rows[1].querySelectorAll('select')[1].id, 'profile-currency');
+    assert.ok(rows[1].querySelector('#profile-email'));
+    assert.ok(rows[1].querySelector('#open-change-password'));
+    assert.equal(rows[2].querySelector('select').id, 'profile-language');
+    assert.equal(rows[2].querySelectorAll('select')[1].id, 'profile-currency');
     assert.equal($('#profile-favorites-count').textContent, '0/3');
     const names = [...window.document.querySelectorAll('#profile-favorite-categories input')].slice(0, 4).map(input => input.value);
     for (const [index, name] of names.slice(0, 3).entries()) {
@@ -883,17 +999,17 @@ test('preferencias mantiene altura fija al buscar categorias y desplaza los cont
     const rules = [...dom.window.document.styleSheets[0].cssRules];
     const scoped = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine), (max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
     const declaration = (selector) => [...scoped.cssRules].find((rule) => rule.selectorText === selector).style;
-    assert.equal(declaration('.user-profile-dialog').getPropertyValue('height'), 'min(640px, calc(100dvh - 32px))');
+    assert.equal(declaration('.user-profile-dialog').getPropertyValue('height'), 'min(760px, calc(100dvh - 32px))');
     const baseDialog = rules.find((rule) => rule.selectorText === '.user-profile-dialog').style;
-    assert.equal(baseDialog.getPropertyValue('overflow-y'), 'auto');
+    assert.equal(baseDialog.getPropertyValue('overflow'), 'hidden');
     assert.equal(baseDialog.getPropertyValue('height'), '');
-    assert.equal(declaration('.profile-favorite-categories').getPropertyValue('height'), '108px');
+    assert.equal(declaration('.profile-favorite-categories').getPropertyValue('height'), 'auto');
     assert.equal(declaration('.profile-favorite-categories').getPropertyValue('align-content'), 'start');
     assert.equal(declaration('.profile-avatar-controls').getPropertyValue('padding-left'), '12px');
     const tablet = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)' && [...rule.cssRules].some((nestedRule) => nestedRule.selectorText === '.user-profile-dialog'));
     const tabletDeclarations = new Map([...tablet.cssRules].map((rule) => [rule.selectorText, rule.style]));
-    assert.equal(tabletDeclarations.get('.user-profile-dialog').getPropertyValue('height'), 'min(640px, calc(100dvh - 32px))');
-    assert.equal(tabletDeclarations.get('.profile-favorite-categories').getPropertyValue('height'), '108px');
+    assert.equal(tabletDeclarations.get('.user-profile-dialog').getPropertyValue('height'), 'min(760px, calc(100dvh - 32px))');
+    assert.equal(tabletDeclarations.get('.profile-favorite-categories').getPropertyValue('height'), 'auto');
   } finally {
     dom.window.close();
   }
@@ -952,7 +1068,7 @@ test('el selector de avatar rechaza formatos y tamaños inválidos y cerrar no s
     $('#open-user-settings').click();
     await waitFor(() => $('#user-profile-dialog').open);
     assert.equal($('#profile-avatar-load').className, $('#logout').className);
-    assert.match(styles, /#profile-avatar-load \{ font: 0\.85rem Arial, sans-serif; \}/);
+    assert.match(styles, /#profile-avatar-load \{ font: 0\.85rem var\(--font-body\); \}/);
     let filePickerOpened = false;
     $('#profile-avatar-file').addEventListener('click', (event) => {
       event.preventDefault();
@@ -1262,13 +1378,13 @@ test('cuenta sin minifiguras muestra bienvenida, pliega paneles y abre la creaci
   await tick();
   assert.equal($('#first-minifigura-dialog').open, true);
   assert.equal(dom.window.document.activeElement, $('#first-minifigura-title'));
-  assert.equal($('#first-minifigura-dialog p').textContent, 'Añade tu primera minifigura para ganar unos Bricks');
+  assert.equal($('#first-minifigura-dialog p').textContent, 'Añade tu primera minipersona para ganar unos Bricks');
   assert.equal($('#first-minifigura-accept').className, 'button button-primary');
   assert.doesNotMatch(styles, /\.first-minifigura-dialog\s*\{[^}]*border-color:/);
   assert.doesNotMatch(styles, /\.first-minifigura-dialog \.button\s*\{/);
   assert.match(styles, /\.button:focus-visible\s*\{\s*outline:\s*2px solid var\(--accent\)/);
   assert.match(styles, /\.first-minifigura-dialog h2:focus\s*\{\s*outline:\s*none;/);
-  assert.equal($('#status').textContent, 'No hay ninguna minifigura registrada en tu cuenta.');
+  assert.equal($('#status').textContent, 'No hay ninguna minipersona registrada en tu cuenta.');
   for (const panel of ['rankings', 'watchlist']) {
     const button = $(`.${panel}-panel .panel-toggle`);
     assert.equal(button.getAttribute('aria-expanded'), 'false');
@@ -1291,7 +1407,7 @@ test('una busqueda sin resultados no cambia el mensaje ni pliega los paneles si 
   $('#nombre').value = 'Inexistente';
   $('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await tick();
-  assert.equal($('#status').textContent, 'No hay minifiguras que coincidan con la consulta.');
+  assert.equal($('#status').textContent, 'No hay minipersonas que coincidan con la consulta.');
   assert.equal($('#first-minifigura-dialog').open, false);
   assert.equal($('.rankings-panel .panel-toggle').getAttribute('aria-expanded'), 'true');
   assert.equal($('.watchlist-panel .panel-toggle').getAttribute('aria-expanded'), 'true');
@@ -1320,7 +1436,7 @@ test('al borrar la ultima figura con un filtro activo se pliegan los paneles y a
   $('#delete-confirm').click();
   await tick();
   await tick();
-  assert.equal($('#status').textContent, 'No hay ninguna minifigura registrada en tu cuenta.');
+  assert.equal($('#status').textContent, 'No hay ninguna minipersona registrada en tu cuenta.');
   assert.equal($('.rankings-panel .panel-toggle').getAttribute('aria-expanded'), 'false');
   assert.equal($('.watchlist-panel .panel-toggle').getAttribute('aria-expanded'), 'false');
   assert.equal($('#first-minifigura-dialog').open, false);
