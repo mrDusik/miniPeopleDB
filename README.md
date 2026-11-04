@@ -19,12 +19,80 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
 * **Analítica histórica:** capturas diarias privadas de valor, figuras, Bricks, nivel y DNA; gráficas y tablas accesibles sin reconstruir días ausentes.
 
+### Sistema visual de bloques
+
+La interfaz usa «minipersona» y «minipersonas» en sus textos visibles, incluidos
+logros y notificaciones. Las rutas, identificadores y datos internos conservan
+la terminología original.
+
+La presencia en el Top Global se indica con una insignia no interactiva en la
+esquina superior derecha del avatar (medalla o posición), con fondo blanco y
+borde amarillo, sin un botón adicional.
+El ranking sigue disponible desde el panel de nivel.
+
+Notificaciones muestra el numero de avisos sin leer en una insignia en la esquina
+superior derecha, con el mismo estilo que Amigos; se oculta cuando no hay avisos.
+
+Preferencias muestra el email registrado en solo lectura y permite cambiar la
+contraseña en un modal con confirmación, mediante Supabase Auth y sin modificar
+los datos del perfil. Este modal comparte con el registro los requisitos en vivo
+y los controles para mostrar u ocultar ambas contraseñas; mantiene los campos
+apilados y los botones debajo.
+
+La interfaz web y Android comparte una estética geométrica: esquinas siempre rectas
+(`border-radius: 0`, incluidos controles nativos, avatares, progreso y tooltips),
+bordes oscuros de 1–2px, separadores de color y sombras duras sin desenfoque.
+La paleta usa rojo `#E3000B` para acciones, amarillo `#FFD500` para acentos,
+azul `#006CB7` para navegación y verde `#009639` para indicadores de éxito.
+Los fondos de lectura son blanco y marfil sutil.
+
+Los componentes existentes reutilizan estos estilos sin cambiar sus flujos ni las
+rejillas responsive. La cabecera principal queda sin marco ni fondo propio; la
+tarjeta de acceso queda sin barra amarilla ni relieves decorativos. Los
+títulos y botones usan Montserrat Bold/Black; textos, formularios, tablas,
+avisos y gráficos usan la misma familia con pesos de lectura y énfasis.
+Los tokens `--font-body` y `--font-display` centralizan la familia; `--font-code`
+reserva monospace para IDs y referencias de inventario, no para importes o
+leyendas de ranking. Los controles nativos heredan la fuente de la aplicación.
+Montserrat se sirve localmente, también en Android, sin solicitudes a
+proveedores de fuentes; su licencia SIL OFL se incluye en
+[`public/fonts/Montserrat-OFL.txt`](public/fonts/Montserrat-OFL.txt).
+Los gráficos conservan sus datos y tipos, con tooltips rectos, barras sin radio y
+marcadores cuadrados. La geometría de los sectores DNA sigue siendo circular
+por representar proporciones, no por redondear un contenedor.
+El modal de logros comparte columnas entre filas para alinear los multiplicadores,
+incluso con distintas cifras de Bricks o sin estrella de destacado; en móvil los
+multiplicadores mantienen la misma alineación en la segunda línea.
+El texto reserva separación respecto al trofeo; los importes de Bricks se alinean
+a la derecha y sus iconos ocupan una columna de ancho fijo.
+Filtro, tabla y modal comparten un único ojo SVG para seguimiento. Los toggles
+de figuras muestran `observada` con `aria-pressed`: ojo negro al estar pulsado y
+gris atenuado cuando no, siempre sin recuadro ni fondo. Un fallo al persistir
+conserva el estado previo.
+La lupa se representa con el emoji 🔍 en toda la interfaz, incluidos contadores,
+filtros y acciones de añadir a buscadas, sin cargar la imagen anterior.
+Colección usa 📦 en filtros, contadores, estados, rankings, perfiles y resumen diario.
+Las categorías muestran el alias `CMF` para `Collectible Minifigures`; sus
+subcategorías omiten la palabra `Minifigures` (por ejemplo, `Series 4`).
+Son únicamente etiquetas visuales: filtros, favoritos, caché y peticiones a la
+API conservan los nombres completos originales.
+Preferencias se ajusta a la altura de pantalla sin scroll exterior; solo se
+desplaza la lista de categorías. En pantallas bajas apaisadas distribuye los
+campos en dos columnas para mantener visibles las acciones.
+En Consulta, los filtros de icono no tienen recuadro ni fondo: la opacidad
+distingue la selección y se conserva el contorno de foco por teclado.
+
 ### Valoración y moneda
+
+La tabla permite ordenar ID, Nombre, Categoría, Subcategoría, Año, Precio y
+Diferencia; Imagen, Seguimiento, Estado y Acciones no son ordenables.
+Cada cabecera ordenable muestra su flecha roja a la derecha;
+un segundo clic invierte el orden y Reestablecer recupera el orden inicial.
 
 Todos los importes se expresan exclusivamente en Euros (€). Cada minifigura puede incluir en su raíz:
 
 * `precioCompra`: precio pagado, opcional y no negativo.
-* `fechaCompra`: fecha opcional con formato `YYYY-MM-DD`.
+* `fechaCompra`: fecha opcional con formato `YYYY-MM-DD`; cuando se edita en el modal no puede ser posterior a hoy (fecha local del navegador).
 * `precio`: valor actual obtenido de Brickset, opcional y no negativo.
 
 El valor total solo incluye figuras `COLECCIÓN`. Para cada una se prioriza `precio` y se usa `precioCompra` como alternativa cuando no hay precio de Brickset. Las figuras `BUSCADA` se contabilizan, pero no contribuyen al total ni a los rankings.
@@ -40,7 +108,7 @@ Nombre y descripción se autocompletan desde `Name` de Brickset y permanecen des
 ## Arquitectura e integraciones
 
 * **Aplicación:** Node.js con módulos ES, Express 5 y frontend estático sin framework: HTML semántico, CSS y JavaScript del navegador. Supabase JS y Chart.js se sirven como recursos locales en `/vendor/supabase.js` y `/vendor/chart.js`.
-* **Identidad:** Supabase Auth admite Google OAuth con PKCE y cuentas clásicas. El acceso clásico pide Username y contraseña; el registro también pide email y repetir contraseña. La API valida el bearer token con Supabase Auth.
+* **Identidad:** Supabase Auth admite Google OAuth con PKCE y cuentas clásicas. El acceso clásico pide Username y contraseña; el registro pide solo email, contraseña y repetir contraseña. El Username se elige una sola vez en el onboarding. La API valida el bearer token con Supabase Auth.
 * **Persistencia:** Supabase Postgres almacena minifiguras, gamificación, perfiles públicos, ponderaciones DNA y regalos. RLS limita las operaciones ordinarias a la identidad autenticada.
 * **Acceso administrativo:** `SUPABASE_SERVICE_ROLE_KEY` se usa desde el proceso backend para las RPC allowlisted del recálculo de categorías y del worker de analítica diaria. Como excepción puntual autorizada, el script de corrección de nombres usa solo sus dos RPC temporales de mantenimiento, que deben retirarse al terminar. No se entrega al navegador ni se usa en rutas ordinarias; estas conservan `anon` + JWT y RLS.
 * **Brickset:** el backend lee páginas públicas de `brickset.com` mediante `fetch` y extrae campos de minifigura; no utiliza una API key. Normaliza a EUR los precios publicados en USD con el último tipo de referencia diario del BCE, cacheado 24 horas; si no obtiene una tasa válida, falla de forma segura. Las peticiones se serializan globalmente y el intervalo mínimo se configura con `BRICKSET_MIN_INTERVAL_MS`.

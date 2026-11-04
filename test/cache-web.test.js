@@ -94,7 +94,7 @@ test('el filtrado sin coincidencias muestra el estado vacío sin pedir al servid
   document.querySelector('#nombre').value = 'inexistente';
   await submitFilters(window);
   assert.deepEqual(renderedIds(document), []);
-  assert.equal(document.querySelector('#status').textContent, 'No hay minifiguras que coincidan con la consulta.');
+  assert.equal(document.querySelector('#status').textContent, 'No hay minipersonas que coincidan con la consulta.');
   assert.equal(catalogGets().length, 1);
   dom.window.close();
 });
@@ -196,7 +196,7 @@ test('la edición confirmada actualiza la tabla antes de la revalidación y sin 
   const row = [...document.querySelectorAll('#catalog-body tr')].find((tr) => tr.children[2].textContent === 'A');
   assert.equal(row.children[3].textContent, 'Nuevo');
   assert.ok(controlsEnabled(document));
-  assert.match(document.querySelector('#toast-region').textContent, /Minifigura actualizada correctamente/);
+  assert.match(document.querySelector('#toast-region').textContent, /Minipersona actualizada correctamente/);
   dom.window.close();
 });
 

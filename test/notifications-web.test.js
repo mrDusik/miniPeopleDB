@@ -210,6 +210,8 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     const badge = window.document.querySelector('#notifications-unread-badge');
     assert.equal(list.querySelectorAll('.notification-item').length, 15);
     assert.equal(badge.hidden, false);
+    assert.equal(badge.textContent, '2');
+    assert.match(styles, /\.notifications-unread-badge, \.friends-count \{[^}]*top: -7px; right: -7px;[^}]*background: var\(--blue\);/);
     assert.equal(window.document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 2 sin leer');
     assert.equal(requests.some(({ url, init }) => url.endsWith('/leer-todas') || init.method === 'POST'), false);
 
@@ -248,18 +250,18 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     assert.equal(window.document.querySelector('#notifications-list .notification-item').dataset.notificationId, 'a-new');
     assert.equal(window.document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 3 sin leer');
     const newToast = window.document.querySelector('#toast-region .toast-task');
-    assert.equal(newToast.textContent.trim(), '¡Has recibido un regalo de Grace: +50 Bricks!');
+    assert.equal(newToast.textContent.trim(), '🎁¡Has recibido un regalo de Grace: +50 Bricks!');
     assert.ok(newToast.classList.contains('toast-gift'));
     assert.equal(newToast.querySelector('strong'), null);
-    assert.equal(newToast.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
+    assert.equal(newToast.querySelector('.toast-icon').textContent, '🎁');
 
     firstChannel.emit({ eventType: 'INSERT', new: { id: 'thanks-hint', type: 'gift_thanks', payload: { user: 'Alex', amount: 5 } } });
     await tick();
     const thanksToast = window.document.querySelector('#toast-region').lastElementChild;
-    assert.equal(thanksToast.textContent.trim(), '¡Alex te ha dado las gracias por tu regalo: +5 Bricks!');
+    assert.equal(thanksToast.textContent.trim(), '🎁¡Alex te ha dado las gracias por tu regalo: +5 Bricks!');
     assert.ok(thanksToast.classList.contains('toast-gift'));
     assert.equal(thanksToast.querySelector('strong'), null);
-    assert.equal(thanksToast.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
+    assert.equal(thanksToast.querySelector('.toast-icon').textContent, '🎁');
 
     window.document.querySelector('#open-notifications').click();
     assert.equal(window.document.querySelector('#notifications-dialog').open, true);
@@ -268,6 +270,7 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     window.document.querySelector('#notifications-mark-all').click();
     await tick();
     assert.equal(badge.hidden, true);
+    assert.equal(badge.textContent, '');
     assert.equal([...window.document.querySelectorAll('.notification-item')].every((item) => item.classList.contains('is-read')), true);
     assert.equal(requests.filter(({ url, init }) => url.endsWith('/leer-todas') && init.method === 'POST').length, 1);
   } finally {
@@ -288,10 +291,10 @@ test('muestra al volver a la pestaña el toast de regalo recibido mientras estab
     Object.defineProperty(window.document, 'visibilityState', { configurable: true, value: 'visible' });
     window.document.dispatchEvent(new window.Event('visibilitychange'));
     const toast = window.document.querySelector('#toast-region .toast-task');
-    assert.equal(toast?.textContent.trim(), '¡Has recibido un regalo de Grace: +5 Bricks!');
+    assert.equal(toast?.textContent.trim(), '🎁¡Has recibido un regalo de Grace: +5 Bricks!');
     assert.ok(toast?.classList.contains('toast-gift'));
     assert.equal(toast?.querySelector('strong'), null);
-    assert.equal(toast?.querySelector('.toast-icon').getAttribute('src'), '/toast_images/regalo.png');
+    assert.equal(toast?.querySelector('.toast-icon').textContent, '🎁');
   } finally {
     dom.window.close();
   }
@@ -410,7 +413,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     details.querySelector('summary').click();
     assert.equal(details.open, true);
     assert.equal(list.querySelector('[data-notification-id="daily-1"] time').title, '09/10/2026 12:01');
-    assert.ok([...details.querySelectorAll('.daily-summary-label')].some((label) => label.textContent === 'Nivel'));
+    assert.ok([...details.querySelectorAll('.daily-summary-label')].some((label) => label.textContent === '🏆 Nivel'));
     assert.ok(details.querySelector('.daily-ranking-deltas'));
     const dailyText = details.textContent;
     for (const value of ['Colección-2', 'Valor-3,50 €', 'Bricks+5', 'Nivel-1', 'Ranking Global+1 puestos', 'Ranking Semanal-2 puestos',
@@ -418,8 +421,10 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
       assert.ok(dailyText.includes(value), `missing ${value}: ${dailyText}`);
     }
     assert.deepEqual([...details.querySelectorAll('.daily-summary-icon')].map((image) => image.getAttribute('src')), [
-      '/status_images/caja.png', '/toast_images/billete.png', '/toast_images/hero_2026-01-05_16-38-47-871.webp', '/toast_images/75206.png',
+      '/toast_images/billete.png', '/toast_images/hero_2026-01-05_16-38-47-871.webp',
     ]);
+    assert.ok(details.textContent.includes('📦 Colección'));
+    assert.ok(details.textContent.includes('🏆 Nivel'));
     assert.match(styles, /\.daily-summary-icon \{[^}]*width: 22px; height: 22px;/);
     assert.match(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
     assert.doesNotMatch(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);

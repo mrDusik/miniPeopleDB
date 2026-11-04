@@ -257,9 +257,10 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(window.document.querySelector('#gamification-dialog-level').textContent, '8 Three-Seven-Five');
   const achievement = window.document.querySelector('#gamification-achievements li');
   assert.equal(achievement.className, 'achievement-item');
-  assert.equal(achievement.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
+  assert.equal(achievement.querySelector('.achievement-icon').textContent, '🏆');
+  assert.equal(achievement.querySelector('.achievement-icon').getAttribute('aria-hidden'), 'true');
   assert.equal(achievement.querySelector('.achievement-name').textContent, 'New mini person');
-  assert.equal(achievement.querySelector('.achievement-description').textContent, 'Añadir una nueva minifigura.');
+  assert.equal(achievement.querySelector('.achievement-description').textContent, 'Añadir una nueva minipersona.');
   assert.equal(achievement.querySelector('.achievement-count').textContent, 'x12');
   assert.equal(achievement.querySelector('.achievement-bricks strong').textContent, '12');
   assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
@@ -380,7 +381,7 @@ test('usa la imagen disponible de cada nivel y Forestman como fallback', async (
   }
 });
 
-test('usa regalo.png en logros de tipo regalo y conserva la copa en los demás', async () => {
+test('usa emoji regalo en logros de tipo regalo y conserva la copa en los demás', async () => {
   const dom = createDom();
   const { window } = dom;
   window.fetch = baseFetch([], state({ logros: [
@@ -394,9 +395,9 @@ test('usa regalo.png en logros de tipo regalo y conserva la copa en los demás',
   assert.deepEqual(items.map((item) => item.querySelector('.achievement-name').textContent), ['High', 'Normal', "Oh! you shouldn't have!"]);
   const gift = items[2];
   const normal = items[1];
-  assert.equal(gift.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/regalo.png');
-  assert.equal(gift.querySelector('.achievement-icon').alt, 'Regalo');
-  assert.equal(normal.querySelector('.achievement-icon').getAttribute('src'), '/toast_images/75206.png');
+  assert.equal(gift.querySelector('.achievement-icon').textContent, '🎁');
+  assert.equal(gift.querySelector('.achievement-icon').getAttribute('aria-label'), 'Regalo');
+  assert.equal(normal.querySelector('.achievement-icon').textContent, '🏆');
   dom.window.close();
 });
 
@@ -468,6 +469,27 @@ test('el resumen DNA muestra solo el principal y limpia estados vacios', async (
       assert.equal(button.textContent, dna ? 'Newbie' : 'DNA no disponible');
       assert.equal(window.document.querySelector('#gamification-dna-percentage').hidden, true);
     }
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el grafico DNA conserva sectores proporcionales con tooltip recto y tipografia local', async () => {
+  const dom = createDom();
+  try {
+    dom.window.fetch = baseFetch([], state(), undefined, {
+      principal: 'Collector', porcentajes: { rarityHunter: 10, explorer: 20, collector: 60, fan: 10 },
+    });
+    dom.window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dom.window.document.querySelector('#open-dna-inline').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { configuration } = dom.window.__dnaCharts.at(-1);
+    assert.equal(configuration.type, 'doughnut');
+    assert.equal(configuration.options.plugins.tooltip.cornerRadius, 0);
+    assert.equal(configuration.options.plugins.tooltip.backgroundColor, '#222222');
+    assert.equal(configuration.options.plugins.tooltip.titleFont.family, 'Montserrat');
+    assert.equal(configuration.options.plugins.tooltip.bodyFont.family, 'Montserrat');
   } finally {
     dom.window.close();
   }
@@ -598,6 +620,32 @@ test('los paneles de rankings y seguimiento se comprimen y expanden con su flech
   dom.window.close();
 });
 
+test('toast de logro regalo usa emoji y conserva importe y accesibilidad', async () => {
+  const dom = createDom();
+  const { window } = dom;
+  window.fetch = baseFetch([], state());
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.showGamificationToasts({ logrosNuevos: [
+    { type: 'regalo', nombre: 'Gift achievement', bricksNuevos: 20 },
+    { type: 'coleccion', nombre: 'Regular achievement', bricksNuevos: 30 },
+  ], nivelesAlcanzados: [{ id: 1, nombre: 'Stud' }] });
+  const toast = window.document.querySelector('.toast-task');
+  assert.ok(toast);
+  assert.equal(toast.textContent, '🎁Gift achievement +20 Bricks');
+  assert.equal(toast.querySelector('.toast-icon').tagName, 'SPAN');
+  assert.equal(toast.querySelector('.toast-icon').getAttribute('aria-hidden'), 'true');
+  assert.equal(toast.querySelector('img'), null);
+  assert.equal(window.document.querySelectorAll('.toast-task').length, 1);
+  await new Promise((resolve) => setTimeout(resolve, 320));
+  const normal = window.document.querySelectorAll('.toast-task')[1];
+  assert.equal(normal.textContent, 'Regular achievement +30 Bricks');
+  assert.equal(normal.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  await new Promise((resolve) => setTimeout(resolve, 320));
+  assert.equal(window.document.querySelector('.toast-level').textContent, '🏆NIVEL 1 Stud');
+  dom.window.close();
+});
+
 test('ordena los Toasts de logros por Bricks y separa su aparición', async () => {
   const dom = createDom();
   const { window } = dom;
@@ -625,18 +673,21 @@ test('ordena los Toasts de logros por Bricks y separa su aparición', async () =
   await new Promise((resolve) => setTimeout(resolve, 10));
   window.document.querySelector('#form-nombre').value = 'Nueva';
   window.document.querySelector('#form-descripcion').value = 'Figura';
-  window.document.querySelector('#form-categoria').value = 'Space';
+  window.setFormCategories('Space');
   window.document.querySelector('#form-anio').value = '2024';
   window.document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 10));
   const taskToast = [...window.document.querySelectorAll('.toast')].find((toast) => /New mini person \+1 Bricks/.test(toast.textContent));
-  assert.ok(taskToast);
+  assert.ok(taskToast, window.document.querySelector('#form-error').textContent);
   assert.ok(taskToast.classList.contains('toast-task'));
   await new Promise((resolve) => setTimeout(resolve, 620));
   assert.ok([...window.document.querySelectorAll('.toast')].some((toast) => /WOAH! \+10 Bricks/.test(toast.textContent) && toast.classList.contains('toast-task')));
   await new Promise((resolve) => setTimeout(resolve, 320));
   const levelToast = [...window.document.querySelectorAll('.toast')].find((toast) => toast.classList.contains('toast-level'));
-  assert.equal(levelToast.textContent, 'NIVEL 5 Skeleton');
+  assert.equal(levelToast.textContent, '🏆NIVEL 5 Skeleton');
+  assert.equal(levelToast.querySelector('.toast-icon').tagName, 'SPAN');
+  assert.equal(levelToast.querySelector('.toast-icon').getAttribute('aria-hidden'), 'true');
+  assert.equal(levelToast.querySelector('img'), null);
   dom.window.close();
 });
 

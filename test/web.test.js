@@ -83,7 +83,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const iconDocument = new JSDOM(html);
     try {
       const icons = iconDocument.window.document.querySelectorAll('.auth-password-visibility svg');
-      assert.equal(icons.length, 2);
+      assert.equal(icons.length, 4);
       for (const icon of icons) {
         const reference = icon.querySelector('use').getAttribute('href');
         const symbol = iconDocument.window.document.querySelector(reference);
@@ -133,9 +133,9 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     assert.ok(html.indexOf('name="nombre"') < html.indexOf('name="id"'));
     assert.match(html, /id="show-all"[^>]*>Reestablecer<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
     assert.match(html, /aria-label="Filtrar observadas"[^>]*title="Filtrar observadas"/);
-    assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/caja\.png" title="Colección" alt="">/);
-    assert.match(html, /<img class="filter-symbol status-icon-image" src="\/status_images\/lupa\.png" title="Búsqueda" alt="">/);
-    assert.match(html, /<span class="eye-symbol" title="Seguimiento" aria-hidden="true">👁️<\/span>/);
+    assert.match(html, /<span class="filter-symbol status-icon-image box-icon" title="Colección" aria-hidden="true">📦<\/span>/);
+    assert.match(html, /<span class="filter-symbol status-icon-image magnifier-icon" title="Búsqueda" aria-hidden="true">🔍<\/span>/);
+    assert.match(html, /<span class="eye-symbol" title="Seguimiento" aria-hidden="true"><svg /);
     assert.match(script, /matchesClientFilters/);
     assert.match(script, /replaceChildren/);
     assert.match(script, /No se pudo cargar el catálogo/);
@@ -148,9 +148,10 @@ test('la tabla no muestra la columna Descripción y muestra Categoría y Subcate
     const dom = new JSDOM(html);
     const headers = [...dom.window.document.querySelectorAll('table thead th')];
     assert.doesNotMatch(html, /<th scope="col">Descripción<\/th>/);
-    assert.match(html, /<th scope="col">Categoría<\/th>/);
-    assert.match(html, /<th scope="col">Subcategoría<\/th>/);
-    for (const [index, label] of [[0, 'Imagen'], [1, 'Observar'], [10, 'Acciones']]) {
+    assert.match(html, /data-sort="categoria">Categoría<\/button><\/th>/);
+    assert.match(html, /data-sort="subcategoria">Subcategoría<\/button><\/th>/);
+    assert.equal(headers[1].textContent.trim(), 'Seguimiento');
+    for (const [index, label] of [[0, 'Imagen'], [10, 'Acciones']]) {
       assert.equal(headers[index].textContent.trim(), '');
       assert.equal(headers[index].getAttribute('aria-label'), label);
     }
@@ -280,7 +281,8 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const dom = new JSDOM('<style></style>');
   dom.window.document.querySelector('style').textContent = css;
   const rules = [...dom.window.document.styleSheets[0].cssRules];
-  const smartphone = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).at(-1);
+  const smartphone = rules.find((rule) => rule.conditionText?.includes('(max-width: 600px)')
+    && [...rule.cssRules].some(({ selectorText }) => selectorText === '.watchlist-row, .top-five .ranking-row'));
   const smartphoneHeader = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)');
   const levelPanel = [...smartphoneHeader.cssRules].find((rule) => rule.selectorText === '.notifications-entry-row > .gamification-summary');
   assert.equal(levelPanel.style.getPropertyValue('grid-column'), '1 / -1');
@@ -292,9 +294,9 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('width'), 'min(160px, calc(100% - 220px))');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-area'), '1 / 1');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-rows'), '68px auto');
-  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) 32px 44px 44px 64px');
+  assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) 44px 44px 64px');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
-  for (const [selector, column] of [['.ranking-session', '2'], ['.notifications-trigger', '3'], ['.friends-trigger', '4'], ['.user-session', '5']]) {
+  for (const [selector, column] of [['.notifications-trigger', '2'], ['.friends-trigger', '3'], ['.user-session', '4']]) {
     assert.equal(headerDeclarations.get(`.header-top > .notifications-entry-row > ${selector}`).getPropertyValue('grid-column'), column);
   }
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-profile').getPropertyValue('right'), '0');
@@ -524,7 +526,8 @@ test('seguimiento en smartphone se oculta tambien cuando supera cinco figuras', 
   const style = document.querySelector('style');
   style.textContent = css;
   const rules = [...document.styleSheets[0].cssRules];
-  const smartphone = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).at(-1);
+  const smartphone = rules.find((rule) => rule.conditionText?.includes('(max-width: 600px)')
+    && [...rule.cssRules].some(({ selectorText }) => selectorText === '.watchlist-row, .top-five .ranking-row'));
   const scroller = [...smartphone.cssRules].find((rule) => rule.style?.getPropertyValue('display') === 'flex' && rule.selectorText?.includes('.watchlist-row:has('));
   const hiddenRule = rules.find((rule) => rule.selectorText === '.rankings[hidden], .watchlist-row[hidden]');
   const watchlist = document.querySelector('.watchlist-row');
@@ -555,7 +558,7 @@ test('tablet hereda la presentacion de monitor y solo adapta las columnas de la 
     const rules = [...dom.window.document.styleSheets[0].cssRules];
     const monitorPresentation = rules.find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
     const declarations = new Map([...monitorPresentation.cssRules].map((rule) => [rule.selectorText, rule.style]));
-    assert.equal(declarations.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
+    assert.equal(declarations.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '52px 52px 88px minmax(0, 1fr)');
     assert.equal(declarations.get('.notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
     const tabletColumns = rules.find((rule) => rule.conditionText === '(min-width: 601px) and (orientation: portrait) and (hover: none) and (pointer: coarse)');
     const tableDeclarations = new Map([...tabletColumns.cssRules].map((rule) => [rule.selectorText, rule.style]));
@@ -564,7 +567,7 @@ test('tablet hereda la presentacion de monitor y solo adapta las columnas de la 
     const portraitPresentation = rules.find((rule) => rule.conditionText === '(min-width: 601px) and (max-width: 1366px) and (orientation: portrait)');
     const portraitStyles = new Map([...portraitPresentation.cssRules].map((rule) => [rule.selectorText, rule.style]));
     assert.equal(portraitStyles.get('.header-top > .brand-heading').getPropertyValue('flex'), '0 0 25%');
-    assert.equal(portraitStyles.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '32px 44px 44px 64px minmax(0, 1fr)');
+    assert.equal(portraitStyles.get('.header-top > .notifications-entry-row').getPropertyValue('grid-template-columns'), '44px 44px 64px minmax(0, 1fr)');
   } finally {
     dom.window.close();
   }
@@ -579,10 +582,10 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   const monitorStyles = new Map([...monitor.cssRules].map((rule) => [rule.selectorText, rule.style]));
   const modalMonitorStyles = new Map([...monitorRules.at(-1).cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(modalMonitorStyles.get('.modal-public-profile').getPropertyValue('width'), 'min(1280px, calc(100% - 24px))');
-  assert.equal(monitorStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
-  assert.equal(monitorStyles.get('.notifications-entry-row > .notifications-trigger').getPropertyValue('grid-column'), '2');
-  assert.equal(monitorStyles.get('.notifications-entry-row > .friends-trigger').getPropertyValue('grid-column'), '3');
-  assert.equal(monitorStyles.get('.notifications-entry-row > .user-session').getPropertyValue('grid-column'), '4');
+  assert.equal(monitorStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '52px 52px 88px minmax(0, 1fr)');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .notifications-trigger').getPropertyValue('grid-column'), '1');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .friends-trigger').getPropertyValue('grid-column'), '2');
+  assert.equal(monitorStyles.get('.notifications-entry-row > .user-session').getPropertyValue('grid-column'), '3');
   assert.equal(monitorStyles.get('.notifications-entry-row > .user-session').getPropertyValue('padding-left'), '12px');
   const wideHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: landscape) and (hover: hover) and (pointer: fine), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
   const wideStyles = new Map([...wideHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
@@ -593,7 +596,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.equal(monitorHeader.cssRules[0].style.getPropertyValue('flex'), '0 0 clamp(100px, calc(100% - 960px), 320px)');
   const tabletHeader = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (orientation: portrait) and (hover: none) and (pointer: coarse), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
   const tabletHeaderStyles = new Map([...tabletHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
-  assert.equal(tabletHeaderStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '36px 52px 52px 88px minmax(0, 1fr)');
+  assert.equal(tabletHeaderStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '52px 52px 88px minmax(0, 1fr)');
   const tabletLandscapeHeader = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (min-height: 501px) and (orientation: landscape) and (hover: none) and (pointer: coarse)').at(-1);
   assert.equal(tabletLandscapeHeader.cssRules[0].style.getPropertyValue('flex'), '0 0 clamp(100px, calc(100% - 960px), 320px)');
   const compactMonitor = [...monitorDom.window.document.styleSheets[0].cssRules].find((rule) => rule.conditionText === '(min-width: 761px) and (max-width: 939px) and (hover: hover) and (pointer: fine)');
@@ -615,9 +618,9 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 320px/s);
   assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
   assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
-  assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) Arial, sans-serif/);
+  assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) var\(--font-body\)/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
-  assert.match(css, /\.notifications-entry-row\s*\{[^}]*grid-template-columns: 36px 52px 52px 76px minmax\(0, 1fr\)[^}]*min-width: 0/s);
+  assert.match(css, /\.notifications-entry-row\s*\{[^}]*grid-template-columns: 52px 52px 76px minmax\(0, 1fr\)[^}]*min-width: 0/s);
   assert.match(css, /\.gamification-level-stack \{[^}]*display: grid;[^}]*grid-template-columns: var\(--level-image-size\) minmax\(0, 1fr\);[^}]*min-height: var\(--level-image-size\);/);
   assert.match(css, /\.gamification-level-stack \{[^}]*row-gap: 4px;/);
   assert.match(css, /\.gamification-level-stack \.gamification-level \{[^}]*grid-row: 1 \/ 3; grid-template-rows: subgrid;/);
@@ -643,9 +646,9 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.filters-form > #show-all\s*\{[^}]*align-self:\s*end/);
   assert.match(css, /\.filters-form \.form-actions\s*\{[^}]*grid-row:\s*1;[^}]*align-self:\s*end/);
   assert.match(css, /\.modal-preview img\s*\{[^}]*object-fit:\s*contain;\s*\}/);
-  assert.match(css, /\.collection-value strong\s*\{[^}]*font:\s*700 1\.2rem Arial, sans-serif/s);
+  assert.match(css, /\.collection-value strong\s*\{[^}]*font:\s*700 1\.2rem var\(--font-body\)/s);
   assert.match(css, /\.gamification-bricks-value strong\s*\{[^}]*line-height:\s*1/s);
-  assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem\/1 'Arial Rounded MT Bold', 'Trebuchet MS', Arial, sans-serif/s);
+  assert.match(css, /\.gamification-level-title\s*\{[^}]*font:\s*700 1\.35rem\/1 var\(--font-display\)/s);
   assert.match(css, /\.gamification-level-title\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /#gamification-level-number\s*\{[^}]*font-size:\s*1\.75rem/s);
   assert.match(css, /\.gamification-meter > span\s*\{[^}]*position:\s*absolute/s);
@@ -712,7 +715,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(headerTop.children[1].className, 'notifications-entry-row');
     assert.equal(document.querySelector('.notifications-entry-row #open-notifications')?.getAttribute('aria-controls'), 'notifications-dialog');
     assert.equal(document.querySelector('.page-header').nextElementSibling.classList.contains('rankings-panel'), true);
-    assert.deepEqual([...document.querySelector('.notifications-entry-row').children].map((element) => element.className), ['ranking-session', 'notifications-trigger', 'notifications-trigger friends-trigger', 'user-session', 'gamification-summary']);
+    assert.deepEqual([...document.querySelector('.notifications-entry-row').children].map((element) => element.className), ['notifications-trigger', 'notifications-trigger friends-trigger', 'user-session', 'gamification-summary']);
     assert.equal(document.querySelector('#open-friends').getAttribute('aria-label'), 'Amigos');
     assert.equal(document.querySelector('#open-friends').title, 'Amigos');
     assert.equal(document.querySelector('#open-friends img').getAttribute('src'), '/status_images/friends.png');
@@ -720,7 +723,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(document.querySelector('#friends-count').hidden, true);
     assert.equal(document.querySelector('#friends-count').getAttribute('aria-hidden'), 'true');
     assert.match(css, /\.friends-count \{[^}]*position: absolute;[^}]*background: var\(--blue\);/);
-    assert.match(css, /\.notifications-entry-row > \.ranking-session \{[^}]*width: 36px; min-height: 44px;/);
+    assert.equal(document.querySelector('.ranking-session'), null);
     assert.match(css, /\.notifications-entry-row > \.gamification-summary \{ grid-column: 1 \/ -1; grid-row: 2; \}/);
     assert.match(css, /\.notifications-toolbar \{ display: flex; justify-content: flex-start;/);
     assert.match(css, /\.toast-notification \{ color: white; background: #2e7d32;/);
@@ -734,7 +737,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(main.querySelector('.gamification-level-title .gamification-level-label').textContent.trim(), '0 Duplo');
     assert.equal(main.querySelector('.gamification-metrics #gamification-toggle').id, 'gamification-toggle');
     assert.deepEqual([...main.querySelector('.gamification-level-stack').children].map((element) => element.className), ['gamification-level', 'gamification-dna-row']);
-    assert.equal(document.querySelector('.notifications-entry-row #user-avatar').parentElement.id, 'user-menu-toggle');
+    assert.equal(document.querySelector('.notifications-entry-row #user-avatar').closest('#user-menu-toggle').id, 'user-menu-toggle');
     assert.equal(main.querySelector('#user-menu-toggle'), null);
     assert.equal(document.querySelector('#open-friends').nextElementSibling, document.querySelector('.user-session'));
     assert.equal(main.querySelector('#open-dna-inline').className, 'gamification-dna-name');
@@ -778,7 +781,9 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.ok(summaryActions.every((button) => button.classList.contains('button-secondary')));
     const countsPanel = main.querySelector('.collection-counts-panel');
     assert.equal(countsPanel.querySelectorAll(':scope > span').length, 2);
-    for (const count of countsPanel.children) assert.deepEqual([...count.children].map((element) => element.tagName), ['IMG', 'STRONG']);
+    assert.deepEqual([...countsPanel.children[0].children].map((element) => element.tagName), ['SPAN', 'STRONG']);
+    assert.deepEqual([...countsPanel.children[1].children].map((element) => element.tagName), ['SPAN', 'STRONG']);
+    assert.equal(countsPanel.querySelector('.magnifier-icon').textContent, '🔍');
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
     assert.match(css, /\.summary-achievements-row \.button \{ flex: 1 1 0; min-width: 0; white-space: nowrap; \}/);
@@ -823,7 +828,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   const heading = dom.window.document.querySelector('#form-dialog .form-dialog-heading');
   assert.equal(heading.parentElement, form.parentElement);
   assert.equal(heading.nextElementSibling, form);
-  assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Nueva minifigura');
+  assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Nueva minipersona');
   assert.equal(heading.querySelector('#form-cancel').textContent, 'Cerrar');
   assert.equal(heading.querySelector('#form-cancel').type, 'button');
   assert.equal(form.querySelector('#form-cancel'), null);
@@ -906,6 +911,184 @@ test('El servidor expone correctamente los elementos del formulario y la integra
     assert.match(script, /apiFetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
 });
 
+test('la terminologia minipersona se aplica a mensajes remotos sin cambiar datos ni identificadores', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.fetch = async (url) => ({ ok: true, json: async () => url === '/categorias'
+    ? JSON.parse(officialCategoriasRaw) : url === '/valoracion' ? { total: 0, top5: [], top5Antiguas: [] } : [] });
+  try {
+    window.eval(await readSessionScript());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const body = window.document.body;
+    assert.doesNotMatch(body.textContent, /\bminifiguras?\b/i);
+    for (const element of body.querySelectorAll('[aria-label], [title], [alt]')) {
+      for (const attribute of ['aria-label', 'title', 'alt']) {
+        assert.doesNotMatch(element.getAttribute(attribute) ?? '', /\bminifiguras?\b/i);
+      }
+    }
+    const achievement = { nombre: 'Minifigura destacada', descripcion: 'Consigue 10 minifiguras y MINIFIGURAS.', cantidad: 2, total: 20 };
+    window.remoteAchievement = achievement;
+    const item = window.eval('createAchievementItem(remoteAchievement)');
+    assert.equal(item.querySelector('.achievement-name').textContent, 'Minipersona destacada');
+    assert.equal(item.querySelector('.achievement-description').textContent, 'Consigue 10 minipersonas y MINIPERSONAS.');
+    assert.equal(achievement.nombre, 'Minifigura destacada');
+    const notification = window.eval("renderNotificationMessage({type:'system', data:{message:'Tu minifigura y tus minifiguras'}})");
+    assert.equal(notification.textContent, 'Tu minipersona y tus minipersonas');
+    window.eval("showToast('Minifigura: 10 minifiguras')");
+    assert.match(window.document.querySelector('#toast-region').textContent, /Minipersona: 10 minipersonas/);
+    assert.ok(window.document.querySelector('#new-minifigura'));
+    assert.ok(window.document.querySelector('#minifigura-form'));
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('todas las columnas de datos ordenan en ambos sentidos sin cambiar los datos originales', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  const fields = ['id', 'nombre', 'categoria', 'subcategoria', 'anio', 'precio', 'diferencia'];
+  window.fetch = async (url) => ({ ok: true, json: async () => url === '/categorias'
+    ? JSON.parse(officialCategoriasRaw) : url === '/valoracion' ? { total: 0, top5: [], top5Antiguas: [] } : [] });
+  try {
+    window.eval(await readSessionScript());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual([...window.document.querySelectorAll('[data-sort]')].map(({ dataset }) => dataset.sort), fields);
+    for (const index of [1, 7]) {
+      assert.equal(window.document.querySelectorAll('thead th')[index].querySelector('button'), null);
+    }
+    const fixtures = [
+      { id: 'MF10', nombre: 'Zeta', categoria: 'Space', subcategoria: 'Zeta', anio: 2024, estadoColeccion: 'COLECCIÓN', precio: 30, precioCompra: 10, observada: true },
+      { id: 'MF2', nombre: 'Álfa', categoria: 'Collectible Minifigures', subcategoria: 'Series 4 Minifigures', anio: 2020, estadoColeccion: 'BUSCADA', precio: 5, precioCompra: 1, observada: false },
+      { id: 'MF3', nombre: 'Beta', categoria: 'Castle', subcategoria: 'Beta', anio: 2022, estadoColeccion: 'COLECCIÓN', precio: 15, precioCompra: 5, observada: false },
+    ];
+    window.sortFixture = fixtures;
+    for (const field of fields) {
+      const button = window.document.querySelector(`[data-sort="${field}"]`);
+      button.click();
+      assert.equal(button.dataset.direction, 'asc');
+      assert.equal(button.closest('th').getAttribute('aria-sort'), 'ascending');
+      const ascending = window.eval('sortCatalog(sortFixture)').map(({ id }) => id);
+      button.click();
+      assert.equal(button.dataset.direction, 'desc');
+      assert.equal(button.closest('th').getAttribute('aria-sort'), 'descending');
+      const descending = window.eval('sortCatalog(sortFixture)').map(({ id }) => id);
+      assert.notDeepEqual(ascending, descending, field);
+      assert.deepEqual(fixtures.map(({ id }) => id), ['MF10', 'MF2', 'MF3']);
+    }
+    window.document.querySelector('[data-sort="id"]').click();
+    assert.deepEqual(Array.from(window.eval('sortCatalog(sortFixture)'), ({ id }) => id), ['MF2', 'MF3', 'MF10']);
+    window.document.querySelector('[data-sort="nombre"]').click();
+    assert.deepEqual(Array.from(window.eval('sortCatalog(sortFixture)'), ({ id }) => id), ['MF2', 'MF3', 'MF10']);
+    window.sortFixture = [{ id: 'empty' }, ...fixtures];
+    for (const direction of ['asc', 'desc']) {
+      window.document.querySelector('[data-sort="precio"]').click();
+      assert.equal(window.eval('sortCatalog(sortFixture).at(-1).id'), 'empty');
+    }
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('los alias CMF son solo visuales y nunca se envian ni sustituyen los nombres del catalogo', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const category = 'Collectible Minifigures';
+  const subcategory = 'Series 4 Minifigures';
+  const figure = { id: 'CMF-OLD', nombre: 'Figura', categoria: category, subcategoria: subcategory, anio: 2020, estadoColeccion: 'COLECCIÓN' };
+  const catalog = [figure, { ...figure, id: 'SPACE', categoria: 'Space' }];
+  const categories = JSON.parse(officialCategoriasRaw);
+  categories.find(({ categoria }) => categoria === category).subcategorias.push({ subcategoria: subcategory, total: 16 });
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const { document } = window;
+  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  const writes = [];
+  window.fetch = async (url, options = {}) => {
+    if (url === '/categorias') return { ok: true, json: async () => categories };
+    if (url.endsWith('/brickset')) return { ok: true, json: async () => figure };
+    if (['POST', 'PUT'].includes(options.method) && url.startsWith('/minifiguras')) {
+      const payload = JSON.parse(options.body);
+      writes.push(payload);
+      return { ok: true, status: 200, json: async () => payload };
+    }
+    if (url === '/minifiguras') return { ok: true, json: async () => catalog };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 2, buscadas: 0, top5: [], top5Antiguas: [] }) };
+    return { ok: false, json: async () => ({}) };
+  };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+  try {
+    window.eval(script);
+    await tick();
+    const categoryOption = [...document.querySelectorAll('#categoria option')].find(({ value }) => value === category);
+    assert.match(categoryOption.textContent, /^CMF[: (]/);
+    const rows = [...document.querySelectorAll('#catalog-body tr')];
+    assert.equal(rows[0].children[4].textContent, 'CMF');
+    assert.equal(rows[0].children[5].textContent, 'Series 4');
+    assert.equal(rows[1].children[5].textContent, subcategory, 'no se abrevian subcategorias de otros temas');
+    document.querySelector('#categoria').value = category;
+    document.querySelector('#categoria').dispatchEvent(new window.Event('change'));
+    const subOption = [...document.querySelectorAll('#subcategoria option')].find(({ value }) => value === subcategory);
+    assert.match(subOption.textContent, /^Series 4:/);
+    document.querySelector('#subcategoria').value = subcategory;
+    document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+    assert.equal(document.querySelectorAll('#catalog-body tr').length, 1);
+    assert.equal(document.querySelector('#catalog-body tr').children[2].textContent, figure.id);
+
+    for (const mode of ['view', 'edit', 'ranking-create']) {
+      window.eval(`openFormDialog(${JSON.stringify(mode)}, ${JSON.stringify(figure)})`);
+      await tick();
+      assert.equal(document.querySelector('#form-categoria').value, 'CMF');
+      assert.equal(document.querySelector('#form-subcategoria').value, 'Series 4');
+      const payload = window.eval('buildPayloadFromForm()');
+      assert.equal(payload.categoria, category);
+      assert.equal(payload.subcategoria, subcategory);
+      assert.equal(window.eval('hasFormMetadata()'), true);
+      if (mode === 'edit') {
+        document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+        await tick();
+      }
+      document.querySelector('#form-cancel').click();
+    }
+    document.querySelector('#new-minifigura').click();
+    assert.equal(document.querySelector('#form-categoria').value, '');
+    assert.equal(window.eval('buildPayloadFromForm().categoria'), '');
+    const id = document.querySelector('#form-id');
+    id.value = 'CMF-NEW';
+    id.dispatchEvent(new window.Event('input'));
+    await window.eval('loadFormBricksetData()');
+    assert.equal(document.querySelector('#form-categoria').value, 'CMF');
+    assert.equal(document.querySelector('#form-subcategoria').value, 'Series 4');
+    document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+    await tick();
+    assert.equal(writes.length, 2);
+    for (const payload of writes) {
+      assert.equal(payload.categoria, category);
+      assert.equal(payload.subcategoria, subcategory);
+    }
+    window.eval('renderProfileFavoriteOptions()');
+    const favorite = [...document.querySelectorAll('.profile-favorite-option input')].find(({ value }) => value === category);
+    assert.equal(favorite.nextElementSibling.textContent, 'CMF');
+    favorite.click();
+    assert.equal(document.querySelector('.profile-selected-category > span').textContent, 'CMF');
+    for (const query of ['CMF', category]) {
+      document.querySelector('#profile-favorite-search').value = query;
+      window.eval('renderProfileFavoriteOptions()');
+      assert.equal(document.querySelector('.profile-favorite-option input').value, category);
+    }
+    assert.equal(catalog[0].categoria, category);
+    assert.equal(catalog[0].subcategoria, subcategory);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('la interfaz renderiza diferencias, ordena columnas y conserva el estado por defecto en edición', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
@@ -933,20 +1116,20 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   const rows = () => [...window.document.querySelectorAll('#catalog-body tr')];
   assert.deepEqual(
     [...window.document.querySelectorAll('#categoria option')].slice(1).map((option) => option.textContent),
-    ['Collectible Minifigures: 1 de 845 (0,1%)', 'Space: 3 de 230 (1,3%)'],
+    ['CMF: 1 de 845 (0,1%)', 'Space: 3 de 230 (1,3%)'],
   );
   assert.equal(rows()[0].children[9].textContent, '5,00 €');
   assert.equal(rows()[1].children[9].textContent, 'N/A');
   assert.equal(rows()[2].children[9].textContent, '?');
-  assert.equal(rows()[0].children[7].querySelector('.badge img').getAttribute('src'), '/status_images/caja.png');
+  assert.equal(rows()[0].children[7].querySelector('.badge .box-icon').textContent, '📦');
   assert.equal(rows()[0].children[7].querySelector('.badge').getAttribute('aria-label'), 'Colección');
   assert.equal(rows()[0].children[7].querySelector('.badge').title, 'Colección');
-  assert.equal(rows()[1].children[7].querySelector('.badge img').getAttribute('src'), '/status_images/lupa.png');
+  assert.equal(rows()[1].children[7].querySelector('.badge .magnifier-icon').textContent, '🔍');
   assert.equal(rows()[1].children[7].querySelector('.badge').getAttribute('aria-label'), 'Búsqueda');
   assert.equal(rows()[1].children[7].querySelector('.badge').title, 'Búsqueda');
   assert.ok(rows()[0].children[9].querySelector('.difference-positive'));  assert.equal(rows()[0].children[4].textContent, 'Space');
   assert.equal(rows()[0].children[5].textContent, '');
-  assert.equal(rows()[1].children[4].textContent, 'Collectible Minifigures');
+  assert.equal(rows()[1].children[4].textContent, 'CMF');
   assert.equal(rows()[1].children[5].textContent, 'Team GB');
   window.document.querySelector('[data-sort="anio"]').click();
   assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'b', 'c', 'a']);
@@ -960,7 +1143,7 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'a', 'b', 'c']);
   window.document.querySelector('#show-all').click();
   assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'b', 'c', 'd']);
-  assert.equal(window.document.querySelectorAll('.table-sort[data-direction=""]').length, 3);
+  assert.equal(window.document.querySelectorAll('.table-sort[data-direction=""]').length, 7);
 
   const editButton = rows().find((row) => row.children[2].textContent === 'c').querySelector('[data-action="edit"]');
   editButton.click();
@@ -971,6 +1154,27 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.equal(window.document.querySelector('#form-observada').disabled, false);
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
   assert.equal(window.eval('buildPayloadFromForm().id'), 'c');
+  const purchasePrice = window.document.querySelector('#form-precioCompra');
+  const purchaseDate = window.document.querySelector('#form-fechaCompra');
+  assert.equal(purchaseDate.max, window.eval('localToday()'));
+  window.document.querySelector('[data-form-state="COLECCIÓN"]').click();
+  for (const [field, invalid] of [[purchasePrice, '-1'], [purchaseDate, '9999-12-31']]) {
+    const previous = field.value;
+    field.value = invalid;
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(window.document.querySelector('#form-submit').disabled, true);
+    assert.ok(window.document.querySelector('#form-error').textContent.length > 0);
+    assert.notEqual(window.eval('validatePayload(buildPayloadFromForm())'), null);
+    field.value = previous;
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(window.document.querySelector('#form-submit').disabled, false);
+    assert.equal(window.document.querySelector('#form-error').textContent, '');
+  }
+  purchaseDate.value = window.eval('localToday()');
+  purchasePrice.value = '0';
+  purchasePrice.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(window.document.querySelector('#form-submit').disabled, false);
+  assert.equal(window.eval('validatePayload(buildPayloadFromForm())'), null);
   assert.equal(catalog[2].FechaRegistro, '2026-01-02T00:00:00.000Z');
   window.document.querySelector('#form-cancel').click();
   window.document.querySelector('#new-minifigura').click();
@@ -978,21 +1182,28 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   dom.window.close();
 });
 
-test('los indicadores requeridos son rojos sin colorear etiquetas ni campos opcionales', async () => {
+test('solo ID muestra indicador requerido en el modal sin alterar los campos autocompletados', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM(html);
   assert.match(css, /\.required-label > span::after, span\.required-label::after \{ content: ' \*'; color: var\(--accent\); \}/);
   assert.match(css, /#form-dialog\.view-mode .*required-label.*content: ''/);
-  for (const input of dom.window.document.querySelectorAll('#minifigura-form input[required]')) {
-    assert.ok(input.closest('.required-label') || input.closest('label').querySelector('.required-label'));
+  const form = dom.window.document.querySelector('#minifigura-form');
+  assert.deepEqual([...form.querySelectorAll('.required-label')].map((label) => label.id), ['form-id-label']);
+  assert.equal(form.querySelector('#form-id').required, true);
+  for (const id of ['form-nombre', 'form-categoria', 'form-anio', 'form-precio']) {
+    const input = form.querySelector(`#${id}`);
+    assert.equal(input.required, true);
+    assert.equal(input.readOnly, true);
+    assert.equal(input.closest('.required-label'), null);
+    assert.equal(input.closest('label').querySelector('.required-label'), null);
   }
   assert.equal(dom.window.document.querySelector('#form-descripcion').closest('.required-label'), null);
   assert.equal(dom.window.document.querySelector('#form-subcategoria').closest('label').querySelector('.required-label'), null);
   dom.window.close();
 });
 
-test('Nueva minifigura, Editar y Eliminar se muestran como iconos sin texto visible y con aria-label', async () => {
+test('Nueva minipersona, Editar y Eliminar se muestran como iconos sin texto visible y con aria-label', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const catalog = [
@@ -1014,7 +1225,7 @@ test('Nueva minifigura, Editar y Eliminar se muestran como iconos sin texto visi
   const deleteButton = window.document.querySelector('[data-action="delete"]');
 
   for (const [button, expectedLabel] of [
-    [newButton, 'Nueva minifigura'],
+    [newButton, 'Nueva minipersona'],
     [editButton, 'Editar'],
     [deleteButton, 'Eliminar'],
   ]) {
@@ -1081,7 +1292,7 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
     window.document.querySelector(selector).click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(window.document.querySelector('#form-dialog').open, true);
-    assert.equal(window.document.querySelector('#form-dialog-title').textContent, 'Ver minifigura');
+    assert.equal(window.document.querySelector('#form-dialog-title').textContent, 'Ver minipersona');
     assert.equal(window.document.querySelector('#form-id').value, expectedId);
     assert.equal(window.document.querySelector('#form-descripcion').value, expectedDescription);
     assert.equal(window.document.querySelector('#form-id').disabled, true);
@@ -1700,6 +1911,29 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   assert.equal(window.document.querySelector('#form-fechaCompra').type, 'date');
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, false);
   window.document.querySelector('#form-estadoColeccion').value = '';
+  const purchaseDate = window.document.querySelector('#form-fechaCompra');
+  const purchasePrice = window.document.querySelector('#form-precioCompra');
+  const today = window.eval('localToday()');
+  assert.equal(purchaseDate.max, today);
+  assert.equal(purchasePrice.min, '0');
+  for (const [field, value, message] of [
+    [purchaseDate, '9999-12-31', 'La fecha de compra no puede ser posterior a hoy.'],
+    [purchasePrice, '-0.01', 'El precio de compra debe ser un número mayor o igual a cero.'],
+  ]) {
+    field.value = value;
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(window.document.querySelector('#form-submit').disabled, true);
+    assert.equal(window.document.querySelector('#form-error').textContent, message);
+    window.document.querySelector('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(submittedPayload, undefined);
+    field.value = '';
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(window.document.querySelector('#form-error').textContent, '');
+  }
+  purchaseDate.value = today;
+  purchasePrice.value = '0';
+  purchasePrice.dispatchEvent(new window.Event('input', { bubbles: true }));
   window.document.querySelector('#minifigura-form').dispatchEvent(
     new window.Event('submit', { bubbles: true, cancelable: true }),
   );
@@ -1708,6 +1942,8 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   assert.equal(submittedPayload.estadoColeccion, 'COLECCIÓN');
   assert.equal(submittedPayload.nombre, 'Nueva');
   assert.equal(submittedPayload.descripcion, 'Variante, Info');
+  assert.equal(submittedPayload.fechaCompra, today);
+  assert.equal(submittedPayload.precioCompra, 0);
   window.document.querySelector('#new-minifigura').click();
   idInput.value = 'new-f';
   idInput.dispatchEvent(new window.Event('input'));
@@ -1797,16 +2033,22 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(window.document.querySelector('.eye-icon.active').dataset.id, 'HIGH');
+  for (const button of window.document.querySelectorAll('.eye-icon')) {
+    assert.equal(button.querySelector('use').getAttribute('href'), '#observation-eye-icon');
+    assert.equal(button.querySelector('svg').getAttribute('aria-hidden'), 'true');
+    assert.equal(button.getAttribute('aria-pressed'), String(button.classList.contains('active')));
+  }
   assert.equal(window.document.querySelectorAll('.watchlist-card').length, 1);
   assert.equal(window.document.querySelector('#watchlist-title').textContent, 'Seguimiento (1 / 10)');
   const watchlistCard = window.document.querySelector('.watchlist-card');
   assert.equal(watchlistCard.title, window.document.querySelector('.ranking-card').title);
   assert.equal(watchlistCard.querySelector('.watchlist-state-icon').title, 'Colección');
-  assert.equal(watchlistCard.querySelector('.watchlist-state-icon img').getAttribute('src'), '/status_images/caja.png');
+  assert.equal(watchlistCard.querySelector('.watchlist-state-icon .box-icon').textContent, '📦');
   assert.match(css, /\.watchlist-card \.status-icon-image\s*\{\s*width:\s*1\.5rem;\s*height:\s*1\.5rem;/);
-  assert.match(css, /\.status-icon-image\[src\$="caja\.png"\]\s*\{\s*transform:\s*scale\(1\.2\);/);
-  assert.match(css, /\.watchlist-card \.watchlist-state-icon img\[src\$="caja\.png"\]\s*\{\s*margin-right:\s*2px;/);
-  assert.match(watchlistCard.textContent, /^ HIGH 30,00/);
+  assert.match(css, /\.status-icon-image\.box-icon\s*\{\s*display:\s*inline-grid;/);
+  assert.equal(watchlistCard.querySelector('.watchlist-caption .watchlist-code').textContent, 'HIGH');
+  assert.equal(watchlistCard.querySelector('.watchlist-caption .watchlist-price').textContent, '30,00\u00a0€');
+  assert.match(watchlistCard.textContent, /^📦 HIGH 30,00/u);
   assert.equal(window.document.querySelector('.eye-icon.active').title, 'Seguimiento');
   assert.equal(window.document.querySelector('.filter-symbol').title, 'Colección');
   assert.equal(window.document.querySelectorAll('.filter-symbol')[1].title, 'Búsqueda');
@@ -1815,7 +2057,7 @@ test('la interfaz muestra y alterna la watchlist con el orden del resumen', asyn
   assert.equal(window.document.querySelectorAll('.count-icon')[1].title, 'Búsqueda');
   assert.match(css, /\.watchlist-row\s*\{[^}]*justify-content:\s*flex-start;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/);
   assert.match(css, /\.watchlist-card\s*\{\s*scroll-snap-align:\s*start;/);
-  assert.match(css, /\.watchlist-card:hover\s*\{[^}]*border-color:\s*var\(--accent\)/s);
+  assert.match(css, /\.ranking-card:hover, \.watchlist-card:hover\s*\{\s*background:\s*var\(--paper\);/);
   assert.equal(window.document.querySelector('#collection-count').textContent, '1');
   assert.equal(window.document.querySelector('#wanted-count').textContent, '1');
 
@@ -1849,6 +2091,7 @@ test('el modal de seguimiento permite alternar el ojo y conserva el estado ante 
     await new Promise((resolve) => setTimeout(resolve, 0));
     window.document.querySelector('.watchlist-card').click();
     const eye = window.document.querySelector('#form-observada');
+    assert.equal(eye.querySelector('use').getAttribute('href'), '#observation-eye-icon');
     assert.equal(eye.disabled, false);
     assert.equal(eye.getAttribute('aria-pressed'), 'true');
     assert.equal(window.document.querySelector('#form-nombre').disabled, true);

@@ -219,7 +219,7 @@ const authUsernameInput = document.querySelector('#auth-username');
 const authEmailInput = document.querySelector('#auth-email');
 const authPasswordInput = document.querySelector('#auth-password');
 const authPasswordRepeatInput = document.querySelector('#auth-password-repeat');
-const authShowPasswordButtons = [...document.querySelectorAll('.auth-password-visibility')];
+const authShowPasswordButtons = [...document.querySelectorAll('#classic-auth-form .auth-password-visibility')];
 const classicAuthSubmit = document.querySelector('#classic-auth-submit');
 const openPasswordRecoveryButton = document.querySelector('#open-password-recovery');
 const passwordRecoveryForm = document.querySelector('#password-recovery-form');
@@ -245,6 +245,19 @@ const deleteAccountConfirmButton = document.querySelector('#delete-account-confi
 const deleteAccountCancelButton = document.querySelector('#delete-account-cancel');
 const deleteAccountError = document.querySelector('#delete-account-error');
 const profileUsernameInput = document.querySelector('#profile-username');
+const profileAccountSettings = document.querySelector('#profile-account-settings');
+const profileEmailInput = document.querySelector('#profile-email');
+const openChangePasswordButton = document.querySelector('#open-change-password');
+const changePasswordDialog = document.querySelector('#change-password-dialog');
+const changePasswordForm = document.querySelector('#change-password-form');
+const settingsPasswordInput = document.querySelector('#settings-password');
+const settingsPasswordConfirmInput = document.querySelector('#settings-password-confirm');
+const settingsPasswordMessage = document.querySelector('#settings-password-message');
+const settingsPasswordSave = document.querySelector('#settings-password-save');
+const settingsPasswordCancel = document.querySelector('#settings-password-cancel');
+const settingsShowPasswordButtons = [...changePasswordForm.querySelectorAll('.auth-password-visibility')];
+let settingsPasswordConfirmBlurred = false;
+let settingsPasswordRequest = 0;
 const profileAvatarInput = document.querySelector('#profile-avatar-url');
 const profileAvatarFileInput = document.querySelector('#profile-avatar-file');
 const profileAvatarLoadButton = document.querySelector('#profile-avatar-load');
@@ -269,9 +282,9 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 
 const ERROR_MESSAGES = {
   ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
-  MINIFIGURA_INVALIDA: 'Los datos de la minifigura no son válidos.',
-  ID_DUPLICADO: 'Esta minifigura ya está registrada en tu inventario.',
-  MINIFIGURA_NO_ENCONTRADA: 'La minifigura ya no existe.',
+  MINIFIGURA_INVALIDA: 'Los datos de la minipersona no son válidos.',
+  ID_DUPLICADO: 'Esta minipersona ya está registrada en tu inventario.',
+  MINIFIGURA_NO_ENCONTRADA: 'La minipersona ya no existe.',
   CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
   CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
   CATEGORIAS_NO_DISPONIBLES: 'El catálogo de categorías no está disponible en este momento.',
@@ -280,7 +293,6 @@ const ERROR_MESSAGES = {
 
 let requestSequence = 0;
 let authMode = 'login';
-let pendingRegistrationUsername = '';
 let activeFilters = {};
 let catalogCache = [];
 let currentCatalog = [];
@@ -399,6 +411,31 @@ function formatFilterOption(nombre, count, total) {
   return `${nombre}: ${count} de ${total} (${percentage}%)`;
 }
 
+function interfaceText(text) {
+  return String(text ?? '').replace(/\bminifiguras?\b/gi, (word) => {
+    const replacement = word.toLowerCase().endsWith('s') ? 'minipersonas' : 'minipersona';
+    if (word === word.toUpperCase()) return replacement.toUpperCase();
+    return word[0] === word[0].toUpperCase() ? replacement[0].toUpperCase() + replacement.slice(1) : replacement;
+  });
+}
+
+function categoryDisplayName(category) {
+  return category === 'Collectible Minifigures' ? 'CMF' : category ?? '';
+}
+
+function subcategoryDisplayName(category, subcategory) {
+  return category === 'Collectible Minifigures'
+    ? (subcategory ?? '').replace(/\bMinifigures\b/g, '').replace(/\s+/g, ' ').trim()
+    : subcategory ?? '';
+}
+
+function setFormCategories(category = '', subcategory = '') {
+  formCategoriaInput.dataset.canonicalValue = category;
+  formSubcategoriaInput.dataset.canonicalValue = subcategory;
+  formCategoriaInput.value = categoryDisplayName(category);
+  formSubcategoriaInput.value = subcategoryDisplayName(category, subcategory);
+}
+
 function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   const previousValue = selectElement.value;
   const matchingCatalog = catalogMatchingStateFilters().filter((minifigura) => !categoria || minifigura.categoria === categoria);
@@ -412,7 +449,7 @@ function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   selectElement.replaceChildren(new Option(`${placeholderText} (${matchingCatalog.length})`, ''));
   for (const subcategoria of subcategorias.sort()) {
     const total = officialSubcategories.find((item) => item.subcategoria === subcategoria)?.total;
-    selectElement.append(new Option(formatFilterOption(subcategoria, counts.get(subcategoria), total), subcategoria));
+    selectElement.append(new Option(formatFilterOption(subcategoryDisplayName(categoria, subcategoria), counts.get(subcategoria), total), subcategoria));
   }
   selectElement.value = subcategorias.includes(previousValue) ? previousValue : '';
   selectElement.disabled = !categoriasReady || subcategorias.length === 0;
@@ -430,7 +467,7 @@ function renderCategoryOptions(categorias) {
   categoriaInput.replaceChildren(new Option(`Todas (${matchingCatalog.length})`, ''));
   for (const categoria of categoryNames) {
     const total = categorias.find((item) => item.categoria === categoria)?.total;
-    categoriaInput.append(new Option(formatFilterOption(categoria, categoryCounts.get(categoria), total), categoria));
+    categoriaInput.append(new Option(formatFilterOption(categoryDisplayName(categoria), categoryCounts.get(categoria), total), categoria));
   }
   categoriaInput.value = categoryNames.includes(selectedCategoria) ? selectedCategoria : '';
   renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
@@ -555,24 +592,17 @@ function normalizedCollectionState(value) {
     : value;
 }
 
-function collectionStateIconSource(value) {
-  const state = normalizedCollectionState(value);
-  return state === 'COLECCION' ? '/status_images/caja.png' : state === 'BUSCADA' ? '/status_images/lupa.png' : null;
-}
-
 function appendCollectionStateIcon(element, value) {
-  const source = collectionStateIconSource(value);
-  if (!source) {
-    element.textContent = value ?? '';
+  const state = normalizedCollectionState(value);
+  if (state === 'BUSCADA' || state === 'COLECCION') {
+    const icon = document.createElement('span');
+    icon.className = `status-icon-image ${state === 'BUSCADA' ? 'magnifier-icon' : 'box-icon'}`;
+    icon.textContent = state === 'BUSCADA' ? '🔍' : '📦';
+    icon.setAttribute('aria-hidden', 'true');
+    element.append(icon);
     return;
   }
-
-  const image = document.createElement('img');
-  image.className = 'status-icon-image';
-  image.src = source;
-  image.alt = '';
-  image.setAttribute('aria-hidden', 'true');
-  element.append(image);
+  element.textContent = value ?? '';
 }
 
 function collectionStateMeaning(value) {
@@ -681,11 +711,18 @@ function renderWatchlist(observed) {
     card.title = `${minifigura.id} - ${minifigura.nombre ?? ''}`;
     const image = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 128, height: 112 });
     const caption = document.createElement('span');
+    caption.className = 'watchlist-caption';
     const stateIcon = document.createElement('span');
     stateIcon.className = 'watchlist-state-icon';
     appendCollectionStateIcon(stateIcon, minifigura.estadoColeccion);
     stateIcon.title = collectionStateMeaning(minifigura.estadoColeccion);
-    caption.append(stateIcon, document.createTextNode(` ${minifigura.id} ${formatPrice(minifigura.precioBrickset)}`));
+    const code = document.createElement('span');
+    code.className = 'watchlist-code';
+    code.textContent = minifigura.id;
+    const price = document.createElement('span');
+    price.className = 'watchlist-price';
+    price.textContent = formatPrice(minifigura.precioBrickset);
+    caption.append(stateIcon, document.createTextNode(' '), code, document.createTextNode(' '), price);
     card.append(image, caption);
     fragment.append(card);
   }
@@ -708,7 +745,11 @@ function sortCatalog(catalog) {
   }
 
   const direction = activeSort.direction === 'asc' ? 1 : -1;
+  const textFields = ['id', 'nombre', 'categoria', 'subcategoria'];
+  const isText = textFields.includes(activeSort.field);
   const sortValue = (minifigura) => {
+    if (activeSort.field === 'categoria') return categoryDisplayName(minifigura.categoria);
+    if (activeSort.field === 'subcategoria') return subcategoryDisplayName(minifigura.categoria, minifigura.subcategoria);
     if (activeSort.field !== 'diferencia') return minifigura[activeSort.field];
     if (normalizedCollectionState(minifigura.estadoColeccion) === 'BUSCADA'
       || !Number.isFinite(minifigura.precio)
@@ -719,12 +760,12 @@ function sortCatalog(catalog) {
   return [...catalog].sort((left, right) => {
     const leftValue = sortValue(left);
     const rightValue = sortValue(right);
-    const leftMissing = !Number.isFinite(leftValue);
-    const rightMissing = !Number.isFinite(rightValue);
+    const leftMissing = isText ? typeof leftValue !== 'string' || !leftValue.trim() : !Number.isFinite(leftValue);
+    const rightMissing = isText ? typeof rightValue !== 'string' || !rightValue.trim() : !Number.isFinite(rightValue);
     if (leftMissing || rightMissing) {
       return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
     }
-    return (leftValue - rightValue) * direction;
+    return (isText ? leftValue.localeCompare(rightValue, 'es', { sensitivity: 'base', numeric: true }) : leftValue - rightValue) * direction;
   });
 }
 
@@ -792,7 +833,17 @@ function observedCell(minifigura) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = `eye-icon ${minifigura.observada ? 'active' : 'inactive'}`;
-  button.textContent = '👁️';
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('fill', 'none');
+  icon.setAttribute('stroke', 'currentColor');
+  icon.setAttribute('stroke-width', '2');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.setAttribute('focusable', 'false');
+  const reference = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  reference.setAttribute('href', '#observation-eye-icon');
+  icon.append(reference);
+  button.append(icon);
   button.title = 'Seguimiento';
   button.setAttribute('aria-label', minifigura.observada ? 'Dejar de observar' : 'Observar');
   button.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
@@ -894,8 +945,8 @@ function renderCatalogPage() {
       observedCell(minifigura),
       idCell(minifigura),
       cell(minifigura.nombre),
-      cell(minifigura.categoria),
-      cell(minifigura.subcategoria),
+      cell(categoryDisplayName(minifigura.categoria)),
+      cell(subcategoryDisplayName(minifigura.categoria, minifigura.subcategoria)),
       cell(minifigura.anio),
       badgeCell(minifigura.estadoColeccion),
       priceCell(minifigura.precio),
@@ -911,8 +962,8 @@ function renderCatalogPage() {
 
   if (currentCatalog.length === 0) {
     setStatus(hasLoadedFullCatalog && catalogForOptions.length === 0
-      ? 'No hay ninguna minifigura registrada en tu cuenta.'
-      : 'No hay minifiguras que coincidan con la consulta.');
+      ? 'No hay ninguna minipersona registrada en tu cuenta.'
+      : 'No hay minipersonas que coincidan con la consulta.');
   } else {
     setStatus('');
   }
@@ -1206,7 +1257,9 @@ function renderDnaView(state, { chart, status, legend, canvas, centerLabel, perc
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#202124', padding: 12, cornerRadius: 6,
+            backgroundColor: '#222222', padding: 12, cornerRadius: 0,
+            titleFont: { family: 'Montserrat', weight: 'bold' },
+            bodyFont: { family: 'Montserrat' },
             external({ tooltip }) { if (centerLabel) centerLabel.hidden = tooltip.opacity > 0; },
             callbacks: { label: (item) => `${item.label}: ${formatAnalyticsHistoryPercent(item.raw)}` },
           },
@@ -1342,24 +1395,25 @@ function createAchievementItem(logro, { editable = false } = {}) {
     const item = document.createElement('li');
     item.className = 'achievement-item';
 
-    const icon = document.createElement('img');
+    const icon = document.createElement('span');
     icon.className = 'achievement-icon';
     if (logro.type === 'regalo') {
-      icon.src = '/toast_images/regalo.png';
-      icon.alt = 'Regalo';
+      icon.textContent = '🎁';
+      icon.setAttribute('role', 'img');
+      icon.setAttribute('aria-label', 'Regalo');
     } else {
-      icon.src = '/toast_images/75206.png';
-      icon.alt = '';
+      icon.textContent = '🏆';
+      icon.setAttribute('aria-hidden', 'true');
     }
 
     const info = document.createElement('div');
     info.className = 'achievement-info';
     const name = document.createElement('span');
     name.className = 'achievement-name';
-    name.textContent = logro.nombre;
+    name.textContent = interfaceText(logro.nombre);
     const description = document.createElement('span');
     description.className = 'achievement-description';
-    description.textContent = logro.descripcion ?? '';
+    description.textContent = interfaceText(logro.descripcion);
     info.append(name, description);
 
     const count = document.createElement('span');
@@ -1503,9 +1557,10 @@ function updateRankingWantedActions(list) {
     if (card.closest('#public-profile-content')) button.dataset.profileWanted = 'true';
     button.title = 'Añadir a buscadas';
     button.setAttribute('aria-label', 'Añadir a buscadas');
-    const icon = document.createElement('img');
-    icon.src = '/status_images/lupa.png';
-    icon.alt = '';
+    const icon = document.createElement('span');
+    icon.className = 'magnifier-icon';
+    icon.textContent = '🔍';
+    icon.setAttribute('aria-hidden', 'true');
     button.append(icon);
     card.append(button);
   }
@@ -1555,7 +1610,10 @@ function renderGlobalRanking() {
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = currentUserIndex === -1
     ? '' : ['🥇', '🥈', '🥉'][currentUserIndex] ?? `#${currentUserIndex + 1}`;
   rankingMainGlobe.setAttribute('aria-label', currentUserIndex === -1
-    ? 'En Top Global' : `En Top Global, posición ${currentUserIndex + 1}. Abrir Ranking Global`);
+    ? 'En Top Global' : `En Top Global, posición ${currentUserIndex + 1}`);
+  rankingMainGlobe.title = rankingMainGlobe.getAttribute('aria-label');
+  if (currentUserIndex === -1) userMenuToggle.removeAttribute('aria-describedby');
+  else userMenuToggle.setAttribute('aria-describedby', 'ranking-main-globe');
   renderRankingRows({
     entries: rankingEntries, list: globalRankingList, criterion: selectedRankingCriterion,
     expandedUserId: expandedRankingUserId, dialog: rankingDialog, closeButton: rankingCloseButton,
@@ -1606,7 +1664,7 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
   dna.className = 'ranking-dna-principal';
   dna.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
     ? entry.dnaPrincipal ?? 'Newbie'
-    : entry.dnaRasgos.slice(0, 2).map(({ nombre, porcentaje }) => (
+    : entry.dnaRasgos.slice(0, 1).map(({ nombre, porcentaje }) => (
       `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
     )).join(' / ');
   level.append(levelImage, levelNumber, levelName, dna);
@@ -1624,10 +1682,9 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
   collection.className = 'ranking-collection-count';
   collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
   collection.title = `${entry.totalColeccion} en colección`;
-  const collectionIcon = document.createElement('img');
-  collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon';
-  collectionIcon.src = '/status_images/caja.png';
-  collectionIcon.alt = '';
+  const collectionIcon = document.createElement('span');
+  collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon box-icon';
+  collectionIcon.textContent = '📦';
   collectionIcon.setAttribute('aria-hidden', 'true');
   const collectionCount = document.createElement('strong');
   collectionCount.textContent = entry.totalColeccion;
@@ -1787,15 +1844,20 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   toast.className = `toast toast-${type}`;
   if (type === 'gift') toast.classList.add('toast-task', 'toast-gift');
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  const messageNode = typeof message === 'string' ? document.createTextNode(message) : message;
+  const messageNode = typeof message === 'string' ? document.createTextNode(interfaceText(message)) : message;
   if (iconSrc === null) iconSrc = '/toast_images/87X2Rz8y2ZY.png';
   iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
-  const icon = iconSrc ? document.createElement('img') : null;
+  const icon = type === 'level' || type === 'gift' ? document.createElement('span') : iconSrc ? document.createElement('img') : null;
   if (icon) {
     icon.className = 'toast-icon';
-    icon.src = iconSrc;
-    icon.alt = type === 'notification' ? 'Notificaciones'
-      : type === 'level' ? 'Nivel alcanzado' : type === 'task' || type === 'gift' ? 'Bricks' : 'Separador de ladrillos';
+    if (type === 'level' || type === 'gift') {
+      icon.textContent = type === 'gift' ? '🎁' : '🏆';
+      icon.setAttribute('aria-hidden', 'true');
+    } else {
+      icon.src = iconSrc;
+      icon.alt = type === 'notification' ? 'Notificaciones'
+        : type === 'task' || type === 'gift' ? 'Bricks' : 'Separador de ladrillos';
+    }
   }
   if (icon && iconPosition === 'before') toast.append(icon);
   toast.append(messageNode);
@@ -1815,7 +1877,7 @@ function showRealtimeNotificationToast(notification) {
     const message = isThanks
       ? `¡${user} te ha dado las gracias por tu regalo: +${amount} Bricks!`
       : `¡Has recibido un regalo de ${user}: +${amount} Bricks!`;
-    showToast(message, 'gift', '/toast_images/regalo.png', 'before');
+    showToast(message, 'gift', '', 'before');
     return;
   }
   showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
@@ -1852,9 +1914,9 @@ function showGamificationToasts(gamification) {
       return;
     }
     if (logro.kind === 'level') {
-      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', '/toast_images/75206.png', 'before');
+      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', null, 'before');
     } else {
-      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, 'task', '/toast_images/hero_2026-01-05_16-38-47-871.webp', 'before');
+      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, logro.type === 'regalo' ? 'gift' : 'task', '/toast_images/hero_2026-01-05_16-38-47-871.webp', 'before');
     }
     setTimeout(showNext, 300);
   };
@@ -1879,7 +1941,7 @@ function mostrarImagenMinifigura(id, nombre) {
   const requestSequence = ++imageModalImageSequence;
   const preloader = new Image();
   imageModalImage.src = imageFallbackUrl;
-  imageModalImage.alt = `Imagen de la minifigura ${upperId}`;
+  imageModalImage.alt = `Imagen de la minipersona ${upperId}`;
   imageModalTitle.textContent = upperId;
   imageModalName.textContent = nombre ?? '';
   imageModal.showModal();
@@ -1893,7 +1955,7 @@ function mostrarImagenMinifigura(id, nombre) {
 
 function openFormDialog(mode, minifigura, trigger = null) {
   if (!categoriasReady) {
-    showToast('No se pueden crear minifiguras sin cargar las categorías oficiales.', 'error');
+    showToast('No se pueden crear minipersonas sin cargar las categorías oficiales.', 'error');
     return;
   }
   pauseSyncForModal();
@@ -1904,18 +1966,18 @@ function openFormDialog(mode, minifigura, trigger = null) {
   currentEditId = mode === 'edit' ? minifigura.id : null;
   formSynced = mode !== 'create' && mode !== 'ranking-create';
   minifiguraForm.reset();
+  setFormCategories();
   bricksetLoading.hidden = true;
   formPreviewImage.src = imageFallbackUrl;
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
-  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minifigura' : mode === 'view' ? 'Ver minifigura' : 'Nueva minifigura';
+  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minipersona' : mode === 'view' ? 'Ver minipersona' : 'Nueva minipersona';
 
   if (mode !== 'create') {
     formIdInput.value = minifigura.id ?? '';
     formNombreInput.value = minifigura.nombre ?? '';
     formDescripcionInput.value = minifigura.descripcion ?? '';
-    formCategoriaInput.value = minifigura.categoria ?? '';
-    formSubcategoriaInput.value = minifigura.subcategoria ?? '';
+    setFormCategories(minifigura.categoria ?? '', minifigura.subcategoria ?? '');
     formAnioInput.value = minifigura.anio ?? '';
     formEstadoInput.value = minifigura.estadoColeccion ?? '';
     formPrecioCompraInput.value = minifigura.precioCompra ?? '';
@@ -1956,18 +2018,19 @@ async function openMinifiguraView(id) {
       const matches = await response.json();
       minifigura = Array.isArray(matches) ? matches.find((item) => item.id === id) : null;
     } catch {
-      showToast('No se pudo cargar la minifigura.', 'error');
+      showToast('No se pudo cargar la minipersona.', 'error');
       return;
     }
   }
   if (minifigura) {
     openFormDialog('view', minifigura);
   } else {
-    showToast('No se pudo cargar la minifigura.', 'error');
+    showToast('No se pudo cargar la minipersona.', 'error');
   }
 }
 
 function updateFormMode() {
+  formFechaCompraInput.max = localToday();
   const isCreate = currentFormMode === 'create';
   const isRankingCreate = currentFormMode === 'ranking-create';
   const isView = currentFormMode === 'view';
@@ -2024,7 +2087,7 @@ function updateFormToggleStates() {
 function hasFormMetadata() {
   return formNombreInput.value.trim() !== ''
     && formCategoriaInput.value.trim() !== ''
-    && officialCategorias.some(({ categoria }) => categoria === formCategoriaInput.value.trim())
+    && officialCategorias.some(({ categoria }) => categoria === formCategoriaInput.dataset.canonicalValue)
     && Number.isInteger(Number(formAnioInput.value)) && Number(formAnioInput.value) > 0;
 }
 
@@ -2036,7 +2099,26 @@ function isFormValid() {
     && formCategoriaInput.value.trim() !== ''
     && Number.isInteger(Number(formAnioInput.value))
     && Number(formAnioInput.value) > 0
-    && (precio === '' || (Number.isFinite(Number(precio)) && Number(precio) >= 0));
+    && (precio === '' || (Number.isFinite(Number(precio)) && Number(precio) >= 0))
+    && purchaseValidationError() === null;
+}
+
+function localToday() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function purchaseValidationError() {
+  if (!formFechaCompraInput.disabled && (formFechaCompraInput.validity.badInput
+    || (formFechaCompraInput.value !== '' && formFechaCompraInput.value > localToday()))) {
+    return 'La fecha de compra no puede ser posterior a hoy.';
+  }
+  const price = formPrecioCompraInput.value.trim();
+  if (!formPrecioCompraInput.disabled && (formPrecioCompraInput.validity.badInput
+    || (price !== '' && (!Number.isFinite(Number(price)) || Number(price) < 0)))) {
+    return 'El precio de compra debe ser un número mayor o igual a cero.';
+  }
+  return null;
 }
 
 function closeFormDialog() {
@@ -2080,11 +2162,11 @@ function buildPayloadFromForm() {
     id: formIdInput.value.trim(),
     nombre: formNombreInput.value.trim(),
     descripcion: formDescripcionInput.value.trim(),
-    categoria: formCategoriaInput.value.trim(),
+    categoria: formCategoriaInput.dataset.canonicalValue,
     observada: formObservedButton.getAttribute('aria-pressed') === 'true',
   };
 
-  const subcategoria = formSubcategoriaInput.value.trim();
+  const subcategoria = formSubcategoriaInput.dataset.canonicalValue;
   if (subcategoria !== '') {
     payload.subcategoria = subcategoria;
   }
@@ -2113,6 +2195,8 @@ function buildPayloadFromForm() {
 }
 
 function validatePayload(payload) {
+  const purchaseError = purchaseValidationError();
+  if (purchaseError) return purchaseError;
   if (!payload.id) {
     return 'El id es obligatorio.';
   }
@@ -2142,7 +2226,7 @@ function validatePayload(payload) {
 
 function openDeleteDialog(minifigura) {
   pendingDeleteId = minifigura.id;
-  deleteMessage.textContent = `Se eliminará la minifigura "${minifigura.nombre}" (${minifigura.id}).\n\nEsta acción no se puede deshacer.`;
+  deleteMessage.textContent = `Se eliminará la minipersona "${minifigura.nombre}" (${minifigura.id}).\n\nEsta acción no se puede deshacer.`;
   deleteDialog.showModal();
 }
 
@@ -2173,7 +2257,10 @@ showAllButton.addEventListener('click', () => {
   form.reset();
   activeFilters = {};
   activeSort = { field: null, direction: 'asc' };
-  sortButtons.forEach((button) => { button.dataset.direction = ''; });
+  sortButtons.forEach((button) => {
+    button.dataset.direction = '';
+    button.closest('th').setAttribute('aria-sort', 'none');
+  });
   renderDynamicFilterOptions(catalogCache);
   applyFilters();
 });
@@ -2186,6 +2273,8 @@ sortButtons.forEach((button) => {
       : { field, direction: 'asc' };
     sortButtons.forEach((sortButton) => {
       sortButton.dataset.direction = sortButton === button ? activeSort.direction : '';
+      sortButton.closest('th').setAttribute('aria-sort', sortButton === button
+        ? activeSort.direction === 'asc' ? 'ascending' : 'descending' : 'none');
     });
     renderCatalogPage();
   });
@@ -2230,6 +2319,7 @@ function setNotificationsUnreadCount(count) {
   const unreadCount = Number.isInteger(count) && count > 0 ? count : 0;
   const label = unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones';
   notificationsUnreadBadge.hidden = unreadCount === 0;
+  notificationsUnreadBadge.textContent = unreadCount === 0 ? '' : String(unreadCount);
   notificationsMarkAllButton.disabled = unreadCount === 0;
   notificationsOpenButton.setAttribute('aria-label', label);
   notificationsOpenButton.title = label;
@@ -2311,7 +2401,7 @@ function renderNotificationMessage(notification) {
     marker.setAttribute('aria-hidden', 'true');
     marker.textContent = notification.type === 'ranking_exited'
       ? '❌' : data.ranking === 'weekly' ? '🗓️' : '🌐';
-    message.append(marker, document.createTextNode(` ${data.message ?? 'Tienes una notificación de ranking.'}`));
+    message.append(marker, document.createTextNode(` ${interfaceText(data.message ?? 'Tienes una notificación de ranking.')}`));
     return message;
   }
   if (notification.type === 'weekly_ranking_available') {
@@ -2319,10 +2409,10 @@ function renderNotificationMessage(notification) {
     marker.className = 'notification-leading-emoji';
     marker.setAttribute('aria-hidden', 'true');
     marker.textContent = '🗓️';
-    message.append(marker, document.createTextNode(` ${data.message ?? 'El Ranking Semanal de esta semana ya está disponible.'}`));
+    message.append(marker, document.createTextNode(` ${interfaceText(data.message ?? 'El Ranking Semanal de esta semana ya está disponible.')}`));
     return message;
   }
-  message.textContent = data.message ?? 'Tienes una notificación.';
+  message.textContent = interfaceText(data.message ?? 'Tienes una notificación.');
   return message;
 }
 
@@ -2496,10 +2586,10 @@ function renderDailyNotification(notification) {
     metric.append(name, amount);
     target.append(metric);
   };
-  addMetric('Colección', formatSignedNumber(deltas.figures), '/status_images/caja.png');
+  addMetric('📦 Colección', formatSignedNumber(deltas.figures));
   addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
   addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
-  addMetric('Nivel', formatSignedNumber(deltas.level), '/toast_images/75206.png');
+  addMetric('🏆 Nivel', formatSignedNumber(deltas.level));
   details.append(metrics);
   if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);
   if (Number.isFinite(deltas.weeklyPosition)) addMetric('🗓️ Ranking Semanal', `${formatSignedNumber(deltas.weeklyPosition)} puestos`, null, rankingMetrics);
@@ -3785,7 +3875,7 @@ function createAnalyticsChart(canvas, configuration) {
   options.interaction = { mode: 'index', axis: 'x', intersect: false };
   options.plugins.legend = {
     display: true, position: 'bottom', onClick() {},
-    labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 20, font: { family: 'Trebuchet MS', size: 12 } },
+    labels: { color: ink, usePointStyle: true, pointStyle: 'rect', boxWidth: 8, boxHeight: 8, padding: 20, font: { family: 'Montserrat', size: 12 } },
   };
   const formatTooltipLabel = options.plugins.tooltip.callbacks.label;
   options.plugins.tooltip.callbacks.label = (item) => {
@@ -3795,16 +3885,16 @@ function createAnalyticsChart(canvas, configuration) {
       : `${label}: ${new Intl.NumberFormat('es-ES').format(item.parsed.y)}`;
   };
   Object.assign(options.plugins.tooltip, {
-    backgroundColor: '#202124', titleColor: '#ffffff', bodyColor: '#ffffff',
-    padding: 12, cornerRadius: 6, boxPadding: 5,
-    titleFont: { family: 'Trebuchet MS', size: 13, weight: 'bold' },
-    bodyFont: { family: 'Trebuchet MS', size: 12 },
+    backgroundColor: '#222222', titleColor: '#ffffff', bodyColor: '#ffffff',
+    padding: 12, cornerRadius: 0, boxPadding: 5,
+    titleFont: { family: 'Montserrat', size: 13, weight: 'bold' },
+    bodyFont: { family: 'Montserrat', size: 12 },
   });
   for (const [name, scale] of Object.entries(options.scales)) {
     scale.border = { display: false };
     scale.grid = { ...scale.grid, color: '#e9edf1', drawTicks: false };
-    scale.ticks = { ...scale.ticks, color: muted, padding: 10, font: { family: 'Trebuchet MS', size: 11 } };
-    scale.title = { ...scale.title, color: muted, font: { family: 'Trebuchet MS', size: 11 } };
+    scale.ticks = { ...scale.ticks, color: muted, padding: 10, font: { family: 'Montserrat', size: 11 } };
+    scale.title = { ...scale.title, color: muted, font: { family: 'Montserrat', size: 11 } };
     if (name === 'x') {
       scale.offset = false;
       scale.grid.display = false;
@@ -3821,7 +3911,7 @@ function createAnalyticsChart(canvas, configuration) {
   }
   for (const dataset of configuration.data.datasets) {
     if (dataset.type === 'bar') {
-      dataset.borderRadius = 3;
+      dataset.borderRadius = 0;
       dataset.maxBarThickness = 18;
       dataset.borderWidth = 1;
       const changes = dataset.data.map(({ y }) => y ?? 0);
@@ -3829,6 +3919,7 @@ function createAnalyticsChart(canvas, configuration) {
       if (changes.some((change) => change < 0)) options.scales.figures.suggestedMin = Math.min(...changes) * 3;
     } else {
       dataset.borderWidth = 2;
+      dataset.pointStyle = 'rect';
       dataset.pointRadius = configuration.data.datasets[0].data.filter(({ y }) => y !== null).length > 30 ? 0 : 3;
       dataset.pointHoverRadius = 6;
       dataset.pointHitRadius = 12;
@@ -4128,17 +4219,15 @@ for (const button of rankingOrderButtons) {
     void loadGlobalRanking();
   });
 }
-for (const trigger of [rankingOpenButton, rankingMainGlobe]) {
-  trigger.addEventListener('click', () => {
-    rankingTrigger = trigger;
-    userProfile.hidden = true;
-    userMenuToggle.setAttribute('aria-expanded', 'false');
-    rankingDialog.showModal();
-    expandedRankingUserId = null;
-    rankingCloseButton.focus();
-    void loadGlobalRanking();
-  });
-}
+rankingOpenButton.addEventListener('click', () => {
+  rankingTrigger = rankingOpenButton;
+  userProfile.hidden = true;
+  userMenuToggle.setAttribute('aria-expanded', 'false');
+  rankingDialog.showModal();
+  expandedRankingUserId = null;
+  rankingCloseButton.focus();
+  void loadGlobalRanking();
+});
 
 rankingCloseButton.addEventListener('click', () => {
   rankingDialog.close();
@@ -4330,7 +4419,7 @@ async function toggleObserved(minifigura, trigger) {
     const result = await response.json();
     if (!response.ok) {
       if (result.error === 'LIMITE_OBSERVADAS') {
-        showToast('Límite alcanzado: Máximo 10 minifiguras en observación', 'warning');
+        showToast('Límite alcanzado: Máximo 10 minipersonas en observación', 'warning');
       } else {
         showToast(messageForErrorCode(result.error), 'error');
       }
@@ -4414,7 +4503,7 @@ formDialog.addEventListener('close', () => {
   formPreviewImage.removeAttribute('src');
 });
 
-[formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput].forEach((input) => {
+[formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput, formFechaCompraInput, formPrecioCompraInput].forEach((input) => {
   input.addEventListener('input', () => {
     if (currentFormMode === 'create' && input === formIdInput) {
       formError.textContent = '';
@@ -4424,14 +4513,16 @@ formDialog.addEventListener('close', () => {
       formSynced = false;
       formNombreInput.value = '';
       formDescripcionInput.value = '';
-      formCategoriaInput.value = '';
-      formSubcategoriaInput.value = '';
+      setFormCategories();
       formAnioInput.value = '';
       formPrecioInput.value = '';
       formPreviewImage.src = input.value.trim() ? imagenUrlPara(input.value) : '';
     }
     if (currentFormMode) {
       updateFormMode();
+      if (input === formFechaCompraInput || input === formPrecioCompraInput) {
+        formError.textContent = purchaseValidationError() ?? '';
+      }
     }
   });
 });
@@ -4499,7 +4590,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
       }
       if (!isCurrent()) return;
       if (errorCode === 'LIMITE_OBSERVADAS') {
-        formError.textContent = 'Límite alcanzado: Máximo 10 minifiguras en observación';
+        formError.textContent = 'Límite alcanzado: Máximo 10 minipersonas en observación';
         showToast(formError.textContent, 'warning');
         return;
       }
@@ -4514,7 +4605,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
         } catch {
           if (!isCurrent()) return;
         }
-        formError.textContent = duplicateMessage ?? 'No se pudo comprobar el estado de la minifigura. Inténtalo de nuevo.';
+        formError.textContent = duplicateMessage ?? 'No se pudo comprobar el estado de la minipersona. Inténtalo de nuevo.';
         updateRankingWantedActions();
         return;
       }
@@ -4533,7 +4624,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
     upsertCached(result);
     applyFilters({ preservePage: true });
     closeFormDialog();
-    showToast(isEdit ? 'Minifigura actualizada correctamente.' : 'Minifigura creada correctamente.', 'success');
+    showToast(isEdit ? 'Minipersona actualizada correctamente.' : 'Minipersona creada correctamente.', 'success');
     void revalidate({ notifyAchievements: isEdit });
   } catch {
     if (!isCurrent()) return;
@@ -4564,8 +4655,7 @@ async function loadFormBricksetData() {
     }
     formNombreInput.value = result.nombre;
     formDescripcionInput.value = result.descripcion ?? '';
-    formCategoriaInput.value = result.categoria;
-    formSubcategoriaInput.value = result.subcategoria ?? '';
+    setFormCategories(result.categoria, result.subcategoria ?? '');
     formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
     formPrecioInput.value = result.precio ?? '';
     formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
@@ -4623,7 +4713,7 @@ deleteConfirmButton.addEventListener('click', async () => {
     closeDeleteDialog();
     removeCached(id);
     applyFilters({ preservePage: true });
-    showToast('Minifigura eliminada correctamente.', 'success');
+    showToast('Minipersona eliminada correctamente.', 'success');
     void revalidate({ notifyAchievements: true });
   } catch {
     showToast('No se pudo conectar con el servidor. Intentalo de nuevo.', 'error');
@@ -4669,6 +4759,8 @@ async function apiFetch(url, init = {}) {
 }
 
 function clearUserData() {
+  if (changePasswordDialog.open) changePasswordDialog.close();
+  profileEmailInput.value = '';
   profileRequestSequence += 1;
   profileReadyUserId = null;
   currentUserProfile = null;
@@ -4736,6 +4828,8 @@ function clearUserData() {
   rankingMainGlobe.hidden = true;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = '';
   rankingMainGlobe.setAttribute('aria-label', 'En Top Global');
+  rankingMainGlobe.title = 'En Top Global';
+  userMenuToggle.removeAttribute('aria-describedby');
   globalRankingList.replaceChildren();
   rankingStatus.textContent = '';
   for (const button of document.querySelectorAll('.rankings-panel .panel-toggle, .watchlist-panel .panel-toggle')) {
@@ -4860,7 +4954,9 @@ function applyProfileAvatar(profile) {
 
 function renderProfileFavoriteOptions() {
   const query = profileFavoriteSearch.value.trim().normalize('NFKC').toLocaleLowerCase();
-  const visibleCategories = officialCategorias.filter(({ categoria }) => categoria.normalize('NFKC').toLocaleLowerCase().includes(query));
+  const visibleCategories = officialCategorias.filter(({ categoria }) => (
+    [categoria, categoryDisplayName(categoria)].some((name) => name.normalize('NFKC').toLocaleLowerCase().includes(query))
+  ));
   profileFavoriteCategories.replaceChildren();
   for (const { categoria } of visibleCategories) {
     const label = document.createElement('label');
@@ -4880,7 +4976,7 @@ function renderProfileFavoriteOptions() {
       });
     });
     const name = document.createElement('span');
-    name.textContent = categoria;
+    name.textContent = categoryDisplayName(categoria);
     label.append(checkbox, name);
     profileFavoriteCategories.append(label);
   }
@@ -4890,13 +4986,13 @@ function renderProfileFavoriteOptions() {
     const item = document.createElement('span');
     item.className = 'profile-selected-category';
     const name = document.createElement('span');
-    name.textContent = category;
+    name.textContent = categoryDisplayName(category);
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'profile-remove-button';
     remove.textContent = '×';
-    remove.setAttribute('aria-label', `Quitar ${category}`);
-    remove.title = `Quitar ${category}`;
+    remove.setAttribute('aria-label', `Quitar ${categoryDisplayName(category)}`);
+    remove.title = `Quitar ${categoryDisplayName(category)}`;
     remove.addEventListener('click', () => {
       selectedProfileFavorites.delete(category);
       renderProfileFavoriteOptions();
@@ -4987,8 +5083,10 @@ function openProfileDialog(profile, onboarding) {
   systemNotificationsSetting.hidden = onboarding || !nativePush?.isAndroid?.();
   profileDialogCloseButton.hidden = onboarding;
   openDeleteAccountButton.hidden = onboarding;
+  profileAccountSettings.hidden = onboarding;
+  profileEmailInput.value = currentSession?.user?.email || '';
   profileUsernameInput.disabled = !onboarding;
-  profileUsernameInput.value = profile?.username || pendingRegistrationUsername || currentSession?.user?.user_metadata?.username || '';
+  profileUsernameInput.value = profile?.username || currentSession?.user?.user_metadata?.username || '';
   profileAvatarInput.value = profile?.avatarUrl || '';
   profileAvatarReadSequence += 1;
   pendingProfileAvatarFile = null;
@@ -5084,7 +5182,6 @@ async function saveUserProfile(event) {
 
     profileSaved = true;
     currentUserProfile = result;
-    pendingRegistrationUsername = '';
     applyProfileAvatar(result);
     profileDialog.close();
     if (profileDialogMode === 'onboarding') startApplicationForCurrentProfile();
@@ -5323,8 +5420,9 @@ function setAuthMode(mode) {
   document.querySelector('#auth-divider').textContent = registering ? 'o crea una nueva cuenta en MiniPeopleDB' : 'o con tu usuario de MiniPeopleDB';
   passwordRepeatBlurred = false;
   openPasswordRecoveryButton.hidden = registering;
-  authUsernameField.hidden = false;
-  authUsernameInput.required = true;
+  authUsernameField.hidden = registering;
+  authUsernameInput.disabled = registering;
+  authUsernameInput.required = !registering;
   document.querySelector('#auth-email-field').hidden = !registering;
   authEmailInput.disabled = !registering;
   authEmailInput.required = registering;
@@ -5366,17 +5464,19 @@ function showPasswordUpdate(session) {
 authModeLoginButton.addEventListener('click', () => setAuthMode('login'));
 authModeRegisterButton.addEventListener('click', () => setAuthMode('register'));
 
-function validateRegistrationPassword() {
-  const password = authPasswordInput.value;
-  const rules = {
+function passwordRules(password) {
+  return {
     length: password.length >= 5,
     uppercase: /\p{Lu}/u.test(password),
     lowercase: /\p{Ll}/u.test(password),
     number: /[0-9]/.test(password),
   };
-  for (const [rule, met] of Object.entries(rules)) {
-    document.querySelector(`[data-rule="${rule}"]`).classList.toggle('is-met', met);
-  }
+}
+
+function validateRegistrationPassword() {
+  const password = authPasswordInput.value;
+  const rules = passwordRules(password);
+  renderPasswordRules(document.querySelector('#auth-password-rules'), rules);
   authPasswordInput.setCustomValidity(authMode === 'register' && !Object.values(rules).every(Boolean)
     ? 'La contraseña debe cumplir todas las directrices de seguridad.' : '');
   authPasswordRepeatInput.setCustomValidity(authMode === 'register' && authPasswordRepeatInput.value !== password
@@ -5390,14 +5490,20 @@ authPasswordRepeatInput.addEventListener('blur', () => {
   passwordRepeatBlurred = true;
   validateRegistrationPassword();
 });
-function setPasswordVisibility(visible) {
+function renderPasswordRules(list, rules) {
+  for (const [rule, met] of Object.entries(rules)) {
+    list.querySelector(`[data-rule="${rule}"]`).classList.toggle('is-met', met);
+  }
+}
+
+function setPasswordVisibility(visible, inputs = [authPasswordInput, authPasswordRepeatInput],
+  buttons = authShowPasswordButtons, plural = authMode === 'register') {
   const type = visible ? 'text' : 'password';
-  authPasswordInput.type = type;
-  authPasswordRepeatInput.type = type;
+  for (const input of inputs) input.type = type;
   const label = visible
-    ? (authMode === 'register' ? 'Ocultar contraseñas' : 'Ocultar contraseña')
-    : (authMode === 'register' ? 'Mostrar contraseñas' : 'Mostrar contraseña');
-  for (const button of authShowPasswordButtons) {
+    ? (plural ? 'Ocultar contraseñas' : 'Ocultar contraseña')
+    : (plural ? 'Mostrar contraseñas' : 'Mostrar contraseña');
+  for (const button of buttons) {
     button.setAttribute('aria-pressed', String(visible));
     button.setAttribute('aria-label', label);
     button.title = label;
@@ -5417,7 +5523,8 @@ classicAuthForm.addEventListener('submit', async (event) => {
   const password = authPasswordInput.value;
   const username = authUsernameInput.value;
   setAuthMessage('');
-  authUsernameInput.setCustomValidity(USERNAME_PATTERN.test(username) ? '' : 'Usa entre 3 y 20 letras, números o guiones bajos.');
+  authUsernameInput.setCustomValidity(authMode === 'register' || USERNAME_PATTERN.test(username)
+    ? '' : 'Usa entre 3 y 20 letras, números o guiones bajos.');
   validateRegistrationPassword();
   if (!classicAuthForm.reportValidity()) return;
   classicAuthSubmit.disabled = true;
@@ -5428,12 +5535,10 @@ classicAuthForm.addEventListener('submit', async (event) => {
         email,
         password,
         options: {
-          data: { username },
           ...(nativeAuth ? { emailRedirectTo: nativeOAuthRedirectUrl } : {}),
         },
       });
       if (error) throw error;
-      pendingRegistrationUsername = username;
       setAuthMessage(data?.session
         ? 'Cuenta creada. Completa tu perfil para continuar.'
         : 'Si el email puede registrarse, recibirás instrucciones para confirmar la cuenta.');
@@ -5552,12 +5657,79 @@ deleteAccountConfirmButton.addEventListener('click', async () => {
   }
 });
 
+function validateSettingsPassword() {
+  const rules = passwordRules(settingsPasswordInput.value);
+  renderPasswordRules(document.querySelector('#settings-password-rules'), rules);
+  settingsPasswordInput.setCustomValidity(Object.values(rules).every(Boolean)
+    ? '' : 'La contraseña debe cumplir todas las directrices de seguridad.');
+  settingsPasswordConfirmInput.setCustomValidity(settingsPasswordConfirmInput.value === settingsPasswordInput.value
+    ? '' : 'Las contraseñas no coinciden.');
+  settingsPasswordConfirmInput.setAttribute('aria-invalid',
+    String(settingsPasswordConfirmBlurred && settingsPasswordConfirmInput.validity.customError));
+}
+
+function resetSettingsPassword() {
+  changePasswordForm.reset();
+  settingsPasswordConfirmBlurred = false;
+  setPasswordVisibility(false, [settingsPasswordInput, settingsPasswordConfirmInput], settingsShowPasswordButtons, true);
+  validateSettingsPassword();
+  settingsPasswordMessage.textContent = '';
+}
+
+for (const button of settingsShowPasswordButtons) {
+  button.addEventListener('click', () => setPasswordVisibility(settingsPasswordInput.type === 'password',
+    [settingsPasswordInput, settingsPasswordConfirmInput], settingsShowPasswordButtons, true));
+}
+openChangePasswordButton.addEventListener('click', () => {
+  if (!currentSession || profileDialogMode !== 'settings') return;
+  resetSettingsPassword();
+  changePasswordDialog.showModal();
+  settingsPasswordInput.focus();
+});
+settingsPasswordInput.addEventListener('input', validateSettingsPassword);
+settingsPasswordConfirmInput.addEventListener('input', validateSettingsPassword);
+settingsPasswordConfirmInput.addEventListener('blur', () => {
+  settingsPasswordConfirmBlurred = true;
+  validateSettingsPassword();
+});
+settingsPasswordCancel.addEventListener('click', () => changePasswordDialog.close());
+changePasswordDialog.addEventListener('close', () => {
+  settingsPasswordRequest += 1;
+  resetSettingsPassword();
+  settingsPasswordSave.disabled = false;
+  if (profileDialog.open) openChangePasswordButton.focus();
+});
+changePasswordForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!currentSession || !supabaseClient || settingsPasswordSave.disabled) return;
+  validateSettingsPassword();
+  if (!changePasswordForm.reportValidity()) return;
+  const userId = currentSession.user.id;
+  const request = ++settingsPasswordRequest;
+  settingsPasswordSave.disabled = true;
+  settingsPasswordMessage.textContent = 'Actualizando contraseña...';
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: settingsPasswordInput.value });
+    if (error) throw error;
+    if (request !== settingsPasswordRequest || currentSession?.user?.id !== userId) return;
+    changePasswordDialog.close();
+    showToast('La contraseña se actualizó correctamente.');
+  } catch {
+    if (request === settingsPasswordRequest && currentSession?.user?.id === userId) {
+      settingsPasswordMessage.textContent = 'No se pudo cambiar la contraseña. Inténtalo de nuevo.';
+    }
+  } finally {
+    if (request === settingsPasswordRequest) settingsPasswordSave.disabled = false;
+  }
+});
+
 profileForm.addEventListener('submit', saveUserProfile);
 profileDialogCloseButton.addEventListener('click', closeProfileDialog);
 profileDialog.addEventListener('cancel', (event) => {
   if (profileDialogMode === 'onboarding') event.preventDefault();
 });
 profileDialog.addEventListener('close', () => {
+  if (changePasswordDialog.open) changePasswordDialog.close();
   profileAvatarReadSequence += 1;
   pendingProfileAvatarFile = null;
   profileAvatarFileInput.value = '';
