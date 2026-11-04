@@ -308,6 +308,8 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-profile').getPropertyValue('right'), '0');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-menu-toggle').getPropertyValue('gap'), '2px');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row .user-avatar:not([hidden]), .header-top > .notifications-entry-row .user-avatar-fallback').getPropertyValue('width'), '32px');
+  const narrowHeader = rules.find((rule) => rule.conditionText === '(max-width: 600px)');
+  assert.equal([...narrowHeader.cssRules].find((rule) => rule.selectorText === '.header-top > .notifications-entry-row').style.getPropertyValue('grid-template-rows'), '107px auto');
   const bricks = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-bricks-value');
   const counts = headerDeclarations.get('.header-top > .notifications-entry-row .collection-counts-panel');
   const metrics = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-metrics');
@@ -622,8 +624,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.header-top\s*\{[^}]*display:\s*flex/s);
   assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
   assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 320px/s);
-  assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
-  assert.match(css, /\.page-header \.brand-logo\s*\{[^}]*object-fit:\s*cover/s);
+  assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*aspect-ratio:\s*3 \/ 2; object-fit:\s*contain/s);
   assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
   assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) var\(--font-body\)/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);

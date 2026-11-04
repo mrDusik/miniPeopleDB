@@ -112,9 +112,7 @@ body {
 .header-top { display: flex; align-items: center; flex-wrap: nowrap; gap: 16px 24px; }
 .brand-heading { display: inline-grid; flex: 0 0 320px; min-width: 0; }
 .brand-heading h1 { margin: 0; }
-.brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 1024 / 421; object-fit: contain; }
-.page-header .brand-logo { object-fit: cover; }
-.auth-card .brand-logo { aspect-ratio: 3 / 2; object-fit: contain; }
+.brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain; }
 .notifications-trigger { position: relative; display: grid; flex: 0 0 52px; place-items: center; width: 52px; height: 52px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; }
 .notifications-trigger img { display: block; width: 100%; max-width: 36px; height: 27px; object-fit: contain; }
 .notifications-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
@@ -1421,7 +1419,7 @@ input[type="radio"]:checked::before { content: ''; width: 8px; height: 8px; back
 @media (max-width: 600px) {
   .page-header .header-top { padding: 8px; }
   .page-header .header-top > .brand-heading { width: min(160px, calc(100% - 220px)); }
-  .header-top > .notifications-entry-row { grid-template-rows: 56px auto; }
+  .header-top > .notifications-entry-row { grid-template-rows: 107px auto; }
   h2 { font-size: 1.2rem; }
   #filters-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
   #filters-form select { min-height: 44px; height: 44px; font-size: 1rem; }

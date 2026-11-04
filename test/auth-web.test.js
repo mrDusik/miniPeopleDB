@@ -108,7 +108,7 @@ test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', asy
   assert.equal($('#auth-title').textContent, '');
   assert.equal($('.auth-eyebrow'), null);
   assert.match(styles, /\.auth-card h1 \{ width: min\(280px, 100%\); margin: 0; \}/);
-  assert.match(styles, /\.auth-card \.brand-logo \{ aspect-ratio: 3 \/ 2; object-fit: contain; \}/);
+  assert.match(styles, /\.brand-logo \{[^}]*aspect-ratio: 3 \/ 2; object-fit: contain; \}/);
   assert.equal($('#login-google').textContent, 'Inicia sesión con Google');
   assert.equal($('#login-google img').getAttribute('src'), '/logo_images/google-2.png');
   assert.equal($('#login-google img').alt, '');
