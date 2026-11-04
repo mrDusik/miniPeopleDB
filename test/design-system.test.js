@@ -113,6 +113,8 @@ test('el emoji de coleccion cabe en su columna de ranking sin invadir el contado
     const icon = rules.find(({ selectorText }) => selectorText === '.ranking-collection-count .ranking-collection-icon').style;
     assert.equal(icon.getPropertyValue('font-size'), icon.getPropertyValue('width'));
     const brick = rules.find(({ selectorText }) => selectorText === '.ranking-bricks .gamification-brick-icon').style;
+    const brickCounter = rules.find(({ selectorText }) => selectorText === '.ranking-bricks').style;
+    assert.equal(brickCounter.getPropertyValue('transform'), 'translateX(19px)');
     for (const property of ['width', 'height']) {
       assert.equal(icon.getPropertyValue(property), brick.getPropertyValue(property));
     }

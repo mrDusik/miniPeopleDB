@@ -447,8 +447,10 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('display'), 'block');
   assert.equal(portraitDeclarations.get('.ranking-order-toolbar')?.getPropertyValue('overflow'), 'visible');
   assert.equal(portraitDeclarations.get('#analytics-history-ranges')?.getPropertyValue('grid-template-columns'), 'repeat(4, minmax(0, 1fr))');
-  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('grid-template-columns'), 'repeat(6, minmax(0, 1fr))');
-  assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('white-space'), 'normal');
+  assert.equal(portraitDeclarations.get('.ranking-criteria')?.getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
+  assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('padding-inline'), '4px');
+  assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('font-size'), '0.68rem');
+  assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('white-space'), 'nowrap');
   assert.equal(portraitDeclarations.get('.ranking-user-details')?.getPropertyValue('max-width'), '100%');
   tabletDom.window.close();
 });
@@ -501,7 +503,8 @@ test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', 
     assert.equal(declarations.get('.modal-public-profile .public-profile-awards').getPropertyValue('grid-row'), '2');
     assert.equal(declarations.get('.modal-public-profile .public-profile-content > .public-profile-tops').getPropertyValue('grid-column'), '1 / -1');
     const profileGroup = declarations.get('.modal-public-profile .public-profile-stats > div');
-    assert.equal(profileGroup.getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr)');
+    assert.equal(profileGroup.getPropertyValue('grid-template-columns'), '28px minmax(0, 1fr)');
+    assert.equal(profileGroup.getPropertyValue('gap'), '4px 8px');
     assert.equal(profileGroup.getPropertyValue('overflow'), '');
     const profileIcon = declarations.get('.modal-public-profile .public-profile-stat-icon');
     assert.equal(profileIcon.getPropertyValue('width'), '24px');

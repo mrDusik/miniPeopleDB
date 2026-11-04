@@ -401,7 +401,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
   assert.doesNotMatch(styles, /\.ranking-expand \.ranking-star/);
-  assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; grid-template-columns: minmax\(0, 1fr\) 1\.55rem; width: 100px; \}/);
+  assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; grid-template-columns: minmax\(0, 1fr\) 1\.55rem; width: 100px; transform: translateX\(19px\); \}/);
   assert.match(styles, /\.ranking-bricks strong \{ justify-self: end;/);
   assert.match(styles, /\.ranking-collection-count \{ grid-column: 5; grid-row: 1 \/ 3; grid-template-columns: 1\.55rem minmax\(0, 1fr\); width: 85px; \}/);
   assert.match(styles, /\.ranking-bricks \.gamification-brick-icon \{ width: 1\.55rem; height: 1\.55rem; object-fit: contain; \}/);
@@ -410,8 +410,8 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
   assert.match(styles, /\.ranking-order-toolbar \{ display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; \}/);
-  assert.match(styles, /\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); gap: 4px; \}/);
-  assert.match(styles, /#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; \}/);
+  assert.match(styles, /\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: 4px; \}/);
+  assert.match(styles, /#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; padding-inline: 4px; font-size: 0\.68rem; white-space: nowrap; \}/);
   assert.match(styles, /\.ranking-user-details \{ width: 100%; min-width: 0; max-width: 100%; margin-right: 0; \}/);
   assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);
