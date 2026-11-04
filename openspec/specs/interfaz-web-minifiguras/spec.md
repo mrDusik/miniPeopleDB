@@ -87,7 +87,7 @@ El estado Coleccion SHALL usar `📦` en lugar de `caja.png` en toda la interfaz
 
 Los emojis de estado de las tarjetas de seguimiento SHALL tener las mismas dimensiones y tamano de fuente que los filtros de Consulta, tanto en movil como en escritorio.
 
-Las tarjetas de seguimiento de una misma fila SHALL alinear sus bordes e imagenes y mostrar icono, codigo y precio en una unica linea sin saltos ni recortes. El ancho SHALL adaptarse al contenido y el panel SHALL permitir desplazamiento horizontal en movil en lugar de comprimir o dividir el texto.
+Las tarjetas de seguimiento de una misma fila SHALL alinear sus bordes e imagenes y mostrar icono, codigo y precio sin recortes. En smartphone SHALL mostrar el icono y el codigo en la primera linea, y el precio en la segunda; el ID SHALL usar la tipografia de codigo de la aplicacion y el precio SHALL usar la misma tipografia y tamano que las leyendas de ranking. La separacion entre tarjetas SHALL coincidir con la de los rankings y el emoji de estado SHALL mostrarse reducido. El ancho SHALL adaptarse al contenido y el panel SHALL permitir desplazamiento horizontal en movil.
 
 La tipografia SHALL ser coherente en textos, tablas, formularios, controles nativos, avisos, perfiles, rankings y graficos: Montserrat para lectura y enfasis, con pesos Bold/Black para titulos y acciones. Los estilos SHALL centralizar la familia en `--font-body` y `--font-display`, sin sobrescrituras locales con Arial Rounded o Trebuchet. `--font-code` SHALL reservar monospace para IDs y referencias de inventario, no para leyendas de ranking o importes aislados.
 
@@ -789,7 +789,7 @@ Debajo del nivel y nombre del usuario activo SHALL aparecer un boton de icono DN
 
 ### Requirement: Visualizar DNA propio en modal de tarta
 
-El modal DNA SHALL conservar la linea grafica de los modales existentes y representar las proporciones agregadas mediante una tarta con Rarity Hunter amarillo, Explorer rojo, Collector azul y Fan verde. SHALL incluir una leyenda con los cuatro nombres, sus colores y descripciones: Rarity Hunter busca piezas raras y valiosas; Explorer descubre categorias y subcategorias; Collector amplia y completa la coleccion; Fan muestra afinidad por tematicas y personajes. La leyenda SHALL ofrecer tambien las proporciones agregadas propias de forma accesible, sin pesos individuales. Un usuario Newbie SHALL ver un estado neutro con ese texto, sin segmentos inventados. SHALL manejar carga, error, cierre por boton o Escape y retorno de foco al disparador, sin cambiar logros propios o ajenos. Al cerrar o cambiar sesion SHALL descartar respuestas obsoletas y limpiar datos privados.
+El modal DNA SHALL conservar la linea grafica de los modales existentes y representar las proporciones agregadas mediante una tarta con Rarity Hunter amarillo, Explorer rojo, Collector azul y Fan verde. SHALL incluir una leyenda con los cuatro nombres, sus colores y descripciones: Rarity Hunter busca piezas raras y valiosas; Explorer descubre categorias y subcategorias; Collector amplia y completa la coleccion; Fan muestra afinidad por tematicas y personajes. En smartphone la leyenda SHALL quedar junto al grafico con un espacio reducido, y cada descripcion SHALL ajustarse al ancho disponible en hasta dos lineas para no desbordar el modal. La leyenda SHALL ofrecer tambien las proporciones agregadas propias de forma accesible, sin pesos individuales. Un usuario Newbie SHALL ver un estado neutro con ese texto, sin segmentos inventados. SHALL manejar carga, error, cierre por boton o Escape y retorno de foco al disparador, sin cambiar logros propios o ajenos. Al cerrar o cambiar sesion SHALL descartar respuestas obsoletas y limpiar datos privados.
 
 #### Scenario: DNA disponible
 - **WHEN** el usuario abre DNA con contribuciones positivas
@@ -871,6 +871,11 @@ La interfaz SHALL mostrar un boton con el asset local `sobre.png` alineado a la 
 - **WHEN** la pantalla principal se muestra en un smartphone
 - **THEN** el botón de notificaciones aparece a la izquierda, inmediatamente encima del panel de nivel y dentro del espacio reservado para el logo
 - **AND** su posición no aumenta la altura de la cabecera ni reduce el tamaño del logo
+
+#### Scenario: Alinear indicadores y resumen en smartphone
+- **WHEN** la pantalla principal se muestra en un smartphone
+- **THEN** los indicadores de notificaciones, amigos y ranking del avatar quedan alineados
+- **AND** no aparece una línea gris a la derecha del contador de Búsqueda
 
 ### Requirement: Mostrar y paginar la bandeja de notificaciones
 
