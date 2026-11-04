@@ -130,7 +130,7 @@ Los campos Nombre e Id de Consulta SHALL mostrarse vacios sin ejemplos como plac
 
 Los botones del acordeon del panel de nivel SHALL centrar iconos y textos vertical y horizontalmente. Los dos botones de ranking SHALL compartir una misma fila y sus etiquetas SHALL permanecer en una sola linea, con tipografia y espaciado compactos para no desbordar el panel.
 
-En los rankings global y semanal, el emoji de coleccion SHALL tener las mismas dimensiones que la imagen de Bricks y ajustar su fuente a la columna reservada. Ambos indicadores SHALL mantener 8px de separacion respecto al numero, tambien en movil, sin superposiciones.
+En los rankings global y semanal, el emoji de coleccion SHALL tener las mismas dimensiones que la imagen de Bricks y ajustar su fuente a la columna reservada. El contador de Bricks SHALL desplazarse visualmente 19px a la derecha en las filas. Ambos indicadores SHALL mantener 8px de separacion respecto al numero, tambien en movil, sin superposiciones.
 
 Los campos del modal de minifigura SHALL compartir el mismo borde de 1px y color `--line`, incluidos los deshabilitados en creacion, edicion y consulta. El fondo y texto SHALL conservar la distincion de campos no editables.
 
@@ -980,7 +980,7 @@ Los ajustes posteriores SHALL limitarse a Smartphone (hasta 600px en portrait o 
 #### Scenario: Mantener el resumen de Usuario en una fila en Smartphone
 - **WHEN** se abre el modal Usuario en Smartphone, incluso con un nivel largo como `Dragon Form`
 - **THEN** Bricks, nivel, colección y búsqueda permanecen en una sola fila de cuatro contadores sin desbordamiento horizontal
-- **AND** los iconos y espacios se compactan solo en Smartphone y el nombre del nivel puede ajustarse dentro de su propia columna sin ocultarse
+- **AND** los iconos y cifras conservan una separación legible, compacta solo en Smartphone, y el nombre del nivel puede ajustarse dentro de su propia columna sin ocultarse
 
 #### Scenario: Abrir un perfil desde cada listado
 - **WHEN** se activa un usuario desde Buscador, Amigos, Solicitudes Enviadas o Solicitudes Recibidas
