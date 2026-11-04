@@ -101,11 +101,14 @@ test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', asy
   assert.equal($('#auth-screen').hidden, false);
   assert.equal($('.page-shell').hidden, true);
   assert.equal($('#auth-screen').getAttribute('aria-labelledby'), 'auth-title');
+  assert.equal($('#auth-title img').getAttribute('src'), '/logo_images/mini-people-db-header.png');
+  assert.equal($('.brand-heading img').getAttribute('src'), '/logo_images/mini-people-db-header.png');
   assert.equal($('#auth-title img').getAttribute('src'), $('.brand-heading img').getAttribute('src'));
   assert.equal($('#auth-title img').alt, 'MiniPeopleDB');
   assert.equal($('#auth-title').textContent, '');
   assert.equal($('.auth-eyebrow'), null);
   assert.match(styles, /\.auth-card h1 \{ width: min\(280px, 100%\); margin: 0; \}/);
+  assert.match(styles, /\.auth-card \.brand-logo \{ aspect-ratio: 3 \/ 2; object-fit: contain; \}/);
   assert.equal($('#login-google').textContent, 'Inicia sesión con Google');
   assert.equal($('#login-google img').getAttribute('src'), '/logo_images/google-2.png');
   assert.equal($('#login-google img').alt, '');
