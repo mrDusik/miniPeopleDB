@@ -2569,16 +2569,24 @@ function renderDailyNotification(notification) {
   metrics.className = 'daily-summary-metrics';
   const rankingMetrics = document.createElement('div');
   rankingMetrics.className = 'daily-ranking-deltas';
-  const addMetric = (label, value, iconPath = null, target = metrics) => {
+  const addMetric = (label, value, icon = null, target = metrics) => {
     const metric = document.createElement('div');
     metric.className = 'daily-summary-metric';
-    if (iconPath) {
+    if (icon) {
       metric.classList.add('has-icon');
-      const icon = document.createElement('img');
-      icon.className = 'daily-summary-icon';
-      icon.src = iconPath;
-      icon.alt = '';
-      metric.append(icon);
+      if (icon.startsWith('/')) {
+        const image = document.createElement('img');
+        image.className = 'daily-summary-icon';
+        image.src = icon;
+        image.alt = '';
+        metric.append(image);
+      } else {
+        const emoji = document.createElement('span');
+        emoji.className = 'daily-summary-icon daily-summary-emoji';
+        emoji.textContent = icon;
+        emoji.setAttribute('aria-hidden', 'true');
+        metric.append(emoji);
+      }
     }
     const name = document.createElement('span');
     name.className = 'daily-summary-label';
@@ -2589,10 +2597,10 @@ function renderDailyNotification(notification) {
     metric.append(name, amount);
     target.append(metric);
   };
-  addMetric('📦 Colección', formatSignedNumber(deltas.figures));
+  addMetric('Colección', formatSignedNumber(deltas.figures), '📦');
   addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
   addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
-  addMetric('🏆 Nivel', formatSignedNumber(deltas.level));
+  addMetric('Nivel', formatSignedNumber(deltas.level), '🏆');
   details.append(metrics);
   if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);
   if (Number.isFinite(deltas.weeklyPosition)) addMetric('🗓️ Ranking Semanal', `${formatSignedNumber(deltas.weeklyPosition)} puestos`, null, rankingMetrics);

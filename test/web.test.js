@@ -322,6 +322,7 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal([...narrowHeader.cssRules].find((rule) => rule.selectorText === '.header-top > .notifications-entry-row').style.getPropertyValue('grid-template-rows'), '107px auto');
   const bricks = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-bricks-value');
   const counts = headerDeclarations.get('.header-top > .notifications-entry-row .collection-counts-panel');
+  const countItems = headerDeclarations.get('.header-top > .notifications-entry-row .collection-counts-panel > span');
   const metrics = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-metrics');
   const values = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-values');
   const image = headerDeclarations.get('.header-top > .notifications-entry-row .gamification-level-image');
@@ -345,6 +346,7 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(values.getPropertyValue('overflow'), 'visible');
   assert.equal(bricks.getPropertyValue('flex-wrap'), 'nowrap');
   assert.equal(counts.getPropertyValue('display'), 'flex');
+  assert.equal(countItems.getPropertyValue('gap'), '7px');
   assert.equal(headerDeclarations.get('.header-top > .notifications-entry-row #gamification-toggle').getPropertyValue('position'), 'static');
   const declarations = new Map([...smartphone.cssRules].map((rule) => [rule.selectorText, rule.style]));
   assert.equal(declarations.get(':root')?.getPropertyValue('font-size'), '14px');

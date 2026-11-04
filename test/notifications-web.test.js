@@ -413,19 +413,22 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     details.querySelector('summary').click();
     assert.equal(details.open, true);
     assert.equal(list.querySelector('[data-notification-id="daily-1"] time').title, '09/10/2026 12:01');
-    assert.ok([...details.querySelectorAll('.daily-summary-label')].some((label) => label.textContent === '🏆 Nivel'));
+    assert.ok([...details.querySelectorAll('.daily-summary-label')].some((label) => label.textContent === 'Nivel'));
     assert.ok(details.querySelector('.daily-ranking-deltas'));
     const dailyText = details.textContent;
     for (const value of ['Colección-2', 'Valor-3,50 €', 'Bricks+5', 'Nivel-1', 'Ranking Global+1 puestos', 'Ranking Semanal-2 puestos',
       'Collector-1.25%', 'Explorer+2%', 'Rarity Hunter-0.5%', 'Fan+0.25%']) {
       assert.ok(dailyText.includes(value), `missing ${value}: ${dailyText}`);
     }
-    assert.deepEqual([...details.querySelectorAll('.daily-summary-icon')].map((image) => image.getAttribute('src')), [
+    assert.deepEqual([...details.querySelectorAll('img.daily-summary-icon')].map((image) => image.getAttribute('src')), [
       '/toast_images/billete.png', '/toast_images/hero_2026-01-05_16-38-47-871.webp',
     ]);
-    assert.ok(details.textContent.includes('📦 Colección'));
-    assert.ok(details.textContent.includes('🏆 Nivel'));
+    assert.deepEqual([...details.querySelectorAll('.daily-summary-emoji')].map((emoji) => emoji.textContent), ['📦', '🏆']);
+    assert.ok(details.querySelector('.daily-summary-emoji').getAttribute('aria-hidden'));
+    assert.ok(details.textContent.includes('📦Colección'));
+    assert.ok(details.textContent.includes('🏆Nivel'));
     assert.match(styles, /\.daily-summary-icon \{[^}]*width: 22px; height: 22px;/);
+    assert.match(styles, /\.daily-summary-emoji \{[^}]*font-size: 22px; line-height: 1;/);
     assert.match(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
     assert.doesNotMatch(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
     assert.deepEqual([...details.querySelectorAll('.daily-dna-trait .dna-swatch')].map((swatch) => swatch.className), [
