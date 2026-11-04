@@ -113,6 +113,8 @@ body {
 .brand-heading { display: inline-grid; flex: 0 0 320px; min-width: 0; }
 .brand-heading h1 { margin: 0; }
 .brand-logo { display: block; width: 100%; height: auto; aspect-ratio: 1024 / 421; object-fit: contain; }
+.page-header .brand-logo { object-fit: cover; }
+.auth-card .brand-logo { aspect-ratio: 3 / 2; object-fit: contain; }
 .notifications-trigger { position: relative; display: grid; flex: 0 0 52px; place-items: center; width: 52px; height: 52px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; }
 .notifications-trigger img { display: block; width: 100%; max-width: 36px; height: 27px; object-fit: contain; }
 .notifications-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }

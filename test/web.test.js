@@ -48,11 +48,17 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     assert.equal(levelTitle.firstElementChild.getAttribute('alt'), '');
     assert.equal(levelTitle.querySelector('#gamification-level-number').id, 'gamification-level-number');
 
-    const logo = new JSDOM(html).window.document.querySelector('.brand-logo');
+    const document = new JSDOM(html).window.document;
+    const logo = document.querySelector('.brand-logo');
     assert.equal(logo.alt, 'MiniPeopleDB');
     const logoImage = await fetch(`${baseUrl}${logo.getAttribute('src')}`);
     assert.equal(logoImage.status, 200);
     assert.match(logoImage.headers.get('content-type'), /^image\/png/);
+    const headerLogo = document.querySelector('.page-header .brand-logo');
+    assert.equal(headerLogo.getAttribute('src'), '/logo_images/mini-people-db-header.png');
+    const headerLogoImage = await fetch(`${baseUrl}${headerLogo.getAttribute('src')}`);
+    assert.equal(headerLogoImage.status, 200);
+    assert.match(headerLogoImage.headers.get('content-type'), /^image\/png/);
     const envelopeImage = await fetch(`${baseUrl}/status_images/sobre.png`);
     assert.equal(envelopeImage.status, 200);
     assert.match(envelopeImage.headers.get('content-type'), /^image\/png/);
@@ -617,6 +623,7 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   assert.match(css, /\.header-top\s*\{[^}]*flex-wrap:\s*nowrap/s);
   assert.match(css, /\.brand-heading\s*\{[^}]*flex:\s*0 0 320px/s);
   assert.match(css, /\.brand-logo\s*\{[^}]*width:\s*100%[^}]*object-fit:\s*contain/s);
+  assert.match(css, /\.page-header \.brand-logo\s*\{[^}]*object-fit:\s*cover/s);
   assert.match(css, /\.gamification-main\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/s);
   assert.match(css, /\.gamification-main \.gamification-bricks-value strong, \.gamification-main \.collection-counts-panel strong \{[^}]*font: 700 var\(--summary-count-size\) var\(--font-body\)/);
   assert.match(css, /\.gamification-summary \.count-icon \{ width: 2\.15rem; height: 2\.15rem; transform: none; \}/);
