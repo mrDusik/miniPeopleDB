@@ -55,6 +55,7 @@ Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, cuyos objetos contienen
 - **WHEN** una fila del ranking muestra el nivel de un usuario
 - **THEN** muestra el activo local asociado al ID de ese nivel
 - **AND** usa la imagen de Forestman cuando no existe un activo específico
+- **AND** en las tarjetas de resumen la imagen queda por encima de la fila de Bricks, sin superponerse
 
 ### Requirement: Distribuir los criterios a ancho completo en portrait
 

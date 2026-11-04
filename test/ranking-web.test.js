@@ -417,7 +417,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \.ranking-bricks \{ grid-column: 2 \/ 4; grid-row: 3; justify-self: start; width: 85px; \}/);
   assert.match(styles, /\.ranking-expand \.ranking-collection-count \{ grid-column: 3 \/ 5; grid-row: 3; justify-self: end; width: 70px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-expand \{ grid-template-columns: 24px 40px minmax\(0, 1fr\) 12px; grid-template-rows: 36px minmax\(24px, auto\) minmax\(16px, auto\) 26px; min-height: 0; gap: 3px 6px; padding: 5px;/);
-  assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 4; width: 44px; height: 44px; \}/);
+  assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 3; align-self: start; width: 40px; height: 40px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-avatar-wrap \{ grid-column: 2; grid-row: 1; justify-self: center; align-self: center; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-level-info \{ grid-column: 2 \/ 4; grid-row: 2 \/ 5; grid-template-columns: 40px auto minmax\(0, 1fr\); grid-template-rows: subgrid;/);
   assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start;/);
@@ -487,7 +487,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.match(styles, /\.ranking-summary \.ranking-expand \{ grid-template-columns: 28px 46px minmax\(0, 1fr\) 18px; grid-template-rows: 40px minmax\(24px, auto\) minmax\(16px, auto\) minmax\(26px, auto\); column-gap: 6px; padding: 6px 10px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-level-info \{ display: grid; grid-column: 2 \/ 4; grid-row: 2 \/ 5; grid-template-columns: 46px auto minmax\(0, 1fr\); grid-template-rows: subgrid;/);
   assert.match(styles, /\.ranking-summary \.ranking-avatar-wrap \{ grid-column: 2; grid-row: 1; justify-self: center; \}/);
-  assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 4; justify-self: center; align-self: center; width: 48px; height: 48px; \}/);
+  assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 3; justify-self: center; align-self: start; width: 40px; height: 40px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-name \{ grid-column: 3; grid-row: 1; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.55rem; width: auto;/);
   assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.2rem; width: auto;/);

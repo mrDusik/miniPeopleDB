@@ -778,7 +778,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-summary .ranking-avatar-wrap { grid-column: 2; grid-row: 1; justify-self: center; }
 .ranking-summary .ranking-name { grid-column: 3; grid-row: 1; }
 .ranking-summary .ranking-level-info { display: grid; grid-column: 2 / 4; grid-row: 2 / 5; grid-template-columns: 46px auto minmax(0, 1fr); grid-template-rows: subgrid; align-content: stretch; align-items: center; gap: 3px 6px; }
-.ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 4; justify-self: center; align-self: center; width: 48px; height: 48px; }
+.ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 3; justify-self: center; align-self: start; width: 40px; height: 40px; }
 .ranking-summary .ranking-level-number { grid-column: 2; grid-row: 1; }
 .ranking-summary .ranking-level-name { grid-column: 3; grid-row: 1; }
 .ranking-summary .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; }
@@ -811,7 +811,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .ranking-summary { grid-column: 1 / -1; }
   .ranking-summary .ranking-expand { grid-template-columns: 28px 46px minmax(0, 1fr) 16px; grid-template-rows: 40px minmax(24px, auto) minmax(16px, auto) minmax(26px, auto); padding: 6px 8px; }
   .ranking-summary .ranking-level-info { grid-template-columns: 46px auto minmax(0, 1fr); }
-  .ranking-summary .ranking-level-info .gamification-level-image { width: 44px; height: 44px; }
+  .ranking-summary .ranking-level-info .gamification-level-image { width: 40px; height: 40px; }
   .ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; width: auto; }
   .ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; width: 85px; }
   .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
@@ -847,6 +847,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .watchlist-card img { width: 128px; height: 112px; object-fit: contain; }
 .watchlist-card .status-icon-image { width: 1.5rem; height: 1.5rem; }
 .watchlist-card .watchlist-caption { display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 6px; white-space: nowrap; }
+.watchlist-card .watchlist-identity { display: contents; }
 .watchlist-caption .watchlist-state-icon { display: grid; place-items: center; }
 .watchlist-caption .watchlist-code, .watchlist-caption .watchlist-price { flex: 0 0 auto; overflow-wrap: normal; }
 .watchlist-card { min-width: max-content; content-visibility: auto; contain-intrinsic-size: auto 150px auto 156px; }
@@ -1099,10 +1100,13 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .header-top > .brand-heading { grid-area: 1 / 1; align-self: start; justify-self: start; width: min(160px, calc(100% - 220px)); margin: 0; }
   .header-top > .notifications-entry-row { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr) 44px 44px 64px; grid-template-rows: 68px auto; gap: 12px 6px; }
   .header-top > .notifications-entry-row > .notifications-trigger { grid-column: 2; width: 44px; height: 44px; padding: 4px; }
-  .header-top > .notifications-entry-row > .friends-trigger { grid-column: 3; }
-  .header-top > .notifications-entry-row > .user-session { grid-column: 4; padding-left: 12px; }
+  .header-top > .notifications-entry-row > .friends-trigger { grid-column: 3; width: 44px; height: 44px; padding: 4px; }
+  .header-top > .notifications-entry-row > .user-session { grid-column: 4; padding-left: 0; }
   .header-top > .notifications-entry-row .user-menu-toggle { gap: 2px; }
   .header-top > .notifications-entry-row .user-avatar:not([hidden]), .header-top > .notifications-entry-row .user-avatar-fallback { width: 32px; height: 32px; }
+  .header-top > .notifications-entry-row .notifications-unread-badge,
+  .header-top > .notifications-entry-row .friends-count { top: -16px; }
+  .header-top > .notifications-entry-row #ranking-main-globe { top: -14px; right: -5px; }
   .header-top > .notifications-entry-row .user-menu-chevron { width: 18px; }
   .header-top > .notifications-entry-row .user-profile { left: auto; right: 0; }
   .notifications-entry-row > .gamification-summary { grid-column: 1 / -1; grid-row: 2; }
@@ -1116,7 +1120,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .header-top > .notifications-entry-row #gamification-level-number { font-size: 1.61rem; }
   .header-top > .notifications-entry-row .gamification-dna-row { grid-column: 2; grid-row: 2; justify-content: flex-start; padding-inline: 8px 0; }
   .header-top > .notifications-entry-row .gamification-metrics { position: relative; display: flex; grid-column: 2; grid-row: 3; align-items: center; min-width: 0; padding-left: 8px; }
-  .header-top > .notifications-entry-row .gamification-values { display: flex; flex: 1 1 0; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; }
+  .header-top > .notifications-entry-row .gamification-values { display: flex; flex: 1 1 0; align-items: center; gap: 8px; min-width: 0; overflow: visible; }
   .header-top > .notifications-entry-row .gamification-bricks-value { position: relative; flex: 0 0 auto; flex-wrap: nowrap; margin-inline: 0; gap: 6px; }
   .header-top > .notifications-entry-row .collection-counts-panel { display: flex; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; gap: 8px; }
   .header-top > .notifications-entry-row .collection-counts-panel > span { flex-direction: row; justify-content: flex-end; gap: 4px; }
@@ -1144,17 +1148,17 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 @media (max-width: 600px) and (orientation: portrait), (orientation: portrait) and (hover: none) and (pointer: coarse), (max-width: 600px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
   :root { font-size: 14px; }
   .modal-dna { overflow-x: hidden; }
-  #dna-dialog:not(:has(#dna-status.loading-message)) .dna-legend-panel { width: calc(100% + 8px); margin-left: -8px; }
+  #dna-dialog:not(:has(#dna-status.loading-message)) .dna-legend-panel { width: calc(100% + 4px); margin-left: -4px; }
   #dna-dialog:has(#dna-status.loading-message) #dna-status { margin-inline: 8px; }
   .watchlist-row, .top-five .ranking-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 4px; overflow: visible; scroll-snap-type: none; }
-  .watchlist-row { padding: 4px 13px 8px; }
-  .watchlist-row:not([hidden]) { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
-  .watchlist-row:has(> .watchlist-card:nth-child(6)):not([hidden]) { display: flex; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
+  .watchlist-row { padding: 4px 0 8px; }
+  .watchlist-row:not([hidden]) { display: flex; flex-wrap: nowrap; column-gap: 4px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
+  .watchlist-row:has(> .watchlist-card:nth-child(6)):not([hidden]) { display: flex; flex-wrap: nowrap; justify-content: flex-start; column-gap: 4px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; }
   .watchlist-row:has(> .watchlist-card:nth-child(6)) > .watchlist-card { flex: 0 0 calc((100% - 16px) / 5); scroll-snap-align: start; }
   .watchlist-card, .top-five .ranking-card { width: 100%; min-width: 0; height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
   .watchlist-card > img, .top-five .ranking-img { width: 100%; height: 48px; object-fit: contain; }
   .watchlist-card > span, .top-five .ranking-caption { align-self: center; max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
-  .watchlist-card { width: auto; min-width: max-content; height: auto; min-height: 90px; grid-template-rows: 48px auto; }
+  .watchlist-card { width: auto; min-width: max-content; height: auto; min-height: 90px; grid-template-rows: 48px auto; flex: 1 1 0; }
   .ranking-user-details .ranking-highlight-group .ranking-row { gap: 4px; }
   .ranking-user-details .ranking-highlight-group .ranking-card-static { flex: 0 0 calc((100% - 16px) / 5); height: 90px; grid-template-rows: 48px minmax(0, 1fr); gap: 4px; padding: 6px 2px; content-visibility: visible; }
   .ranking-user-details .ranking-highlight-group .ranking-card-static .ranking-img { width: 100%; height: 48px; object-fit: contain; }
@@ -1168,13 +1172,17 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .modal-public-profile .public-profile-figures .ranking-caption { max-width: 100%; min-width: 0; font-size: 0.68rem; line-height: 1.2; overflow-wrap: anywhere; }
   .modal-public-profile .public-profile-figures .ranking-add-wanted { inset: -1px; width: auto; height: auto; min-height: 0; padding: 0; border-radius: inherit; align-items: flex-start; justify-content: flex-end; }
   .modal-public-profile .public-profile-figures .ranking-add-wanted .magnifier-icon { width: 9px; height: 9px; margin: 3px; font-size: 9px; }
-  .watchlist-state-icon .status-icon-image { width: 1.656rem; height: 1.656rem; font-size: 1.656rem; }
-  .dna-dialog-body { grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 16px; }
+  .watchlist-card .watchlist-caption { display: grid; grid-template-rows: auto auto; justify-items: center; gap: 1px; font: 700 0.68rem/1.2 var(--font-body); letter-spacing: 0.01em; white-space: normal; }
+  .watchlist-card .watchlist-identity { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; }
+  .watchlist-card .watchlist-code { font-family: var(--font-code); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .watchlist-card .watchlist-price { font: 700 0.68rem/1.2 var(--font-body); letter-spacing: 0.01em; white-space: nowrap; }
+  .watchlist-card .watchlist-state-icon .status-icon-image { width: 1rem; height: 1rem; font-size: 1rem; }
+  #dna-dialog .dna-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; justify-items: stretch; gap: 12px; }
   .dna-chart { width: min(200px, 64vw); justify-self: center; }
   .dna-legend { gap: 10px; }
   .dna-legend-item { gap: 3px 5px; margin-right: 12px; }
   .dna-legend-item > strong { font-size: 0.8rem; }
-  .dna-description { grid-column: 1 / -1; font-size: 0.68rem; white-space: nowrap; }
+  .dna-description { display: -webkit-box; grid-column: 2 / -1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; font-size: 0.68rem; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .global-ranking-list { gap: 6px; }
   .global-ranking-row { grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 6px; }
   .ranking-summary { grid-column: 1; grid-row: 1; }
@@ -1184,7 +1192,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .ranking-avatar-wrap, .ranking-avatar, .ranking-avatar-fallback { width: 28px; height: 28px; }
   .ranking-summary .ranking-name { grid-column: 3; grid-row: 1; font-size: 0.85rem; }
   .ranking-summary .ranking-level-info { grid-column: 2 / 4; grid-row: 2 / 5; grid-template-columns: 40px auto minmax(0, 1fr); grid-template-rows: subgrid; gap: 2px 6px; }
-  .ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 4; width: 44px; height: 44px; }
+  .ranking-summary .ranking-level-info .gamification-level-image { grid-column: 1; grid-row: 1 / 3; align-self: start; width: 40px; height: 40px; }
   .ranking-level-number { grid-column: 2; grid-row: 1; font-size: 1.1rem; }
   .ranking-level-name { grid-column: 3; grid-row: 1; font-size: 0.9rem; line-height: 1.2; }
   .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; font-size: 0.68rem; line-height: 1.35; }

@@ -712,6 +712,8 @@ function renderWatchlist(observed) {
     const image = createLazyImage({ src: imagenUrlPara(minifigura.id), alt: minifigura.nombre, width: 128, height: 112 });
     const caption = document.createElement('span');
     caption.className = 'watchlist-caption';
+    const identity = document.createElement('span');
+    identity.className = 'watchlist-identity';
     const stateIcon = document.createElement('span');
     stateIcon.className = 'watchlist-state-icon';
     appendCollectionStateIcon(stateIcon, minifigura.estadoColeccion);
@@ -722,7 +724,8 @@ function renderWatchlist(observed) {
     const price = document.createElement('span');
     price.className = 'watchlist-price';
     price.textContent = formatPrice(minifigura.precioBrickset);
-    caption.append(stateIcon, document.createTextNode(' '), code, document.createTextNode(' '), price);
+    identity.append(stateIcon, document.createTextNode(' '), code);
+    caption.append(identity, document.createTextNode(' '), price);
     card.append(image, caption);
     fragment.append(card);
   }
