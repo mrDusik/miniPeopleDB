@@ -114,6 +114,7 @@ La interfaz SHALL permitir solicitar a Supabase Auth un enlace de recuperación 
 #### Scenario: Cambio de contraseña desde enlace válido
 - **WHEN** la persona abre un enlace de recuperación vigente y envía una nueva contraseña aceptada
 - **THEN** Supabase Auth actualiza la contraseña
+- **AND** la sesión de recuperación no permite acceder a la aplicación antes de actualizar la contraseña
 - **AND** la aplicación no almacena la contraseña en sus tablas
 
 ### Requirement: Enviar credenciales a la API de datos

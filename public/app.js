@@ -316,6 +316,8 @@ let achievementQueue = [];
 let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
+let authCallbackPending = false;
+let passwordRecoveryPending = false;
 const nativeAuth = window.NativeAuth?.isNative() ? window.NativeAuth : null;
 const nativePush = window.NativePush?.isNative() ? window.NativePush : null;
 let nativePushRegistration = null;
@@ -5527,6 +5529,7 @@ function startNativeEmailHandoffPolling() {
 async function initializeAuth() {
   showAuthScreen();
   setAuthMessage('Preparando el acceso...', { loading: true });
+  authCallbackPending = new URLSearchParams(window.location.search).has('code');
   if (nativeAuth) {
     try {
       if (!nativeAppUrlListenerRegistered) {
@@ -5579,9 +5582,14 @@ async function initializeAuth() {
   // Supabase warns against calling its API inside this callback, so it only updates local state.
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY' && session) {
+      authCallbackPending = false;
+      passwordRecoveryPending = true;
       showPasswordUpdate(session);
       return;
     }
+    if (passwordRecoveryPending) return;
+    if (authCallbackPending && event === 'INITIAL_SESSION') return;
+    if (event === 'SIGNED_IN') authCallbackPending = false;
     if (session || currentSession) handleSession(session);
   });
   try {
@@ -5595,7 +5603,7 @@ async function initializeAuth() {
       }
     }
     const { data } = await supabaseClient.auth.getSession();
-    handleSession(data?.session ?? null);
+    if (!authCallbackPending && !passwordRecoveryPending) handleSession(data?.session ?? null);
     startNativeEmailHandoffPolling();
   } catch {
     handleSession(null, 'No se pudo recuperar la sesión.');
@@ -5847,6 +5855,7 @@ passwordUpdateForm.addEventListener('submit', async (event) => {
     if (error) throw error;
     newPasswordInput.value = '';
     passwordUpdateForm.hidden = true;
+    passwordRecoveryPending = false;
     handleSession(currentSession, 'La contraseña se actualizó correctamente.');
   } catch {
     setAuthMessage('No se pudo cambiar la contraseña. Inténtalo de nuevo.', { error: true });
