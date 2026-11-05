@@ -885,6 +885,20 @@ test('un callback de inicio de sesión espera PASSWORD_RECOVERY o SIGNED_IN ante
   dom.window.close();
 });
 
+test('un callback que Supabase no puede validar deja de mostrar la espera indefinida', async () => {
+  const { dom, window, $ } = startApp({
+    session: null,
+    url: 'http://localhost/?code=invalid-code',
+  });
+  await tick();
+  window.__supabaseStub.setSession('INITIAL_SESSION', null);
+  await tick();
+  assert.equal($('#auth-message').textContent, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+  assert.equal($('#auth-message').getAttribute('aria-busy'), 'false');
+  assert.equal($('.page-shell').hidden, true);
+  dom.window.close();
+});
+
 test('cambio de contraseña envía el nuevo secreto solo a Supabase Auth', async () => {
   const { dom, window, $ } = startApp({ session: null, updatePasswordError: 'recovery token invalid' });
   await tick();

@@ -117,6 +117,10 @@ La interfaz SHALL permitir solicitar a Supabase Auth un enlace de recuperación 
 - **AND** la sesión de recuperación no permite acceder a la aplicación antes de actualizar la contraseña
 - **AND** la aplicación no almacena la contraseña en sus tablas
 
+#### Scenario: Enlace de recuperación inválido o caducado
+- **WHEN** Supabase Auth no puede validar el callback del enlace de recuperación
+- **THEN** la aplicación permanece en la pantalla de acceso y muestra un error genérico en lugar de quedarse cargando indefinidamente
+
 ### Requirement: Enviar credenciales a la API de datos
 
 La interfaz SHALL incluir el access token vigente de la sesión en la cabecera `Authorization: Bearer <token>` de cada petición a los endpoints de datos, y SHALL NOT almacenar el token en cookies propias ni incluirlo en URLs.
