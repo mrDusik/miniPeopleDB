@@ -853,6 +853,10 @@ test('PASSWORD_RECOVERY muestra cambio de contraseña y solo abre la app tras ac
   assert.equal($('.page-shell').hidden, true);
   assert.deepEqual(requests, []);
 
+  window.__supabaseStub.setSession('INITIAL_SESSION', null);
+  await tick();
+  assert.equal($('#auth-message').textContent, 'Preparando el acceso...');
+
   window.__supabaseStub.setSession('PASSWORD_RECOVERY', recoverySession);
   await tick();
   assert.equal($('#password-update-form').hidden, false);
@@ -892,7 +896,7 @@ test('un callback que Supabase no puede validar deja de mostrar la espera indefi
   });
   await tick();
   window.__supabaseStub.setSession('INITIAL_SESSION', null);
-  await tick();
+  await new Promise((resolve) => setTimeout(resolve, 1100));
   assert.equal($('#auth-message').textContent, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
   assert.equal($('#auth-message').getAttribute('aria-busy'), 'false');
   assert.equal($('.page-shell').hidden, true);

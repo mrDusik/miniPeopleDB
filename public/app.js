@@ -317,6 +317,7 @@ let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
 let authCallbackPending = false;
+let authCallbackTimeoutId = null;
 let passwordRecoveryPending = false;
 const nativeAuth = window.NativeAuth?.isNative() ? window.NativeAuth : null;
 const nativePush = window.NativePush?.isNative() ? window.NativePush : null;
@@ -5585,21 +5586,29 @@ async function initializeAuth() {
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY' && session) {
       authCallbackPending = false;
+      window.clearTimeout(authCallbackTimeoutId);
+      authCallbackTimeoutId = null;
       passwordRecoveryPending = true;
       showPasswordUpdate(session);
       return;
     }
     if (passwordRecoveryPending) return;
     if (authCallbackPending && event === 'INITIAL_SESSION') {
-      window.setTimeout(() => {
+      window.clearTimeout(authCallbackTimeoutId);
+      authCallbackTimeoutId = window.setTimeout(() => {
+        authCallbackTimeoutId = null;
         if (authCallbackPending) {
           authCallbackPending = false;
           handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
         }
-      }, 0);
+      }, 1000);
       return;
     }
-    if (event === 'SIGNED_IN') authCallbackPending = false;
+    if (event === 'SIGNED_IN') {
+      authCallbackPending = false;
+      window.clearTimeout(authCallbackTimeoutId);
+      authCallbackTimeoutId = null;
+    }
     if (session || currentSession) handleSession(session);
   });
   try {
