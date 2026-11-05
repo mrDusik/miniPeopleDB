@@ -92,6 +92,16 @@ Antes de liberar un APK que incluya este flujo:
 
 La app consulta el handoff mientras está activa y al reanudarse; la página de confirmación no fuerza la apertura de Android. La persistencia y el API usan solo las RPC allowlisted de handoff, sin `service_role`. El registro web y el callback PKCE de Google siguen sin cambios.
 
+## Recuperación de contraseña por email
+
+En Supabase Auth, configura la plantilla **Reset Password** para enlazar directamente el token hash de recuperación a la URL de retorno:
+
+```html
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery">Restablecer contraseña</a>
+```
+
+La app verifica el token con Supabase Auth, lo retira de la barra de direcciones y muestra el formulario para elegir una contraseña nueva. No uses `{{ .ConfirmationURL }}` para este flujo. El destino de retorno debe estar permitido en **Authentication → URL Configuration → Redirect URLs**; en web es la URL raíz, por ejemplo `https://minipeopledb.onrender.com/`. En Android, el retorno registrado en el proyecto debe ser `com.mrdusik.minipeopledb://auth/callback`.
+
 ## Notificaciones push
 
 La integración Capacitor incluye recepción FCM, un canal Android estable y permiso contextual. La bandeja autenticada y Realtime siguen funcionando aunque no se configure Firebase. Para habilitar push:

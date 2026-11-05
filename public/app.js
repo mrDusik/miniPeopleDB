@@ -5296,13 +5296,22 @@ async function processNativeOAuthCallback(rawUrl) {
     return;
   }
 
-  const allowedParameters = new Set(['code', 'error', 'error_code', 'error_description']);
+  const allowedParameters = new Set(['code', 'error', 'error_code', 'error_description', 'token_hash', 'type']);
   const codes = callbackUrl.searchParams.getAll('code');
+  const tokenHashes = callbackUrl.searchParams.getAll('token_hash');
+  const types = callbackUrl.searchParams.getAll('type');
+  const parameterNames = [...callbackUrl.searchParams.keys()];
+  const isRecoveryCallback = tokenHashes.length === 1 && tokenHashes[0].length > 0 && tokenHashes[0].length <= 2048
+    && types.length === 1 && types[0] === 'recovery'
+    && parameterNames.length === 2 && parameterNames.every((name) => ['token_hash', 'type'].includes(name));
   if (callbackUrl.protocol !== 'com.mrdusik.minipeopledb:' || callbackUrl.hostname !== 'auth'
     || callbackUrl.pathname !== '/callback' || callbackUrl.port || callbackUrl.username || callbackUrl.password
     || callbackUrl.hash || [...callbackUrl.searchParams.keys()].some((key) => !allowedParameters.has(key))
-    || ['error', 'error_code', 'error_description'].some((key) => callbackUrl.searchParams.has(key))
-    || codes.length !== 1 || !codes[0] || !supabaseClient) {
+    || !supabaseClient
+    || (!isRecoveryCallback && (
+      ['error', 'error_code', 'error_description', 'token_hash', 'type'].some((key) => callbackUrl.searchParams.has(key))
+      || codes.length !== 1 || !codes[0]
+    ))) {
     showNativeOAuthError();
     return;
   }
@@ -5310,12 +5319,18 @@ async function processNativeOAuthCallback(rawUrl) {
   nativeOAuthPending = false;
   clearTimeout(nativeOAuthFinishTimer);
   try {
-    const { data, error } = await supabaseClient.auth.exchangeCodeForSession(codes[0]);
+    const { data, error } = isRecoveryCallback
+      ? await supabaseClient.auth.verifyOtp({ token_hash: tokenHashes[0], type: 'recovery' })
+      : await supabaseClient.auth.exchangeCodeForSession(codes[0]);
     if (error || !data?.session) throw new Error('OAUTH_CALLBACK_INVALIDO');
     await nativeAuth.closeBrowser();
-    handleSession(data.session);
+    if (!isRecoveryCallback) handleSession(data.session);
   } catch {
-    showNativeOAuthError();
+    if (isRecoveryCallback) {
+      handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+    } else {
+      showNativeOAuthError();
+    }
   }
 }
 
@@ -5531,8 +5546,18 @@ async function initializeAuth() {
   showAuthScreen();
   setAuthMessage('Preparando el acceso...', { loading: true });
   const callbackParameters = new URLSearchParams(window.location.search);
-  authCallbackPending = ['code', 'error', 'error_code', 'error_description']
-    .some((parameter) => callbackParameters.has(parameter));
+  const tokenHashes = callbackParameters.getAll('token_hash');
+  const recoveryTypes = callbackParameters.getAll('type');
+  const hasRecoveryTokenHash = callbackParameters.has('token_hash');
+  const recoveryTokenHash = tokenHashes.length === 1 && tokenHashes[0].length > 0 && tokenHashes[0].length <= 2048
+    && recoveryTypes.length === 1 && recoveryTypes[0] === 'recovery'
+    && [...callbackParameters.keys()].length === 2
+    && [...callbackParameters.keys()].every((name) => ['token_hash', 'type'].includes(name))
+    ? tokenHashes[0] : null;
+  const recoveryTokenHashCallback = hasRecoveryTokenHash;
+  if (recoveryTokenHashCallback) window.history.replaceState(null, '', window.location.pathname);
+  authCallbackPending = recoveryTokenHashCallback
+    || ['code', 'error', 'error_code', 'error_description'].some((parameter) => callbackParameters.has(parameter));
   if (nativeAuth) {
     try {
       if (!nativeAppUrlListenerRegistered) {
@@ -5592,6 +5617,7 @@ async function initializeAuth() {
       showPasswordUpdate(session);
       return;
     }
+    if (recoveryTokenHashCallback) return;
     if (passwordRecoveryPending) return;
     if (authCallbackPending && event === 'INITIAL_SESSION') {
       window.clearTimeout(authCallbackTimeoutId);
@@ -5619,6 +5645,23 @@ async function initializeAuth() {
         const callbackUrl = pendingNativeOAuthCallbackUrl;
         pendingNativeOAuthCallbackUrl = null;
         await processNativeOAuthCallback(callbackUrl);
+      }
+    }
+    if (recoveryTokenHashCallback) {
+      if (!recoveryTokenHash) {
+        handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+        return;
+      }
+      try {
+        const { data, error } = await supabaseClient.auth.verifyOtp({
+          token_hash: recoveryTokenHash,
+          type: 'recovery',
+        });
+        if (error || !data?.session) throw new Error('RECUPERACION_INVALIDA');
+      } catch {
+        handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+        startNativeEmailHandoffPolling();
+        return;
       }
     }
     const { data } = await supabaseClient.auth.getSession();

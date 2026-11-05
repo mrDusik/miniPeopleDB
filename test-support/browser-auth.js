@@ -14,6 +14,7 @@ export function supabaseStubScript({
   passwordSignInError = null,
   signUpError = null,
   recoveryError = null,
+  recoveryVerifyOtpError = null,
   updatePasswordError = null,
   avatarUploadError = null,
   passwordSession = null,
@@ -21,17 +22,18 @@ export function supabaseStubScript({
   oauthCallbackError = null,
   configError = false,
   recoverySession = null,
+  recoveryVerifyOtpSession = null,
   profileData = DEFAULT_PROFILE,
   profileFallback = true,
 } = {}) {
   return `(() => {
-  const options = ${JSON.stringify({ session, signInError, passwordSignInError, signUpError, recoveryError, updatePasswordError, avatarUploadError, passwordSession, oauthSession, oauthCallbackError, configError, recoverySession, profileData, profileFallback })};
+  const options = ${JSON.stringify({ session, signInError, passwordSignInError, signUpError, recoveryError, recoveryVerifyOtpError, updatePasswordError, avatarUploadError, passwordSession, oauthSession, oauthCallbackError, configError, recoverySession, recoveryVerifyOtpSession, profileData, profileFallback })};
   let session = options.session;
   let configError = options.configError;
   const listeners = [];
   const calls = {
     createClient: [], signInWithOAuth: [], signInWithPassword: [], setSession: [], signUp: [],
-    resetPasswordForEmail: [], updateUser: [],     signOut: [], exchangeCodeForSession: [], channel: [], removeChannel: [],
+    resetPasswordForEmail: [], verifyOtp: [], updateUser: [], signOut: [], exchangeCodeForSession: [], channel: [], removeChannel: [],
     avatarUploads: [], avatarRemovals: [],
   };
   const channels = [];
@@ -146,6 +148,16 @@ export function supabaseStubScript({
               emit('PASSWORD_RECOVERY');
             }
             return { error: null };
+          },
+          async verifyOtp(args) {
+            calls.verifyOtp.push(args);
+            if (options.recoveryVerifyOtpError) return { data: null, error: { message: options.recoveryVerifyOtpError } };
+            session = options.recoveryVerifyOtpSession ?? {
+              access_token: 'token-recovery-verified',
+              user: { id: 'recovery-user', email: 'recovery@example.com', user_metadata: {} },
+            };
+            emit('PASSWORD_RECOVERY');
+            return { data: { session, user: session.user }, error: null };
           },
           async updateUser(args) {
             calls.updateUser.push(args);
