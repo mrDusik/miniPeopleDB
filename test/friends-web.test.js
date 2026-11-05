@@ -179,6 +179,18 @@ test('el buscador no muestra instrucciones de longitud pero mantiene el umbral d
   }
 });
 
+test('el indicador de búsqueda de amigos tiene espacio para girar sin recortarse', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const spinnerRule = rules.find((rule) => rule.selectorText === '.modal-friends #friends-status-search.loading-message');
+    assert.ok(spinnerRule);
+    assert.equal(spinnerRule.style.getPropertyValue('padding-left'), '4px');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('los ajustes de anchura y tarjetas se limitan al monitor con ratón', () => {
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {

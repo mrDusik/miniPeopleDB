@@ -548,6 +548,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .friends-request-state.state-rejected { color: var(--accent-dark); }
 .friends-status:empty { display: none; }
 .modal-friends .status { margin: 8px 0; }
+.modal-friends #friends-status-search.loading-message { padding-left: 4px; }
 .modal-friends .status:empty { display: none; }
 .modal-public-profile { width: min(900px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .modal-public-profile[open] { display: flex; flex-direction: column; overflow: hidden; }

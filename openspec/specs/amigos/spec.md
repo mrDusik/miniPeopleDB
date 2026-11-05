@@ -15,6 +15,10 @@ El sistema SHALL permitir a una persona autenticada buscar usuarios por coincide
 - **THEN** recibe los usernames que contienen la cadena sin distinguir mayúsculas y minúsculas
 - **AND** no recibe su propio usuario ni campos privados
 
+#### Scenario: Indicador durante la búsqueda
+- **WHEN** se ejecuta una búsqueda desde el modal Amigos
+- **THEN** el indicador animado de carga se muestra completo dentro del panel
+
 #### Scenario: Consulta demasiado corta o sin sesión
 - **WHEN** la búsqueda tiene menos de tres caracteres o no hay sesión válida
 - **THEN** el sistema responde respectivamente `400` o `401` y no revela resultados

@@ -1385,6 +1385,35 @@ test('Preferencias agrupa identidad, cuenta e idioma y mantiene hasta tres categ
   }
 });
 
+test('Preferencias etiqueta la contraseña como crear solo para cuentas Google sin otros proveedores', async () => {
+  const cases = [
+    ['Google', { app_metadata: { provider: 'google', providers: ['google'] } }, 'Crear contraseña'],
+    ['clásica', { app_metadata: { provider: 'email', providers: ['email'] } }, 'Cambiar contraseña'],
+    ['Google vinculada con email', {
+      app_metadata: { provider: 'google', providers: ['google', 'email'] },
+      identities: [{ provider: 'google' }, { provider: 'email' }],
+    }, 'Cambiar contraseña'],
+  ];
+
+  for (const [description, metadata, expectedLabel] of cases) {
+    const { dom, $ } = startApp({
+      session: {
+        access_token: 'token-preferences',
+        user: { id: 'preferences-user', email: 'preferences@example.com', ...metadata },
+      },
+    });
+    try {
+      await waitFor(() => $('.page-shell').hidden === false);
+      $('#user-menu-toggle').click();
+      $('#open-user-settings').click();
+      await waitFor(() => $('#user-profile-dialog').open);
+      assert.equal($('#open-change-password').textContent, expectedLabel, description);
+    } finally {
+      dom.window.close();
+    }
+  }
+});
+
 test('preferencias mantiene altura fija al buscar categorias y desplaza los controles del avatar', () => {
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {

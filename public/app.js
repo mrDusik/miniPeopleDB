@@ -4966,6 +4966,15 @@ function providerAvatarUrl(user) {
   return '';
 }
 
+function hasGoogleOnlyIdentity(user) {
+  const providers = new Set([
+    ...(Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers : []),
+    ...(Array.isArray(user?.identities) ? user.identities.map((identity) => identity.provider) : []),
+    ...(typeof user?.app_metadata?.provider === 'string' ? [user.app_metadata.provider] : []),
+  ]);
+  return providers.size === 1 && providers.has('google');
+}
+
 function applyProfileAvatar(profile) {
   userName.textContent = profile?.username || '';
   if (profile?.username) userProfile.title = profile.username;
@@ -5109,6 +5118,9 @@ function openProfileDialog(profile, onboarding) {
   openDeleteAccountButton.hidden = onboarding;
   profileAccountSettings.hidden = onboarding;
   profileEmailInput.value = currentSession?.user?.email || '';
+  openChangePasswordButton.textContent = hasGoogleOnlyIdentity(currentSession?.user)
+    ? 'Crear contraseña'
+    : 'Cambiar contraseña';
   profileUsernameInput.disabled = !onboarding;
   profileUsernameInput.value = profile?.username || currentSession?.user?.user_metadata?.username || '';
   profileAvatarInput.value = profile?.avatarUrl || '';
