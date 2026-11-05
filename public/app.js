@@ -1441,7 +1441,7 @@ function createAchievementItem(logro, { editable = false } = {}) {
     bricksValue.textContent = logro.total;
     const brickIcon = document.createElement('img');
     brickIcon.className = 'achievement-brick-icon';
-    brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+    brickIcon.src = '/toast_images/brick.png';
     brickIcon.alt = 'Bricks';
     bricks.append(bricksValue, brickIcon);
 
@@ -1690,7 +1690,7 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
     : weekly ? String(entry.bricksSemanales) : entry.bricks;
   const brickIcon = document.createElement('img');
   brickIcon.className = 'gamification-brick-icon';
-  brickIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+  brickIcon.src = '/toast_images/brick.png';
   brickIcon.alt = 'Bricks';
   bricks.append(bricksValue, brickIcon);
   const collection = document.createElement('span');
@@ -1748,7 +1748,7 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
       giftAmount.textContent = weekly ? '+5' : '+50';
       const giftIcon = document.createElement('img');
       giftIcon.className = 'ranking-gift-icon';
-      giftIcon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+      giftIcon.src = '/toast_images/brick.png';
       giftIcon.alt = '';
       giftIcon.setAttribute('aria-hidden', 'true');
       gift.append(giftAmount, giftIcon);
@@ -1931,7 +1931,7 @@ function showGamificationToasts(gamification) {
     if (logro.kind === 'level') {
       showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', null, 'before');
     } else {
-      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, logro.type === 'regalo' ? 'gift' : 'task', '/toast_images/hero_2026-01-05_16-38-47-871.webp', 'before');
+      showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, logro.type === 'regalo' ? 'gift' : 'task', '/toast_images/brick.png', 'before');
     }
     setTimeout(showNext, 300);
   };
@@ -2376,7 +2376,7 @@ function notificationClockTime(createdAt) {
 function appendNotificationBrick(container) {
   const icon = document.createElement('img');
   icon.className = 'ranking-gift-icon notification-brick-icon';
-  icon.src = '/toast_images/hero_2026-01-05_16-38-47-871.webp';
+  icon.src = '/toast_images/brick.png';
   icon.alt = '';
   icon.setAttribute('aria-hidden', 'true');
   container.append(icon);
@@ -2611,7 +2611,7 @@ function renderDailyNotification(notification) {
   };
   addMetric('Colección', formatSignedNumber(deltas.figures), '📦');
   addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
-  addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/brick.png');
   addMetric('Nivel', formatSignedNumber(deltas.level), '🏆');
   details.append(metrics);
   if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);

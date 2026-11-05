@@ -216,9 +216,9 @@ En Android, el modal Preferencias SHALL mostrar un control llamado «Notificacio
 - **THEN** el control en Preferencias aparece activado
 - **AND** el modal Notificaciones no contiene el control
 
-#### Scenario: Usar el icono común de ladrillo rojo
-- **WHEN** Android muestra el icono de la aplicación o una notificación nativa
-- **THEN** ambos usan la marca de ladrillo rojo definida por el favicon del cliente web
+#### Scenario: Conservar el icono de ladrillo rojo en notificaciones
+- **WHEN** Android muestra una notificación nativa
+- **THEN** usa la silueta de ladrillo rojo definida por el favicon del cliente web, independientemente del icono del launcher
 
 #### Scenario: Aviso push representativo sin acciones
 - **WHEN** FCM entrega una notificación de cualquier categoría soportada

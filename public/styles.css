@@ -165,7 +165,9 @@ body {
 .daily-summary-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 0; }
 .daily-summary-metric { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; align-items: start; gap: 2px 8px; min-width: 0; }
 .daily-summary-metric.has-icon { grid-template-columns: 24px minmax(0, 1fr); }
+.daily-summary-metric.has-icon:has(.daily-summary-icon[src$="/brick.png"]) { grid-template-columns: 36px minmax(0, 1fr); }
 .daily-summary-icon { grid-column: 1; grid-row: 1 / 3; align-self: center; width: 22px; height: 22px; object-fit: contain; }
+.daily-summary-icon[src$="/brick.png"] { width: 33px; height: 22px; }
 .daily-summary-emoji { display: grid; place-items: center; font-size: 22px; line-height: 1; }
 .daily-summary-label { grid-column: 1; grid-row: 1; min-width: 0; color: var(--muted); font-size: 0.82rem; }
 .daily-summary-metric.has-icon .daily-summary-label, .daily-summary-metric.has-icon .daily-summary-value { grid-column: 2; }
@@ -250,7 +252,7 @@ h2 { margin-bottom: 0; font-family: var(--font-display); font-size: 1.45rem; fon
 .gamification-metrics, .gamification-values { display: contents; }
 .gamification-bricks-value { display: flex; order: -1; align-items: center; gap: 6px; }
 .gamification-bricks-value strong { line-height: 1; }
-.gamification-brick-icon { display: block; width: auto; height: 2.15rem; object-fit: contain; }
+.gamification-brick-icon { display: block; width: auto; height: 1.5rem; object-fit: contain; }
 .gamification-progress { display: grid; justify-items: center; gap: 8px; color: var(--muted); font: 700 0.78rem var(--font-body); }
 .gamification-next { font-size: 0.68rem; text-align: center; }
 .gamification-meter { position: relative; display: grid; width: 100%; min-width: 240px; align-items: center; }
@@ -261,6 +263,7 @@ h2 { margin-bottom: 0; font-family: var(--font-display); font-size: 1.45rem; fon
 .gamification-progress progress::-webkit-progress-value { background: var(--accent); border-radius: 11px; }
 .gamification-progress progress::-moz-progress-bar { background: var(--accent); border-radius: 11px; }
 .toast-icon { display: block; flex: 0 0 24px; width: 24px; height: 24px; object-fit: contain; }
+.toast-icon[src$="/brick.png"] { flex-basis: 30px; width: 30px; height: 20px; }
 span.toast-icon { display: grid; place-items: center; font-size: 1.25rem; line-height: 1; }
 .rankings { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 24px; text-align: center; }
 .rankings[hidden], .watchlist-row[hidden] { display: none; }
@@ -364,7 +367,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #delete-account-message { white-space: pre-line; }
 #delete-message { white-space: pre-line; }
 .first-minifigura-dialog { width: min(370px, calc(100% - 32px)); padding: 28px 24px; text-align: center; }
-.first-minifigura-icon { display: block; width: 56px; height: 56px; margin: 0 auto 16px; object-fit: contain; }
+.first-minifigura-icon { display: block; width: 84px; height: 56px; margin: 0 auto 16px; object-fit: contain; }
 .first-minifigura-dialog h2 { margin-bottom: 12px; color: var(--ink); }
 .first-minifigura-dialog h2:focus { outline: none; }
 .first-minifigura-dialog p { margin-bottom: 24px; color: var(--muted); line-height: 1.5; }
@@ -483,6 +486,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #form-dialog.view-mode .form-actions { display: none; }
 .form-actions #form-submit { margin-left: auto; }
 .brickset-loading, .loading-message { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 700 0.9rem var(--font-body); }
+.modal .loading-message, .modal .brickset-loading { padding-left: 4px; }
 .brickset-loading[hidden] { display: none; }
 .brickset-loading-icon, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
 .modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *):not(:has(.loading-message)) { display: none; }
@@ -548,7 +552,6 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .friends-request-state.state-rejected { color: var(--accent-dark); }
 .friends-status:empty { display: none; }
 .modal-friends .status { margin: 8px 0; }
-.modal-friends #friends-status-search.loading-message { padding-left: 4px; }
 .modal-friends .status:empty { display: none; }
 .modal-public-profile { width: min(900px, calc(100% - 24px)); max-height: calc(100vh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .modal-public-profile[open] { display: flex; flex-direction: column; overflow: hidden; }
@@ -563,6 +566,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .public-profile-stats { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; align-items: center; gap: 4px 20px; min-width: 0; }
 .public-profile-stats > div { display: grid; flex: 0 1 auto; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 4px 8px; min-width: 0; max-width: 100%; padding: 4px 0; }
 .public-profile-stat-icon { grid-column: 1; grid-row: 1; width: 32px; height: 32px; object-fit: contain; }
+.public-profile-stat-icon[src$="/brick.png"] { width: 36px; height: 24px; }
 .public-profile-stats > div > span:not(.public-profile-stat-icon), .public-profile-stats > div > strong { grid-column: 2; }
 .public-profile-stats span:not(.public-profile-stat-icon) { color: var(--muted); font: 0.75rem var(--font-body); }
 .public-profile-stats strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: 700 0.95rem var(--font-body); }
@@ -744,8 +748,8 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-level-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .ranking-dna-principal { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: italic 700 0.68rem var(--font-display); text-transform: uppercase; white-space: normal; }
 .ranking-bricks, .ranking-collection-count { display: grid; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
-.ranking-bricks { grid-column: 4; grid-row: 1 / 3; grid-template-columns: minmax(0, 1fr) 1.55rem; width: 100px; transform: translateX(19px); }
-.ranking-bricks .gamification-brick-icon { width: 1.55rem; height: 1.55rem; object-fit: contain; }
+.ranking-bricks { grid-column: 4; grid-row: 1 / 3; grid-template-columns: minmax(0, 1fr) 1.9rem; width: 100px; transform: translateX(19px); }
+.ranking-bricks .gamification-brick-icon { width: 1.9rem; height: 1.55rem; object-fit: contain; }
 .ranking-bricks strong { justify-self: end; color: var(--ink); font: 700 1.05rem var(--font-body); line-height: 1; font-variant-numeric: tabular-nums; }
 .ranking-collection-count { grid-column: 5; grid-row: 1 / 3; grid-template-columns: 1.55rem minmax(0, 1fr); width: 85px; }
 .ranking-collection-count strong { text-align: left; color: var(--ink); font: 700 1.05rem var(--font-body); line-height: 1; font-variant-numeric: tabular-nums; }
@@ -785,7 +789,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-summary .ranking-level-name { grid-column: 3; grid-row: 1; }
 .ranking-summary .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; }
 .ranking-summary .ranking-level-name, .ranking-summary .ranking-dna-principal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1.55rem; width: auto; }
+.ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1.9rem; width: auto; }
 .ranking-summary .ranking-bricks strong { justify-self: end; }
 .ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; justify-self: end; width: 85px; }
 .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
@@ -1012,7 +1016,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .gamification-main .gamification-bricks-value { grid-column: 1; grid-row: 2; gap: 6px; }
   .gamification-main .collection-counts-panel { grid-column: 2 / 4; grid-row: 2; justify-self: end; flex-wrap: wrap; gap: 12px; }
   .gamification-summary .count-icon { width: 1.75rem; height: 1.75rem; }
-  .gamification-brick-icon { height: 1.75rem; }
+  .gamification-brick-icon { height: 1.5rem; }
   .gamification-details { position: static; width: 100%; max-width: none; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); box-shadow: none; }
   .gamification-meter { min-width: 0; }
   .summary-sync-row { flex-wrap: wrap; }
@@ -1141,6 +1145,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .modal-public-profile .public-profile-content > .public-profile-tops { grid-column: 1 / -1; }
   .modal-public-profile .public-profile-stats > div { grid-template-columns: 28px minmax(0, 1fr); gap: 4px 8px; }
   .modal-public-profile .public-profile-stat-icon { width: 24px; height: 24px; }
+  .modal-public-profile .public-profile-stat-icon[src$="/brick.png"] { width: 30px; height: 20px; }
   .modal-public-profile .public-profile-stats strong { white-space: nowrap; }
   .modal-public-profile #public-profile-level { overflow: visible; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
   .modal-ranking .ranking-highlight-group .ranking-card-static { flex-basis: 112px; align-content: start; }
@@ -1198,10 +1203,11 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .ranking-level-number { grid-column: 2; grid-row: 1; font-size: 1.1rem; }
   .ranking-level-name { grid-column: 3; grid-row: 1; font-size: 0.9rem; line-height: 1.2; }
   .ranking-dna-principal { grid-column: 2 / 4; grid-row: 2; font-size: 0.68rem; line-height: 1.35; }
-  .ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1.2rem; width: auto; }
+  .ranking-summary .ranking-bricks { grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1.6rem; width: auto; }
   .ranking-summary .ranking-collection-count { grid-column: 3; grid-row: 4; justify-self: end; width: 70px; grid-template-columns: 1.2rem minmax(0, 1fr); }
   .ranking-bricks strong, .ranking-collection-count strong { font-size: 0.95rem; }
-  .ranking-bricks .gamification-brick-icon, .ranking-collection-count .ranking-collection-icon { width: 1.2rem; height: 1.2rem; }
+  .ranking-bricks .gamification-brick-icon { width: 1.6rem; height: 1.1rem; }
+  .ranking-collection-count .ranking-collection-icon { width: 1.2rem; height: 1.2rem; }
   .ranking-collection-count .ranking-collection-icon { font-size: 1.2rem; }
   .ranking-summary .ranking-bricks, .ranking-summary .ranking-collection-count { column-gap: 8px; }
   .ranking-summary .ranking-bricks, .ranking-summary .ranking-collection-count { grid-column: 1 / 4; }
@@ -1326,7 +1332,8 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .header-top > .notifications-entry-row .gamification-level-stack { --level-image-size: 1.5rem; }
   .header-top > .notifications-entry-row .gamification-level-title { column-gap: 4px; font-size: 0.9rem; }
   .header-top > .notifications-entry-row #gamification-level-number { font-size: 1.1rem; }
-  .header-top > .notifications-entry-row .count-icon, .header-top > .notifications-entry-row .gamification-brick-icon { width: 1.4rem; height: 1.4rem; }
+  .header-top > .notifications-entry-row .count-icon { width: 1.4rem; height: 1.4rem; }
+  .header-top > .notifications-entry-row .gamification-brick-icon { width: auto; height: 1.4rem; }
   .header-top > .notifications-entry-row .collection-counts-panel { gap: 4px; }
   .header-top > .notifications-entry-row #gamification-toggle { width: 28px; }
 }
@@ -1474,12 +1481,12 @@ input[type="radio"]:checked::before { content: ''; width: 8px; height: 8px; back
 #gamification-dialog .achievement-bricks {
   display: grid;
   grid-column: 4;
-  grid-template-columns: minmax(0, 1fr) 1.6rem;
+  grid-template-columns: minmax(0, 1fr) 2.25rem;
   justify-self: stretch;
   gap: 8px;
 }
 #gamification-dialog .achievement-bricks strong { text-align: right; font-variant-numeric: tabular-nums; }
-#gamification-dialog .achievement-brick-icon { width: 1.6rem; height: 1.6rem; object-fit: contain; }
+#gamification-dialog .achievement-brick-icon { width: auto; height: 1.5rem; object-fit: contain; }
 #gamification-dialog .achievement-star { grid-column: 5; }
 
 #public-profile-dialog .public-profile-achievements {
@@ -1488,9 +1495,9 @@ input[type="radio"]:checked::before { content: ''; width: 8px; height: 8px; back
 }
 #public-profile-dialog .achievement-item { grid-column: 1 / -1; grid-template-columns: subgrid; column-gap: 12px; }
 #public-profile-dialog .achievement-count { grid-column: 3; justify-self: stretch; white-space: nowrap; font-variant-numeric: tabular-nums; }
-#public-profile-dialog .achievement-bricks { display: grid; grid-column: 4; grid-template-columns: minmax(0, 1fr) 1.6rem; justify-self: stretch; gap: 8px; }
+#public-profile-dialog .achievement-bricks { display: grid; grid-column: 4; grid-template-columns: minmax(0, 1fr) 2.25rem; justify-self: stretch; gap: 8px; }
 #public-profile-dialog .achievement-bricks strong { text-align: right; font-variant-numeric: tabular-nums; }
-#public-profile-dialog .achievement-brick-icon { width: 1.6rem; height: 1.6rem; object-fit: contain; }
+#public-profile-dialog .achievement-brick-icon { width: auto; height: 1.5rem; object-fit: contain; }
 #public-profile-dialog .achievement-star { grid-column: 5; }
 
 @media (max-width: 600px), (max-width: 900px) and (max-height: 500px) and (pointer: coarse) {

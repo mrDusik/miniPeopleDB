@@ -263,7 +263,7 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(achievement.querySelector('.achievement-description').textContent, 'Añadir una nueva minipersona.');
   assert.equal(achievement.querySelector('.achievement-count').textContent, 'x12');
   assert.equal(achievement.querySelector('.achievement-bricks strong').textContent, '12');
-  assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/toast_images/brick.png');
   window.document.querySelector('#gamification-close').click();
   assert.equal(window.document.querySelector('#gamification-dialog').open, false);
   window.document.querySelector('#gamification-toggle').click();
@@ -640,7 +640,7 @@ test('toast de logro regalo usa emoji y conserva importe y accesibilidad', async
   await new Promise((resolve) => setTimeout(resolve, 320));
   const normal = window.document.querySelectorAll('.toast-task')[1];
   assert.equal(normal.textContent, 'Regular achievement +30 Bricks');
-  assert.equal(normal.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  assert.equal(normal.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
   await new Promise((resolve) => setTimeout(resolve, 320));
   assert.equal(window.document.querySelector('.toast-level').textContent, '🏆NIVEL 1 Stud');
   dom.window.close();

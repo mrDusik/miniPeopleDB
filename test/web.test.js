@@ -65,6 +65,9 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const friendsImage = await fetch(`${baseUrl}/status_images/friends.png`);
     assert.equal(friendsImage.status, 200);
     assert.match(friendsImage.headers.get('content-type'), /^image\/png/);
+    const brickImage = await fetch(`${baseUrl}/toast_images/brick.png`);
+    assert.equal(brickImage.status, 200);
+    assert.match(brickImage.headers.get('content-type'), /^image\/png/);
 
     const levelImage = await fetch(`${baseUrl}/level_images/9_forestman.png`);
     assert.equal(levelImage.status, 200);
@@ -230,7 +233,9 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     document.head.append(style);
     const selector = '.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *):not(:has(.loading-message))';
     const rule = [...style.sheet.cssRules].find((entry) => entry.selectorText === selector);
+    const indicatorRule = [...style.sheet.cssRules].find((entry) => entry.selectorText === '.modal .loading-message, .modal .brickset-loading');
     assert.equal(rule?.style.display, 'none');
+    assert.equal(indicatorRule?.style.getPropertyValue('padding-left'), '4px');
     for (const [dialogId, statusId, contentSelectors] of [
       ['ranking-dialog', 'ranking-status', ['.ranking-order-toolbar', '#global-ranking-list']],
       ['weekly-ranking-dialog', 'weekly-ranking-status', ['#weekly-ranking-list']],
@@ -242,6 +247,7 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
       const dialog = document.getElementById(dialogId);
       const status = document.getElementById(statusId);
       status.classList.add('loading-message');
+      assert.equal(dom.window.getComputedStyle(status).paddingLeft, '4px', dialogId);
       assert.equal(dialog.querySelector('.modal-dialog-heading').matches(selector), false);
       assert.equal(dialog.querySelector('.modal-dialog-heading button').matches(selector), false);
       assert.equal(status.matches(selector), false);
@@ -252,7 +258,9 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
       assert.equal(dialog.querySelector(contentSelectors[0]).matches(selector), false);
     }
     const formDialog = document.getElementById('form-dialog');
-    formDialog.querySelector('#brickset-loading').classList.add('loading-message');
+    const bricksetLoading = formDialog.querySelector('#brickset-loading');
+    bricksetLoading.classList.add('loading-message');
+    assert.equal(dom.window.getComputedStyle(bricksetLoading).paddingLeft, '4px');
     assert.equal(formDialog.querySelector('form').matches(selector), false);
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-dialog-body \{ display: block; \}/);
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-legend-panel \{ width: 100%; \}/);

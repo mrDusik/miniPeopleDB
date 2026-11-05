@@ -115,19 +115,32 @@ test('el emoji de coleccion cabe en su columna de ranking sin invadir el contado
     const brick = rules.find(({ selectorText }) => selectorText === '.ranking-bricks .gamification-brick-icon').style;
     const brickCounter = rules.find(({ selectorText }) => selectorText === '.ranking-bricks').style;
     assert.equal(brickCounter.getPropertyValue('transform'), 'translateX(19px)');
-    for (const property of ['width', 'height']) {
-      assert.equal(icon.getPropertyValue(property), brick.getPropertyValue(property));
-    }
+    assert.equal(brick.getPropertyValue('height'), icon.getPropertyValue('height'));
+    assert.ok(parseFloat(brick.getPropertyValue('width')) > parseFloat(brick.getPropertyValue('height')));
     const desktopSpacing = rules.find(({ selectorText }) => selectorText === '.ranking-bricks, .ranking-collection-count').style;
     assert.equal(desktopSpacing.getPropertyValue('gap'), '8px');
     const mobile = rules.filter(({ cssRules }) => cssRules).flatMap(({ cssRules }) => [...cssRules]);
-    const mobileIcon = mobile.find(({ selectorText }) => selectorText === '.ranking-collection-count .ranking-collection-icon').style;
+    const mobileIcon = mobile.filter(({ selectorText }) => selectorText === '.ranking-collection-count .ranking-collection-icon').at(-1).style;
     assert.equal(mobileIcon.getPropertyValue('font-size'), '1.2rem');
     const spacing = mobile.find(({ selectorText }) => selectorText === '.ranking-summary .ranking-bricks, .ranking-summary .ranking-collection-count').style;
     assert.equal(spacing.getPropertyValue('column-gap'), '8px');
-    const mobileSizes = mobile.find(({ selectorText }) => selectorText === '.ranking-bricks .gamification-brick-icon, .ranking-collection-count .ranking-collection-icon').style;
-    assert.equal(mobileIcon.getPropertyValue('font-size'), mobileSizes.getPropertyValue('width'));
-    assert.equal(mobileSizes.getPropertyValue('height'), mobileSizes.getPropertyValue('width'));
+    const mobileBrick = mobile.filter(({ selectorText }) => selectorText === '.ranking-bricks .gamification-brick-icon').at(-1).style;
+    assert.equal(mobileBrick.getPropertyValue('height'), '1.1rem');
+    assert.ok(parseFloat(mobileBrick.getPropertyValue('width')) > parseFloat(mobileBrick.getPropertyValue('height')));
+    const mobileSummary = mobile.filter(({ selectorText }) => selectorText === '.ranking-summary .ranking-bricks').at(-1).style;
+    assert.equal(mobileSummary.getPropertyValue('grid-template-columns'), '5ch 1.6rem');
+  });
+});
+
+test('el icono Bricks conserva una altura visual comparable a emojis e iconos cercanos', () => {
+  withStyles((rules) => {
+    const declarations = new Map(rules.filter(({ selectorText }) => selectorText).map(({ selectorText, style }) => [selectorText, style]));
+    assert.equal(declarations.get('.toast-icon[src$="/brick.png"]').getPropertyValue('height'), '20px');
+    assert.equal(declarations.get('.daily-summary-icon[src$="/brick.png"]').getPropertyValue('height'), '22px');
+    assert.equal(declarations.get('.daily-summary-metric.has-icon:has(.daily-summary-icon[src$="/brick.png"])')
+      .getPropertyValue('grid-template-columns'), '36px minmax(0, 1fr)');
+    assert.equal(declarations.get('.public-profile-stat-icon[src$="/brick.png"]').getPropertyValue('height'), '24px');
+    assert.equal(declarations.get('.first-minifigura-icon').getPropertyValue('width'), '84px');
   });
 });
 
@@ -506,7 +519,7 @@ test('el modal de logros comparte columnas para alinear multiplicadores con o si
     assert.equal(count.getPropertyValue('font-variant-numeric'), 'tabular-nums');
     const bricks = rules.find(({ selectorText }) => selectorText === '#gamification-dialog .achievement-bricks').style;
     assert.equal(bricks.getPropertyValue('display'), 'grid');
-    assert.equal(bricks.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) 1.6rem');
+    assert.equal(bricks.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) 2.25rem');
     assert.equal(bricks.getPropertyValue('justify-self'), 'stretch');
     const amount = rules.find(({ selectorText }) => selectorText === '#gamification-dialog .achievement-bricks strong').style;
     assert.equal(amount.getPropertyValue('text-align'), 'right');

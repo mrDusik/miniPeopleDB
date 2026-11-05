@@ -14,6 +14,8 @@ El marcador de notificaciones SHALL mostrar el numero de avisos sin leer en la e
 
 Los contadores de Bricks de ambos rankings SHALL mantener sus iconos alineados con una columna numerica estable de 5ch para cuatro digitos y signo semanal. Los numeros SHALL alinearse hacia su icono con separacion constante de 8px y cifras tabulares.
 
+El icono ilustrado de Bricks SHALL mantener una escala visual comparable con los emojis e imagenes adyacentes en todas las superficies web y Android que lo reutilicen, conservando su proporcion original y sin que el espacio transparente del archivo reduzca su tamano aparente.
+
 Los contadores de coleccion de los rankings global y semanal SHALL reservar un ancho estable por fila (85px normal, 70px compacto), suficiente para cuatro digitos, con cajas alineadas en una misma columna independientemente de las cifras. Los numeros SHALL alinearse a la izquierda con cifras tabulares y separacion constante de 8px respecto al emoji, sin ampliar el hueco cuando haya menos digitos.
 
 El registro clasico SHALL pedir solo email, contraseña y confirmacion. SHALL ocultar y deshabilitar Username y SHALL NOT enviarlo como metadata de registro; se elegira durante onboarding. El acceso clasico SHALL mantener Username obligatorio y habilitarlo al volver desde registro.
@@ -233,6 +235,10 @@ La interfaz SHALL representar cada minifigura en una fila y SHALL mostrar una ac
 ### Requirement: Comunicar estados de carga y error
 
 La interfaz SHALL comunicar cargas, errores locales y errores de Brickset sin borrar datos válidos ni bloquear la página.
+
+#### Scenario: Indicador completo en modales
+- **WHEN** se muestra un indicador de carga dentro de un modal
+- **THEN** el espacio interior permite que el indicador animado se vea completo al girar
 
 #### Scenario: Consulta en curso
 - **WHEN** se inicia una consulta o actualización de precios

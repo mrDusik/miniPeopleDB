@@ -183,7 +183,7 @@ test('el indicador de búsqueda de amigos tiene espacio para girar sin recortars
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {
     const rules = [...dom.window.document.styleSheets[0].cssRules];
-    const spinnerRule = rules.find((rule) => rule.selectorText === '.modal-friends #friends-status-search.loading-message');
+    const spinnerRule = rules.find((rule) => rule.selectorText === '.modal .loading-message, .modal .brickset-loading');
     assert.ok(spinnerRule);
     assert.equal(spinnerRule.style.getPropertyValue('padding-left'), '4px');
   } finally {

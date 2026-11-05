@@ -401,10 +401,10 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.ranking-expand \{[^}]*border: 1px solid var\(--line\); border-left: 4px solid var\(--blue\);/);
   assert.match(styles, /\.ranking-expand-current \{ border-left-color: var\(--accent\);/);
   assert.doesNotMatch(styles, /\.ranking-expand \.ranking-star/);
-  assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; grid-template-columns: minmax\(0, 1fr\) 1\.55rem; width: 100px; transform: translateX\(19px\); \}/);
+  assert.match(styles, /\.ranking-bricks \{ grid-column: 4; grid-row: 1 \/ 3; grid-template-columns: minmax\(0, 1fr\) 1\.9rem; width: 100px; transform: translateX\(19px\); \}/);
   assert.match(styles, /\.ranking-bricks strong \{ justify-self: end;/);
   assert.match(styles, /\.ranking-collection-count \{ grid-column: 5; grid-row: 1 \/ 3; grid-template-columns: 1\.55rem minmax\(0, 1fr\); width: 85px; \}/);
-  assert.match(styles, /\.ranking-bricks \.gamification-brick-icon \{ width: 1\.55rem; height: 1\.55rem; object-fit: contain; \}/);
+  assert.match(styles, /\.ranking-bricks \.gamification-brick-icon \{ width: 1\.9rem; height: 1\.55rem; object-fit: contain; \}/);
   assert.match(styles, /\.ranking-collection-count \.ranking-collection-icon \{ width: 1\.55rem; height: 1\.55rem; font-size: 1\.55rem; object-fit: contain; transform: none; \}/);
   assert.match(styles, /\.global-ranking-entry \{ min-width: 0; \}/);
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
@@ -489,8 +489,8 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.match(styles, /\.ranking-summary \.ranking-avatar-wrap \{ grid-column: 2; grid-row: 1; justify-self: center; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-level-info \.gamification-level-image \{ grid-column: 1; grid-row: 1 \/ 3; justify-self: center; align-self: start; width: 40px; height: 40px; \}/);
   assert.match(styles, /\.ranking-summary \.ranking-name \{ grid-column: 3; grid-row: 1; \}/);
-  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.55rem; width: auto;/);
-  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.2rem; width: auto;/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.9rem; width: auto;/);
+  assert.match(styles, /\.ranking-summary \.ranking-bricks \{ grid-column: 3; grid-row: 4; justify-self: start; grid-template-columns: 5ch 1\.6rem; width: auto;/);
   assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end; width: 85px;/);
   assert.match(styles, /\.ranking-collection-count strong \{ text-align: left;/);
   assert.match(styles, /\.ranking-summary \.ranking-collection-count \{ grid-column: 3; grid-row: 4; justify-self: end; width: 70px; grid-template-columns: 1\.2rem minmax\(0, 1fr\);/);
@@ -877,7 +877,7 @@ test('envía una vez, bloquea dobles clics y limpia ranking al cerrar sesión', 
   assert.equal(calls.filter(({ url }) => url === '/api/ranking/regalar').length, 1);
   assert.equal(dom.window.document.querySelector('[data-gift-user="user-b"]').disabled, true);
   assert.equal(dom.window.document.querySelector('[data-gift-user="user-b"]').textContent, '+50');
-  assert.equal(dom.window.document.querySelector('[data-gift-user="user-b"] img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+  assert.equal(dom.window.document.querySelector('[data-gift-user="user-b"] img').getAttribute('src'), '/toast_images/brick.png');
 
   dom.window.__supabaseStub.setSession('SIGNED_OUT', null);
   await new Promise((resolve) => setTimeout(resolve, 0));
