@@ -864,10 +864,13 @@ test('PASSWORD_RECOVERY muestra cambio de contraseña y solo abre la app tras ac
   assert.equal($('.page-shell').hidden, true);
   assert.deepEqual(requests, []);
 
-  $('#new-password').value = 'new-valid-password';
+  $('#new-password').value = 'New1-valid-password';
+  $('#new-password-repeat').value = 'New1-valid-password';
+  $('#new-password').dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('#new-password-repeat').dispatchEvent(new window.Event('input', { bubbles: true }));
   $('#password-update-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await tick();
-  assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'new-valid-password' }]));
+  assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'New1-valid-password' }]));
   assert.equal($('#auth-screen').hidden, true);
   assert.ok(requests.some(({ url }) => url === '/minifiguras'));
   dom.window.close();
@@ -957,12 +960,40 @@ test('cambio de contraseña envía el nuevo secreto solo a Supabase Auth', async
   const { dom, window, $ } = startApp({ session: null, updatePasswordError: 'recovery token invalid' });
   await tick();
   $('#password-update-form').hidden = false;
-  $('#new-password').value = 'new-safe-password';
+  $('#new-password').value = 'New1-safe-password';
+  $('#new-password-repeat').value = 'New1-safe-password';
   $('#password-update-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await tick();
-  assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'new-safe-password' }]));
+  assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'New1-safe-password' }]));
   assert.equal($('#auth-message').textContent, 'No se pudo cambiar la contraseña. Inténtalo de nuevo.');
   assert.equal($('#auth-message').textContent.includes('recovery token invalid'), false);
+  dom.window.close();
+});
+
+test('recuperación valida requisitos, repetición y muestra el progreso al escribir', async () => {
+  const { dom, window, $ } = startApp({ session: null });
+  await tick();
+  $('#password-update-form').hidden = false;
+  $('#new-password').value = 'Abc';
+  $('#new-password').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.deepEqual([...$('#new-password-rules').querySelectorAll('li')].map((rule) => rule.classList.contains('is-met')),
+    [false, true, true, false]);
+
+  $('#new-password-repeat').value = 'Abc';
+  $('#new-password-repeat').dispatchEvent(new window.Event('blur'));
+  $('#password-update-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await tick();
+  assert.equal(window.__supabaseStub.calls.updateUser.length, 0);
+  assert.equal($('#new-password-repeat').getAttribute('aria-invalid'), 'false');
+
+  $('#new-password').value = 'Abcd1';
+  $('#new-password').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.deepEqual([...$('#new-password-rules').querySelectorAll('li')].map((rule) => rule.classList.contains('is-met')),
+    [true, true, true, true]);
+  assert.equal($('#new-password-repeat').getAttribute('aria-invalid'), 'true');
+  $('#new-password-repeat').value = 'Abcd1';
+  $('#new-password-repeat').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal($('#new-password-repeat').getAttribute('aria-invalid'), 'false');
   dom.window.close();
 });
 

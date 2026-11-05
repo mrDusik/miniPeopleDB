@@ -227,6 +227,9 @@ const recoveryEmailInput = document.querySelector('#recovery-email');
 const cancelPasswordRecoveryButton = document.querySelector('#cancel-password-recovery');
 const passwordUpdateForm = document.querySelector('#password-update-form');
 const newPasswordInput = document.querySelector('#new-password');
+const newPasswordRepeatInput = document.querySelector('#new-password-repeat');
+const newPasswordRulesList = document.querySelector('#new-password-rules');
+const recoveryPasswordVisibilityButtons = [...passwordUpdateForm.querySelectorAll('.auth-password-visibility')];
 const profileCheckRetryButton = document.querySelector('#profile-check-retry');
 const logoutButton = document.querySelector('#logout');
 const userName = document.querySelector('#user-name');
@@ -5711,6 +5714,7 @@ loginButton.addEventListener('click', async () => {
 });
 
 let passwordRepeatBlurred = false;
+let recoveryPasswordRepeatBlurred = false;
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -5755,7 +5759,10 @@ function showPasswordUpdate(session) {
   authAccessPanel.hidden = true;
   passwordRecoveryForm.hidden = true;
   passwordUpdateForm.hidden = false;
-  newPasswordInput.value = '';
+  passwordUpdateForm.reset();
+  recoveryPasswordRepeatBlurred = false;
+  setPasswordVisibility(false, [newPasswordInput, newPasswordRepeatInput], recoveryPasswordVisibilityButtons, true);
+  validateRecoveryPassword();
   setAuthMessage('');
   newPasswordInput.focus();
 }
@@ -5783,11 +5790,28 @@ function validateRegistrationPassword() {
   authPasswordRepeatInput.setAttribute('aria-invalid', String(passwordRepeatBlurred && authPasswordRepeatInput.validity.customError));
 }
 
+function validateRecoveryPassword() {
+  const rules = passwordRules(newPasswordInput.value);
+  renderPasswordRules(newPasswordRulesList, rules);
+  newPasswordInput.setCustomValidity(Object.values(rules).every(Boolean)
+    ? '' : 'La contraseña debe cumplir todas las directrices de seguridad.');
+  newPasswordRepeatInput.setCustomValidity(newPasswordRepeatInput.value === newPasswordInput.value
+    ? '' : 'Las contraseñas no coinciden.');
+  newPasswordRepeatInput.setAttribute('aria-invalid',
+    String(recoveryPasswordRepeatBlurred && newPasswordRepeatInput.validity.customError));
+}
+
 authPasswordInput.addEventListener('input', validateRegistrationPassword);
 authPasswordRepeatInput.addEventListener('input', validateRegistrationPassword);
 authPasswordRepeatInput.addEventListener('blur', () => {
   passwordRepeatBlurred = true;
   validateRegistrationPassword();
+});
+newPasswordInput.addEventListener('input', validateRecoveryPassword);
+newPasswordRepeatInput.addEventListener('input', validateRecoveryPassword);
+newPasswordRepeatInput.addEventListener('blur', () => {
+  recoveryPasswordRepeatBlurred = true;
+  validateRecoveryPassword();
 });
 function renderPasswordRules(list, rules) {
   for (const [rule, met] of Object.entries(rules)) {
@@ -5812,6 +5836,14 @@ function setPasswordVisibility(visible, inputs = [authPasswordInput, authPasswor
 
 for (const button of authShowPasswordButtons) {
   button.addEventListener('click', () => setPasswordVisibility(authPasswordInput.type === 'password'));
+}
+for (const button of recoveryPasswordVisibilityButtons) {
+  button.addEventListener('click', () => setPasswordVisibility(
+    newPasswordInput.type === 'password',
+    [newPasswordInput, newPasswordRepeatInput],
+    recoveryPasswordVisibilityButtons,
+    true,
+  ));
 }
 authUsernameInput.addEventListener('input', () => authUsernameInput.setCustomValidity(''));
 
@@ -5909,13 +5941,15 @@ passwordRecoveryForm.addEventListener('submit', async (event) => {
 passwordUpdateForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!supabaseClient) return;
+  validateRecoveryPassword();
+  if (!passwordUpdateForm.reportValidity()) return;
   const submitButton = passwordUpdateForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   setAuthMessage('Actualizando contraseña...', { loading: true });
   try {
     const { error } = await supabaseClient.auth.updateUser({ password: newPasswordInput.value });
     if (error) throw error;
-    newPasswordInput.value = '';
+    passwordUpdateForm.reset();
     passwordUpdateForm.hidden = true;
     passwordRecoveryPending = false;
     handleSession(currentSession, 'La contraseña se actualizó correctamente.');
