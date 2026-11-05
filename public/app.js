@@ -329,11 +329,17 @@ try {
   nativePushRegistration = null;
 }
 const nativeOAuthRedirectUrl = 'com.mrdusik.minipeopledb://auth/callback';
+const nativeEmailHandoffApiPath = '/api/android/email-handoff';
+const nativeEmailHandoffDatabaseName = 'minipeopledb-auth-handoff';
+const nativeEmailHandoffStoreName = 'pending';
 let pendingNativeOAuthCallbackUrl = null;
 let nativeOAuthPending = false;
 let nativeOAuthFinishTimer = null;
 let nativeAppUrlListenerRegistered = false;
 let nativeBrowserFinishedListenerRegistered = false;
+let nativeEmailHandoffResumeListenerRegistered = false;
+let nativeEmailHandoffPollTimer = null;
+let nativeEmailHandoffPollInFlight = false;
 let appStarted = false;
 let lastCollectionTotal = null;
 let profileRequestSequence = 0;
@@ -2938,6 +2944,7 @@ async function initializeNativePushListeners() {
       void refreshSystemNotificationsSetting();
       if (currentSession) void loadNotifications({ reset: true, preserveItems: true });
       resumePendingPushOpen();
+      void pollNativeEmailHandoffs();
     });
   } catch {
     // Push remains optional; authentication and the durable inbox keep working.
@@ -5317,6 +5324,206 @@ async function receiveNativeOAuthCallback(rawUrl) {
   await processNativeOAuthCallback(rawUrl);
 }
 
+function nativeEmailHandoffTransaction(mode, operation) {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error('ALMACENAMIENTO_NO_DISPONIBLE'));
+      return;
+    }
+    const openRequest = window.indexedDB.open(nativeEmailHandoffDatabaseName, 1);
+    openRequest.onerror = () => reject(new Error('ALMACENAMIENTO_NO_DISPONIBLE'));
+    openRequest.onupgradeneeded = () => {
+      const database = openRequest.result;
+      if (!database.objectStoreNames.contains(nativeEmailHandoffStoreName)) {
+        database.createObjectStore(nativeEmailHandoffStoreName, { keyPath: 'id' });
+      }
+    };
+    openRequest.onsuccess = () => {
+      const database = openRequest.result;
+      let transaction;
+      let request;
+      let settled = false;
+      const finish = (error, value) => {
+        if (settled) return;
+        settled = true;
+        database.close();
+        if (error) reject(error);
+        else resolve(value);
+      };
+      try {
+        transaction = database.transaction(nativeEmailHandoffStoreName, mode);
+        request = operation(transaction.objectStore(nativeEmailHandoffStoreName));
+      } catch {
+        finish(new Error('ALMACENAMIENTO_NO_DISPONIBLE'));
+        return;
+      }
+      transaction.oncomplete = () => finish(null, request?.result);
+      transaction.onerror = () => finish(new Error('ALMACENAMIENTO_NO_DISPONIBLE'));
+      transaction.onabort = () => finish(new Error('ALMACENAMIENTO_NO_DISPONIBLE'));
+    };
+  });
+}
+
+function readNativeEmailHandoffs() {
+  return nativeEmailHandoffTransaction('readonly', (store) => store.getAll());
+}
+
+function saveNativeEmailHandoff(handoff) {
+  return nativeEmailHandoffTransaction('readwrite', (store) => store.put(handoff));
+}
+
+function deleteNativeEmailHandoff(handoffId) {
+  return nativeEmailHandoffTransaction('readwrite', (store) => store.delete(handoffId));
+}
+
+function base64UrlToBytes(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error('HANDOFF_INVALIDO');
+  }
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = window.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function createNativeEmailHandoff(email) {
+  const crypto = window.crypto;
+  if (!crypto?.subtle || typeof window.indexedDB === 'undefined') throw new Error('HANDOFF_NO_DISPONIBLE');
+  const callbackUrl = new URL(apiUrl('/android-email-confirmation'), window.location.href);
+  if (callbackUrl.protocol !== 'https:' || callbackUrl.hostname === 'localhost') {
+    throw new Error('HANDOFF_NO_DISPONIBLE');
+  }
+  const keyPair = await crypto.subtle.generateKey({
+    name: 'RSA-OAEP',
+    modulusLength: 2048,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: 'SHA-256',
+  }, false, ['encrypt', 'decrypt']);
+  if (keyPair.privateKey.extractable !== false) throw new Error('HANDOFF_NO_DISPONIBLE');
+  const publicKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailDigest = Array.from(new Uint8Array(await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(normalizedEmail),
+  )), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const response = await fetch(apiUrl(nativeEmailHandoffApiPath), {
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emailDigest, publicKey }),
+  });
+  if (!response.ok) throw new Error('HANDOFF_NO_DISPONIBLE');
+  const handoff = await response.json();
+  const expiresAt = Date.parse(handoff.expiresAt);
+  if (!UUID_PATTERN.test(handoff.handoffId ?? '')
+    || !/^[A-Za-z0-9_-]{43}$/.test(handoff.pollProof ?? '')
+    || !Number.isFinite(expiresAt) || expiresAt <= Date.now()
+    || expiresAt > Date.now() + 24 * 60 * 60 * 1000 + 60_000) {
+    throw new Error('HANDOFF_INVALIDO');
+  }
+  await saveNativeEmailHandoff({
+    id: handoff.handoffId,
+    pollProof: handoff.pollProof,
+    privateKey: keyPair.privateKey,
+    expiresAt,
+  });
+  callbackUrl.searchParams.set('handoff_id', handoff.handoffId);
+  return { handoffId: handoff.handoffId, emailRedirectTo: callbackUrl.toString() };
+}
+
+function showNativeEmailHandoffError() {
+  if (!currentSession) setAuthMessage('No se pudo completar la confirmación. Vuelve a intentarlo o inicia sesión.', { error: true });
+}
+
+async function pollNativeEmailHandoffs() {
+  if (!nativeAuth || !supabaseClient || currentSession || nativeEmailHandoffPollInFlight) return;
+  nativeEmailHandoffPollInFlight = true;
+  try {
+    const handoffs = await readNativeEmailHandoffs();
+    for (const handoff of handoffs) {
+      if (!UUID_PATTERN.test(handoff?.id ?? '') || typeof handoff.pollProof !== 'string'
+        || !/^[A-Za-z0-9_-]{43}$/.test(handoff.pollProof) || !handoff.privateKey) {
+        if (handoff?.id) await deleteNativeEmailHandoff(handoff.id);
+        showNativeEmailHandoffError();
+        continue;
+      }
+      if (!Number.isFinite(handoff.expiresAt) || handoff.expiresAt <= Date.now()) {
+        await deleteNativeEmailHandoff(handoff.id);
+        showNativeEmailHandoffError();
+        continue;
+      }
+
+      let response;
+      try {
+        response = await fetch(apiUrl(`${nativeEmailHandoffApiPath}/${handoff.id}/consume`), {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pollProof: handoff.pollProof }),
+        });
+      } catch {
+        showNativeEmailHandoffError();
+        return;
+      }
+      if (response.status === 202) continue;
+      if (response.status === 404) {
+        await deleteNativeEmailHandoff(handoff.id);
+        showNativeEmailHandoffError();
+        continue;
+      }
+      if (!response.ok) {
+        showNativeEmailHandoffError();
+        continue;
+      }
+
+      try {
+        const { payload } = await response.json();
+        if (!payload || Object.keys(payload).length !== 3
+          || !['iv', 'wrappedKey', 'ciphertext'].every((key) => typeof payload[key] === 'string')) {
+          throw new Error('HANDOFF_INVALIDO');
+        }
+        const wrappedKey = base64UrlToBytes(payload.wrappedKey);
+        const iv = base64UrlToBytes(payload.iv);
+        const ciphertext = base64UrlToBytes(payload.ciphertext);
+        if (iv.length !== 12 || wrappedKey.length < 256 || wrappedKey.length > 1024
+          || ciphertext.length < 32 || ciphertext.length > 16 * 1024) {
+          throw new Error('HANDOFF_INVALIDO');
+        }
+        const rawAesKey = await window.crypto.subtle.decrypt(
+          { name: 'RSA-OAEP' }, handoff.privateKey, wrappedKey,
+        );
+        const aesKey = await window.crypto.subtle.importKey('raw', rawAesKey, 'AES-GCM', false, ['decrypt']);
+        const plaintext = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext);
+        const tokens = JSON.parse(new TextDecoder().decode(plaintext));
+        if (!tokens || Object.keys(tokens).length !== 2
+          || typeof tokens.access_token !== 'string' || tokens.access_token.length > 8192
+          || typeof tokens.refresh_token !== 'string' || tokens.refresh_token.length > 8192) {
+          throw new Error('HANDOFF_INVALIDO');
+        }
+        const { data, error } = await supabaseClient.auth.setSession(tokens);
+        if (error || !data?.session) throw new Error('HANDOFF_INVALIDO');
+        await deleteNativeEmailHandoff(handoff.id);
+        return;
+      } catch {
+        await deleteNativeEmailHandoff(handoff.id);
+        showNativeEmailHandoffError();
+      }
+    }
+  } catch {
+    showNativeEmailHandoffError();
+  } finally {
+    nativeEmailHandoffPollInFlight = false;
+  }
+}
+
+function startNativeEmailHandoffPolling() {
+  if (!nativeAuth) return;
+  void pollNativeEmailHandoffs();
+  if (nativeEmailHandoffPollTimer === null) {
+    nativeEmailHandoffPollTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void pollNativeEmailHandoffs();
+    }, 5000);
+  }
+}
+
 async function initializeAuth() {
   showAuthScreen();
   setAuthMessage('Preparando el acceso...', { loading: true });
@@ -5337,6 +5544,15 @@ async function initializeAuth() {
           }, 500);
         });
         nativeBrowserFinishedListenerRegistered = true;
+      }
+      if (!nativeEmailHandoffResumeListenerRegistered) {
+        await nativeAuth.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) void pollNativeEmailHandoffs();
+        });
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'hidden') void pollNativeEmailHandoffs();
+        });
+        nativeEmailHandoffResumeListenerRegistered = true;
       }
     } catch {
       setAuthMessage('No se pudo preparar el acceso seguro. Inténtalo de nuevo.', { error: true });
@@ -5380,8 +5596,10 @@ async function initializeAuth() {
     }
     const { data } = await supabaseClient.auth.getSession();
     handleSession(data?.session ?? null);
+    startNativeEmailHandoffPolling();
   } catch {
     handleSession(null, 'No se pudo recuperar la sesión.');
+    startNativeEmailHandoffPolling();
   }
 }
 
@@ -5540,16 +5758,26 @@ classicAuthForm.addEventListener('submit', async (event) => {
   if (!classicAuthForm.reportValidity()) return;
   classicAuthSubmit.disabled = true;
   setAuthMessage(authMode === 'register' ? 'Creando tu cuenta...' : 'Iniciando sesión...', { loading: true });
+  let pendingEmailHandoff = null;
   try {
     if (authMode === 'register') {
+      if (nativeAuth) pendingEmailHandoff = await createNativeEmailHandoff(email);
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: {
-          ...(nativeAuth ? { emailRedirectTo: nativeOAuthRedirectUrl } : {}),
+          ...(pendingEmailHandoff ? {
+            emailRedirectTo: pendingEmailHandoff.emailRedirectTo,
+            data: { android_email_handoff: true },
+          } : {}),
         },
       });
       if (error) throw error;
+      if (pendingEmailHandoff) {
+        if (data?.session) await deleteNativeEmailHandoff(pendingEmailHandoff.handoffId);
+        else startNativeEmailHandoffPolling();
+        pendingEmailHandoff = null;
+      }
       setAuthMessage(data?.session
         ? 'Cuenta creada. Completa tu perfil para continuar.'
         : 'Si el email puede registrarse, recibirás instrucciones para confirmar la cuenta.');
@@ -5569,6 +5797,13 @@ classicAuthForm.addEventListener('submit', async (event) => {
     setPasswordVisibility(false);
     validateRegistrationPassword();
   } catch {
+    if (pendingEmailHandoff) {
+      try {
+        await deleteNativeEmailHandoff(pendingEmailHandoff.handoffId);
+      } catch {
+        setAuthMessage('No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.', { error: true });
+      }
+    }
     setAuthMessage(authMode === 'register'
       ? 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.'
       : 'No se pudo iniciar sesión. Revisa el username y la contraseña.', { error: true });

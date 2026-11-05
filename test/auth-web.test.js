@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { webcrypto } from 'node:crypto';
 import { JSDOM } from 'jsdom';
 import { categoriasMockRaw } from '../test-support/fixtures.js';
 import { withSupabaseSession } from '../test-support/browser-auth.js';
@@ -19,21 +20,105 @@ function tick() {
 }
 
 async function waitFor(predicate) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
     if (predicate()) return;
     await tick();
   }
   assert.equal(predicate(), true);
 }
 
+function createIndexedDbMock() {
+  const databases = new Map();
+  return {
+    databases,
+    open(name) {
+      const request = {};
+      setTimeout(() => {
+        let stores = databases.get(name);
+        const needsUpgrade = !stores;
+        if (!stores) {
+          stores = new Map();
+          databases.set(name, stores);
+        }
+        request.result = {
+          objectStoreNames: { contains: (storeName) => stores.has(storeName) },
+          createObjectStore(storeName) {
+            const records = new Map();
+            stores.set(storeName, records);
+            return { name: storeName };
+          },
+          transaction(storeName) {
+            const records = stores.get(storeName);
+            const transaction = {};
+            transaction.objectStore = () => ({
+              put(record) {
+                records.set(record.id, record);
+                const result = { result: record.id };
+                queueMicrotask(() => transaction.oncomplete?.());
+                return result;
+              },
+              getAll() {
+                const result = {};
+                queueMicrotask(() => {
+                  result.result = [...records.values()];
+                  transaction.oncomplete?.();
+                });
+                return result;
+              },
+              delete(id) {
+                records.delete(id);
+                const result = {};
+                queueMicrotask(() => transaction.oncomplete?.());
+                return result;
+              },
+            });
+            return transaction;
+          },
+          close() {},
+        };
+        if (needsUpgrade) request.onupgradeneeded?.();
+        request.onsuccess?.();
+      }, 0);
+      return request;
+    },
+  };
+}
+
+async function encryptSessionForHandoff(publicJwk, tokens) {
+  const publicKey = await webcrypto.subtle.importKey('jwk', publicJwk, {
+    name: 'RSA-OAEP', hash: 'SHA-256',
+  }, false, ['encrypt']);
+  const aesKey = await webcrypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+  const rawAesKey = await webcrypto.subtle.exportKey('raw', aesKey);
+  const wrappedKey = await webcrypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, rawAesKey);
+  const iv = webcrypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await webcrypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    new TextEncoder().encode(JSON.stringify(tokens)),
+  );
+  const encode = (value) => Buffer.from(value).toString('base64url');
+  return {
+    iv: encode(iv),
+    wrappedKey: encode(wrappedKey),
+    ciphertext: encode(ciphertext),
+  };
+}
+
 function startApp({
-  session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', apiBaseUrl = '', nativeAuth, nativePush, ...authOptions
+  session, fetchImpl, profileData = completeProfile, url = 'http://localhost/', apiBaseUrl = '', nativeAuth, nativePush, indexedDB, ...authOptions
 } = {}) {
   const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const { window } = dom;
-  window.MINIPEOPLEDB_API_BASE_URL = apiBaseUrl;
+  window.MINIPEOPLEDB_API_BASE_URL = apiBaseUrl || (nativeAuth ? 'https://minipeopledb.onrender.com' : '');
   if (nativeAuth) window.NativeAuth = nativeAuth;
   if (nativePush) window.NativePush = nativePush;
+  if (nativeAuth) {
+    Object.defineProperty(window, 'crypto', { value: webcrypto });
+    Object.defineProperty(window, 'TextEncoder', { value: TextEncoder });
+    Object.defineProperty(window, 'TextDecoder', { value: TextDecoder });
+    window.indexedDB = indexedDB ?? createIndexedDbMock();
+  }
   window.crypto.randomUUID ??= () => '00000000-0000-4000-8000-000000000001';
   window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
   window.HTMLDialogElement.prototype.close = function close() {
@@ -254,9 +339,29 @@ test('Android rechaza callbacks OAuth ajenos o fallidos sin mostrar datos del pr
   }
 });
 
-test('el registro Android asigna el callback de la app a la confirmación de email', async () => {
+test('el registro Android crea un handoff persistente y usa el callback HTTPS sin incluir la prueba', async () => {
   const nativeAuth = makeNativeAuth();
-  const { dom, window, $ } = startApp({ session: null, nativeAuth });
+  let createdHandoff;
+  const { dom, window, requests, $ } = startApp({
+    session: null,
+    nativeAuth,
+    fetchImpl: (url, init) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/api/android/email-handoff') {
+        createdHandoff = JSON.parse(init.body);
+        return {
+          ok: true, status: 201,
+          json: async () => ({
+            handoffId: '00000000-0000-4000-8000-000000000001',
+            pollProof: 'p'.repeat(43),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }),
+        };
+      }
+      if (pathname.endsWith('/consume')) return { ok: true, status: 202, json: async () => ({ status: 'pending' }) };
+      return undefined;
+    },
+  });
   try {
     await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
     $('#auth-mode-register').click();
@@ -265,11 +370,142 @@ test('el registro Android asigna el callback de la app a la confirmación de ema
     $('#auth-password').value = 'Password1';
     $('#auth-password-repeat').value = 'Password1';
     $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    await waitFor(() => window.__supabaseStub.calls.signUp.length === 1);
-    assert.equal(window.__supabaseStub.calls.signUp[0].options.emailRedirectTo,
-      'com.mrdusik.minipeopledb://auth/callback');
+    for (let attempt = 0; attempt < 500 && window.__supabaseStub.calls.signUp.length === 0; attempt += 1) await tick();
+    assert.equal(window.__supabaseStub.calls.signUp.length, 1, `${$('#auth-message').textContent} ${JSON.stringify(requests)}`);
+    const redirect = new URL(window.__supabaseStub.calls.signUp[0].options.emailRedirectTo);
+    assert.equal(redirect.origin, 'https://minipeopledb.onrender.com');
+    assert.equal(redirect.pathname, '/android-email-confirmation');
+    assert.equal(redirect.searchParams.get('handoff_id'), '00000000-0000-4000-8000-000000000001');
+    assert.equal([...redirect.searchParams.keys()].join(','), 'handoff_id');
+    assert.equal(JSON.stringify(redirect).includes('p'.repeat(43)), false);
+    assert.deepEqual(JSON.parse(JSON.stringify(window.__supabaseStub.calls.signUp[0].options.data)), {
+      android_email_handoff: true,
+    });
+    assert.equal(createdHandoff.emailDigest.length, 64);
+    assert.equal(createdHandoff.publicKey.kty, 'RSA');
+    assert.equal(createdHandoff.publicKey.e, 'AQAB');
+    assert.equal(window.indexedDB.databases.get('minipeopledb-auth-handoff').get('pending').size, 1);
+    assert.equal(requests.some(({ url }) => url.endsWith('/api/android/email-handoff')), true);
   } finally {
     dom.window.close();
+  }
+});
+
+test('Android recupera el handoff tras reiniciar y abre onboarding antes de pedir datos protegidos', async () => {
+  const indexedDB = createIndexedDbMock();
+  const handoffId = '00000000-0000-4000-8000-000000000002';
+  const tokens = { access_token: 'restored-access', refresh_token: 'restored-refresh' };
+  let publicKey;
+  const firstNativeAuth = makeNativeAuth();
+  const first = startApp({
+    session: null,
+    nativeAuth: firstNativeAuth,
+    indexedDB,
+    fetchImpl: (url, init) => {
+      if (new URL(url).pathname === '/api/android/email-handoff') {
+        publicKey = JSON.parse(init.body).publicKey;
+        return {
+          ok: true, status: 201,
+          json: async () => ({
+            handoffId, pollProof: 'q'.repeat(43),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }),
+        };
+      }
+      if (new URL(url).pathname.endsWith('/consume')) {
+        return { ok: true, status: 202, json: async () => ({ status: 'pending' }) };
+      }
+      return undefined;
+    },
+  });
+  try {
+    await waitFor(() => first.window.__supabaseStub.calls.createClient.length === 1);
+    first.$('#auth-mode-register').click();
+    first.$('#auth-email').value = 'space@example.com';
+    first.$('#auth-password').value = 'Password1';
+    first.$('#auth-password-repeat').value = 'Password1';
+    first.$('#classic-auth-form').dispatchEvent(new first.window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => first.window.__supabaseStub.calls.signUp.length === 1);
+  } finally {
+    first.dom.window.close();
+  }
+
+  const payload = await encryptSessionForHandoff(publicKey, tokens);
+  const requests = [];
+  const second = startApp({
+    session: null,
+    nativeAuth: makeNativeAuth(),
+    indexedDB,
+    profileData: { ...completeProfile, username: null, onboardingCompleted: false },
+    fetchImpl: (url) => {
+      const path = new URL(url).pathname;
+      requests.push(path);
+      if (path === `/api/android/email-handoff/${handoffId}/consume`) {
+        return { ok: true, status: 200, json: async () => ({ payload }) };
+      }
+      if (path === '/api/profile') {
+        return { ok: true, status: 200, json: async () => ({ ...completeProfile, username: null, onboardingCompleted: false }) };
+      }
+      return undefined;
+    },
+  });
+  try {
+    await waitFor(() => second.window.__supabaseStub.calls.setSession.length === 1);
+    await waitFor(() => second.$('#user-profile-dialog').open);
+    assert.deepEqual(JSON.parse(JSON.stringify(second.window.__supabaseStub.calls.setSession)), [tokens]);
+    assert.equal(second.$('#user-profile-dialog-title').textContent, 'Completa tu perfil');
+    assert.equal(requests.includes('/minifiguras'), false, JSON.stringify(requests));
+    await waitFor(() => indexedDB.databases.get('minipeopledb-auth-handoff').get('pending').size === 0);
+    assert.equal(indexedDB.databases.get('minipeopledb-auth-handoff').get('pending').size, 0);
+  } finally {
+    second.dom.window.close();
+  }
+});
+
+test('Android discards expired, replayed and undecryptable handoffs with a generic recoverable error', async () => {
+  for (const scenario of ['expired', 'replayed', 'invalid-ciphertext']) {
+    const indexedDB = createIndexedDbMock();
+    const pair = await webcrypto.subtle.generateKey({
+      name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256',
+    }, false, ['encrypt', 'decrypt']);
+    const handoffId = '00000000-0000-4000-8000-000000000003';
+    const records = new Map([[
+      handoffId,
+      {
+        id: handoffId,
+        pollProof: 'r'.repeat(43),
+        privateKey: pair.privateKey,
+        expiresAt: scenario === 'expired' ? Date.now() - 1 : Date.now() + 60_000,
+      },
+    ]]);
+    indexedDB.databases.set('minipeopledb-auth-handoff', new Map([['pending', records]]));
+    const requests = [];
+    const app = startApp({
+      session: null,
+      nativeAuth: makeNativeAuth(),
+      indexedDB,
+      fetchImpl: (url) => {
+        const path = new URL(url).pathname;
+        requests.push(path);
+        if (path.endsWith('/consume')) {
+          return scenario === 'replayed'
+            ? { ok: false, status: 404, json: async () => ({ error: 'HANDOFF_NO_ENCONTRADO' }) }
+            : { ok: true, status: 200, json: async () => ({
+              payload: { iv: 'bad', wrappedKey: 'bad', ciphertext: 'bad' },
+            }) };
+        }
+        return undefined;
+      },
+    });
+    try {
+      await waitFor(() => records.size === 0);
+      assert.equal(app.window.__supabaseStub.calls.setSession.length, 0);
+      assert.equal(app.$('#auth-message').textContent,
+        'No se pudo completar la confirmación. Vuelve a intentarlo o inicia sesión.');
+      assert.equal(requests.some((path) => path.endsWith('/consume')), scenario !== 'expired');
+    } finally {
+      app.dom.window.close();
+    }
   }
 });
 

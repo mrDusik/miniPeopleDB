@@ -141,6 +141,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
   };
   const adminCalls = [];
   const avatarObjects = new Map();
+  const emailHandoffs = new Map();
   let sequence = 0;
 
   function userForToken(token) {
@@ -464,7 +465,51 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
   function rpc(name, parameters, uid) {
     const failure = takeFailure(name, 'rpc');
     if (failure) return { data: null, error: failure };
+    if (name === 'android_email_handoff_create') {
+      emailHandoffs.set(parameters.p_id, {
+        emailDigest: parameters.p_email_digest,
+        publicKey: clone(parameters.p_public_key),
+        proofDigest: parameters.p_proof_digest,
+        state: 'pending',
+        payload: null,
+        expiresAt: Date.parse(timestamp()) + 24 * 60 * 60 * 1000,
+      });
+      return { data: true, error: null };
+    }
+    if (name === 'android_email_handoff_public_key') {
+      const handoff = emailHandoffs.get(parameters.p_id);
+      if (!handoff || handoff.expiresAt <= Date.parse(timestamp()) || handoff.state !== 'pending') {
+        emailHandoffs.delete(parameters.p_id);
+        return { data: null, error: null };
+      }
+      return { data: clone(handoff.publicKey), error: null };
+    }
+    if (name === 'android_email_handoff_consume') {
+      const handoff = emailHandoffs.get(parameters.p_id);
+      if (!handoff || handoff.expiresAt <= Date.parse(timestamp())
+        || handoff.proofDigest !== parameters.p_proof_digest) {
+        if (handoff?.expiresAt <= Date.parse(timestamp())) emailHandoffs.delete(parameters.p_id);
+        return { data: null, error: null };
+      }
+      if (handoff.state === 'pending') return { data: { status: 'pending' }, error: null };
+      emailHandoffs.delete(parameters.p_id);
+      return { data: { status: 'ready', payload: clone(handoff.payload) }, error: null };
+    }
     if (!uid) return { data: null, error: { code: '42501', message: 'NO_AUTENTICADO' } };
+
+    if (name === 'android_email_handoff_publish') {
+      const handoff = emailHandoffs.get(parameters.p_id);
+      const user = Object.values(users).find(({ id }) => id === uid);
+      const digest = typeof user?.email === 'string'
+        ? createHash('sha256').update(user.email.trim().toLowerCase()).digest('hex') : '';
+      if (!handoff || handoff.expiresAt <= Date.parse(timestamp()) || handoff.state !== 'pending'
+        || !digest || digest !== handoff.emailDigest || !(user.email_confirmed_at || user.confirmed_at)) {
+        return { data: null, error: { code: '42501', message: 'HANDOFF_NO_AUTORIZADO' } };
+      }
+      handoff.state = 'published';
+      handoff.payload = clone(parameters.p_encrypted_payload);
+      return { data: true, error: null };
+    }
 
     if (name === 'guardar_perfil_usuario') return saveUserProfile(parameters, uid);
 
