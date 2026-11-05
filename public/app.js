@@ -5766,8 +5766,10 @@ classicAuthForm.addEventListener('submit', async (event) => {
         email,
         password,
         options: {
+          emailRedirectTo: pendingEmailHandoff
+            ? pendingEmailHandoff.emailRedirectTo
+            : `${window.location.origin}/email-confirmation?flow=signup`,
           ...(pendingEmailHandoff ? {
-            emailRedirectTo: pendingEmailHandoff.emailRedirectTo,
             data: { android_email_handoff: true },
           } : {}),
         },

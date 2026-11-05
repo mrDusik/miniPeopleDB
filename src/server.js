@@ -210,6 +210,22 @@ export function createServer({
     return true;
   }
 
+  function setEmailConfirmationSecurityHeaders(response) {
+    let supabaseOrigin = '';
+    try {
+      supabaseOrigin = supabaseConfig ? new URL(supabaseConfig.url).origin : '';
+    } catch {
+      supabaseOrigin = '';
+    }
+    response.set({
+      'cache-control': 'no-store',
+      'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ${supabaseOrigin}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+    });
+  }
+
   app.use((request, response, next) => {
     const origin = request.get('origin');
     if (origin !== 'https://localhost') {
@@ -333,20 +349,12 @@ export function createServer({
     response.status(200).json({ enabled, status: enabled ? 'enabled' : 'disabled' });
   });
   app.get('/android-email-confirmation', (request, response) => {
-    let supabaseOrigin = '';
-    try {
-      supabaseOrigin = supabaseConfig ? new URL(supabaseConfig.url).origin : '';
-    } catch {
-      supabaseOrigin = '';
-    }
-    response.set({
-      'cache-control': 'no-store',
-      'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ${supabaseOrigin}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
-      'referrer-policy': 'no-referrer',
-      'x-content-type-options': 'nosniff',
-      'x-frame-options': 'DENY',
-    });
+    setEmailConfirmationSecurityHeaders(response);
     response.sendFile(resolve(publicDirectory, 'android-email-confirmation.html'));
+  });
+  app.get('/email-confirmation', (request, response) => {
+    setEmailConfirmationSecurityHeaders(response);
+    response.sendFile(resolve(publicDirectory, 'email-confirmation.html'));
   });
   const emailHandoffPath = '/api/android/email-handoff';
   app.all(emailHandoffPath, async (request, response) => {

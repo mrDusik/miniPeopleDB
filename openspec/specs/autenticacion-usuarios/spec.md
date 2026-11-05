@@ -80,6 +80,11 @@ La interfaz SHALL permitir crear una cuenta de Supabase Auth con email y contras
 - **THEN** se crea la identidad en Supabase Auth y se inicia o continúa el flujo de confirmación de email configurado
 - **AND** la contraseña no aparece en tablas de la aplicación ni en respuestas de la API
 
+#### Scenario: Confirmación de registro web en la pestaña original
+- **WHEN** una persona confirma en otra pestaña el email de un registro web iniciado en el navegador actual
+- **THEN** la confirmación establece la sesión de Supabase y la pestaña original continúa el flujo autenticado
+- **AND** la pestaña de confirmación muestra un mensaje para volver a la original, sin redirigir a una segunda instancia de la aplicación
+
 #### Scenario: Username de registro inválido
 - **WHEN** el username no cumple `/^[a-zA-Z0-9_]{3,20}$/`
 - **THEN** el formulario rechaza el alta antes de enviarla

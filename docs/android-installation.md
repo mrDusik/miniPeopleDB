@@ -75,13 +75,20 @@ Antes de liberar un APK que incluya este flujo:
    {{ if .Data.android_email_handoff }}
    <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email">Confirmar email</a>
    {{ else }}
-   <a href="{{ .ConfirmationURL }}">Confirmar email</a>
+   <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email">Confirmar email</a>
    {{ end }}
    ```
 
-   `.RedirectTo` ya incluye el `handoff_id`; el enlace lleva el `token_hash` directamente al callback HTTPS, que lo consume con `verifyOtp`. No sustituyas la rama web por el callback Android.
-5. Compila el APK con `ANDROID_API_BASE_URL` apuntando al origen HTTPS desplegado. El callback y las rutas `/api/android/email-handoff` deben estar disponibles antes del primer registro.
-6. Prueba la confirmación en otro dispositivo mientras Android está abierto, y con Android cerrado y reabierto antes de 24 horas. Comprueba que onboarding se muestra antes de pedir datos protegidos. Un enlace vencido requiere solicitar una confirmación nueva.
+   `.RedirectTo` contiene el `handoff_id` para Android y `flow=signup` para web. En **Authentication → URL Configuration → Redirect URLs**, permite los callbacks Android y web de producción:
+
+   ```text
+   https://minipeopledb.onrender.com/android-email-confirmation\?handoff_id=*
+   https://minipeopledb.onrender.com/email-confirmation\?flow=signup
+   ```
+
+   Para desarrollo local, permite también el origen y puerto usado por el servidor local con la ruta `/email-confirmation?flow=signup`. El callback web confirma directamente con `verifyOtp` y persiste la sesión en el origen compartido; Supabase Auth notifica a la pestaña original y el callback pide volver a ella sin abrir otra instancia de la app. No cambies la rama web por el callback Android.
+5. Compila el APK con `ANDROID_API_BASE_URL` apuntando al origen HTTPS desplegado. El callback Android y las rutas `/api/android/email-handoff` deben estar disponibles antes del primer registro.
+6. Prueba la confirmación Android en otro dispositivo mientras Android está abierto y con Android cerrado y reabierto antes de 24 horas. Prueba también el registro web y verifica que la pestaña original continúa autenticada. Comprueba que onboarding se muestra antes de pedir datos protegidos. Un enlace vencido requiere solicitar una confirmación nueva.
 
 La app consulta el handoff mientras está activa y al reanudarse; la página de confirmación no fuerza la apertura de Android. La persistencia y el API usan solo las RPC allowlisted de handoff, sin `service_role`. El registro web y el callback PKCE de Google siguen sin cambios.
 
