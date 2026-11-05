@@ -5529,7 +5529,9 @@ function startNativeEmailHandoffPolling() {
 async function initializeAuth() {
   showAuthScreen();
   setAuthMessage('Preparando el acceso...', { loading: true });
-  authCallbackPending = new URLSearchParams(window.location.search).has('code');
+  const callbackParameters = new URLSearchParams(window.location.search);
+  authCallbackPending = ['code', 'error', 'error_code', 'error_description']
+    .some((parameter) => callbackParameters.has(parameter));
   if (nativeAuth) {
     try {
       if (!nativeAppUrlListenerRegistered) {
@@ -5588,7 +5590,15 @@ async function initializeAuth() {
       return;
     }
     if (passwordRecoveryPending) return;
-    if (authCallbackPending && event === 'INITIAL_SESSION') return;
+    if (authCallbackPending && event === 'INITIAL_SESSION') {
+      window.setTimeout(() => {
+        if (authCallbackPending) {
+          authCallbackPending = false;
+          handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+        }
+      }, 0);
+      return;
+    }
     if (event === 'SIGNED_IN') authCallbackPending = false;
     if (session || currentSession) handleSession(session);
   });
