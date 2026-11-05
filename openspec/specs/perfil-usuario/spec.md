@@ -103,6 +103,18 @@ La interfaz SHALL ofrecer un acceso identificable a la configuración desde el m
 - **THEN** no se informa éxito ni se marca como completo un onboarding parcial
 - **AND** se conservan los valores introducidos para poder reintentar
 
+### Requirement: Etiquetar la acción de contraseña según el proveedor
+
+En Preferencias, la acción para establecer una contraseña SHALL mostrar "Crear contraseña" si Google es el único proveedor vinculado a la cuenta, y SHALL mostrar "Cambiar contraseña" si la cuenta es clásica o tiene otros proveedores vinculados.
+
+#### Scenario: Cuenta exclusivamente de Google
+- **WHEN** una persona con una cuenta cuyo único proveedor vinculado es Google abre Preferencias
+- **THEN** la acción de contraseña muestra "Crear contraseña"
+
+#### Scenario: Cuenta clásica o con proveedores vinculados
+- **WHEN** una persona con una cuenta clásica o con Google y otro proveedor vinculado abre Preferencias
+- **THEN** la acción de contraseña muestra "Cambiar contraseña"
+
 ### Requirement: Mostrar username como identidad visible
 
 La aplicación SHALL usar el username guardado en lugar del nombre OAuth o email para la identidad propia y el nombre público de rankings y avisos nuevos o guardados. Esta publicación del username está expresamente autorizada; emails y preferencias SHALL seguir siendo privados. La corrección de avisos históricos SHALL usar referencias fiables al autor, nunca coincidencias de nombres Google; si no hay identidad o perfil identificable, SHALL mostrar "Coleccionista". SHALL conservar IDs, fechas, estado de lectura, importes y recompensas. La referencia interna al autor SHALL NOT exponerse en los datos de la API. El menú junto a Notificaciones SHALL tener un ancho de 190.5px, la mitad de los 381px anteriores, limitado al viewport.
