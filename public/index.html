@@ -83,10 +83,26 @@
         <button type="button" id="cancel-password-recovery" class="auth-text-button">Volver al acceso</button>
       </form>
       <form id="password-update-form" class="auth-form" hidden>
-        <label>
-          Nueva contraseña
-          <input id="new-password" name="password" type="password" autocomplete="new-password" required>
-        </label>
+        <div class="auth-password-field">
+          <label for="new-password">Nueva contraseña</label>
+          <div class="auth-password-control">
+            <input id="new-password" name="password" type="password" autocomplete="new-password" aria-describedby="new-password-rules" required>
+            <button type="button" id="show-new-password" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+          </div>
+        </div>
+        <div class="auth-password-field">
+          <label for="new-password-repeat">Repetir contraseña</label>
+          <div class="auth-password-control">
+            <input id="new-password-repeat" name="password-repeat" type="password" autocomplete="new-password" required>
+            <button type="button" id="show-new-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+          </div>
+        </div>
+        <ul id="new-password-rules" class="auth-password-rules" aria-live="polite">
+          <li data-rule="length">Al menos 5 caracteres</li>
+          <li data-rule="uppercase">Al menos una letra mayúscula</li>
+          <li data-rule="lowercase">Al menos una letra minúscula</li>
+          <li data-rule="number">Al menos un número</li>
+        </ul>
         <button type="submit" class="button button-secondary">Cambiar contraseña</button>
       </form>
       <button type="button" id="profile-check-retry" class="button button-secondary" hidden>Reintentar</button>

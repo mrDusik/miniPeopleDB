@@ -100,7 +100,7 @@ En Supabase Auth, configura la plantilla **Reset Password** para enlazar directa
 <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery">Restablecer contraseña</a>
 ```
 
-La app verifica el token con Supabase Auth, lo retira de la barra de direcciones y muestra el formulario para elegir una contraseña nueva. No uses `{{ .ConfirmationURL }}` para este flujo. El destino de retorno debe estar permitido en **Authentication → URL Configuration → Redirect URLs**; en web es la URL raíz, por ejemplo `https://minipeopledb.onrender.com/`. En Android, el retorno registrado en el proyecto debe ser `com.mrdusik.minipeopledb://auth/callback`.
+La app verifica el token con Supabase Auth, lo retira de la barra de direcciones y muestra el formulario para elegir y repetir la contraseña nueva. El formulario marca en tiempo real los requisitos de longitud mínima, mayúscula, minúscula y número, y solo permite continuar si ambos valores coinciden y cumplen las reglas. No uses `{{ .ConfirmationURL }}` para este flujo. El destino de retorno debe estar permitido en **Authentication → URL Configuration → Redirect URLs**; en web es la URL raíz, por ejemplo `https://minipeopledb.onrender.com/`. En Android, el retorno registrado en el proyecto debe ser `com.mrdusik.minipeopledb://auth/callback`.
 
 ## Notificaciones push
 
