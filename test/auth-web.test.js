@@ -641,8 +641,8 @@ test('la autenticación vuelve a intentarse tras recuperar la conexión', async 
 });
 
 for (const url of ['http://localhost:3000/', 'http://127.0.0.1:3000/', 'http://localhost:3001/', 'https://minipeopledb.onrender.com/']) {
-  test(`el login conserva el origen y puerto de ${url} sin incluir parametros OAuth`, async () => {
-    const { dom, window, $ } = startApp({ session: null, url: `${url}?code=previous-code#previous-token` });
+  test(`el login conserva el origen y puerto de ${url} sin incluir parametros de callback`, async () => {
+    const { dom, window, $ } = startApp({ session: null, url: `${url}?flow=previous-flow#previous-token` });
     try {
       await tick();
       $('#login-google').click();
@@ -844,11 +844,16 @@ test('un inicio de sesión clásico entrega el mismo estado de sesión que OAuth
 
 test('PASSWORD_RECOVERY muestra cambio de contraseña y solo abre la app tras actualizarla', async () => {
   const recoverySession = { access_token: 'token-recovery', user: { id: 'recovery-user', email: 'recovery@example.com', user_metadata: {} } };
-  const { dom, window, requests, $ } = startApp({ session: null, recoverySession });
+  const { dom, window, requests, $ } = startApp({
+    session: recoverySession,
+    url: 'http://localhost/?code=recovery-code',
+  });
   await tick();
-  $('#open-password-recovery').click();
-  $('#recovery-email').value = 'recovery@example.com';
-  $('#password-recovery-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.equal($('#password-update-form').hidden, true);
+  assert.equal($('.page-shell').hidden, true);
+  assert.deepEqual(requests, []);
+
+  window.__supabaseStub.setSession('PASSWORD_RECOVERY', recoverySession);
   await tick();
   assert.equal($('#password-update-form').hidden, false);
   assert.equal($('#auth-access-panel').hidden, true);
@@ -860,6 +865,22 @@ test('PASSWORD_RECOVERY muestra cambio de contraseña y solo abre la app tras ac
   await tick();
   assert.equal(JSON.stringify(window.__supabaseStub.calls.updateUser), JSON.stringify([{ password: 'new-valid-password' }]));
   assert.equal($('#auth-screen').hidden, true);
+  assert.ok(requests.some(({ url }) => url === '/minifiguras'));
+  dom.window.close();
+});
+
+test('un callback de inicio de sesión espera PASSWORD_RECOVERY o SIGNED_IN antes de usar la sesión', async () => {
+  const session = { access_token: 'token-callback', user: { id: 'callback-user', email: 'callback@example.com', user_metadata: {} } };
+  const { dom, window, requests, $ } = startApp({
+    session,
+    url: 'http://localhost/?code=signin-code',
+  });
+  await tick();
+  assert.equal($('.page-shell').hidden, true);
+  assert.deepEqual(requests, []);
+
+  window.__supabaseStub.setSession('SIGNED_IN', session);
+  await waitFor(() => !$('.page-shell').hidden);
   assert.ok(requests.some(({ url }) => url === '/minifiguras'));
   dom.window.close();
 });
