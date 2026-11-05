@@ -374,13 +374,13 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.equal(giftMessage.textContent.includes('El usuario'), false);
     assert.equal(giftMessage.textContent.includes('Bricks'), false);
     assert.equal(giftMessage.textContent, 'Grace vio tus tops en el Ranking Global y te regaló 50.');
-    assert.equal(giftMessage.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    assert.equal(giftMessage.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
     const weeklyGiftMessage = list.querySelector('[data-notification-id="weekly-gift-1"] .notification-message');
     assert.equal(weeklyGiftMessage.textContent, 'Grace vio tus tops en el Ranking Semanal y te regaló 5.');
     const thankMessage = list.querySelector('[data-notification-id="thanks-1"] .notification-message');
     assert.equal(thankMessage.querySelector('strong').textContent, 'Ada');
     assert.equal(thankMessage.textContent, 'Ada agradeció tu regalo con 5.');
-    assert.equal(thankMessage.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    assert.equal(thankMessage.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
     assert.equal(thankMessage.querySelector('img').nextSibling.textContent, '.');
     const giftThankButton = list.querySelector('.notification-thank');
     assert.ok(giftThankButton.classList.contains('ranking-gift'));
@@ -389,7 +389,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.match(styles, /\.notification-actions \{[^}]*display: flex;[^}]*justify-content: flex-start/);
     assert.match(styles, /\.notification-actions \.notification-thank \{[^}]*width: auto/);
     assert.equal(giftThankButton.childNodes[0].textContent.trim(), '¡Gracias! +5');
-    assert.equal(giftThankButton.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    assert.equal(giftThankButton.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
     assert.equal(list.querySelector('[data-notification-id="entered-1"] .notification-leading-emoji').textContent, '🌐');
     assert.equal(list.querySelector('[data-notification-id="entered-1"] .notification-message').textContent.includes('puesto 8'), true);
     assert.equal(list.querySelector('[data-notification-id="weekly-entry-1"] .notification-leading-emoji').textContent, '🗓️');
@@ -421,7 +421,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
       assert.ok(dailyText.includes(value), `missing ${value}: ${dailyText}`);
     }
     assert.deepEqual([...details.querySelectorAll('img.daily-summary-icon')].map((image) => image.getAttribute('src')), [
-      '/toast_images/billete.png', '/toast_images/hero_2026-01-05_16-38-47-871.webp',
+      '/toast_images/billete.png', '/toast_images/brick.png',
     ]);
     assert.deepEqual([...details.querySelectorAll('.daily-summary-emoji')].map((emoji) => emoji.textContent), ['📦', '🏆']);
     assert.ok(details.querySelector('.daily-summary-emoji').getAttribute('aria-hidden'));
@@ -441,7 +441,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     let thankButton = list.querySelector('.notification-thank');
     assert.equal(thankButton.childNodes[0].textContent.trim(), '¡Gracias! +5');
     assert.ok(thankButton.classList.contains('ranking-gift'));
-    assert.equal(thankButton.querySelector('img').getAttribute('src'), '/toast_images/hero_2026-01-05_16-38-47-871.webp');
+    assert.equal(thankButton.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
     thankButton.click();
     thankButton = window.document.querySelector('.notification-thank');
     assert.equal(thankButton.disabled, true);

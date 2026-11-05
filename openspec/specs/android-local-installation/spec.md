@@ -24,6 +24,20 @@ El APK de prueba SHALL usar los valores confirmados por el propietario el 2026-1
 - **WHEN** se genera el APK de prueba
 - **THEN** la app muestra el nombre confirmado y utiliza el identificador, backend y callback aprobados
 
+### Requirement: Mantener la aplicación Android en orientación vertical
+La actividad principal de Android SHALL permanecer en orientación vertical, incluso cuando se rote físicamente el dispositivo.
+
+#### Scenario: Rotar el dispositivo
+- **WHEN** se rota un smartphone mientras la aplicación está abierta
+- **THEN** la interfaz permanece en orientación vertical y no cambia a horizontal
+
+### Requirement: Usar el icono de aplicación Android suministrado
+El launcher de Android SHALL usar el arte de icono de aplicación suministrado, con recursos adaptativos y por densidad. El favicon web y el icono de las notificaciones nativas SHALL conservar el ladrillo rojo existente.
+
+#### Scenario: Mostrar el icono de la aplicación
+- **WHEN** Android muestra el launcher de MiniPeopleDB
+- **THEN** usa el icono de aplicación suministrado y no el favicon web
+
 ### Requirement: Conectar la aplicación instalada con los servicios remotos
 La aplicación Android SHALL cargar los recursos cliente necesarios y conectarse por HTTPS al backend configurado para obtener configuración pública y ejecutar las operaciones de API existentes. Las solicitudes autenticadas SHALL seguir enviando la sesión del usuario. La configuración de red SHALL permitir únicamente los orígenes requeridos por los clientes soportados y SHALL NOT exponer secretos de servidor ni ampliar permisos de datos.
 
