@@ -113,9 +113,15 @@ La interfaz SHALL permitir solicitar a Supabase Auth un enlace de recuperación 
 
 #### Scenario: Cambio de contraseña desde enlace válido
 - **WHEN** la persona abre un enlace de recuperación vigente y envía una nueva contraseña aceptada
+- **AND** la aplicación verifica el token hash de tipo `recovery` proporcionado por Supabase Auth
 - **THEN** Supabase Auth actualiza la contraseña
 - **AND** la sesión de recuperación no permite acceder a la aplicación antes de actualizar la contraseña
 - **AND** la aplicación no almacena la contraseña en sus tablas
+
+#### Scenario: Consumo seguro del token de recuperación
+- **WHEN** la aplicación recibe el token hash del enlace de recuperación
+- **THEN** lo elimina inmediatamente de la URL visible y lo verifica exclusivamente con Supabase Auth
+- **AND** muestra el formulario para cambiar la contraseña solo después de recibir una sesión de recuperación válida
 
 #### Scenario: Enlace de recuperación inválido o caducado
 - **WHEN** Supabase Auth no puede validar el callback del enlace de recuperación

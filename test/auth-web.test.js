@@ -873,6 +873,37 @@ test('PASSWORD_RECOVERY muestra cambio de contraseña y solo abre la app tras ac
   dom.window.close();
 });
 
+test('callback de recuperación con token_hash limpia la URL y muestra el formulario sin abrir la app', async () => {
+  const recoverySession = { access_token: 'token-recovery-hash', user: { id: 'recovery-user', email: 'recovery@example.com', user_metadata: {} } };
+  const { dom, window, requests, $ } = startApp({
+    session: null,
+    recoveryVerifyOtpSession: recoverySession,
+    url: 'http://localhost/?token_hash=one-time-hash&type=recovery',
+  });
+  await waitFor(() => !$('#password-update-form').hidden);
+  assert.equal(window.location.search, '');
+  assert.equal(JSON.stringify(window.__supabaseStub.calls.verifyOtp), JSON.stringify([
+    { token_hash: 'one-time-hash', type: 'recovery' },
+  ]));
+  assert.equal($('.page-shell').hidden, true);
+  assert.deepEqual(requests, []);
+  dom.window.close();
+});
+
+test('callback de recuperación token_hash inválido muestra error genérico y no abre la app', async () => {
+  const { dom, window, requests, $ } = startApp({
+    session: null,
+    recoveryVerifyOtpError: 'otp_expired',
+    url: 'http://localhost/?token_hash=one-time-hash&type=recovery',
+  });
+  await waitFor(() => $('#auth-message').textContent === 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+  assert.equal(window.location.search, '');
+  assert.equal($('#password-update-form').hidden, true);
+  assert.equal($('.page-shell').hidden, true);
+  assert.deepEqual(requests, []);
+  dom.window.close();
+});
+
 test('un callback de inicio de sesión espera PASSWORD_RECOVERY o SIGNED_IN antes de usar la sesión', async () => {
   const session = { access_token: 'token-callback', user: { id: 'callback-user', email: 'callback@example.com', user_metadata: {} } };
   const { dom, window, requests, $ } = startApp({
@@ -887,6 +918,25 @@ test('un callback de inicio de sesión espera PASSWORD_RECOVERY o SIGNED_IN ante
   await waitFor(() => !$('.page-shell').hidden);
   assert.ok(requests.some(({ url }) => url === '/minifiguras'));
   dom.window.close();
+});
+
+test('Android procesa un enlace de recuperación token_hash y no inicia la sesión operativa', async () => {
+  const recoverySession = { access_token: 'token-native-recovery', user: { id: 'native-recovery', email: 'recovery@example.com', user_metadata: {} } };
+  const nativeAuth = makeNativeAuth();
+  const { dom, window, requests, $ } = startApp({ session: null, recoveryVerifyOtpSession: recoverySession, nativeAuth });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    nativeAuth.emitUrlOpen('com.mrdusik.minipeopledb://auth/callback?token_hash=one-time-hash&type=recovery');
+    await waitFor(() => !$('#password-update-form').hidden);
+    assert.equal(JSON.stringify(window.__supabaseStub.calls.verifyOtp), JSON.stringify([
+      { token_hash: 'one-time-hash', type: 'recovery' },
+    ]));
+    assert.equal(nativeAuth.closedBrowserCount, 1);
+    assert.equal($('.page-shell').hidden, true);
+    assert.deepEqual(requests, []);
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('un callback que Supabase no puede validar deja de mostrar la espera indefinida', async () => {
