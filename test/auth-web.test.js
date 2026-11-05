@@ -339,6 +339,37 @@ test('Android rechaza callbacks OAuth ajenos o fallidos sin mostrar datos del pr
   }
 });
 
+test('el registro web confirma el email en el mismo origen para reanudar la pestaña original', async () => {
+  const { dom, window, $ } = startApp({
+    session: null,
+    url: 'https://minipeopledb.onrender.com/',
+  });
+  try {
+    await waitFor(() => window.__supabaseStub.calls.createClient.length === 1);
+    $('#auth-mode-register').click();
+    $('#auth-email').value = 'web@example.com';
+    $('#auth-password').value = 'Password1';
+    $('#auth-password-repeat').value = 'Password1';
+    $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => window.__supabaseStub.calls.signUp.length === 1);
+
+    const options = window.__supabaseStub.calls.signUp[0].options;
+    const redirect = new URL(options.emailRedirectTo);
+    assert.equal(redirect.origin, window.location.origin);
+    assert.equal(redirect.pathname, '/email-confirmation');
+    assert.equal(redirect.searchParams.get('flow'), 'signup');
+    assert.deepEqual(JSON.parse(JSON.stringify(options.data ?? {})), {});
+
+    window.__supabaseStub.setSession('SIGNED_IN', {
+      access_token: 'confirmed-web-session',
+      user: { id: 'web-user', email: 'web@example.com', user_metadata: {} },
+    });
+    await waitFor(() => $('#auth-screen').hidden);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el registro Android crea un handoff persistente y usa el callback HTTPS sin incluir la prueba', async () => {
   const nativeAuth = makeNativeAuth();
   let createdHandoff;
@@ -650,7 +681,9 @@ test('registro clásico pide solo email y contraseñas y reserva el username par
   $('#classic-auth-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await tick();
   assert.equal(JSON.stringify(window.__supabaseStub.calls.signUp), JSON.stringify([{
-    email: 'new@example.com', password: 'Safe-password1', options: {},
+    email: 'new@example.com',
+    password: 'Safe-password1',
+    options: { emailRedirectTo: 'http://localhost/email-confirmation?flow=signup' },
   }]));
   assert.match($('#auth-message').textContent, /confirmar la cuenta/);
   assert.equal($('#auth-message').classList.contains('loading-message'), false);

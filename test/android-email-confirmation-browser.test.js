@@ -7,6 +7,8 @@ import { startTestServer } from '../test-support/server.js';
 
 const page = await readFile(new URL('../public/android-email-confirmation.html', import.meta.url), 'utf8');
 const callbackScript = await readFile(new URL('../public/android-email-confirmation.js', import.meta.url), 'utf8');
+const webPage = await readFile(new URL('../public/email-confirmation.html', import.meta.url), 'utf8');
+const webCallbackScript = await readFile(new URL('../public/email-confirmation.js', import.meta.url), 'utf8');
 const HANDOFF_ID = '00000000-0000-4000-8000-000000000001';
 const SESSION = { access_token: 'confirmed-access-token', refresh_token: 'confirmed-refresh-token' };
 
@@ -157,6 +159,117 @@ test('hosted callback response has no-store and restrictive security headers', a
     assert.match(response.headers.get('content-security-policy'), /default-src 'none'/);
     assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
     assert.equal((await response.text()).includes('third-party'), false);
+  } finally {
+    await context.close();
+  }
+});
+
+test('web confirmation persists the Supabase session for the original tab without redirecting the callback tab', async () => {
+  const dom = new JSDOM(webPage, {
+    url: 'https://backend.test/email-confirmation?flow=signup&token_hash=one-time-token-hash&type=email',
+    runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  const calls = { verifyOtp: [], createClient: [] };
+  window.supabase = {
+    createClient(url, anonKey, options) {
+      calls.createClient.push({ url, anonKey, options });
+      return {
+        auth: {
+          async verifyOtp(params) {
+            calls.verifyOtp.push(params);
+            return { data: { session: SESSION }, error: null };
+          },
+        },
+      };
+    },
+  };
+  window.fetch = async (input) => {
+    assert.equal(new URL(input, window.location.href).pathname, '/config/supabase');
+    return {
+      ok: true,
+      json: async () => ({ url: 'https://project.supabase.test', anonKey: 'public-anon-key' }),
+    };
+  };
+  try {
+    window.eval(webCallbackScript);
+    assert.equal(window.location.search, '');
+    for (let attempt = 0; attempt < 20 && calls.verifyOtp.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(calls.verifyOtp.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.verifyOtp[0])), {
+      token_hash: 'one-time-token-hash',
+      type: 'email',
+    });
+    assert.equal(calls.createClient[0].options.auth.persistSession, true);
+    assert.equal(calls.createClient[0].options.auth.detectSessionInUrl, false);
+    assert.match(window.document.querySelector('#confirmation-message').textContent, /Vuelve a la pestaña/);
+    assert.equal(window.location.pathname, '/email-confirmation');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('web confirmation rejects unrelated or duplicate parameters and reports verification failures generically', async () => {
+  for (const search of [
+    '?flow=signup&token_hash=a&token_hash=b&type=email',
+    '?flow=signup&token_hash=a&type=recovery',
+    '?flow=signup&token_hash=a&type=email&access_token=secret',
+  ]) {
+    const dom = new JSDOM(webPage, {
+      url: `https://backend.test/email-confirmation${search}`,
+      runScripts: 'outside-only',
+    });
+    try {
+      dom.window.eval(webCallbackScript);
+      assert.equal(dom.window.location.search, '');
+      assert.match(dom.window.document.querySelector('#confirmation-message').textContent, /No se pudo confirmar/);
+    } finally {
+      dom.window.close();
+    }
+  }
+
+  const dom = new JSDOM(webPage, {
+    url: 'https://backend.test/email-confirmation?flow=signup&token_hash=one-time-token-hash&type=email',
+    runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  let verifyCalls = 0;
+  window.supabase = {
+    createClient: () => ({ auth: { verifyOtp: async () => {
+      verifyCalls += 1;
+      return { data: null, error: { message: 'provider detail' } };
+    } } }),
+  };
+  window.fetch = async () => ({
+    ok: true,
+    json: async () => ({ url: 'https://project.supabase.test', anonKey: 'anon' }),
+  });
+  try {
+    window.eval(webCallbackScript);
+    for (let attempt = 0; attempt < 20 && verifyCalls === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(verifyCalls, 1);
+    assert.match(window.document.querySelector('#confirmation-message').textContent, /No se pudo confirmar/);
+    assert.equal(window.document.body.textContent.includes('provider detail'), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('web confirmation route applies no-store and restrictive security headers', async () => {
+  const context = await startTestServer();
+  try {
+    const response = await fetch(`${context.baseUrl}/email-confirmation?flow=signup`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.match(response.headers.get('content-security-policy'), /default-src 'none'/);
+    assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+    assert.match(await response.text(), /pestaña de MiniPeopleDB/);
   } finally {
     await context.close();
   }
