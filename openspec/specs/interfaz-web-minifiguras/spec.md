@@ -26,6 +26,11 @@ La interfaz SHALL usar `minipersona` y `minipersonas` en lugar de `minifigura` y
 
 Esta terminologia SHALL NOT renombrar rutas API, identificadores DOM, campos, codigos de error, datos persistidos ni contratos internos.
 
+#### Scenario: Renderizar terminología de minipersonas
+- **WHEN** la interfaz muestra textos propios o mensajes y logros recibidos del backend
+- **THEN** presenta `minipersona` o `minipersonas` con las mayúsculas y plurales correspondientes
+- **AND** adapta los mensajes del backend solo al renderizarlos, sin modificar los objetos originales ni contratos internos
+
 ### Requirement: Ordenacion de todas las columnas de datos
 
 La tabla principal SHALL permitir ordenar ID, Nombre, Categoria, Subcategoria, Anio, Precio y Diferencia en ambos sentidos mediante botones de cabecera. Imagen, Seguimiento, Estado y Acciones SHALL quedar excluidas, sin botones ni flechas de ordenacion. Cada nombre ordenable SHALL mostrar a su derecha una flecha roja sin saltos de linea; el sentido activo SHALL comunicarse tambien mediante `aria-sort`.
@@ -33,6 +38,11 @@ La tabla principal SHALL permitir ordenar ID, Nombre, Categoria, Subcategoria, A
 Los textos SHALL ordenarse con comparacion espanola sin distinguir acentos ni mayusculas y con orden numerico natural para IDs. Categoria y subcategoria SHALL ordenarse por sus etiquetas visuales sin modificar valores canonicos. Los numeros SHALL ordenarse por valor numerico y los valores ausentes SHALL quedar al final en ambos sentidos. Restablecer SHALL recuperar el orden original y limpiar los indicadores de ordenacion.
 
 El avatar de la cabecera principal y su alternativa sin imagen SHALL tener las mismas dimensiones que los botones Notificaciones y Amigos: 52px en escritorio y 44px en disposiciones compactas, sin escalado visual adicional y sin invadir el chevron o controles vecinos.
+
+#### Scenario: Ordenar y restablecer la tabla
+- **WHEN** el usuario ordena una columna compatible y después restablece el orden
+- **THEN** la tabla ordena en el sentido elegido, comunica el sentido activo con `aria-sort` y mantiene los valores ausentes al final
+- **AND** restablecer recupera el orden original y limpia los indicadores de ordenación
 
 ### Requirement: Preferencias sin desplazamiento exterior
 
@@ -47,6 +57,11 @@ El modal de preferencias SHALL ajustarse a la altura disponible sin scroll verti
 La lista SHALL ocupar todo el espacio restante de su recuadro sin un limite fijo de 108px ni huecos inferiores innecesarios, manteniendo las opciones alineadas al inicio cuando haya pocos resultados.
 
 Preferencias SHALL conservar los margenes normales de los modales y 12px entre grupos de campos cuando la altura de pantalla supere 700px. La reduccion de espacios SHALL limitarse a pantallas de altura igual o inferior a 700px para mantener visibles las acciones sin scroll exterior.
+
+#### Scenario: Usar preferencias en una pantalla compacta
+- **WHEN** el usuario abre Preferencias en una pantalla de altura igual o inferior a 700px
+- **THEN** los controles y acciones permanecen accesibles sin desplazamiento vertical exterior
+- **AND** solo la lista de categorias favoritas dispone de desplazamiento interno
 
 ### Requirement: Alias visuales de categorias CMF
 
