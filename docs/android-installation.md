@@ -60,6 +60,31 @@ Antes de probar OAuth real, configura en Supabase Auth la URL de retorno permiti
 
 El APK no contiene la clave `service_role`, secretos del backend ni credenciales de despliegue. El cliente obtiene la configuración pública de Supabase desde el backend. La interfaz y sus recursos estáticos se abren localmente, pero consultas, autenticación y cambios de datos requieren el backend y Supabase accesibles.
 
+## Confirmación de email Android
+
+El registro Android crea un handoff temporal antes de enviar el email. La app conserva la clave privada no exportable y la prueba de consulta en IndexedDB; el enlace contiene únicamente el identificador opaco del handoff y apunta al callback HTTPS alojado por el backend. El callback verifica exclusivamente el tipo `signup`, elimina los parámetros de verificación de la URL y publica la sesión cifrada para la instalación que inició el registro. No se incluyen tokens en el enlace ni en las respuestas del API.
+
+Antes de liberar un APK que incluya este flujo:
+
+1. Aplica `supabase/android-email-confirmation-handoff.sql` al mismo proyecto Supabase que usa el backend.
+2. Despliega el backend con `src/server.js` y los assets de callback (`/android-email-confirmation` y `/android-email-confirmation.js`).
+3. En Supabase Auth, permite exactamente el callback HTTPS del backend, por ejemplo `https://minipeopledb.onrender.com/android-email-confirmation`. No cambies el Site URL, el retorno OAuth de Google ni los destinos web existentes.
+4. En la plantilla Supabase **Confirm sign up**, conserva el enlace original para registros web y usa el handoff solo para registros Android. El cliente Android añade `android_email_handoff: true` a los metadatos de registro:
+
+   ```html
+   {{ if .Data.android_email_handoff }}
+   <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email">Confirmar email</a>
+   {{ else }}
+   <a href="{{ .ConfirmationURL }}">Confirmar email</a>
+   {{ end }}
+   ```
+
+   `.RedirectTo` ya incluye el `handoff_id`; el enlace lleva el `token_hash` directamente al callback HTTPS, que lo consume con `verifyOtp`. No sustituyas la rama web por el callback Android.
+5. Compila el APK con `ANDROID_API_BASE_URL` apuntando al origen HTTPS desplegado. El callback y las rutas `/api/android/email-handoff` deben estar disponibles antes del primer registro.
+6. Prueba la confirmación en otro dispositivo mientras Android está abierto, y con Android cerrado y reabierto antes de 24 horas. Comprueba que onboarding se muestra antes de pedir datos protegidos. Un enlace vencido requiere solicitar una confirmación nueva.
+
+La app consulta el handoff mientras está activa y al reanudarse; la página de confirmación no fuerza la apertura de Android. La persistencia y el API usan solo las RPC allowlisted de handoff, sin `service_role`. El registro web y el callback PKCE de Google siguen sin cambios.
+
 ## Notificaciones push
 
 La integración Capacitor incluye recepción FCM, un canal Android estable y permiso contextual. La bandeja autenticada y Realtime siguen funcionando aunque no se configure Firebase. Para habilitar push:

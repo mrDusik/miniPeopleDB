@@ -1,5 +1,5 @@
 import { createServer as createHttpServer } from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import express from 'express';
@@ -191,8 +191,24 @@ export function createServer({
   const bricksetSyncJobs = createBricksetSyncJobs({ brickset });
   const app = express();
   const bricksetFullNames = new Map();
+  const emailHandoffRateLimits = new Map();
   const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
   const isPushEnabled = () => typeof pushEnabled === 'function' ? pushEnabled() : Boolean(pushEnabled);
+
+  function allowEmailHandoffCreation(key) {
+    const nowMs = now().getTime();
+    for (const [candidate, entry] of emailHandoffRateLimits) {
+      if (entry.resetAt <= nowMs) emailHandoffRateLimits.delete(candidate);
+    }
+    if (emailHandoffRateLimits.size >= 10000 && !emailHandoffRateLimits.has(key)) {
+      emailHandoffRateLimits.delete(emailHandoffRateLimits.keys().next().value);
+    }
+    const entry = emailHandoffRateLimits.get(key);
+    if (entry && entry.count >= 8) return false;
+    if (entry) entry.count += 1;
+    else emailHandoffRateLimits.set(key, { count: 1, resetAt: nowMs + 60_000 });
+    return true;
+  }
 
   app.use((request, response, next) => {
     const origin = request.get('origin');
@@ -315,6 +331,215 @@ export function createServer({
     response.set('cache-control', 'no-store');
     const enabled = isPushEnabled();
     response.status(200).json({ enabled, status: enabled ? 'enabled' : 'disabled' });
+  });
+  app.get('/android-email-confirmation', (request, response) => {
+    let supabaseOrigin = '';
+    try {
+      supabaseOrigin = supabaseConfig ? new URL(supabaseConfig.url).origin : '';
+    } catch {
+      supabaseOrigin = '';
+    }
+    response.set({
+      'cache-control': 'no-store',
+      'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ${supabaseOrigin}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+    });
+    response.sendFile(resolve(publicDirectory, 'android-email-confirmation.html'));
+  });
+  const emailHandoffPath = '/api/android/email-handoff';
+  app.all(emailHandoffPath, async (request, response) => {
+    response.set('cache-control', 'no-store');
+    if (request.method !== 'POST') {
+      response.set('allow', 'POST');
+      sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+    if (new URL(request.url, 'http://localhost').search) {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+      return;
+    }
+    if (!allowEmailHandoffCreation(request.ip ?? 'unknown')) {
+      sendJson(response, 429, { error: 'HANDOFF_NO_DISPONIBLE' });
+      return;
+    }
+    try {
+      const body = await readJsonBody(request, 8192);
+      if (Object.keys(body).some((key) => !['emailDigest', 'publicKey'].includes(key))
+        || !/^[0-9a-f]{64}$/.test(body.emailDigest ?? '')
+        || !body.publicKey || typeof body.publicKey !== 'object' || Array.isArray(body.publicKey)
+        || body.publicKey.kty !== 'RSA' || typeof body.publicKey.n !== 'string'
+        || body.publicKey.n.length < 300 || body.publicKey.n.length > 1024
+        || !/^[A-Za-z0-9_-]+$/.test(body.publicKey.n)
+        || body.publicKey.e !== 'AQAB' || JSON.stringify(body.publicKey).length > 4096
+        || Object.keys(body.publicKey).some((key) => !['kty', 'n', 'e', 'alg', 'key_ops', 'ext'].includes(key))) {
+        sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+        return;
+      }
+      if (!supabaseConfig) {
+        sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+        return;
+      }
+      const handoffId = randomUUID();
+      const pollProof = randomBytes(32).toString('base64url');
+      const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await client.rpc('android_email_handoff_create', {
+        p_id: handoffId,
+        p_email_digest: body.emailDigest,
+        p_public_key: body.publicKey,
+        p_proof_digest: createHash('sha256').update(pollProof).digest('hex'),
+      });
+      if (error || data !== true) {
+        sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+        return;
+      }
+      sendJson(response, 201, {
+        handoffId,
+        pollProof,
+        expiresAt: new Date(now().getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      });
+    } catch {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+    }
+  });
+  app.all(`${emailHandoffPath}/:id/public-key`, async (request, response) => {
+    response.set('cache-control', 'no-store');
+    if (request.method !== 'GET') {
+      response.set('allow', 'GET');
+      sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+    if (!UUID_PATTERN.test(request.params.id) || new URL(request.url, 'http://localhost').search
+      || await hasRequestBody(request)) {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+      return;
+    }
+    if (!supabaseConfig) {
+      sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+      return;
+    }
+    try {
+      const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await client.rpc('android_email_handoff_public_key', { p_id: request.params.id });
+      if (error) {
+        sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+        return;
+      }
+      if (!data) {
+        sendJson(response, 404, { error: 'HANDOFF_NO_ENCONTRADO' });
+        return;
+      }
+      sendJson(response, 200, { publicKey: data });
+    } catch {
+      sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+    }
+  });
+  app.all(`${emailHandoffPath}/:id/publish`, async (request, response) => {
+    response.set('cache-control', 'no-store');
+    if (request.method !== 'POST') {
+      response.set('allow', 'POST');
+      sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+    if (!UUID_PATTERN.test(request.params.id) || new URL(request.url, 'http://localhost').search) {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+      return;
+    }
+    const token = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization ?? '')?.[1];
+    if (!token) {
+      sendJson(response, 401, { error: 'HANDOFF_NO_AUTORIZADO' });
+      return;
+    }
+    if (!supabaseConfig) {
+      sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+      return;
+    }
+    try {
+      const body = await readJsonBody(request, 20 * 1024);
+      const payload = body.payload;
+      if (Object.keys(body).length !== 1 || !payload || typeof payload !== 'object' || Array.isArray(payload)
+        || Object.keys(payload).length !== 3
+        || typeof payload.iv !== 'string' || !/^[A-Za-z0-9_-]{16}$/.test(payload.iv)
+        || typeof payload.wrappedKey !== 'string' || !/^[A-Za-z0-9_-]+$/.test(payload.wrappedKey)
+        || payload.wrappedKey.length < 342 || payload.wrappedKey.length > 1024
+        || typeof payload.ciphertext !== 'string' || !/^[A-Za-z0-9_-]+$/.test(payload.ciphertext)
+        || payload.ciphertext.length < 43 || payload.ciphertext.length > 15_000) {
+        sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+        return;
+      }
+      const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data: userData, error: userError } = await client.auth.getUser(token);
+      const user = userError ? null : userData?.user;
+      if (!user?.id || !user.email || !(user.email_confirmed_at || user.confirmed_at)) {
+        sendJson(response, 401, { error: 'HANDOFF_NO_AUTORIZADO' });
+        return;
+      }
+      const { data, error } = await client.rpc('android_email_handoff_publish', {
+        p_id: request.params.id,
+        p_encrypted_payload: payload,
+      });
+      if (error || data !== true) {
+        sendJson(response, 400, { error: 'HANDOFF_NO_AUTORIZADO' });
+        return;
+      }
+      sendJson(response, 200, { ok: true });
+    } catch {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+    }
+  });
+  app.all(`${emailHandoffPath}/:id/consume`, async (request, response) => {
+    response.set('cache-control', 'no-store');
+    if (request.method !== 'POST') {
+      response.set('allow', 'POST');
+      sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+      return;
+    }
+    if (!UUID_PATTERN.test(request.params.id) || new URL(request.url, 'http://localhost').search) {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+      return;
+    }
+    try {
+      const body = await readJsonBody(request, 1024);
+      if (Object.keys(body).length !== 1 || typeof body.pollProof !== 'string'
+        || !/^[A-Za-z0-9_-]{43}$/.test(body.pollProof)) {
+        sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+        return;
+      }
+      if (!supabaseConfig) {
+        sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+        return;
+      }
+      const client = createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await client.rpc('android_email_handoff_consume', {
+        p_id: request.params.id,
+        p_proof_digest: createHash('sha256').update(body.pollProof).digest('hex'),
+      });
+      if (error) {
+        sendJson(response, 503, { error: 'HANDOFF_NO_DISPONIBLE' });
+        return;
+      }
+      if (data?.status === 'pending') {
+        sendJson(response, 202, { status: 'pending' });
+        return;
+      }
+      if (data?.status !== 'ready' || !data.payload) {
+        sendJson(response, 404, { error: 'HANDOFF_NO_ENCONTRADO' });
+        return;
+      }
+      sendJson(response, 200, { payload: data.payload });
+    } catch {
+      sendJson(response, 400, { error: 'HANDOFF_INVALIDO' });
+    }
   });
   app.all('/api/auth/login', (request, response) => {
     response.setHeader('cache-control', 'no-store');
