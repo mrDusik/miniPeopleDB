@@ -57,6 +57,12 @@ Cada entrada SHALL incluir `dnaPrincipal` y `dnaRasgos`, cuyos objetos contienen
 - **AND** usa la imagen de Forestman cuando no existe un activo específico
 - **AND** en las tarjetas de resumen la imagen queda por encima de la fila de Bricks, sin superponerse
 
+#### Scenario: Ajustes visuales exclusivos de monitor
+- **WHEN** se visualizan los rankings Global y Semanal con ancho minimo de 761px, hover y puntero fino
+- **THEN** las imagenes de nivel se desplazan 4px hacia abajo sin alterar la distribucion de las filas
+- **AND** los iconos brick de los botones de regalo miden 1rem de alto y mantienen su proporcion, igual que el boton Gracias de notificaciones
+- **AND** las vistas movil y tablet tactil conservan sus estilos anteriores
+
 ### Requirement: Distribuir los criterios a ancho completo en portrait
 
 En orientacion portrait, el grupo de seis criterios del modal Ranking Global SHALL ocupar el mismo ancho util que la linea azul de su encabezado. Todos los botones SHALL tener igual ancho, sin desplazamiento horizontal, recorte ni salto de linea en sus etiquetas. Cuando seis columnas no permitan leer las etiquetas, SHALL distribuirse en varias filas con columnas de igual ancho y cubriendo todo el ancho util. En Smartphone portrait, SHALL mostrarse en dos filas de tres botones con espaciado compacto. Se SHALL conservar las etiquetas, aria-pressed, criterios, orden del Top 10 y comportamiento landscape existentes. Este ajuste no SHALL introducir selectores en el modal semanal.

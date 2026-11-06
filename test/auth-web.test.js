@@ -15,6 +15,31 @@ const completeProfile = {
   onboardingCompleted: true, favoriteCategories: [],
 };
 
+test('solo en monitor el boton iniciar sesion tiene separacion superior adicional sin afectar al registro', () => {
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.append(style);
+    const selector = '#auth-access-panel:has(#auth-mode-login[aria-pressed="true"]) #classic-auth-submit';
+    const matches = [...style.sheet.cssRules].flatMap((rule) =>
+      (rule.cssRules ? [...rule.cssRules] : [rule])
+        .filter((child) => child.selectorText === selector)
+        .map((child) => ({ condition: rule.conditionText, rule: child })));
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].condition, '(min-width: 761px) and (hover: hover) and (pointer: fine)');
+    assert.equal(matches[0].rule.style.getPropertyValue('margin-top'), '6px');
+    assert.equal(document.querySelector(selector)?.id, 'classic-auth-submit');
+    assert.equal(document.querySelector('#login-google').matches(selector), false);
+    document.querySelector('#auth-mode-login').setAttribute('aria-pressed', 'false');
+    document.querySelector('#auth-mode-register').setAttribute('aria-pressed', 'true');
+    assert.equal(document.querySelector(selector), null);
+  } finally {
+    dom.window.close();
+  }
+});
+
 function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }

@@ -54,6 +54,21 @@ Las filas devueltas SHALL incluir la misma proyección limitada de identidad y r
 - **WHEN** el usuario consulta su lista de amigos
 - **THEN** recibe cada amistad confirmada una sola vez y el otro usuario aparece en la lista recíproca
 
+#### Scenario: Imagen de nivel en monitor
+- **WHEN** el modal Amigos se muestra con ancho minimo de 761px, hover y puntero fino
+- **THEN** las imagenes de nivel de sus filas se desplazan 4px hacia abajo, igual que en los modales de ranking
+- **AND** las vistas movil y tablet tactil conservan sus estilos anteriores
+
+### Requirement: Compartir la distribucion interna de filas con los rankings
+
+Las filas de Amigos, Buscador y solicitudes SHALL reutilizar la estructura y estilos internos de las filas de Ranking Global y Semanal en monitor, movil y tablet. Posicion, avatar, nombre, nivel, DNA, Bricks y coleccion SHALL conservar las mismas columnas, dimensiones, tipografia, altura de linea, distancias, padding y reglas responsive para un mismo ancho disponible. La columna lateral SHALL adaptarse a las acciones de cada modal sin imponer un ancho comun. La reserva interna del indicador de despliegue SHALL conservarse aunque Amigos no muestre dicho indicador.
+
+#### Scenario: Filas equivalentes en cualquier vista
+- **WHEN** se muestran filas de Amigos y de los rankings con el mismo ancho disponible
+- **THEN** sus elementos comunes tienen la misma distribucion y espaciado, sin overrides exclusivos de Amigos
+- **AND** Amigos abre el perfil con clic o teclado sin atributos de acordeon, mientras los rankings conservan su indicador y expansion de destacados
+- **AND** las acciones laterales de amistad y regalo siguen siendo independientes
+
 #### Scenario: Listar solicitudes por dirección y estado
 - **WHEN** el usuario consulta solicitudes enviadas o recibidas
 - **THEN** cada pestaña devuelve únicamente las solicitudes propias de esa dirección con estado pendiente o rechazado

@@ -63,6 +63,9 @@ body {
 .auth-access-panel > p { margin: 0; }
 #login-google { display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
 #login-google img { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
+@media (min-width: 761px) and (hover: hover) and (pointer: fine) {
+  #auth-access-panel:has(#auth-mode-login[aria-pressed="true"]) #classic-auth-submit { margin-top: 6px; }
+}
 .auth-divider { color: var(--muted); font-size: 0.85rem; }
 .auth-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border: 1px solid var(--line); }
 .auth-mode-toggle button { min-height: 40px; border: 0; background: var(--surface); color: var(--ink); cursor: pointer; }
@@ -530,11 +533,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #friends-search { width: 100%; min-height: 42px; margin-bottom: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink); background: white; font: 1rem var(--font-body); }
 #friends-search:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .modal .friends-list { display: grid; gap: 8px; margin: 0; padding: 4px 4px 4px 0; list-style: none; }
-.friends-row { min-width: 0; }
 .friends-list .friends-row { grid-template-columns: minmax(0, 1fr) max-content; }
 .friends-count[hidden] { display: none; }
-.friends-row > .friends-summary { display: block; }
-.friends-row .friends-user-button { width: 100%; cursor: pointer; }
 .friends-remove { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 44px; height: 36px; padding: 3px; color: var(--accent-dark); font-weight: 700; }
 .friends-remove img { width: 22px; height: 22px; object-fit: contain; }
 .friends-request-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -543,10 +543,8 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .friends-request-controls .friends-accept-request { grid-column: 1; grid-row: 1; }
 .friends-request-controls .friends-reject-request, .friends-request-controls .friends-request-state { grid-column: 2; grid-row: 1; justify-self: start; min-width: 0; text-align: left; }
 .friends-action-error { grid-column: 1 / -1; margin: 0; color: var(--accent-dark); font: 0.8rem var(--font-body); }
-.friends-user-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .friends-avatar, .friends-avatar-fallback { display: grid; flex: 0 0 38px; place-items: center; width: 38px; height: 38px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .friends-avatar[hidden], .friends-avatar-fallback[hidden] { display: none; }
-.friends-username { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: 700 0.94rem var(--font-body); }
 .friends-user-details { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; color: var(--muted); font: 0.78rem var(--font-body); }
 .friends-request-state { min-width: 76px; color: var(--muted); font: 700 0.78rem var(--font-body); text-align: right; }
 .friends-request-state.state-rejected { color: var(--accent-dark); }
@@ -732,7 +730,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .global-ranking-entry { min-width: 0; }
 .global-ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) 94px; align-items: center; gap: 10px; min-width: 0; }
 .global-ranking-entry > .global-ranking-row { row-gap: 0; }
-.ranking-expand { position: relative; display: grid; grid-template-columns: 34px 42px minmax(0, 1fr) 100px 85px 18px; grid-template-rows: 22px minmax(30px, auto); align-items: center; gap: 0 10px; width: 100%; min-width: 0; min-height: 68px; border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 0; padding: 8px 12px; color: var(--ink); background: var(--surface); cursor: pointer; text-align: left; font: inherit; }
+.ranking-expand { position: relative; display: grid; grid-template-columns: 34px 42px minmax(0, 1fr) 100px 85px 18px; grid-template-rows: 22px minmax(30px, auto); align-items: center; gap: 0 10px; width: 100%; min-width: 0; min-height: 68px; border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 0; padding: 8px 12px; color: var(--ink); background: var(--surface); cursor: pointer; text-align: left; font: 1rem/1.5 var(--font-body); }
 .ranking-expand-current { border-left-color: var(--accent); background: #fffdf4; }
 .ranking-expand:hover { background: #f4f8ff; }
 .ranking-expand:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -795,6 +793,11 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-summary .ranking-row-chevron { grid-column: 4; grid-row: 1 / 5; }
 .achievements-heading-text { flex: 1 1 auto; min-width: 0; }
 .achievements-heading h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+
+@media (min-width: 761px) and (hover: hover) and (pointer: fine) {
+  .ranking-gift .ranking-gift-icon { width: auto; height: 1rem; }
+  .modal-ranking .ranking-level-info .gamification-level-image, .modal-friends .ranking-level-info .gamification-level-image { transform: translateY(4px); }
+}
 
 @media (max-width: 1400px) {
   .ranking-user-details { grid-template-columns: 1fr; }
@@ -899,7 +902,6 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .modal { padding: 18px; }
   .modal-ranking { padding: 12px; }
   .modal-friends { padding: 14px; }
-  .friends-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
   .modal-dna { padding: 16px; }
   .dna-dialog-body { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; }
   .dna-chart { width: min(220px, 64vw); }

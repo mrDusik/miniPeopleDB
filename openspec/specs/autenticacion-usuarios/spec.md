@@ -6,6 +6,15 @@ Identifica a cada usuario mediante Google OAuth, mantiene su sesión en la inter
 
 ## Requirements
 
+### Requirement: Separacion del boton de acceso en monitor
+
+En modo Iniciar sesion, el boton de envio del formulario clasico SHALL tener 6px adicionales de margen superior cuando el ancho sea al menos 761px con hover y puntero fino. Este ajuste SHALL NOT afectar al registro, al acceso Google ni a las vistas movil y tablet tactil.
+
+#### Scenario: Boton de acceso clasico en monitor
+- **WHEN** se muestra el formulario Iniciar sesion en monitor
+- **THEN** el boton de envio queda ligeramente mas abajo con 6px de margen superior adicional
+- **AND** al cambiar a Crear cuenta no se aplica ese margen adicional
+
 ### Requirement: Iniciar sesión con Google
 
 La interfaz SHALL mostrar una pantalla de acceso con un botón "Iniciar sesión con Google" cuando no exista una sesión válida, y SHALL ocultar el contenido de la colección hasta que el usuario esté autenticado. El inicio de sesión SHALL delegarse en el proveedor Google a través de Supabase Auth usando el flujo PKCE y SHALL volver a la misma aplicación tras la autenticación.

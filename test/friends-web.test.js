@@ -18,7 +18,7 @@ const friendRows = {
   received: [{ userId: 'friend-c', username: 'SpaceFan', avatarUrl: null, bricks: 120, level: { id: 3, name: 'Level' }, globalPosition: 7, relationshipId: 'request-c', status: 'pending' }],
 };
 
-function createApp({ failLists = false, failSearch = false, failActions = false, failProfile = false, searchFriend = false, profileOverrides = {}, catalog = [], minifiguraError = null } = {}) {
+function createApp({ failLists = false, failSearch = false, failActions = false, failProfile = false, searchFriend = false, profileOverrides = {}, catalog = [], minifiguraError = null, rankingEntries = [] } = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLCanvasElement.prototype.getContext = () => ({});
@@ -94,7 +94,8 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
         ...profileOverrides,
       }) };
     }
-    if (url === '/api/ranking' || url.startsWith('/api/ranking?')) return { ok: true, json: async () => [] };
+    if (url === '/api/ranking/semanal') return { ok: true, json: async () => ({ available: true, entries: structuredClone(rankingEntries) }) };
+    if (url === '/api/ranking' || url.startsWith('/api/ranking?')) return { ok: true, json: async () => structuredClone(rankingEntries) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
   window.eval(withSupabaseSession(script, { session: {
@@ -174,6 +175,100 @@ test('el buscador no muestra instrucciones de longitud pero mantiene el umbral d
     assert.equal(requests.some(({ url }) => url.includes('/api/amigos/buscar')), false);
     assert.equal(search.minLength, 3);
     await tick();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('solo en monitor las filas de amigos bajan la imagen de nivel igual que los rankings', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    window.document.querySelector('#open-friends').click();
+    await tick();
+    const style = window.document.createElement('style');
+    style.textContent = styles;
+    window.document.head.append(style);
+    const selector = '.modal-friends .ranking-level-info .gamification-level-image';
+    const matchingRules = [...style.sheet.cssRules].flatMap((rule) =>
+      (rule.cssRules ? [...rule.cssRules] : [rule])
+        .filter((child) => child.selectorText?.split(', ').includes(selector))
+        .map((child) => ({ condition: rule.conditionText, rule: child })));
+    assert.equal(matchingRules.length, 1);
+    const [{ condition, rule }] = matchingRules;
+    assert.equal(condition, '(min-width: 761px) and (hover: hover) and (pointer: fine)');
+    assert.equal(rule.style.getPropertyValue('transform'), 'translateY(4px)');
+    assert.ok(rule.selectorText.split(', ').includes('.modal-ranking .ranking-level-info .gamification-level-image'));
+    for (const type of ['friends', 'sent', 'received']) {
+      window.document.querySelector(`#friends-tab-${type}`).click();
+      await tick();
+      const image = window.document.querySelector(`#friends-list-${type} .gamification-level-image`);
+      assert.ok(image);
+      assert.ok(image.matches(selector));
+    }
+    assert.equal(window.document.querySelector('.gamification-level-image').matches(selector), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('amigos y ambos rankings comparten estructura y reglas internas en todos los breakpoints, con acciones distintas', async () => {
+  const rankingEntry = {
+    userId: 'friend-a', displayName: 'BrickFan', avatarUrl: 'https://avatar.example/a.png',
+    bricks: 240, bricksSemanales: 240, nivel: 4, nombreNivel: 'Citizen', totalColeccion: 0,
+    dnaPrincipal: 'Newbie', dnaRasgos: [], top5Precio: [], top5Antiguedad: [], regaloEnviado: false,
+  };
+  const { dom, window } = createApp({ rankingEntries: [rankingEntry] });
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    document.querySelector('#open-friends').click();
+    document.querySelector('#open-global-ranking').click();
+    document.querySelector('#open-weekly-ranking').click();
+    await tick();
+    await tick();
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.append(style);
+    const flattenRules = (rules) => [...rules].flatMap((rule) => rule.cssRules ? flattenRules(rule.cssRules) : [rule]);
+    const rules = flattenRules(style.sheet.cssRules).filter((rule) => rule.selectorText && !rule.selectorText.includes('::'));
+    const friendButton = document.querySelector('#friends-list-friends .friends-user-button');
+    const properties = ['display', 'grid-template-columns', 'grid-template-rows', 'gap', 'padding', 'font-size', 'line-height'];
+    const friendNodes = [friendButton.parentElement, friendButton, ...friendButton.querySelectorAll('*')];
+    for (const id of ['ranking-dialog', 'weekly-ranking-dialog']) {
+      const rankingButton = document.querySelector(`#${id} .ranking-expand`);
+      const rankingNodes = [
+        rankingButton.parentElement, rankingButton,
+        ...[...rankingButton.querySelectorAll('*')].filter((node) => !node.matches('.ranking-row-chevron')),
+      ];
+      assert.equal(friendNodes.length, rankingNodes.length);
+      for (const [index, friendNode] of friendNodes.entries()) {
+        const rankingNode = rankingNodes[index];
+        assert.equal(friendNode.tagName, rankingNode.tagName);
+        for (const rule of rules) {
+          assert.equal(friendNode.matches(rule.selectorText), rankingNode.matches(rule.selectorText), rule.selectorText);
+        }
+        for (const property of properties) {
+          assert.equal(window.getComputedStyle(friendNode).getPropertyValue(property),
+            window.getComputedStyle(rankingNode).getPropertyValue(property), property);
+        }
+      }
+      assert.equal(rankingButton.getAttribute('aria-expanded'), 'false');
+      rankingButton.click();
+      assert.equal(rankingButton.getAttribute('aria-expanded'), 'true');
+      assert.equal(document.querySelector(`#${id} .ranking-user-details`).hidden, false);
+    }
+    const cardRule = rules.find((rule) => rule.selectorText === '.ranking-expand');
+    assert.equal(cardRule.style.getPropertyValue('font'), '1rem/1.5 var(--font-body)');
+    assert.equal(friendButton.hasAttribute('aria-expanded'), false);
+    assert.equal(friendButton.querySelector('.ranking-row-chevron'), null);
+    friendButton.click();
+    await tick();
+    assert.equal(document.querySelector('#public-profile-dialog').open, true);
+    assert.ok(document.querySelector('#friends-list-friends .friends-remove'));
+    assert.ok(document.querySelector('#ranking-dialog .ranking-gift'));
   } finally {
     dom.window.close();
   }
