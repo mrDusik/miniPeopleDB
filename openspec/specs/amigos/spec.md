@@ -79,6 +79,7 @@ Las filas de Amigos, Buscador y solicitudes SHALL reutilizar la estructura y est
 - **THEN** las filas ocupan todo el ancho disponible del listado
 - **AND** las solicitudes enviadas usan una sola columna, de modo que la tarjeta del usuario llega al borde derecho sin reservar espacio para acciones
 - **AND** los botones de aceptar y rechazar se alinean al borde derecho del listado sin reservar columnas vacías
+- **AND** en movil portrait ambos botones tienen el mismo ancho de 60px y una altura minima tactil de 44px
 - **AND** el resumen del usuario aprovecha el espacio liberado y las solicitudes rechazadas conservan su estado junto al botón de aceptar
 
 #### Scenario: Listar solicitudes por dirección y estado

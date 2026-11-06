@@ -117,6 +117,7 @@ El sistema SHALL crear notificaciones duraderas para las nuevas solicitudes reci
 - **WHEN** se renderiza una notificación de solicitud o aceptación de amistad
 - **THEN** el username aparece en negrita y el resto del mensaje conserva su texto exacto
 - **AND** la acción de una solicitud muestra `/status_images/friends.png` con nombre accesible y sin el corazón anterior
+- **AND** el boton de aceptar ocupa solo el ancho de su contenido, como Gracias, tambien en movil portrait y Android
 
 #### Scenario: Aceptar una solicitud
 - **WHEN** una persona acepta una solicitud recibida

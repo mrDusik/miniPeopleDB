@@ -85,6 +85,24 @@ test('destacados de consulta publica usan al titular sin controles editables ni 
   dom.window.close();
 });
 
+test('los regalos globales y semanales reservan ancho de contenido y el mismo padding en portrait', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const portraitRules = rules.filter((rule) => rule.conditionText?.startsWith('(max-width: 600px) and (orientation: portrait), (orientation: portrait)'))
+      .flatMap((rule) => [...rule.cssRules]);
+    const row = portraitRules.find((rule) => rule.selectorText === '.global-ranking-row');
+    const gift = portraitRules.find((rule) => rule.selectorText === '.ranking-gift');
+    assert.equal(row.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) minmax(44px, max-content)');
+    assert.equal(gift.style.getPropertyValue('padding'), '0 3px');
+    assert.equal(gift.style.getPropertyValue('gap'), '3px');
+    assert.equal(gift.style.getPropertyValue('font-size'), '0.7rem');
+    assert.equal(gift.style.getPropertyValue('min-height'), '44px');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el acceso y el dialogo semanal tienen semantica propia y reutilizan la estructura visual global', () => {
   const dom = createDom();
   const launcher = dom.window.document.querySelector('#open-weekly-ranking');

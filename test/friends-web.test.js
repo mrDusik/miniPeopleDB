@@ -106,6 +106,23 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+test('aceptar y rechazar tienen iguales dimensiones tactiles en portrait', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const portraitRules = rules.filter((rule) => rule.conditionText?.startsWith('(max-width: 600px) and (orientation: portrait), (orientation: portrait)'))
+      .flatMap((rule) => [...rule.cssRules]);
+    const buttons = portraitRules.find((rule) => rule.selectorText === '.friends-request-controls > .button');
+    assert.ok(buttons, 'las dos acciones deben compartir dimensiones');
+    assert.equal(buttons.style.getPropertyValue('flex'), '0 0 60px');
+    assert.equal(buttons.style.getPropertyValue('width'), '60px');
+    assert.equal(buttons.style.getPropertyValue('min-height'), '44px');
+    assert.equal(buttons.style.getPropertyValue('padding'), '0 9px');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('perfil prioriza estrellas del titular antes de limitar a cinco y solo muestra indicadores', async () => {
   const achievements = Array.from({ length: 6 }, (_, index) => ({
     id: `logro-${index}`, name: `Logro ${index}`, quantity: 1, total: 100 - index,
