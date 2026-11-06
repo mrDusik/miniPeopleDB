@@ -74,6 +74,12 @@ Las filas de Amigos, Buscador y solicitudes SHALL reutilizar la estructura y est
 - **AND** Amigos abre el perfil con clic o teclado sin atributos de acordeon, mientras los rankings conservan su indicador y expansion de destacados
 - **AND** las acciones laterales de amistad y regalo siguen siendo independientes
 
+#### Scenario: Ancho de filas y acciones al borde del modal
+- **WHEN** se muestran filas en cualquiera de las cuatro pestañas del modal Amigos
+- **THEN** las filas ocupan todo el ancho disponible del listado
+- **AND** los botones de aceptar y rechazar se alinean al borde derecho del listado sin reservar columnas vacías
+- **AND** el resumen del usuario aprovecha el espacio liberado y las solicitudes rechazadas conservan su estado junto al botón de aceptar
+
 #### Scenario: Listar solicitudes por dirección y estado
 - **WHEN** el usuario consulta solicitudes enviadas o recibidas
 - **THEN** cada pestaña devuelve únicamente las solicitudes propias de esa dirección con estado pendiente o rechazado

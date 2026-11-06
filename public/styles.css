@@ -533,15 +533,14 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #friends-search { width: 100%; min-height: 42px; margin-bottom: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink); background: white; font: 1rem var(--font-body); }
 #friends-search:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .modal .friends-list { display: grid; gap: 8px; margin: 0; padding: 4px 4px 4px 0; list-style: none; }
-.friends-list .friends-row { grid-template-columns: minmax(0, 1fr) max-content; }
+.friends-list .friends-row { grid-template-columns: minmax(0, 1fr) max-content; width: 100%; }
 .friends-count[hidden] { display: none; }
 .friends-remove { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 44px; height: 36px; padding: 3px; color: var(--accent-dark); font-weight: 700; }
 .friends-remove img { width: 22px; height: 22px; object-fit: contain; }
 .friends-request-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .friends-request-actions .friends-reject-request { color: var(--accent-dark); }
-.friends-request-controls { display: grid; grid-template-columns: 64px 76px; gap: 8px; }
-.friends-request-controls .friends-accept-request { grid-column: 1; grid-row: 1; }
-.friends-request-controls .friends-reject-request, .friends-request-controls .friends-request-state { grid-column: 2; grid-row: 1; justify-self: start; min-width: 0; text-align: left; }
+.friends-request-controls { justify-self: end; }
+.friends-request-controls .friends-request-state { order: 1; }
 .friends-action-error { grid-column: 1 / -1; margin: 0; color: var(--accent-dark); font: 0.8rem var(--font-body); }
 .friends-avatar, .friends-avatar-fallback { display: grid; flex: 0 0 38px; place-items: center; width: 38px; height: 38px; border: 2px solid var(--blue); border-radius: 50%; object-fit: cover; }
 .friends-avatar[hidden], .friends-avatar-fallback[hidden] { display: none; }
