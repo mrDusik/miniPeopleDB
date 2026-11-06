@@ -81,6 +81,11 @@ El sistema SHALL generar como maximo una notificacion de progreso diaria por usu
 - **THEN** el sistema no inventa una base cero ni snapshots intermedios
 - **AND** el resumen inicial omite diferencias no calculables
 
+#### Scenario: Iconos alineados en el resumen diario
+- **WHEN** se despliegan las métricas de una notificación de Resumen diario
+- **THEN** todos sus iconos, incluido Bricks, usan un tamaño de 22px por 22px y una columna de 24px
+- **AND** las etiquetas y valores conservan la misma alineación sin deformar las imágenes
+
 #### Scenario: Reintentar el mismo snapshot
 - **WHEN** `daily-sync` vuelve a confirmar al mismo usuario y fecha
 - **THEN** existe una unica notificacion diaria con los valores actualizados

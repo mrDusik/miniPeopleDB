@@ -428,6 +428,15 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.ok(details.textContent.includes('📦Colección'));
     assert.ok(details.textContent.includes('🏆Nivel'));
     assert.match(styles, /\.daily-summary-icon \{[^}]*width: 22px; height: 22px;/);
+    const style = window.document.createElement('style');
+    style.textContent = styles;
+    window.document.head.append(style);
+    for (const icon of details.querySelectorAll('.daily-summary-icon')) {
+      const iconStyle = window.getComputedStyle(icon);
+      assert.equal(iconStyle.width, '22px');
+      assert.equal(iconStyle.height, '22px');
+      assert.equal(window.getComputedStyle(icon.parentElement).gridTemplateColumns, '24px minmax(0, 1fr)');
+    }
     assert.match(styles, /\.daily-summary-emoji \{[^}]*font-size: 22px; line-height: 1;/);
     assert.match(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
     assert.doesNotMatch(styles, /\.daily-summary-metrics \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
