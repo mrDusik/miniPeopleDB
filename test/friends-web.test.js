@@ -285,6 +285,8 @@ test('las filas de amigos ocupan el ancho disponible y las solicitudes no reserv
     document.head.append(style);
     const rowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '.friends-list .friends-row');
     assert.equal(rowRule.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) max-content');
+    const sentRowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '#friends-list-sent .friends-row');
+    assert.equal(sentRowRule.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
     document.querySelector('#open-friends').click();
     for (const type of ['friends', 'sent', 'received', 'search']) {
       document.querySelector(`#friends-tab-${type}`).click();
@@ -298,6 +300,11 @@ test('las filas de amigos ocupan el ancho disponible y las solicitudes no reserv
       const row = document.querySelector(`#friends-list-${type} .friends-row`);
       assert.ok(row, type);
       assert.equal(window.getComputedStyle(row).width, '100%', type);
+      if (type === 'sent') {
+        assert.equal(row.children.length, 1);
+        assert.ok(row.firstElementChild.classList.contains('friends-summary'));
+        assert.ok(row.matches(sentRowRule.selectorText));
+      }
     }
     const actions = document.querySelector('#friends-list-received .friends-request-controls');
     const controlsStyle = window.getComputedStyle(actions);

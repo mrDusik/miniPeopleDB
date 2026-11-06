@@ -534,6 +534,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #friends-search:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .modal .friends-list { display: grid; gap: 8px; margin: 0; padding: 4px 4px 4px 0; list-style: none; }
 .friends-list .friends-row { grid-template-columns: minmax(0, 1fr) max-content; width: 100%; }
+#friends-list-sent .friends-row { grid-template-columns: minmax(0, 1fr); }
 .friends-count[hidden] { display: none; }
 .friends-remove { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 44px; height: 36px; padding: 3px; color: var(--accent-dark); font-weight: 700; }
 .friends-remove img { width: 22px; height: 22px; object-fit: contain; }

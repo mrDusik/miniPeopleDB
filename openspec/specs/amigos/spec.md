@@ -77,6 +77,7 @@ Las filas de Amigos, Buscador y solicitudes SHALL reutilizar la estructura y est
 #### Scenario: Ancho de filas y acciones al borde del modal
 - **WHEN** se muestran filas en cualquiera de las cuatro pestañas del modal Amigos
 - **THEN** las filas ocupan todo el ancho disponible del listado
+- **AND** las solicitudes enviadas usan una sola columna, de modo que la tarjeta del usuario llega al borde derecho sin reservar espacio para acciones
 - **AND** los botones de aceptar y rechazar se alinean al borde derecho del listado sin reservar columnas vacías
 - **AND** el resumen del usuario aprovecha el espacio liberado y las solicitudes rechazadas conservan su estado junto al botón de aceptar
 
