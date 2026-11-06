@@ -168,9 +168,7 @@ body {
 .daily-summary-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 0; }
 .daily-summary-metric { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; align-items: start; gap: 2px 8px; min-width: 0; }
 .daily-summary-metric.has-icon { grid-template-columns: 24px minmax(0, 1fr); }
-.daily-summary-metric.has-icon:has(.daily-summary-icon[src$="/brick.png"]) { grid-template-columns: 36px minmax(0, 1fr); }
 .daily-summary-icon { grid-column: 1; grid-row: 1 / 3; align-self: center; width: 22px; height: 22px; object-fit: contain; }
-.daily-summary-icon[src$="/brick.png"] { width: 33px; height: 22px; }
 .daily-summary-emoji { display: grid; place-items: center; font-size: 22px; line-height: 1; }
 .daily-summary-label { grid-column: 1; grid-row: 1; min-width: 0; color: var(--muted); font-size: 0.82rem; }
 .daily-summary-metric.has-icon .daily-summary-label, .daily-summary-metric.has-icon .daily-summary-value { grid-column: 2; }
