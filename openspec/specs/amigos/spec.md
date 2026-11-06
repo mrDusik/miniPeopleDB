@@ -40,6 +40,11 @@ Una persona autenticada SHALL poder enviar una solicitud a otro usuario, pero SH
 - **THEN** la misma solicitud pasa de rechazada a aceptada y ambos usuarios aparecen como amigos
 - **AND** el rechazo no genera una notificación para el emisor
 
+#### Scenario: Botón para rechazar una solicitud
+- **WHEN** el modal Amigos muestra una solicitud recibida pendiente
+- **THEN** la acción de rechazo se muestra como un botón con el emoji ✖, no como un enlace de texto
+- **AND** conserva una etiqueta accesible y un título que identifican la acción y el username del emisor
+
 #### Scenario: Aceptación duplicada
 - **WHEN** una solicitud aceptada vuelve a aceptarse desde otra vista o una respuesta tardía
 - **THEN** la amistad permanece única y no se duplica la notificación de aceptación

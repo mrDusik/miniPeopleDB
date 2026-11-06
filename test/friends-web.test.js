@@ -521,8 +521,13 @@ test('el launcher abre el modal accesible de cuatro pestañas y la lista muestra
     const accept = document.querySelector('#friends-list-received .friends-accept-request');
     const reject = document.querySelector('#friends-list-received .friends-reject-request');
     assert.equal(accept.textContent, '+');
-    assert.equal(reject.textContent, 'Rechazar');
-    assert.equal(reject.classList.contains('logout-link'), true);
+    assert.equal(reject.tagName, 'BUTTON');
+    assert.equal(reject.type, 'button');
+    assert.equal(reject.textContent, '✖');
+    assert.equal(reject.classList.contains('logout-link'), false);
+    assert.equal(reject.classList.contains('button'), true);
+    assert.equal(reject.classList.contains('button-secondary'), true);
+    assert.equal(reject.classList.contains('button-icon'), true);
     assert.equal(accept.getAttribute('aria-label'), 'Aceptar solicitud de amistad de SpaceFan');
     assert.equal(reject.getAttribute('aria-label'), 'Rechazar solicitud de amistad de SpaceFan');
     assert.equal(accept.title, accept.getAttribute('aria-label'));
