@@ -387,7 +387,7 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.equal(giftThankButton.parentElement.className, 'notification-actions');
     assert.equal(giftThankButton.parentElement.parentElement.className, 'notification-content');
     assert.match(styles, /\.notification-actions \{[^}]*display: flex;[^}]*justify-content: flex-start/);
-    assert.match(styles, /\.notification-actions \.notification-thank \{[^}]*width: auto/);
+    assert.match(styles, /\.notification-actions \.notification-thank, \.notification-actions \.notification-accept-friend \{[^}]*width: auto/);
     assert.equal(giftThankButton.childNodes[0].textContent.trim(), '¡Gracias! +5');
     assert.equal(giftThankButton.querySelector('img').getAttribute('src'), '/toast_images/brick.png');
     assert.equal(list.querySelector('[data-notification-id="entered-1"] .notification-leading-emoji').textContent, '🌐');
@@ -463,6 +463,21 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.equal(thankButton.disabled, true);
     assert.equal(window.document.querySelector('#notifications-unread-badge').hidden, false);
     assert.equal(window.document.querySelector('[data-notification-id="daily-1"]').classList.contains('is-read'), false);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la accion de amistad conserva ancho de contenido como Gracias en movil', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    for (const selector of ['.notification-actions .notification-thank', '.notification-actions .notification-accept-friend']) {
+      const rule = rules.find((candidate) => candidate.selectorText?.split(', ').includes(selector));
+      assert.equal(rule.style.getPropertyValue('flex'), '0 0 auto', selector);
+      assert.equal(rule.style.getPropertyValue('width'), 'auto', selector);
+      assert.equal(rule.style.getPropertyValue('max-width'), '100%', selector);
+    }
   } finally {
     dom.window.close();
   }

@@ -70,6 +70,7 @@ En orientacion portrait, el grupo de seis criterios del modal Ranking Global SHA
 #### Scenario: Movil portrait
 - **WHEN** se abre el global en un viewport portrait estrecho
 - **THEN** los seis criterios se distribuyen con igual ancho en dos filas, el grupo cubre la linea azul y no hay scroll horizontal ni etiquetas partidas o solapadas
+- **AND** el regalo reserva el ancho de su contenido con el mismo padding horizontal de 3px que el semanal, sin ampliar el modal ni reducir texto o icono; el resumen de usuario ocupa el ancho restante
 
 #### Scenario: Tablet portrait y landscape
 - **WHEN** se abre el global en tablet portrait y despues en landscape
