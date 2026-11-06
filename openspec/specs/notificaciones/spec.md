@@ -62,6 +62,11 @@ El sistema SHALL crear notificaciones duraderas para regalos V2, agradecimientos
 - **AND** el emisor actualiza los hitos por su primera o decima accion, sin marcar la notificacion como leida
 - **AND** un reintento no genera nuevos premios ni eventos
 
+#### Scenario: Icono compacto de agradecimiento en monitor
+- **WHEN** la bandeja se muestra con ancho minimo de 761px, hover y puntero fino
+- **THEN** el icono brick del boton Gracias mide 1rem de alto y conserva su proporcion, igual que los botones de regalo de los rankings
+- **AND** no cambia el comportamiento de los botones ni los estilos de movil y tablet tactil
+
 ### Requirement: Crear un resumen diario desde snapshots confirmados
 
 El sistema SHALL generar como maximo una notificacion de progreso diaria por usuario y fecha de snapshot, solo despues de confirmar el snapshot del proceso `daily-sync`. La notificacion SHALL contener las diferencias entre el snapshot confirmado y el snapshot previo existente mas reciente, sin fabricar valores para dias ausentes: figuras, valor EUR, Bricks, nivel y cada rasgo DNA. El nivel SHALL admitir variaciones positivas, nulas y negativas. SHALL incluir variaciones de posicion global o semanal solo cuando el usuario pertenecia a ese ranking en ambas mediciones comparadas. Reintentar el mismo dia SHALL actualizar el resumen existente sin duplicarlo ni cambiar su estado de lectura.

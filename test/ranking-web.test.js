@@ -431,6 +431,55 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
     assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1232px\) and \(hover: hover\), \(min-width: 761px\) and \(max-width: 1232px\) and \(orientation: portrait\)/);
 });
 
+test('solo en monitor reduce los bricks de regalo y gracias y baja las imagenes de nivel de ambos rankings', async () => {
+  const dom = createDom();
+  try {
+    const { window } = dom;
+    installFetch(window, [entry()], {}, { available: true, entries: [entry({ bricksSemanales: 125 })] });
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    window.document.querySelector('#open-global-ranking').click();
+    window.document.querySelector('#open-weekly-ranking').click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const style = window.document.createElement('style');
+    style.textContent = styles;
+    window.document.head.append(style);
+    const rules = [...style.sheet.cssRules];
+    const desktopCondition = '(min-width: 761px) and (hover: hover) and (pointer: fine)';
+    const desktopRules = rules.filter((rule) => rule.conditionText === desktopCondition)
+      .flatMap((rule) => [...rule.cssRules]);
+    const giftRule = desktopRules.find((rule) => rule.selectorText === '.ranking-gift .ranking-gift-icon');
+    const levelRule = desktopRules.find((rule) => rule.selectorText?.split(', ').includes('.modal-ranking .ranking-level-info .gamification-level-image'));
+    assert.equal(giftRule.style.getPropertyValue('width'), 'auto');
+    assert.equal(giftRule.style.getPropertyValue('height'), '1rem');
+    assert.equal(levelRule.style.getPropertyValue('transform'), 'translateY(4px)');
+
+    for (const id of ['ranking-dialog', 'weekly-ranking-dialog']) {
+      const dialog = window.document.getElementById(id);
+      assert.ok(dialog.querySelector(giftRule.selectorText));
+      assert.ok(dialog.querySelector(levelRule.selectorText));
+    }
+    const thankButton = window.document.createElement('button');
+    thankButton.className = 'ranking-gift notification-thank';
+    const thankIcon = window.document.createElement('img');
+    thankIcon.className = 'ranking-gift-icon notification-brick-icon';
+    thankButton.append(thankIcon);
+    assert.ok(thankIcon.matches(giftRule.selectorText));
+    assert.equal(window.document.querySelector('.gamification-level-image').matches(levelRule.selectorText), false);
+
+    for (const rule of rules) {
+      const scopedRules = rule.cssRules ? [...rule.cssRules] : [rule];
+      if (scopedRules.some((child) => child.selectorText === giftRule.selectorText || child.selectorText === levelRule.selectorText)) {
+        assert.equal(rule.conditionText, desktopCondition);
+      }
+    }
+    assert.equal(rules.find((rule) => rule.selectorText === '.ranking-gift-icon').style.getPropertyValue('height'), '1.6rem');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesión y usa acordeón no interactivo', async () => {
   const dom = createDom();
   const ranking = [entry({ userId: 'user-a', displayName: 'Usuaria Ana Pérez', bricks: 300 }), entry({ dnaPrincipal: 'Newbie', dnaRasgos: [] })];
