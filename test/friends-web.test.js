@@ -274,6 +274,48 @@ test('amigos y ambos rankings comparten estructura y reglas internas en todos lo
   }
 });
 
+test('las filas de amigos ocupan el ancho disponible y las solicitudes no reservan columnas vacías junto a las acciones', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.append(style);
+    const rowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '.friends-list .friends-row');
+    assert.equal(rowRule.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) max-content');
+    document.querySelector('#open-friends').click();
+    for (const type of ['friends', 'sent', 'received', 'search']) {
+      document.querySelector(`#friends-tab-${type}`).click();
+      if (type === 'search') {
+        const search = document.querySelector('#friends-search');
+        search.value = 'Space';
+        search.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      await tick();
+      const row = document.querySelector(`#friends-list-${type} .friends-row`);
+      assert.ok(row, type);
+      assert.equal(window.getComputedStyle(row).width, '100%', type);
+    }
+    const actions = document.querySelector('#friends-list-received .friends-request-controls');
+    const controlsStyle = window.getComputedStyle(actions);
+    assert.equal(controlsStyle.display, 'flex');
+    assert.equal(controlsStyle.justifySelf, 'end');
+    assert.equal(controlsStyle.justifyContent, 'flex-end');
+    assert.equal(controlsStyle.flexWrap, 'nowrap');
+    assert.equal(controlsStyle.gridTemplateColumns, '');
+    assert.equal(actions.lastElementChild.classList.contains('friends-reject-request'), true);
+    const state = document.createElement('span');
+    state.className = 'friends-request-state';
+    actions.prepend(state);
+    assert.equal(window.getComputedStyle(state).order, '1');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el indicador de búsqueda de amigos tiene espacio para girar sin recortarse', () => {
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {
@@ -535,7 +577,7 @@ test('el launcher abre el modal accesible de cuatro pestañas y la lista muestra
     assert.equal(accept.querySelector('img').getAttribute('src'), '/status_images/friends.png');
     assert.equal(reject.querySelector('img'), null);
     assert.equal(accept.parentElement.classList.contains('friends-request-controls'), true);
-    assert.match(styles, /\.friends-request-controls \{[^}]*grid-template-columns: 64px 76px/);
+    assert.match(styles, /\.friends-request-controls \{[^}]*justify-self: end/);
     assert.match(styles, /\.friends-request-actions \{[^}]*flex-wrap: nowrap/);
     assert.match(styles, /\.friends-list \.friends-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) max-content/);
     assert.equal(document.querySelector('#friends-list-received .friends-username').textContent, 'SpaceFan');
