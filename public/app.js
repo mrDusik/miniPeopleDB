@@ -3181,12 +3181,12 @@ function renderFriendRows(rows, type) {
       if (friend.status === 'pending') {
         const rejectButton = document.createElement('button');
         rejectButton.type = 'button';
-        rejectButton.className = 'logout-link friends-reject-request';
+        rejectButton.className = 'button button-secondary button-icon friends-reject-request';
         rejectButton.dataset.requestId = friend.relationshipId;
         rejectButton.dataset.requestAction = 'reject';
         rejectButton.setAttribute('aria-label', `Rechazar solicitud de amistad de ${friend.username}`);
         rejectButton.title = `Rechazar solicitud de amistad de ${friend.username}`;
-        rejectButton.textContent = 'Rechazar';
+        rejectButton.textContent = '✖';
         rejectButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
         if (rejectButton.disabled) rejectButton.setAttribute('aria-busy', 'true');
         actions.append(rejectButton);
