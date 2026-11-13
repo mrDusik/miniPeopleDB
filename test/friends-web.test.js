@@ -12,8 +12,8 @@ const styles = await readFile(new URL('../public/styles.css', import.meta.url), 
 const friendRows = {
   friends: [{ userId: 'friend-a', username: 'BrickFan', avatarUrl: 'https://avatar.example/a.png', bricks: 240, level: { id: 4, name: 'Citizen' }, globalPosition: 3, status: 'accepted' }],
   sent: [
-    { userId: 'friend-b', username: 'CastleFan', avatarUrl: null, bricks: 50, level: { id: 2, name: 'Level' }, globalPosition: null, status: 'rejected' },
-    { userId: 'friend-d', username: 'CityFan', avatarUrl: null, bricks: 20, level: { id: 1, name: 'Level' }, globalPosition: null, status: 'pending' },
+    { userId: 'friend-b', username: 'CastleFan', avatarUrl: null, bricks: 50, level: { id: 2, name: 'Level' }, globalPosition: null, relationshipId: 'request-b', status: 'pending' },
+    { userId: 'friend-d', username: 'CityFan', avatarUrl: null, bricks: 20, level: { id: 1, name: 'Level' }, globalPosition: null, relationshipId: 'request-d', status: 'pending' },
   ],
   received: [{ userId: 'friend-c', username: 'SpaceFan', avatarUrl: null, bricks: 120, level: { id: 3, name: 'Level' }, globalPosition: 7, relationshipId: 'request-c', status: 'pending' }],
 };
@@ -37,6 +37,7 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     this.dispatchEvent(new window.Event('close'));
   };
   const requests = [];
+  const revokedRequests = new Set();
   const storedCatalog = structuredClone(catalog);
   let removed = false;
   let gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] };
@@ -61,7 +62,11 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'idle' }) };
     if (url === '/api/profile') return { ok: true, json: async () => ({ username: 'Viewer', onboardingCompleted: true, favoriteCategories: [], currency: 'EUR', language: 'es', avatarUrl: null }) };
     if (url.startsWith('/api/notificaciones')) return { ok: true, json: async () => ({ notifications: [], unreadCount: 0, nextCursor: null }) };
-    if (url === '/api/amigos/contadores') return { ok: true, json: async () => ({ friends: removed ? 0 : 1, sent: 2, received: 3 }) };
+    if (url === '/api/amigos/contadores') return { ok: true, json: async () => ({ friends: removed ? 0 : 1, sent: 2 - revokedRequests.size, received: 3 }) };
+    if (init.method === 'DELETE' && url.startsWith('/api/amigos/solicitudes/')) {
+      if (!failActions) revokedRequests.add(url.split('/').at(-1));
+      return { ok: !failActions, json: async () => ({ ok: !failActions }) };
+    }
     if (init.method === 'DELETE' && url.startsWith('/api/amigos/')) {
       if (!failActions) {
         removed = true;
@@ -71,7 +76,9 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     }
     if (url.startsWith('/api/amigos?tipo=')) {
       const type = new URL(url, 'http://localhost').searchParams.get('tipo');
-      return { ok: !failLists, json: async () => failLists ? { error: 'AMIGOS_NO_DISPONIBLES' } : { users: structuredClone(friendRows[type] ?? []) } };
+      return { ok: !failLists, json: async () => failLists ? { error: 'AMIGOS_NO_DISPONIBLES' } : {
+        users: structuredClone((friendRows[type] ?? []).filter(({ relationshipId }) => !revokedRequests.has(relationshipId))),
+      } };
     }
     if (url.startsWith('/api/amigos/buscar?')) {
       return { ok: !failSearch, json: async () => failSearch ? { error: 'AMIGOS_NO_DISPONIBLES' } : { users: [
@@ -118,6 +125,158 @@ test('aceptar y rechazar tienen iguales dimensiones tactiles en portrait', () =>
     assert.equal(buttons.style.getPropertyValue('width'), '60px');
     assert.equal(buttons.style.getPropertyValue('min-height'), '44px');
     assert.equal(buttons.style.getPropertyValue('padding'), '0 9px');
+    const column = portraitRules.find((rule) => rule.selectorText === '.friends-request-pending');
+    assert.equal(column.style.getPropertyValue('flex-direction'), 'column');
+    const columnButtons = portraitRules.find((rule) => rule.selectorText === '.friends-request-pending > .button');
+    assert.equal(columnButtons.style.getPropertyValue('flex'), '0 0 auto');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('revocar una enviada actualiza filas, contadores y permite solicitar otra vez', async () => {
+  const { dom, window, requests } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    const originalFetch = window.fetch;
+    window.fetch = async (url, init) => {
+      if (url.startsWith('/api/amigos/buscar?')) {
+        return { ok: true, json: async () => ({ users: [{
+          ...friendRows.sent[0], relationshipStatus: 'request_sent',
+        }] }) };
+      }
+      return originalFetch(url, init);
+    };
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-search').click();
+    const search = document.querySelector('#friends-search');
+    search.value = 'Castle';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(document.querySelector('.friends-send-request'), null);
+    document.querySelector('#friends-tab-sent').click();
+    await tick();
+    for (const username of ['CastleFan', 'CityFan']) {
+      const revoke = document.querySelector('#friends-list-sent .friends-revoke-request');
+      assert.equal(revoke.textContent, '✖');
+      assert.equal(revoke.getAttribute('aria-label'), `Revocar solicitud de amistad a ${username}`);
+      assert.equal(revoke.title, revoke.getAttribute('aria-label'));
+      const requestId = revoke.dataset.revokeRequest;
+      revoke.click();
+      await tick();
+      await tick();
+      assert.equal(document.querySelector(`#friends-list-sent [data-revoke-request="${requestId}"]`), null);
+      assert.equal(requests.filter(({ url, init }) => url === `/api/amigos/solicitudes/${requestId}` && init.method === 'DELETE').length, 1);
+    }
+    assert.equal(document.querySelector('#friends-status-sent').textContent, 'No hay solicitudes.');
+    assert.equal(document.activeElement.id, 'friends-tab-sent');
+    assert.match(document.querySelector('#friends-tab-sent').textContent, /\(0\)/);
+    document.querySelector('#friends-tab-search').click();
+    const send = document.querySelector('.friends-send-request');
+    assert.ok(send);
+    send.click();
+    await tick();
+    assert.ok(requests.some(({ url, init }) => url === '/api/amigos/solicitudes' && init.method === 'POST'));
+    document.querySelector('#friends-tab-sent').click();
+    await tick();
+    assert.equal(document.querySelectorAll('#friends-list-sent .friends-row').length, 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la revocación bloquea dobles clics y conserva la fila si falla', async () => {
+  const { dom, window, requests } = createApp({ failActions: true });
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-sent').click();
+    await tick();
+    const originalFetch = window.fetch;
+    let finish;
+    window.fetch = (url, init) => init?.method === 'DELETE'
+      ? new Promise((resolve) => { finish = async () => resolve(await originalFetch(url, init)); })
+      : originalFetch(url, init);
+    const revoke = document.querySelector('.friends-revoke-request');
+    revoke.click();
+    revoke.click();
+    const busy = document.querySelector('.friends-revoke-request');
+    assert.equal(busy.disabled, true);
+    assert.equal(busy.getAttribute('aria-busy'), 'true');
+    await finish();
+    await tick();
+    assert.equal(document.querySelectorAll('#friends-list-sent .friends-row').length, 2);
+    assert.equal(document.querySelector('.friends-revoke-request').disabled, false);
+    assert.equal(document.querySelector('#friends-list-sent [role="alert"]').textContent, 'No se pudo revocar la solicitud.');
+    assert.equal(requests.filter(({ init }) => init.method === 'DELETE').length, 1);
+    assert.match(document.querySelector('#friends-tab-sent').textContent, /\(2\)/);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('una lista enviada anterior no restaura la solicitud revocada al cambiar de pestaña', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-sent').click();
+    await tick();
+    const originalFetch = window.fetch;
+    let finishRevoke;
+    let finishList;
+    window.fetch = (url, init) => {
+      if (init?.method === 'DELETE') {
+        return new Promise((resolve) => { finishRevoke = async () => resolve(await originalFetch(url, init)); });
+      }
+      if (url === '/api/amigos?tipo=sent') {
+        return new Promise((resolve) => { finishList = () => resolve({ ok: true, json: async () => ({ users: structuredClone(friendRows.sent) }) }); });
+      }
+      return originalFetch(url, init);
+    };
+    document.querySelector('.friends-revoke-request').click();
+    document.querySelector('#friends-tab-friends').click();
+    document.querySelector('#friends-tab-sent').click();
+    await finishRevoke();
+    await tick();
+    finishList();
+    await tick();
+    assert.equal(document.querySelectorAll('#friends-list-sent .friends-row').length, 1);
+    assert.equal(document.querySelector('#friends-list-sent [data-user-id="friend-b"]'), null);
+    assert.equal(document.querySelector('#friends-status-sent').className, 'status');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('una revocación tardía no modifica la interfaz de otra sesión', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-sent').click();
+    await tick();
+    const originalFetch = window.fetch;
+    let finish;
+    window.fetch = (url, init) => init?.method === 'DELETE'
+      ? new Promise((resolve) => { finish = () => resolve({ ok: true, json: async () => ({ ok: true }) }); })
+      : originalFetch(url, init);
+    document.querySelector('.friends-revoke-request').click();
+    window.__supabaseStub.setSession('SIGNED_OUT', null);
+    await tick();
+    finish();
+    await tick();
+    assert.equal(document.querySelectorAll('#friends-list-sent .friends-row').length, 0);
+    assert.equal(document.querySelector('#friends-status-sent').textContent, '');
+    assert.equal(document.querySelector('#friends-count').hidden, true);
   } finally {
     dom.window.close();
   }
@@ -302,7 +461,7 @@ test('las filas de amigos ocupan el ancho disponible y las solicitudes no reserv
     document.head.append(style);
     const rowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '.friends-list .friends-row');
     assert.equal(rowRule.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr) max-content');
-    const sentRowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '#friends-list-sent .friends-row');
+    const sentRowRule = [...style.sheet.cssRules].find((rule) => rule.selectorText === '#friends-list-sent .friends-row:not(:has(.friends-revoke-request))');
     assert.equal(sentRowRule.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
     document.querySelector('#open-friends').click();
     for (const type of ['friends', 'sent', 'received', 'search']) {
@@ -318,9 +477,10 @@ test('las filas de amigos ocupan el ancho disponible y las solicitudes no reserv
       assert.ok(row, type);
       assert.equal(window.getComputedStyle(row).width, '100%', type);
       if (type === 'sent') {
-        assert.equal(row.children.length, 1);
+        assert.equal(row.children.length, 2);
         assert.ok(row.firstElementChild.classList.contains('friends-summary'));
-        assert.ok(row.matches(sentRowRule.selectorText));
+        assert.ok(row.querySelector('.friends-revoke-request'));
+        assert.equal(row.matches(sentRowRule.selectorText), false);
       }
     }
     const actions = document.querySelector('#friends-list-received .friends-request-controls');
@@ -331,6 +491,7 @@ test('las filas de amigos ocupan el ancho disponible y las solicitudes no reserv
     assert.equal(controlsStyle.flexWrap, 'nowrap');
     assert.equal(controlsStyle.gridTemplateColumns, '');
     assert.equal(actions.lastElementChild.classList.contains('friends-reject-request'), true);
+    assert.equal(actions.classList.contains('friends-request-pending'), true);
     const state = document.createElement('span');
     state.className = 'friends-request-state';
     actions.prepend(state);
@@ -859,7 +1020,8 @@ test('el perfil reutiliza gráfico, iconos y tarjetas y destruye el gráfico al 
     await tick();
     const instance = window.__profileCharts.at(-1);
     assert.equal(instance.configuration.type, 'doughnut');
-    assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 60, 10]);
+    assert.deepEqual(Array.from(instance.configuration.data.labels), ['Collector', 'Explorer', 'Fan', 'Rarity Hunter']);
+    assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [60, 20, 10, 10]);
     assert.equal(instance.configuration.options.cutout, '70%');
     assert.equal(document.querySelector('#public-profile-dna-trait').textContent, 'Collector');
     assert.equal(document.querySelector('#public-profile-dna-percentage').textContent, '60%');
@@ -868,7 +1030,7 @@ test('el perfil reutiliza gráfico, iconos y tarjetas y destruye el gráfico al 
     assert.equal(centerLabel.hidden, true);
     instance.configuration.options.plugins.tooltip.external({ tooltip: { opacity: 0 } });
     assert.equal(centerLabel.hidden, false);
-    assert.equal(document.querySelectorAll('.public-profile-stats > div > span').length, 0);
+    assert.equal(document.querySelectorAll('.public-profile-stats > div > span:not(.public-profile-stat-icon)').length, 0);
     assert.equal(document.querySelectorAll('#public-profile-dialog .dna-legend-item').length, 0);
     assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Collector', raw: 60 }), 'Collector: 60%');
     assert.equal(document.querySelectorAll('.public-profile-stat-icon').length, 4);

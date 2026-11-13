@@ -33,6 +33,6 @@ test('repro: Buscar filtra en memoria y muestra solo el resultado filtrado', asy
   window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(requests.filter((url) => url.startsWith('/minifiguras')), ['/minifiguras']);
-  assert.deepEqual([...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent), ['castle-1']);
+  assert.deepEqual([...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.querySelector('.id-link').textContent), ['castle-1']);
   dom.window.close();
 });

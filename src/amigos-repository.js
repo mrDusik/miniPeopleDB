@@ -210,6 +210,15 @@ export class AmigosRepository {
     return { ok: true, requestId: result.requestId, status: 'pending' };
   }
 
+  async revoke(requestId) {
+    const result = await this.run(this.client.rpc('amigos_revocar', { p_solicitud_id: requestId }), (error) => {
+      if (error?.message === 'SOLICITUD_NO_ENCONTRADA') return new SolicitudAmigosNoEncontradaError();
+      return new AmigosNoDisponiblesError();
+    });
+    if (!result || result.ok !== true) throw new AmigosNoDisponiblesError();
+    return { ok: true };
+  }
+
   async reject(requestId) {
     return this.changeRequest('amigos_rechazar', requestId);
   }

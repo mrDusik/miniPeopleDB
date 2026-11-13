@@ -194,6 +194,103 @@ test('RPC de perfil ajeno limita campos, ordena resumen y conserva RLS directo',
   }
 });
 
+test('revocar solicitudes propias respeta permisos, estados, cascadas y rollback social', async () => {
+  const db = new PGlite();
+  const sender = '00000000-0000-4000-8000-0000000000a1';
+  const recipient = '00000000-0000-4000-8000-0000000000b1';
+  const stranger = '00000000-0000-4000-8000-0000000000c1';
+  const setActor = async (id) => {
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [id]);
+    await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+    await db.exec('set role authenticated');
+  };
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      grant usage on schema auth to authenticated;
+      create function auth.uid() returns uuid language sql as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create function auth.role() returns text language sql as $$
+        select nullif(current_setting('request.jwt.claim.role', true), '')
+      $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    for (const role of ['anon', 'service_role', 'authenticated']) {
+      assert.equal((await db.query("select has_function_privilege($1, 'public.amigos_revocar(uuid)', 'EXECUTE') as allowed", [role])).rows[0].allowed,
+        role === 'authenticated');
+    }
+    await db.query('insert into auth.users(id) values ($1), ($2), ($3)', [sender, recipient, stranger]);
+    await db.query(`insert into public.user_profiles(user_id, username) values
+      ($1, 'Sender'), ($2, 'Recipient'), ($3, 'Stranger')`, [sender, recipient, stranger]);
+    for (const installation of ['schema', 'upgrade']) {
+      if (installation === 'upgrade') {
+        await db.exec('reset role');
+        await db.exec('drop function public.amigos_revocar(uuid)');
+        const upgrade = await readFile(new URL('../supabase/friends-social-upgrade.sql', import.meta.url), 'utf8');
+        await db.exec(upgrade);
+        await db.exec(upgrade);
+      }
+      for (const state of ['pending', 'rejected']) {
+        await setActor(sender);
+        const requestId = (await db.query('select public.amigos_enviar($1) as data', [recipient])).rows[0].data.requestId;
+        if (state === 'rejected') {
+          await setActor(recipient);
+          await db.query('select public.amigos_rechazar($1)', [requestId]);
+        }
+        for (const actor of [recipient, stranger]) {
+          await setActor(actor);
+          await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+        }
+        await setActor(sender);
+        await assert.rejects(db.query('delete from public.friend_requests where id = $1', [requestId]), /permission denied/);
+        assert.deepEqual((await db.query('select public.amigos_revocar($1) as data', [requestId])).rows[0].data, { ok: true });
+        await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+        assert.equal((await db.query("select public.amigos_resumen('sent') as data")).rows[0].data.length, 0);
+        assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 0 });
+        await setActor(recipient);
+        assert.equal((await db.query("select public.amigos_resumen('received') as data")).rows[0].data.length, 0);
+        await assert.rejects(db.query('select public.amigos_aceptar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+        await db.exec('reset role');
+        assert.equal((await db.query('select count(*)::integer as total from public.notificaciones where social_request_id = $1', [requestId])).rows[0].total, 0);
+        assert.equal((await db.query('select logros from public.gamificacion where user_id = $1', [sender])).rows[0].logros.some(({ id }) => id === 'first-contact'), false);
+      }
+    }
+    await setActor(sender);
+    const requestId = (await db.query('select public.amigos_enviar($1) as data', [recipient])).rows[0].data.requestId;
+    await db.exec('reset role');
+    const before = (await db.query('select user_id, bricks, logros from public.gamificacion order by user_id')).rows;
+    await db.exec(`
+      create function private.fail_revoke_game() returns trigger language plpgsql as $$
+      begin raise exception 'REVOKE_GAME_FAILURE'; end; $$;
+      create trigger fail_revoke_game before update on public.gamificacion
+      for each row execute function private.fail_revoke_game();
+    `);
+    await setActor(sender);
+    await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /REVOKE_GAME_FAILURE/);
+    await db.exec('reset role');
+    assert.deepEqual((await db.query('select user_id, bricks, logros from public.gamificacion order by user_id')).rows, before);
+    assert.equal((await db.query('select count(*)::integer as total from public.friend_requests where id = $1', [requestId])).rows[0].total, 1);
+    assert.equal((await db.query('select count(*)::integer as total from public.notificaciones where social_request_id = $1', [requestId])).rows[0].total, 1);
+    await db.exec('drop trigger fail_revoke_game on public.gamificacion');
+    await setActor(recipient);
+    await db.query('select public.amigos_aceptar($1)', [requestId]);
+    await setActor(sender);
+    await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+    assert.equal((await db.query("select public.amigos_resumen('friends') as data")).rows[0].data.length, 1);
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', '', false)");
+    await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /NO_AUTENTICADO/);
+  } finally {
+    await db.close();
+  }
+});
+
 test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómica e idempotente', async () => {
   const db = new PGlite();
   const userA = '00000000-0000-4000-8000-0000000000a1';

@@ -428,7 +428,7 @@ Esta acción no se puede deshacer.</p>
             <tr>
               <th scope="col" aria-label="Imagen"></th>
               <th scope="col">Seguimiento</th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="id">ID</button></th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="id"><span class="catalog-id-heading">ID</span><span class="catalog-mobile-heading">Minifigura</span><span class="visually-hidden">, ordenar por ID</span></button></th>
               <th scope="col"><button type="button" class="table-sort" data-sort="nombre">Nombre</button></th>
               <th scope="col"><button type="button" class="table-sort" data-sort="categoria">Categoría</button></th>
               <th scope="col"><button type="button" class="table-sort" data-sort="subcategoria">Subcategoría</button></th>
@@ -735,8 +735,8 @@ Esta acción no se puede deshacer.</p>
       <p id="analytics-history-status" class="status" role="status" aria-live="polite"></p>
       <button type="button" id="analytics-history-retry" class="button button-secondary" hidden>Reintentar</button>
       <div class="analytics-history-charts">
-        <section class="analytics-history-chart" aria-labelledby="analytics-history-value-title">
-          <h3 id="analytics-history-value-title">Colección y Valor</h3>
+        <details class="analytics-history-chart" data-history-section="value" aria-labelledby="analytics-history-value-title">
+          <summary><h3 id="analytics-history-value-title">Colección y Valor</h3></summary>
           <div class="analytics-history-plot"><canvas id="analytics-history-value-chart" role="img" aria-label="Colección y Valor"></canvas></div>
           <details class="analytics-history-table-wrap">
             <summary>Datos</summary>
@@ -745,10 +745,15 @@ Esta acción no se puede deshacer.</p>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Valor</th><th scope="col">Figuras</th><th scope="col">Colección</th></tr></thead>
               <tbody></tbody>
             </table>
+            <nav class="analytics-history-pagination" aria-label="Paginación de Colección y Valor" hidden>
+              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-value-table">Anterior</button>
+              <span role="status" aria-live="polite"></span>
+              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-value-table">Siguiente</button>
+            </nav>
           </details>
-        </section>
-        <section class="analytics-history-chart" aria-labelledby="analytics-history-dna-title">
-          <h3 id="analytics-history-dna-title">DNA</h3>
+        </details>
+        <details class="analytics-history-chart" data-history-section="dna" aria-labelledby="analytics-history-dna-title">
+          <summary><h3 id="analytics-history-dna-title">DNA</h3></summary>
           <div class="analytics-history-plot"><canvas id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas></div>
           <details class="analytics-history-table-wrap">
             <summary>Datos</summary>
@@ -757,10 +762,15 @@ Esta acción no se puede deshacer.</p>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Collector</th><th scope="col">Explorer</th><th scope="col">Rarity Hunter</th><th scope="col">Fan</th></tr></thead>
               <tbody></tbody>
             </table>
+            <nav class="analytics-history-pagination" aria-label="Paginación de DNA" hidden>
+              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-dna-table">Anterior</button>
+              <span role="status" aria-live="polite"></span>
+              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-dna-table">Siguiente</button>
+            </nav>
           </details>
-        </section>
-        <section class="analytics-history-chart" aria-labelledby="analytics-history-progression-title">
-          <h3 id="analytics-history-progression-title">Bricks y Nivel</h3>
+        </details>
+        <details class="analytics-history-chart" data-history-section="progression" aria-labelledby="analytics-history-progression-title">
+          <summary><h3 id="analytics-history-progression-title">Bricks y Nivel</h3></summary>
           <div class="analytics-history-plot"><canvas id="analytics-history-progression-chart" role="img" aria-label="Bricks y Nivel por fecha"></canvas></div>
           <details class="analytics-history-table-wrap">
             <summary>Datos</summary>
@@ -769,8 +779,13 @@ Esta acción no se puede deshacer.</p>
               <thead><tr><th scope="col">Fecha</th><th scope="col">Bricks</th><th scope="col">Nivel</th></tr></thead>
               <tbody></tbody>
             </table>
+            <nav class="analytics-history-pagination" aria-label="Paginación de Bricks y Nivel" hidden>
+              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-progression-table">Anterior</button>
+              <span role="status" aria-live="polite"></span>
+              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-progression-table">Siguiente</button>
+            </nav>
           </details>
-        </section>
+        </details>
       </div>
     </dialog>
 

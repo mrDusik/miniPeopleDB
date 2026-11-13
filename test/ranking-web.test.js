@@ -400,6 +400,20 @@ test('cambios rapidos de criterio ignoran respuestas anteriores y el cierre de s
   dom.window.close();
 });
 
+test('los criterios del ranking permanecen unidos en las dos filas portrait como los selectores compartidos', () => {
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const shared = rules.find((rule) => rule.selectorText === '.analytics-history-ranges');
+    const portrait = rules.find((rule) => rule.conditionText === '(orientation: portrait)');
+    const criteria = [...portrait.cssRules].find((rule) => rule.selectorText === '.ranking-criteria');
+    assert.equal(criteria.style.getPropertyValue('grid-template-columns'), 'repeat(3, minmax(0, 1fr))');
+    assert.equal(criteria.style.getPropertyValue('gap') || shared.style.getPropertyValue('gap'), '0');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.gamification-summary \{ flex: 1 1 auto; width: 100%; min-width: 0;/);
   assert.match(styles, /\.gamification-details \{[^}]*width: min\(381px, 100%\)/);
@@ -428,7 +442,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.global-ranking-row \{[^}]*min-width: 0;/);
   assert.match(styles, /@media \(max-width: 1400px\) \{\s*\.ranking-user-details \{ grid-template-columns: 1fr; \}\s*\.ranking-highlight-group \{ max-width: 600px; \}/);
   assert.match(styles, /\.ranking-order-toolbar \{ display: block; width: 100%; min-width: 0; max-width: 100%; overflow: visible; padding-right: 0; \}/);
-  assert.match(styles, /\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: 4px; \}/);
+  assert.match(styles, /\.ranking-criteria \{ display: grid; width: 100%; min-width: 0; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(styles, /#ranking-order \.button \{ width: 100%; min-width: 0; flex: 1 1 auto; border-radius: 4px; padding-inline: 4px; font-size: 0\.68rem; white-space: nowrap; \}/);
   assert.match(styles, /\.ranking-user-details \{ width: 100%; min-width: 0; max-width: 100%; margin-right: 0; \}/);
   assert.match(styles, /@media \(max-width: 850px\) \{[^}]*\.global-ranking-row \{ grid-template-columns: minmax\(0, 1fr\) auto;/);
@@ -520,7 +534,7 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
   assert.equal(dom.window.document.activeElement.id, 'ranking-close');
   assert.equal(dom.window.document.querySelectorAll('.global-ranking-entry').length, 2);
   assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-star'), null);
-  assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] .ranking-gift'), null);
+  assert.equal(dom.window.document.querySelector('[data-user-id="user-a"] [data-gift-user]'), null);
   const firstEntry = dom.window.document.querySelector('[data-user-id="user-a"]');
   assert.equal(firstEntry.querySelector('.ranking-name').textContent, 'Usuaria A. P.');
   assert.equal(firstEntry.querySelector('.ranking-bricks strong').textContent, '300');
@@ -538,6 +552,13 @@ test('abre el Top 10 desde la segunda fila del panel de nivel, distingue la sesi
     'gamification-level-image', 'ranking-level-number', 'ranking-level-name', 'ranking-dna-principal',
   ]);
   assert.equal(firstEntry.querySelector('.ranking-level-info').parentElement, firstEntry.querySelector('.ranking-expand'));
+  const currentGiftSpace = firstEntry.querySelector('.ranking-gift-space');
+  const otherGift = dom.window.document.querySelector('[data-user-id="user-b"] .ranking-gift');
+  assert.ok(currentGiftSpace.classList.contains('ranking-gift'));
+  assert.equal(currentGiftSpace.textContent, otherGift.textContent);
+  assert.equal(currentGiftSpace.querySelector('.ranking-gift-icon').getAttribute('src'), otherGift.querySelector('.ranking-gift-icon').getAttribute('src'));
+  assert.match(styles, /\.ranking-gift-space \{ visibility: hidden; \}/);
+  assert.doesNotMatch(styles, /\.ranking-gift-space \{ display: none;/);
   assert.match(styles, /\.ranking-level-info \{[^}]*flex-wrap: wrap;[^}]*overflow: visible/);
   assert.match(styles, /\.ranking-level-info \{[^}]*color: var\(--ink\);/);
   assert.match(styles, /\.ranking-level-name \{[^}]*overflow-wrap: anywhere; white-space: normal;/);

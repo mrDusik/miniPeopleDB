@@ -2368,6 +2368,36 @@ $$;
 revoke all on function public.amigos_eliminar(uuid) from public, anon, service_role;
 grant execute on function public.amigos_eliminar(uuid) to authenticated;
 
+create or replace function public.amigos_revocar(p_solicitud_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+  recipient_id uuid;
+begin
+  if actor_id is null or auth.role() is distinct from 'authenticated' then
+    raise exception using errcode = '42501', message = 'NO_AUTENTICADO';
+  end if;
+  select request.recipient_id into recipient_id
+  from public.friend_requests request
+  where request.id = p_solicitud_id and request.sender_id = actor_id
+    and request.status in ('pending', 'rejected')
+  for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'SOLICITUD_NO_ENCONTRADA';
+  end if;
+  delete from public.friend_requests where id = p_solicitud_id;
+  perform private.gamificacion_reconstruir_social(array[actor_id, recipient_id]);
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.amigos_revocar(uuid) from public, anon, service_role;
+grant execute on function public.amigos_revocar(uuid) to authenticated;
+
 create or replace function public.amigos_contadores()
 returns jsonb
 language plpgsql

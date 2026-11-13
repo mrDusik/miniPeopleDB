@@ -839,7 +839,10 @@ function idCell(minifigura) {
   link.dataset.action = 'view';
   link.dataset.id = minifigura.id;
   link.setAttribute('aria-label', `Ver ${minifigura.id}`);
-  element.append(link);
+  const name = document.createElement('span');
+  name.className = 'catalog-mobile-name';
+  name.textContent = minifigura.nombre ?? '';
+  element.append(link, name);
   return element;
 }
 
@@ -1314,7 +1317,7 @@ async function loadDnaDialog() {
 function openDnaDialog(trigger) {
   dnaDialogTrigger = trigger;
   renderDnaLoading();
-  dnaDialog.showModal();
+  openDialog(dnaDialog);
   dnaDialogCloseButton.focus();
   void loadDnaDialog();
 }
@@ -1707,6 +1710,17 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
   container.append(position, avatarWrap, name, level, bricks, collection);
 }
 
+function appendRankingGiftContent(gift, weekly) {
+  const giftAmount = document.createElement('span');
+  giftAmount.textContent = weekly ? '+5' : '+50';
+  const giftIcon = document.createElement('img');
+  giftIcon.className = 'ranking-gift-icon';
+  giftIcon.src = '/toast_images/brick.png';
+  giftIcon.alt = '';
+  giftIcon.setAttribute('aria-hidden', 'true');
+  gift.append(giftAmount, giftIcon);
+}
+
 function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, closeButton, weekly = false }) {
   const currentUserId = currentSession?.user?.id;
   const focused = document.activeElement;
@@ -1744,19 +1758,13 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
       gift.disabled = entry.regaloEnviado;
       gift.setAttribute('aria-label', entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`);
       gift.title = entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`;
-      const giftAmount = document.createElement('span');
-      giftAmount.textContent = weekly ? '+5' : '+50';
-      const giftIcon = document.createElement('img');
-      giftIcon.className = 'ranking-gift-icon';
-      giftIcon.src = '/toast_images/brick.png';
-      giftIcon.alt = '';
-      giftIcon.setAttribute('aria-hidden', 'true');
-      gift.append(giftAmount, giftIcon);
+      appendRankingGiftContent(gift, weekly);
       row.append(gift);
     } else {
       const giftSpace = document.createElement('span');
-      giftSpace.className = 'ranking-gift-space';
+      giftSpace.className = 'button button-secondary ranking-gift ranking-gift-space';
       giftSpace.setAttribute('aria-hidden', 'true');
+      appendRankingGiftContent(giftSpace, weekly);
       row.append(giftSpace);
     }
 
@@ -1854,6 +1862,35 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
   }
 }
 
+const toastHome = toastRegion.parentElement;
+const toastDialogs = [];
+const toastPopoverSupported = typeof toastRegion.showPopover === 'function';
+if (toastPopoverSupported) toastRegion.setAttribute('popover', 'manual');
+
+function refreshToastRegion() {
+  const activeDialog = [...toastDialogs].reverse().find((dialog) => dialog.open);
+  const host = toastRegion.hasChildNodes() ? (activeDialog ?? toastHome) : toastHome;
+  if (toastRegion.parentElement !== host) host.append(toastRegion);
+  if (!toastPopoverSupported) return;
+  if (toastRegion.matches(':popover-open')) toastRegion.hidePopover();
+  if (toastRegion.hasChildNodes()) toastRegion.showPopover();
+}
+
+function openDialog(dialog) {
+  dialog.showModal();
+  const previousIndex = toastDialogs.indexOf(dialog);
+  if (previousIndex !== -1) toastDialogs.splice(previousIndex, 1);
+  toastDialogs.push(dialog);
+  refreshToastRegion();
+}
+
+document.addEventListener('close', (event) => {
+  const index = toastDialogs.indexOf(event.target);
+  if (index === -1 || event.target.open) return;
+  toastDialogs.splice(index, 1);
+  refreshToastRegion();
+}, true);
+
 function showToast(message, type = 'success', iconSrc = null, iconPosition = 'after') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
@@ -1878,8 +1915,10 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   toast.append(messageNode);
   if (icon && iconPosition !== 'before') toast.append(icon);
   toastRegion.append(toast);
+  refreshToastRegion();
   setTimeout(() => {
     toast.remove();
+    if (!toastRegion.hasChildNodes()) refreshToastRegion();
   }, 4000);
 }
 
@@ -1959,7 +1998,7 @@ function mostrarImagenMinifigura(id, nombre) {
   imageModalImage.alt = `Imagen de la minipersona ${upperId}`;
   imageModalTitle.textContent = upperId;
   imageModalName.textContent = nombre ?? '';
-  imageModal.showModal();
+  openDialog(imageModal);
   imageModalCloseButton.focus();
   preloader.onload = () => {
     if (!imageModal.open || requestSequence !== imageModalImageSequence) return;
@@ -2014,7 +2053,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
     formSynced = hasFormMetadata();
   }
   updateFormMode();
-  formDialog.showModal();
+  openDialog(formDialog);
   if (mode === 'ranking-create') {
     formObservedButton.focus();
     if (!formSynced) void loadFormBricksetData();
@@ -2242,7 +2281,7 @@ function validatePayload(payload) {
 function openDeleteDialog(minifigura) {
   pendingDeleteId = minifigura.id;
   deleteMessage.textContent = `Se eliminará la minipersona "${minifigura.nombre}" (${minifigura.id}).\n\nEsta acción no se puede deshacer.`;
-  deleteDialog.showModal();
+  openDialog(deleteDialog);
 }
 
 function closeDeleteDialog() {
@@ -2325,7 +2364,7 @@ function openOwnAchievements(trigger) {
   achievementsViewSequence += 1;
   achievementsTrigger = trigger;
   renderAchievements(ownGamification ?? {}, 'Logros', { editable: true });
-  gamificationDialog.showModal();
+  openDialog(gamificationDialog);
   gamificationCloseButton.focus();
   void loadGamification();
 }
@@ -2473,7 +2512,12 @@ function renderNotifications() {
       openButton.type = 'button';
       openButton.className = 'button button-secondary notification-open-weekly-ranking';
       openButton.setAttribute('aria-label', 'Ver Ranking Semanal');
-      openButton.textContent = 'Ver Ranking Semanal';
+      openButton.append(document.createTextNode('Ver'));
+      const rankingEmoji = document.createElement('span');
+      rankingEmoji.className = 'notification-leading-emoji';
+      rankingEmoji.setAttribute('aria-hidden', 'true');
+      rankingEmoji.textContent = '🗓️';
+      openButton.append(rankingEmoji);
       actions.append(openButton);
     }
     if (notification.type === 'friend_request') {
@@ -3143,6 +3187,17 @@ function renderFriendRows(rows, type) {
       sendButton.disabled = friendsActionRequests.has(`send:${friend.userId}`);
       if (sendButton.disabled) sendButton.setAttribute('aria-busy', 'true');
       item.append(sendButton);
+    } else if (type === 'sent' && ['pending', 'rejected'].includes(friend.status)) {
+      const revokeButton = document.createElement('button');
+      revokeButton.type = 'button';
+      revokeButton.className = 'button button-secondary button-icon friends-revoke-request';
+      revokeButton.dataset.revokeRequest = friend.relationshipId;
+      revokeButton.setAttribute('aria-label', `Revocar solicitud de amistad a ${friend.username}`);
+      revokeButton.title = revokeButton.getAttribute('aria-label');
+      revokeButton.textContent = '✖';
+      revokeButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
+      if (revokeButton.disabled) revokeButton.setAttribute('aria-busy', 'true');
+      item.append(revokeButton);
     } else if (type === 'received' && friend.status === 'accepted') {
       const acceptedButton = document.createElement('button');
       acceptedButton.type = 'button';
@@ -3153,6 +3208,7 @@ function renderFriendRows(rows, type) {
     } else if (type === 'received' && ['pending', 'rejected'].includes(friend.status)) {
       const actions = document.createElement('div');
       actions.className = 'friends-request-actions friends-request-controls';
+      if (friend.status === 'pending') actions.classList.add('friends-request-pending');
       if (friend.status === 'rejected') {
         const state = document.createElement('span');
         state.className = 'friends-request-state state-rejected';
@@ -3388,6 +3444,40 @@ async function sendFriendRequest(userId) {
   }
 }
 
+async function revokeFriendRequest(requestId) {
+  const sessionUserId = currentSession?.user?.id;
+  const key = `request:${requestId}`;
+  const friend = [...friendsRows.sent.values()].find(({ relationshipId }) => relationshipId === requestId);
+  if (!sessionUserId || !friend || friendsActionRequests.has(key)) return;
+  friendsActionRequests.add(key);
+  friendsActionErrors.delete(key);
+  renderFriendRows([...friendsRows.sent.values()], 'sent');
+  try {
+    const response = await apiFetch(`/api/amigos/solicitudes/${encodeURIComponent(requestId)}`, { method: 'DELETE' });
+    const result = await response.json();
+    if (!response.ok || result.ok !== true) throw new Error('revoke unavailable');
+    if (sessionUserId !== currentSession?.user?.id) return;
+    if (friendsActiveTab === 'sent') friendsRequestSequence += 1;
+    friendsRows.sent.delete(friend.userId);
+    const searchRow = friendsRows.search.get(friend.userId);
+    if (searchRow?.relationshipStatus === 'request_sent') searchRow.relationshipStatus = 'none';
+    renderFriendRows([...friendsRows.search.values()], 'search');
+    if (friendsActiveTab === 'search') scheduleFriendsSearch();
+    document.querySelector('#friends-status-sent').textContent = friendsRows.sent.size ? '' : 'No hay solicitudes.';
+    document.querySelector('#friends-status-sent').className = 'status';
+    refreshSocialGamification();
+    void loadFriendsCounts();
+    if (friendsDialog.open && friendsActiveTab === 'sent') {
+      friendsTabButtons.find(({ dataset }) => dataset.friendsTab === 'sent')?.focus();
+    }
+  } catch {
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo revocar la solicitud.');
+  } finally {
+    friendsActionRequests.delete(key);
+    if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.sent.values()], 'sent');
+  }
+}
+
 async function changeFriendRequest(requestId, action) {
   const sessionUserId = currentSession?.user?.id;
   const key = `request:${requestId}`;
@@ -3436,7 +3526,7 @@ function selectFriendsTab(tab) {
 function openFriends(trigger) {
   friendsTrigger = trigger;
   void loadFriendsCounts();
-  friendsDialog.showModal();
+  openDialog(friendsDialog);
   friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
   selectFriendsTab(friendsActiveTab);
 }
@@ -3588,7 +3678,7 @@ function openPublicProfile(userId, trigger) {
   publicProfileUserId = userId;
   clearPublicProfile();
   publicProfileUserId = userId;
-  publicProfileDialog.showModal();
+  openDialog(publicProfileDialog);
   publicProfileCloseButton.focus();
   const requestId = ++publicProfileRequestSequence;
   void loadPublicProfile(userId, requestId);
@@ -3596,7 +3686,7 @@ function openPublicProfile(userId, trigger) {
 
 function openNotifications(trigger, { load = true } = {}) {
   notificationsTrigger = trigger;
-  if (!notificationsDialog.open) notificationsDialog.showModal();
+  if (!notificationsDialog.open) openDialog(notificationsDialog);
   notificationsCloseButton.focus();
   if (load) void loadNotifications({ reset: true });
 }
@@ -3671,6 +3761,11 @@ for (const list of [document.querySelector('#friends-list-friends'), document.qu
     const sendButton = event.target.closest('.friends-send-request');
     if (sendButton) {
       void sendFriendRequest(sendButton.dataset.friendSend);
+      return;
+    }
+    const revokeButton = event.target.closest('[data-revoke-request]');
+    if (revokeButton) {
+      void revokeFriendRequest(revokeButton.dataset.revokeRequest);
       return;
     }
     const actionButton = event.target.closest('[data-request-action]');
@@ -3821,9 +3916,53 @@ function clearAnalyticsHistoryData(clearStatus = true) {
   analyticsHistoryValueTableBody.replaceChildren();
   analyticsHistoryDnaTableBody.replaceChildren();
   analyticsHistoryProgressionTableBody.replaceChildren();
+  analyticsHistoryTables.clear();
+  for (const pagination of analyticsHistoryDialog.querySelectorAll('.analytics-history-pagination')) {
+    pagination.hidden = true;
+    pagination.querySelector('[role="status"]').textContent = '';
+  }
 }
 
 const analyticsHistoryCharts = new Map();
+const analyticsHistoryTables = new Map();
+
+function renderAnalyticsHistoryTable(key, rows, page = 1) {
+  const section = analyticsHistoryDialog.querySelector(`[data-history-section="${key}"]`);
+  const body = section.querySelector('tbody');
+  const pagination = section.querySelector('.analytics-history-pagination');
+  const paginated = Date.parse(analyticsHistoryRange.to) - Date.parse(analyticsHistoryRange.from) >= 7 * 86400000;
+  const pageSize = paginated ? 7 : Math.max(1, rows.length);
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  page = Math.max(1, Math.min(page, pages));
+  analyticsHistoryTables.set(key, { rows, page });
+  body.replaceChildren();
+  for (const values of rows.slice((page - 1) * pageSize, page * pageSize)) {
+    const row = document.createElement('tr');
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.append(cell);
+    }
+    body.append(row);
+  }
+  pagination.hidden = !paginated || rows.length === 0;
+  pagination.querySelector('[role="status"]').textContent = rows.length ? `Página ${page} de ${pages}` : '';
+  pagination.querySelector('[data-history-page="-1"]').disabled = page === 1;
+  pagination.querySelector('[data-history-page="1"]').disabled = page === pages;
+}
+
+for (const section of analyticsHistoryDialog.querySelectorAll('[data-history-section]')) {
+  const key = section.dataset.historySection;
+  section.addEventListener('toggle', () => {
+    if (section.open) analyticsHistoryCharts.get(key)?.resize();
+  });
+  for (const button of section.querySelectorAll('[data-history-page]')) {
+    button.addEventListener('click', () => {
+      const table = analyticsHistoryTables.get(key);
+      if (table) renderAnalyticsHistoryTable(key, table.rows, table.page + Number(button.dataset.historyPage));
+    });
+  }
+}
 
 function destroyAnalyticsHistoryCharts() {
   for (const chart of analyticsHistoryCharts.values()) chart.destroy();
@@ -3889,6 +4028,21 @@ function analyticsHistoryXAxisBounds() {
     : { min, max };
 }
 
+function analyticsHistoryDnaLegendFont({ chart }) {
+  const font = { family: 'Montserrat', size: 12 };
+  if (!chart.width || chart.width >= 600) return font;
+  const { ctx } = chart;
+  ctx.save();
+  ctx.font = '12px Montserrat';
+  const textWidth = chart.data.datasets.reduce((total, dataset) => total + ctx.measureText(dataset.label).width, 0);
+  ctx.restore();
+  const count = chart.data.datasets.length;
+  // Reserve the layout inset, color markers and Chart.js inter-item spacing.
+  const available = chart.width - 8 - count * 8 - (count + 1) * 4 - 2;
+  font.size = Math.min(12, Math.floor(12 * available / (textWidth + count * 6) * 10) / 10);
+  return font;
+}
+
 function createAnalyticsChart(canvas, configuration) {
   const styles = getComputedStyle(document.documentElement);
   const ink = styles.getPropertyValue('--ink').trim();
@@ -3899,7 +4053,10 @@ function createAnalyticsChart(canvas, configuration) {
   options.interaction = { mode: 'index', axis: 'x', intersect: false };
   options.plugins.legend = {
     display: true, position: 'bottom', onClick() {},
-    labels: { color: ink, usePointStyle: true, pointStyle: 'rect', boxWidth: 8, boxHeight: 8, padding: 20, font: { family: 'Montserrat', size: 12 } },
+    labels: {
+      color: ink, usePointStyle: true, pointStyle: 'rect', boxWidth: 8, boxHeight: 8,
+      padding: 20, font: { family: 'Montserrat', size: 12 }, ...options.plugins.legend?.labels,
+    },
   };
   const formatTooltipLabel = options.plugins.tooltip.callbacks.label;
   options.plugins.tooltip.callbacks.label = (item) => {
@@ -3959,23 +4116,14 @@ function renderAnalyticsHistoryValue(data) {
   if (!data.snapshots.length) return;
 
   const { valueSeries, deltaSeries, deltas } = analyticsHistoryValuePoints(data);
-  for (const snapshot of data.snapshots) {
-    const row = document.createElement('tr');
-    const values = [
-      formatAnalyticsHistoryDate(snapshot.snapshotDate),
-      formatAnalyticsHistoryPrice(snapshot.totalValue),
-      String(snapshot.totalFigures),
-      deltas.get(snapshot.snapshotDate) === null ? 'Sin datos'
-        : deltas.get(snapshot.snapshotDate) > 0 ? `+${deltas.get(snapshot.snapshotDate)}`
-          : String(deltas.get(snapshot.snapshotDate)),
-    ];
-    for (const value of values) {
-      const cell = document.createElement('td');
-      cell.textContent = value;
-      row.append(cell);
-    }
-    analyticsHistoryValueTableBody.append(row);
-  }
+  renderAnalyticsHistoryTable('value', data.snapshots.map((snapshot) => [
+    formatAnalyticsHistoryDate(snapshot.snapshotDate),
+    formatAnalyticsHistoryPrice(snapshot.totalValue),
+    String(snapshot.totalFigures),
+    deltas.get(snapshot.snapshotDate) === null ? 'Sin datos'
+      : deltas.get(snapshot.snapshotDate) > 0 ? `+${deltas.get(snapshot.snapshotDate)}`
+        : String(deltas.get(snapshot.snapshotDate)),
+  ]));
 
   if (typeof Chart !== 'function') return;
 
@@ -4035,22 +4183,13 @@ function renderAnalyticsHistoryValue(data) {
 function renderAnalyticsHistoryDna(data) {
   analyticsHistoryDnaTableBody.replaceChildren();
   if (!data.snapshots.length) return;
-  for (const snapshot of data.snapshots) {
-    const row = document.createElement('tr');
-    const values = [
-      formatAnalyticsHistoryDate(snapshot.snapshotDate),
-      formatAnalyticsHistoryPercent(snapshot.dna.collector),
-      formatAnalyticsHistoryPercent(snapshot.dna.explorer),
-      formatAnalyticsHistoryPercent(snapshot.dna.rarityHunter),
-      formatAnalyticsHistoryPercent(snapshot.dna.fan),
-    ];
-    for (const value of values) {
-      const cell = document.createElement('td');
-      cell.textContent = value;
-      row.append(cell);
-    }
-    analyticsHistoryDnaTableBody.append(row);
-  }
+  renderAnalyticsHistoryTable('dna', data.snapshots.map((snapshot) => [
+    formatAnalyticsHistoryDate(snapshot.snapshotDate),
+    formatAnalyticsHistoryPercent(snapshot.dna.collector),
+    formatAnalyticsHistoryPercent(snapshot.dna.explorer),
+    formatAnalyticsHistoryPercent(snapshot.dna.rarityHunter),
+    formatAnalyticsHistoryPercent(snapshot.dna.fan),
+  ]));
   if (typeof Chart !== 'function') return;
 
   const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
@@ -4090,7 +4229,13 @@ function renderAnalyticsHistoryDna(data) {
       parsing: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: true },
+        legend: {
+          display: true,
+          labels: {
+            padding: ({ chart }) => chart.width < 600 ? 4 : 20,
+            font: analyticsHistoryDnaLegendFont,
+          },
+        },
         tooltip: {
           enabled: true,
           callbacks: {
@@ -4110,15 +4255,9 @@ function renderAnalyticsHistoryDna(data) {
 function renderAnalyticsHistoryProgression(data) {
   analyticsHistoryProgressionTableBody.replaceChildren();
   if (!data.snapshots.length) return;
-  for (const snapshot of data.snapshots) {
-    const row = document.createElement('tr');
-    for (const value of [formatAnalyticsHistoryDate(snapshot.snapshotDate), String(snapshot.bricks), String(snapshot.level)]) {
-      const cell = document.createElement('td');
-      cell.textContent = value;
-      row.append(cell);
-    }
-    analyticsHistoryProgressionTableBody.append(row);
-  }
+  renderAnalyticsHistoryTable('progression', data.snapshots.map((snapshot) => [
+    formatAnalyticsHistoryDate(snapshot.snapshotDate), String(snapshot.bricks), String(snapshot.level),
+  ]));
   if (typeof Chart !== 'function') return;
 
   const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
@@ -4209,7 +4348,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
 function openAnalyticsHistory() {
   analyticsHistoryTrigger = analyticsHistoryOpenButton;
   setAnalyticsHistoryRange(historyRangeForDays(7), 7);
-  analyticsHistoryDialog.showModal();
+  openDialog(analyticsHistoryDialog);
   analyticsHistoryCloseButton.focus();
   void loadAnalyticsHistory();
 }
@@ -4247,7 +4386,7 @@ rankingOpenButton.addEventListener('click', () => {
   rankingTrigger = rankingOpenButton;
   userProfile.hidden = true;
   userMenuToggle.setAttribute('aria-expanded', 'false');
-  rankingDialog.showModal();
+  openDialog(rankingDialog);
   expandedRankingUserId = null;
   rankingCloseButton.focus();
   void loadGlobalRanking();
@@ -4265,7 +4404,7 @@ weeklyRankingOpenButton.addEventListener('click', () => {
   weeklyRankingTrigger = weeklyRankingOpenButton;
   userProfile.hidden = true;
   userMenuToggle.setAttribute('aria-expanded', 'false');
-  weeklyRankingDialog.showModal();
+  openDialog(weeklyRankingDialog);
   expandedWeeklyRankingUserId = null;
   weeklyRankingCloseButton.focus();
   void loadWeeklyRanking();
@@ -4750,7 +4889,7 @@ async function initialize() {
   if (await loadCategorias()) {
     const catalog = await loadCatalog();
     if (catalog?.length === 0 && currentSession) {
-      firstMinifiguraDialog.showModal();
+      openDialog(firstMinifiguraDialog);
       firstMinifiguraTitle.focus();
     }
     if (currentSession) {
@@ -4796,6 +4935,7 @@ function clearUserData() {
   achievementQueue = [];
   isShowingAchievement = false;
   toastRegion.replaceChildren();
+  refreshToastRegion();
   clearNotifications();
   clearFriends();
   clearPublicProfile();
@@ -5135,7 +5275,7 @@ function openProfileDialog(profile, onboarding) {
   profileFormMessage.textContent = '';
   profileSaveButton.textContent = onboarding ? 'Completar perfil' : 'Guardar cambios';
   renderProfileFavoriteOptions();
-  if (!profileDialog.open) profileDialog.showModal();
+  if (!profileDialog.open) openDialog(profileDialog);
   void refreshSystemNotificationsSetting();
   (onboarding ? profileUsernameInput : profileAvatarLoadButton).focus();
 }
@@ -5982,7 +6122,7 @@ openDeleteAccountButton.addEventListener('click', () => {
     || profileSaveButton.disabled || accountDeletionInFlight) return;
   accountDeletionUserId = currentSession.user.id;
   deleteAccountError.textContent = '';
-  deleteAccountDialog.showModal();
+  openDialog(deleteAccountDialog);
   deleteAccountCancelButton.focus();
 });
 
@@ -6048,7 +6188,7 @@ for (const button of settingsShowPasswordButtons) {
 openChangePasswordButton.addEventListener('click', () => {
   if (!currentSession || profileDialogMode !== 'settings') return;
   resetSettingsPassword();
-  changePasswordDialog.showModal();
+  openDialog(changePasswordDialog);
   settingsPasswordInput.focus();
 });
 settingsPasswordInput.addEventListener('input', validateSettingsPassword);

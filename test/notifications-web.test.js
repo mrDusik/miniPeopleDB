@@ -399,6 +399,10 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
       '🗓️ El Ranking Semanal de esta semana ya está disponible.');
     const openWeeklyRankingButton = availabilityItem.querySelector('.notification-open-weekly-ranking');
     assert.equal(openWeeklyRankingButton.getAttribute('aria-label'), 'Ver Ranking Semanal');
+    assert.equal(openWeeklyRankingButton.textContent, 'Ver🗓️');
+    assert.equal(openWeeklyRankingButton.querySelector('[aria-hidden="true"]').textContent, '🗓️');
+    assert.match(styles, /\.notification-actions \{[^}]*justify-content: flex-start/);
+    assert.match(styles, /\.notification-actions \.notification-open-weekly-ranking \{[^}]*flex: 0 0 auto;[^}]*width: auto/);
     openWeeklyRankingButton.click();
     await tick();
     await tick();
@@ -472,7 +476,11 @@ test('la accion de amistad conserva ancho de contenido como Gracias en movil', (
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {
     const rules = [...dom.window.document.styleSheets[0].cssRules];
-    for (const selector of ['.notification-actions .notification-thank', '.notification-actions .notification-accept-friend']) {
+    for (const selector of [
+      '.notification-actions .notification-thank',
+      '.notification-actions .notification-accept-friend',
+      '.notification-actions .notification-open-weekly-ranking',
+    ]) {
       const rule = rules.find((candidate) => candidate.selectorText?.split(', ').includes(selector));
       assert.equal(rule.style.getPropertyValue('flex'), '0 0 auto', selector);
       assert.equal(rule.style.getPropertyValue('width'), 'auto', selector);

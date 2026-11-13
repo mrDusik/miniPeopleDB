@@ -33,6 +33,7 @@ function startApp({ fetchImpl, session } = {}) {
     }
 
     destroy() { this.destroyed = true; }
+    resize() { this.resizeCount = (this.resizeCount ?? 0) + 1; }
   };
   const requests = [];
   window.fetch = async (url, init = {}) => {
@@ -83,6 +84,9 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(document.querySelectorAll('.analytics-history-chart canvas').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-chart table').length, 3);
     assert.equal(document.querySelectorAll('.analytics-history-plot canvas').length, 3);
+    const panels = [...document.querySelectorAll('details.analytics-history-chart:not([open])')];
+    assert.equal(panels.length, 3);
+    assert.deepEqual(panels.map((panel) => panel.querySelector(':scope > summary h3').textContent), ['Colección y Valor', 'DNA', 'Bricks y Nivel']);
     assert.equal(document.querySelectorAll('details.analytics-history-table-wrap:not([open])').length, 3);
     assert.deepEqual([...document.querySelectorAll('.analytics-history-table-wrap summary')].map((summary) => summary.textContent), ['Datos', 'Datos', 'Datos']);
     assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Colecci\u00f3n y Valor');
@@ -94,6 +98,137 @@ test('Progreso ofrece controles accesibles, dialog nativo y tablas alternativas'
     assert.equal(document.querySelector('#analytics-history-apply'), null);
     assert.equal(window.getComputedStyle(document.querySelector('#dna-canvas')).zIndex, '1');
     assert.equal(window.getComputedStyle(document.querySelector('.dna-chart-label')).zIndex, '0');
+  } finally {
+    dom.window.close();
+  }
+});
+
+for (const days of [30, 90, 365]) {
+  test(`Progreso pagina las tres tablas de ${days} dias en bloques independientes de 7 filas`, async () => {
+    let snapshots = [];
+    const { dom, window, document, requests, chartInstances } = startApp({
+      fetchImpl(url) {
+        if (!url.startsWith('/api/analytics/history?')) return undefined;
+        const query = new URL(url, 'http://localhost').searchParams;
+        const from = Date.parse(`${query.get('from')}T00:00:00Z`);
+        const to = Date.parse(`${query.get('to')}T00:00:00Z`);
+        snapshots = Array.from({ length: (to - from) / 86400000 + 1 }, (_, index) => ({
+          snapshotDate: new Date(from + index * 86400000).toISOString().slice(0, 10),
+          totalValue: index * 10, totalFigures: index, bricks: index * 5, level: index,
+          dna: { collector: 25, explorer: 25, rarityHunter: 25, fan: 25 },
+        }));
+        return { ok: true, json: async () => ({ snapshots, baseline: null }) };
+      },
+    });
+    try {
+      await tick();
+      document.querySelector('#open-analytics-history').click();
+      await tick();
+      assert.ok([...document.querySelectorAll('.analytics-history-pagination')].every((nav) => nav.hidden));
+      document.querySelector(`[data-history-days="${days}"]`).click();
+      await tick();
+      const requestCount = requests.length;
+      const charts = chartInstances.slice();
+      const sections = [...document.querySelectorAll('[data-history-section]')];
+      for (const [index, section] of sections.entries()) {
+        const nav = section.querySelector('.analytics-history-pagination');
+        const previous = nav.querySelector('[data-history-page="-1"]');
+        const next = nav.querySelector('[data-history-page="1"]');
+        const status = nav.querySelector('[role="status"]');
+        const pages = Math.ceil(days / 7);
+        assert.equal(nav.hidden, false);
+        assert.equal(previous.disabled, true);
+        const dates = [];
+        for (let page = 1; page <= pages; page += 1) {
+          const rows = [...section.querySelectorAll('tbody tr')];
+          assert.equal(rows.length, Math.min(7, days - (page - 1) * 7));
+          assert.equal(status.textContent, `Página ${page} de ${pages}`);
+          assert.equal(next.disabled, page === pages);
+          assert.equal(previous.disabled, page === 1);
+          dates.push(...rows.map((row) => row.firstElementChild.textContent));
+          if (index === 0 && page === 2) assert.equal(rows[0].lastElementChild.textContent, '+1');
+          next.click();
+        }
+        assert.deepEqual(dates, snapshots.map(({ snapshotDate }) => {
+          const [year, month, day] = snapshotDate.split('-');
+          return `${day}/${month}/${year}`;
+        }));
+        previous.click();
+        assert.equal(status.textContent, `Página ${pages - 1} de ${pages}`);
+        if (index === 0) {
+          assert.equal(sections[1].querySelector('[role="status"]').textContent, `Página 1 de ${pages}`);
+          section.open = true;
+          await tick();
+          assert.equal(chartInstances.at(-3).resizeCount, 1);
+          assert.equal(sections[1].open, false);
+        }
+      }
+      assert.equal(requests.length, requestCount);
+      assert.deepEqual(chartInstances, charts);
+      for (const chart of chartInstances.slice(-3)) {
+        assert.equal(chart.configuration.data.datasets[0].data.length, days);
+      }
+      document.querySelector(`[data-history-days="${days}"]`).click();
+      await tick();
+      for (const section of sections) {
+        assert.match(section.querySelector('[role="status"]').textContent, /^Página 1 de /);
+        assert.equal(section.querySelectorAll('tbody tr').length, 7);
+      }
+      document.querySelector('[data-history-days="7"]').click();
+      await tick();
+      for (const section of sections) {
+        assert.equal(section.querySelectorAll('tbody tr').length, 7);
+        assert.equal(section.querySelector('.analytics-history-pagination').hidden, true);
+      }
+      document.querySelector('#analytics-history-close').click();
+      for (const section of sections) {
+        assert.equal(section.querySelectorAll('tbody tr').length, 0);
+        assert.equal(section.querySelector('.analytics-history-pagination').hidden, true);
+        assert.equal(section.querySelector('[role="status"]').textContent, '');
+      }
+    } finally {
+      dom.window.close();
+    }
+  });
+}
+
+test('Progreso oculta paginacion sin datos y limita los controles con menos de 7 filas', async () => {
+  let count = 3;
+  const { dom, document } = startApp({
+    fetchImpl(url) {
+      if (!url.startsWith('/api/analytics/history?')) return undefined;
+      const from = new URL(url, 'http://localhost').searchParams.get('from');
+      return {
+        ok: true,
+        json: async () => ({
+          baseline: null,
+          snapshots: Array.from({ length: count }, () => ({
+            snapshotDate: from, totalValue: null, totalFigures: 1, bricks: 0, level: 0,
+            dna: { collector: 0, explorer: 0, rarityHunter: 0, fan: 0 },
+          })),
+        }),
+      };
+    },
+  });
+  try {
+    await tick();
+    document.querySelector('#open-analytics-history').click();
+    await tick();
+    document.querySelector('[data-history-days="30"]').click();
+    await tick();
+    for (const section of document.querySelectorAll('[data-history-section]')) {
+      assert.equal(section.querySelectorAll('tbody tr').length, 3);
+      assert.equal(section.querySelector('.analytics-history-pagination').hidden, false);
+      assert.equal(section.querySelector('[role="status"]').textContent, 'Página 1 de 1');
+      assert.ok([...section.querySelectorAll('[data-history-page]')].every((button) => button.disabled));
+    }
+    count = 0;
+    document.querySelector('[data-history-days="90"]').click();
+    await tick();
+    for (const section of document.querySelectorAll('[data-history-section]')) {
+      assert.equal(section.querySelectorAll('tbody tr').length, 0);
+      assert.equal(section.querySelector('.analytics-history-pagination').hidden, true);
+    }
   } finally {
     dom.window.close();
   }
@@ -361,6 +496,26 @@ test('DNA usa porcentajes guardados, mantiene Newbie en cero y respeta colores C
     assert.equal(datasets.Explorer.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-explorer'));
     assert.equal(datasets['Rarity Hunter'].borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-rarity'));
     assert.equal(datasets.Fan.borderColor, window.getComputedStyle(document.documentElement).getPropertyValue('--dna-fan'));
+    const labels = chart.options.plugins.legend.labels;
+    for (const width of [224, 294, 334, 520, 1037]) {
+      const context = {
+        chart: {
+          width, data: chart.data,
+          ctx: { save() {}, restore() {}, measureText: (text) => ({ width: text.length * 7 }) },
+        },
+      };
+      const font = labels.font(context);
+      const padding = labels.padding(context);
+      const rowWidth = chart.data.datasets.reduce((total, dataset) => (
+        total + Math.min(labels.boxWidth, font.size) + font.size / 2 + dataset.label.length * 7 * font.size / 12 + padding
+      ), padding);
+      assert.ok(rowWidth <= width - 8, `Leyenda de una linea para ${width}px: ${rowWidth}px`);
+      assert.ok(font.size > 0);
+      if (width >= 600) {
+        assert.equal(font.size, 12);
+        assert.equal(padding, 20);
+      }
+    }
     assert.deepEqual([...document.querySelectorAll('#analytics-history-dna-table tbody tr')].map((row) => row.children[1].textContent), ['60,12%', '0%']);
     assert.doesNotMatch(appScript, /dna_ponderaciones|rarity_hunter|new-mini-person/);
   } finally {

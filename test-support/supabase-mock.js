@@ -597,6 +597,19 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       return { data: { ok: true, removed: true }, error: null };
     }
 
+    if (name === 'amigos_revocar') {
+      const request = tables.friend_requests.find(({ id, sender_id, status }) =>
+        id === parameters?.p_solicitud_id && sender_id === uid && ['pending', 'rejected'].includes(status));
+      if (!request) return { data: null, error: { code: 'P0002', message: 'SOLICITUD_NO_ENCONTRADA' } };
+      const failure = takeFailure('friend_requests', 'delete') ?? takeFailure('notificaciones', 'delete');
+      if (failure) return { data: null, error: failure };
+      tables.friend_requests = tables.friend_requests.filter((row) => row !== request);
+      tables.notificaciones = tables.notificaciones.filter((row) => row.social_request_id !== request.id);
+      rebuildSocialGamification(uid);
+      rebuildSocialGamification(request.recipient_id);
+      return { data: { ok: true }, error: null };
+    }
+
     if (name === 'amigos_contadores') {
       return { data: {
         friends: tables.friendships.filter((row) => [row.user_low_id, row.user_high_id].includes(uid)).length,

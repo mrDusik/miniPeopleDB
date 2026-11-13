@@ -231,7 +231,7 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     const style = document.createElement('style');
     style.textContent = css;
     document.head.append(style);
-    const selector = '.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *):not(:has(.loading-message))';
+    const selector = '.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message))';
     const rule = [...style.sheet.cssRules].find((entry) => entry.selectorText === selector);
     const indicatorRule = [...style.sheet.cssRules].find((entry) => entry.selectorText === '.modal .loading-message, .modal .brickset-loading');
     assert.equal(rule?.style.display, 'none');
@@ -251,6 +251,13 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
       assert.equal(dialog.querySelector('.modal-dialog-heading').matches(selector), false);
       assert.equal(dialog.querySelector('.modal-dialog-heading button').matches(selector), false);
       assert.equal(status.matches(selector), false);
+      const toastRegion = document.createElement('div');
+      toastRegion.className = 'toast-region';
+      toastRegion.innerHTML = '<div class="toast">Aviso</div>';
+      dialog.append(toastRegion);
+      assert.equal(toastRegion.matches(selector), false);
+      assert.equal(toastRegion.firstElementChild.matches(selector), false);
+      toastRegion.remove();
       for (const contentSelector of contentSelectors) {
         assert.equal(dialog.querySelector(contentSelector).matches(selector), true, `${dialogId}: ${contentSelector}`);
       }
@@ -463,6 +470,29 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   assert.equal(portraitDeclarations.get('#ranking-order .button')?.getPropertyValue('white-space'), 'nowrap');
   assert.equal(portraitDeclarations.get('.ranking-user-details')?.getPropertyValue('max-width'), '100%');
   tabletDom.window.close();
+});
+
+test('la identidad compacta del inventario se limita a smartphone vertical y horizontal', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM('<style></style>');
+  try {
+    dom.window.document.querySelector('style').textContent = css;
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const defaults = rules.find((rule) => rule.selectorText === '.catalog-mobile-heading, .catalog-mobile-name');
+    assert.equal(defaults.style.getPropertyValue('display'), 'none');
+    const mobile = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)'
+      && [...rule.cssRules].some(({ selectorText }) => selectorText === '.results-panel .catalog-mobile-name'));
+    assert.ok(mobile);
+    const declarations = new Map([...mobile.cssRules].map((rule) => [rule.selectorText, rule.style]));
+    assert.equal(declarations.get('.results-panel .catalog-mobile-name').getPropertyValue('display'), 'block');
+    assert.equal(declarations.get('.results-panel .catalog-mobile-heading').getPropertyValue('display'), 'inline');
+    assert.equal(declarations.get('.results-panel .catalog-id-heading').getPropertyValue('display'), 'none');
+    assert.equal(declarations.get('.results-panel th, .results-panel td').getPropertyValue('overflow-wrap'), 'anywhere');
+    assert.equal(declarations.get('.results-panel table').getPropertyValue('table-layout'), 'fixed');
+    assert.equal([1, 3, 8, 9, 11].reduce((total, column) => total + Number.parseInt(declarations.get(`.results-panel th:nth-child(${column})`).getPropertyValue('width'), 10), 0), 100);
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('los ajustes de tarjetas, descripcion y DNA solo se aplican a smartphone', async () => {
@@ -999,6 +1029,71 @@ test('la terminologia minipersona se aplica a mensajes remotos sin cambiar datos
   }
 });
 
+test('los toasts permanecen visibles sobre dialogos encadenados y se limpian al expirar', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript({ session: null });
+  for (const supportsPopover of [true, false]) {
+    const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+    const { window } = dom;
+    const timers = [];
+    const originalSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 4000) {
+        timers.push(callback);
+        return timers.length;
+      }
+      return originalSetTimeout(callback, delay, ...args);
+    };
+    window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    window.HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new window.Event('close'));
+    };
+    if (supportsPopover) {
+      const matches = window.Element.prototype.matches;
+      window.Element.prototype.matches = function (selector) {
+        return selector === ':popover-open' ? this.hasAttribute('data-popover-open') : matches.call(this, selector);
+      };
+      window.HTMLElement.prototype.showPopover = function () { this.setAttribute('data-popover-open', ''); };
+      window.HTMLElement.prototype.hidePopover = function () { this.removeAttribute('data-popover-open'); };
+    }
+    window.fetch = async () => ({ ok: true, json: async () => [] });
+    try {
+      window.eval(script);
+      const region = window.document.querySelector('#toast-region');
+      const home = region.parentElement;
+      const first = window.document.querySelector('#ranking-dialog');
+      const second = window.document.querySelector('#public-profile-dialog');
+      window.eval("openDialog(document.querySelector('#ranking-dialog'))");
+      assert.equal(region.parentElement, home);
+      first.close();
+      window.eval("showToast('Primer aviso')");
+      assert.equal(region.parentElement, home);
+      assert.equal(region.hasAttribute('data-popover-open'), supportsPopover);
+      window.eval("openDialog(document.querySelector('#ranking-dialog'))");
+      assert.equal(region.parentElement, first);
+      window.eval("showToast('Segundo aviso', 'error')");
+      window.eval("openDialog(document.querySelector('#public-profile-dialog'))");
+      assert.equal(region.parentElement, second);
+      assert.equal(region.children.length, 2);
+      assert.equal(region.hasAttribute('data-popover-open'), supportsPopover);
+      second.close();
+      assert.equal(region.parentElement, first);
+      first.close();
+      assert.equal(region.parentElement, home);
+      timers[0]();
+      assert.equal(region.children.length, 1);
+      assert.equal(region.hasAttribute('data-popover-open'), supportsPopover);
+      timers[1]();
+      assert.equal(region.children.length, 0);
+      assert.equal(region.parentElement, home);
+      assert.equal(region.hasAttribute('data-popover-open'), false);
+    } finally {
+      dom.window.close();
+    }
+  }
+});
+
 test('todas las columnas de datos ordenan en ambos sentidos sin cambiar los datos originales', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -1092,7 +1187,7 @@ test('los alias CMF son solo visuales y nunca se envian ni sustituyen los nombre
     document.querySelector('#subcategoria').value = subcategory;
     document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
     assert.equal(document.querySelectorAll('#catalog-body tr').length, 1);
-    assert.equal(document.querySelector('#catalog-body tr').children[2].textContent, figure.id);
+    assert.equal(document.querySelector('#catalog-body tr .id-link').textContent, figure.id);
 
     for (const mode of ['view', 'edit', 'ranking-create']) {
       window.eval(`openFormDialog(${JSON.stringify(mode)}, ${JSON.stringify(figure)})`);
@@ -1185,20 +1280,20 @@ test('la interfaz renderiza diferencias, ordena columnas y conserva el estado po
   assert.equal(rows()[1].children[4].textContent, 'CMF');
   assert.equal(rows()[1].children[5].textContent, 'Team GB');
   window.document.querySelector('[data-sort="anio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'b', 'c', 'a']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['d', 'b', 'c', 'a']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'd', 'b', 'c']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['a', 'd', 'b', 'c']);
   window.document.querySelector('[data-sort="precio"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['b', 'd', 'a', 'c']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['b', 'd', 'a', 'c']);
   window.document.querySelector('[data-sort="diferencia"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'd', 'b', 'c']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['a', 'd', 'b', 'c']);
   window.document.querySelector('[data-sort="diferencia"]').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['d', 'a', 'b', 'c']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['d', 'a', 'b', 'c']);
   window.document.querySelector('#show-all').click();
-  assert.deepEqual(rows().map((row) => row.children[2].textContent), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(rows().map((row) => row.querySelector('.id-link').textContent), ['a', 'b', 'c', 'd']);
   assert.equal(window.document.querySelectorAll('.table-sort[data-direction=""]').length, 7);
 
-  const editButton = rows().find((row) => row.children[2].textContent === 'c').querySelector('[data-action="edit"]');
+  const editButton = rows().find((row) => row.querySelector('.id-link').textContent === 'c').querySelector('[data-action="edit"]');
   editButton.click();
   assert.equal(window.document.querySelector('#form-estadoColeccion').value, '');
   assert.equal(window.document.querySelector('#form-id').disabled, true);
@@ -1337,6 +1432,19 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   const thumbnail = window.document.querySelector('.table-thumb');
   assert.equal(thumbnail.src, 'https://img.bricklink.com/ItemImage/MN/0/st008.png');
   assert.equal(thumbnail.dataset.action, 'preview');
+  const idHeader = window.document.querySelector('[data-sort="id"]');
+  assert.equal(idHeader.querySelector('.catalog-id-heading').textContent, 'ID');
+  assert.equal(idHeader.querySelector('.catalog-mobile-heading').textContent, 'Minifigura');
+  assert.match(idHeader.querySelector('.visually-hidden').textContent, /ordenar por ID/);
+  const identity = window.document.querySelector('#catalog-body tr td:nth-child(3)');
+  assert.equal(identity.querySelector('.id-link').textContent, 'ST008');
+  assert.equal(identity.querySelector('.catalog-mobile-name').textContent, 'Demogorgon');
+  assert.equal(window.document.querySelector('#catalog-body tr td:nth-child(4)').textContent, 'Demogorgon');
+  const longName = 'Un nombre muy largo <sin etiquetas> para la minifigura';
+  window.figureWithLongName = { id: 'LONG-ID', nombre: longName };
+  const longIdentity = window.eval('idCell(figureWithLongName)');
+  assert.equal(longIdentity.querySelector('.catalog-mobile-name').textContent, longName);
+  assert.equal(longIdentity.querySelector('.catalog-mobile-name').children.length, 0);
   assert.equal(window.document.querySelectorAll('.ranking-card').length, 2);
   for (const [selector, expectedId, expectedDescription] of [
     ['.ranking-card', 'RANK1', 'Datos completos'],
@@ -1599,7 +1707,7 @@ test('los toggles 📦 y 🔍 filtran por estado individualmente o muestran ambo
   const submitFilters = async () => {
     window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    return [...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent).sort();
+    return [...window.document.querySelectorAll('#catalog-body tr')].map((row) => row.querySelector('.id-link').textContent).sort();
   };
 
   collectionToggle.checked = true;

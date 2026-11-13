@@ -58,7 +58,7 @@ async function setup({ catalog = [], valuation = emptyValuation, onFetch } = {})
 }
 
 function renderedIds(document) {
-  return [...document.querySelectorAll('#catalog-body tr')].map((row) => row.children[2].textContent);
+  return [...document.querySelectorAll('#catalog-body tr')].map((row) => row.querySelector('.id-link').textContent);
 }
 
 async function submitFilters(window) {
@@ -193,7 +193,7 @@ test('la edición confirmada actualiza la tabla antes de la revalidación y sin 
   await flush();
 
   assert.equal(control.pending.length, 1, 'se lanza una revalidación en segundo plano');
-  const row = [...document.querySelectorAll('#catalog-body tr')].find((tr) => tr.children[2].textContent === 'A');
+  const row = [...document.querySelectorAll('#catalog-body tr')].find((tr) => tr.querySelector('.id-link').textContent === 'A');
   assert.equal(row.children[3].textContent, 'Nuevo');
   assert.ok(controlsEnabled(document));
   assert.match(document.querySelector('#toast-region').textContent, /Minipersona actualizada correctamente/);

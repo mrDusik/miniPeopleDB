@@ -8,9 +8,13 @@ Esta capacidad permite consultar y gestionar el catálogo desde un navegador med
 
 Los toasts con fondo de color (logros ordinarios y niveles) SHALL mostrar texto blanco, incluidos sus textos hijos. Los toasts con fondo neutro SHALL conservar texto oscuro legible; una franja lateral de color SHALL NOT implicar texto blanco.
 
+Los toasts SHALL permanecer visibles por encima de cualquier dialogo abierto en smartphones, incluida la aplicacion Android, sin impedir la interaccion con los controles del dialogo. Al abrir o cerrar dialogos encadenados SHALL conservarse la visibilidad de los avisos pendientes.
+
 Los toasts de logros recien conseguidos con `type: regalo` SHALL usar el emoji `🎁` en lugar de la imagen de Bricks, conservando nombre, importe, orden y cadencia de la cola. Los demas logros SHALL conservar su icono de Bricks y los niveles su trofeo.
 
 El marcador de notificaciones SHALL mostrar el numero de avisos sin leer en la esquina superior derecha, compartiendo estilo, tamano y posicion con el contador de Amigos. SHALL actualizar su texto con el contador real, ocultarse y vaciarse cuando sea cero y conservar el recuento en la etiqueta accesible del boton.
+
+La accion para abrir el Ranking Semanal desde una notificacion SHALL mostrar solo «Ver» y el emoji 🗓️. En smartphones, incluida la aplicacion Android, SHALL conservar ancho de contenido y alineacion izquierda, sin ocupar todo el ancho disponible; su etiqueta accesible SHALL identificar el ranking.
 
 Los contadores de Bricks de ambos rankings SHALL mantener sus iconos alineados con una columna numerica estable de 5ch para cuatro digitos y signo semanal. Los numeros SHALL alinearse hacia su icono con separacion constante de 8px y cifras tabulares.
 
@@ -36,6 +40,8 @@ Esta terminologia SHALL NOT renombrar rutas API, identificadores DOM, campos, co
 ### Requirement: Ordenacion de todas las columnas de datos
 
 La tabla principal SHALL permitir ordenar ID, Nombre, Categoria, Subcategoria, Anio, Precio y Diferencia en ambos sentidos mediante botones de cabecera. Imagen, Seguimiento, Estado y Acciones SHALL quedar excluidas, sin botones ni flechas de ordenacion. Cada nombre ordenable SHALL mostrar a su derecha una flecha roja sin saltos de linea; el sentido activo SHALL comunicarse tambien mediante `aria-sort`.
+
+En smartphone y Android, tanto en vertical como en horizontal, la columna ID SHALL titularse «Minifigura» y mostrar el nombre completo debajo del ID, con saltos de linea cuando sea necesario. La cabecera SHALL seguir ordenando por ID; imagen, estado, precio y acciones SHALL permanecer visibles sin desplazamiento horizontal. En escritorio y tablet SHALL conservarse la columna de nombre independiente.
 
 Los textos SHALL ordenarse con comparacion espanola sin distinguir acentos ni mayusculas y con orden numerico natural para IDs. Categoria y subcategoria SHALL ordenarse por sus etiquetas visuales sin modificar valores canonicos. Los numeros SHALL ordenarse por valor numerico y los valores ausentes SHALL quedar al final en ambos sentidos. Restablecer SHALL recuperar el orden original y limpiar los indicadores de ordenacion.
 
@@ -838,6 +844,13 @@ La interfaz SHALL ofrecer al usuario autenticado un boton `📈 Progreso` con to
 - **WHEN** la API devuelve cero snapshots o falla
 - **THEN** el modal muestra respectivamente estado vacio o error con reintento, sin inventar datos ni conservar los de una cuenta previa
 
+#### Scenario: Paneles y tablas paginadas en escritorio, smartphone y Android
+- **WHEN** el usuario consulta Progreso en cualquiera de estas plataformas
+- **THEN** Coleccion y Valor, DNA y Bricks y Nivel aparecen en paneles desplegables independientes, inicialmente cerrados y operables por teclado
+- **AND** para 30, 90 y 365 dias cada tabla de Datos tiene paginacion independiente de 7 filas por pagina, salvo la ultima si quedan menos, con controles Anterior y Siguiente e indicador de pagina accesible
+- **AND** cambiar pagina no consulta la API ni recorta los graficos del periodo; cambiar rango reinicia todas las tablas en la primera pagina y los estados vacios no muestran paginacion
+- **AND** el rango de 7 dias conserva sus datos sin controles de paginacion
+
 #### Scenario: Cerrar o cambiar cuenta
 - **WHEN** se cierra el modal o finaliza la sesion durante la carga
 - **THEN** se invalidan respuestas pendientes, se liberan los graficos y al cerrar se restaura el foco cuando corresponde
@@ -861,6 +874,11 @@ El modal SHALL mostrar areas apiladas sobre un eje fijo de 0 a 100 para Collecto
 #### Scenario: Composicion historica y Newbie
 - **WHEN** hay un snapshot con cuatro porcentajes positivos y otro con cuatro ceros
 - **THEN** el primero muestra areas proporcionales con los colores definidos y el segundo muestra ausencia de contribuciones
+
+#### Scenario: Leyenda de DNA en smartphone y Android
+- **WHEN** se consulta el grafico DNA en smartphone o Android, o se cambia su orientacion
+- **THEN** Collector, Explorer, Rarity Hunter y Fan permanecen completos en una sola linea, ajustando separacion y tipografia al ancho disponible sin recortes ni scroll horizontal
+- **AND** la leyenda de escritorio conserva su tipografia y espaciado habituales
 
 ### Requirement: Representar Bricks y nivel historicos
 

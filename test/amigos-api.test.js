@@ -120,6 +120,56 @@ test('solicitudes se envían una vez, se pueden rechazar y aceptar después con 
   }
 });
 
+test('revocar solicitudes retira ambas listas y permite reiniciar sin revelar rechazos', async () => {
+  const mock = friendsMock();
+  const context = await startTestServer({ supabase: mock });
+  const sender = authFetch(TOKEN_A);
+  const receiver = authFetch(TOKEN_B);
+  const outsider = authFetch(TOKEN_C);
+  const base = `${context.baseUrl}/api/amigos/solicitudes`;
+  try {
+    assert.equal((await fetch(`${base}/${USER_B}`, { method: 'DELETE' })).status, 401);
+    assert.equal((await sender(`${base}/invalid`, { method: 'DELETE' })).status, 400);
+    assert.equal((await sender(`${base}/${USER_B}?userId=${USER_A}`, { method: 'DELETE' })).status, 400);
+    assert.equal((await sender(`${base}/${USER_B}`, { method: 'DELETE', body: '{}' })).status, 400);
+    assert.equal((await sender(`${base}/${USER_B}`, { method: 'POST' })).status, 405);
+    for (const rejected of [false, true]) {
+      const request = await (await sender(base, { method: 'POST', body: JSON.stringify({ receptorId: USER_B }) })).json();
+      const url = `${base}/${request.requestId}`;
+      if (rejected) await receiver(`${url}/rechazar`, { method: 'POST' });
+      for (const caller of [receiver, outsider]) {
+        const denied = await caller(url, { method: 'DELETE' });
+        assert.equal(denied.status, 404);
+        assert.deepEqual(await denied.json(), { error: 'SOLICITUD_NO_ENCONTRADA' });
+      }
+      mock.failNext('friend_requests', { code: 'XX000', message: 'private SQL detail' }, 'delete');
+      const failed = await sender(url, { method: 'DELETE' });
+      assert.equal(failed.status, 500);
+      assert.deepEqual(await failed.json(), { error: 'AMIGOS_NO_DISPONIBLES' });
+      assert.equal(mock.rows('friend_requests').length, 1);
+      assert.equal(mock.rows('notificaciones', USER_B).length, 1);
+      const revoked = await sender(url, { method: 'DELETE' });
+      assert.equal(revoked.status, 200);
+      assert.equal(revoked.headers.get('cache-control'), 'no-store');
+      assert.deepEqual(await revoked.json(), { ok: true });
+      for (const [caller, type] of [[sender, 'sent'], [receiver, 'received']]) {
+        assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos?tipo=${type}`)).json(), { users: [] });
+        assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos/contadores`)).json(), { friends: 0, sent: 0, received: 0 });
+      }
+      assert.equal(mock.rows('notificaciones', USER_B).length, 0);
+      assert.equal((await receiver(`${url}/aceptar`, { method: 'POST' })).status, 404);
+      assert.equal((await sender(url, { method: 'DELETE' })).status, 404);
+    }
+    const next = await (await sender(base, { method: 'POST', body: JSON.stringify({ receptorId: USER_B }) })).json();
+    await receiver(`${base}/${next.requestId}/aceptar`, { method: 'POST' });
+    assert.equal((await sender(`${base}/${next.requestId}`, { method: 'DELETE' })).status, 404);
+    assert.equal(mock.rows('friendships').length, 1);
+    assert.deepEqual(mock.adminCalls(), []);
+  } finally {
+    await context.close();
+  }
+});
+
 test('perfil ajeno devuelve solo el resumen permitido y errores controlados', async () => {
   const mock = friendsMock();
   const context = await startTestServer({ supabase: mock });

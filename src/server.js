@@ -873,6 +873,31 @@ export function createServer({
       return;
     }
 
+    const revokeFriendRequestRoute = /^\/api\/amigos\/solicitudes\/([^/]+)$/.exec(requestUrl.pathname);
+    if (revokeFriendRequestRoute) {
+      if (request.method !== 'DELETE') {
+        response.setHeader('allow', 'DELETE');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (!UUID_PATTERN.test(revokeFriendRequestRoute[1])) {
+        sendJson(response, 400, { error: 'SOLICITUD_INVALIDA' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await friendsRepository.revoke(revokeFriendRequestRoute[1].toLowerCase()));
+      } catch (error) {
+        sendJson(response, error instanceof SolicitudAmigosNoEncontradaError ? 404 : 500, {
+          error: error instanceof SolicitudAmigosNoEncontradaError ? error.code : 'AMIGOS_NO_DISPONIBLES',
+        });
+      }
+      return;
+    }
+
     const friendRequestActionRoute = /^\/api\/amigos\/solicitudes\/([^/]+)\/(aceptar|rechazar)$/.exec(requestUrl.pathname);
     if (friendRequestActionRoute) {
       if (request.method !== 'POST') {
