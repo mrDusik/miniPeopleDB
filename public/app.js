@@ -222,6 +222,7 @@ const authPasswordRepeatInput = document.querySelector('#auth-password-repeat');
 const authShowPasswordButtons = [...document.querySelectorAll('#classic-auth-form .auth-password-visibility')];
 const classicAuthSubmit = document.querySelector('#classic-auth-submit');
 const openPasswordRecoveryButton = document.querySelector('#open-password-recovery');
+const openContactAuthButton = document.querySelector('#open-contact-auth');
 const passwordRecoveryForm = document.querySelector('#password-recovery-form');
 const recoveryEmailInput = document.querySelector('#recovery-email');
 const cancelPasswordRecoveryButton = document.querySelector('#cancel-password-recovery');
@@ -238,6 +239,18 @@ const userMenuToggle = document.querySelector('#user-menu-toggle');
 const userSession = document.querySelector('.user-session');
 const userAvatar = document.querySelector('#user-avatar');
 const openUserSettingsButton = document.querySelector('#open-user-settings');
+const openContactProfileButton = document.querySelector('#open-contact-profile');
+const contactDialog = document.querySelector('#contact-dialog');
+const contactDialogTitle = document.querySelector('#contact-title');
+const contactCloseButton = document.querySelector('#contact-close');
+const contactForm = document.querySelector('#contact-form');
+const contactEmailInput = document.querySelector('#contact-email');
+const contactUsernameInput = document.querySelector('#contact-username');
+const contactMessageInput = document.querySelector('#contact-message');
+const contactMessageCount = document.querySelector('#contact-message-count');
+const contactMessageLimit = document.querySelector('#contact-message-limit');
+const contactStatus = document.querySelector('#contact-status');
+const contactSubmitButton = document.querySelector('#contact-submit');
 const profileDialog = document.querySelector('#user-profile-dialog');
 const profileDialogTitle = document.querySelector('#user-profile-dialog-title');
 const profileDialogCloseButton = document.querySelector('#user-profile-close');
@@ -319,6 +332,8 @@ let achievementQueue = [];
 let isShowingAchievement = false;
 let supabaseClient = null;
 let currentSession = null;
+let contactDialogTrigger = null;
+let contactSending = false;
 let authCallbackPending = false;
 let authCallbackTimeoutId = null;
 let passwordRecoveryPending = false;
@@ -4487,6 +4502,22 @@ userMenuToggle.addEventListener('click', () => {
   userProfile.hidden = !expanded;
 });
 
+openContactAuthButton.addEventListener('click', () => openContactDialog(openContactAuthButton));
+openContactProfileButton.addEventListener('click', () => {
+  if (!currentSession || !currentUserProfile) return;
+  openContactDialog(openContactProfileButton);
+});
+contactCloseButton.addEventListener('click', () => contactDialog.close());
+contactDialog.addEventListener('close', () => {
+  const trigger = contactDialogTrigger;
+  contactDialogTrigger = null;
+  resetContactForm();
+  if (trigger?.isConnected && !trigger.disabled && !trigger.closest('[hidden]')) trigger.focus();
+});
+contactForm.addEventListener('submit', submitContact);
+contactMessageInput.addEventListener('input', updateContactMessageCount);
+contactForm.addEventListener('input', () => setContactStatus(''));
+
 openUserSettingsButton.addEventListener('click', async () => {
   userProfile.hidden = true;
   userMenuToggle.setAttribute('aria-expanded', 'false');
@@ -4921,7 +4952,111 @@ async function apiFetch(url, init = {}) {
   return response;
 }
 
+function setContactStatus(message, { error = false, loading = false } = {}) {
+  contactStatus.textContent = message;
+  contactStatus.className = loading ? 'status loading-message' : error && message ? 'status error' : 'status';
+  contactStatus.setAttribute('aria-live', error ? 'assertive' : 'polite');
+  contactStatus.setAttribute('aria-busy', String(loading));
+}
+
+function updateContactMessageCount() {
+  const length = contactMessageInput.value.length;
+  const limit = contactMessageInput.maxLength;
+  contactMessageCount.textContent = `${length} / ${limit}`;
+  contactMessageLimit.textContent = length >= limit
+    ? `Has alcanzado el límite de ${limit} caracteres.`
+    : '';
+}
+
+function resetContactForm() {
+  contactForm.reset();
+  updateContactMessageCount();
+  contactEmailInput.disabled = false;
+  contactUsernameInput.disabled = false;
+  contactMessageInput.disabled = false;
+  contactSubmitButton.disabled = false;
+  contactSending = false;
+  setContactStatus('');
+}
+
+function openContactDialog(trigger) {
+  contactDialogTrigger = trigger;
+  resetContactForm();
+  const authenticated = Boolean(currentSession);
+  contactEmailInput.value = currentSession?.user?.email ?? '';
+  contactUsernameInput.value = currentUserProfile?.username ?? '';
+  contactEmailInput.disabled = authenticated;
+  contactUsernameInput.disabled = authenticated;
+  contactDialog.showModal();
+  contactDialogTitle.focus();
+}
+
+async function submitContact(event) {
+  event.preventDefault();
+  if (contactSending) return;
+
+  const message = contactMessageInput.value.trim();
+  if (!message) {
+    setContactStatus('Escribe un mensaje.', { error: true });
+    contactMessageInput.focus();
+    return;
+  }
+
+  let body = { message };
+  if (!currentSession) {
+    const email = contactEmailInput.value.trim();
+    const username = contactUsernameInput.value.trim();
+    if (!email && !username) {
+      setContactStatus('Indica tu Email o Usuario.', { error: true });
+      contactEmailInput.focus();
+      return;
+    }
+    if (email && !contactEmailInput.checkValidity()) {
+      setContactStatus('Introduce un Email válido.', { error: true });
+      contactEmailInput.focus();
+      return;
+    }
+    if (username && !contactUsernameInput.checkValidity()) {
+      setContactStatus('El Usuario debe tener entre 3 y 20 letras, números o guiones bajos.', { error: true });
+      contactUsernameInput.focus();
+      return;
+    }
+    body = { email, username, message };
+  }
+
+  contactSending = true;
+  contactSubmitButton.disabled = true;
+  setContactStatus('Enviando mensaje…', { loading: true });
+  try {
+    const init = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    };
+    const response = currentSession
+      ? await apiFetch('/api/contact', init)
+      : await fetch(apiUrl('/api/contact'), init);
+    if (!response.ok) {
+      setContactStatus(response.status === 429
+        ? 'Se alcanzó el límite de envíos. Inténtalo de nuevo más tarde.'
+        : 'No se pudo enviar el mensaje. Inténtalo de nuevo.', { error: true });
+      return;
+    }
+    contactMessageInput.value = '';
+    updateContactMessageCount();
+    setContactStatus('Mensaje enviado correctamente. Pronto me pondré en contacto contigo por Email.');
+  } catch {
+    setContactStatus('No se pudo enviar el mensaje. Inténtalo de nuevo.', { error: true });
+  } finally {
+    contactSending = false;
+    contactSubmitButton.disabled = false;
+  }
+}
+
 function clearUserData() {
+  contactDialogTrigger = null;
+  if (contactDialog.open) contactDialog.close();
+  else resetContactForm();
   if (changePasswordDialog.open) changePasswordDialog.close();
   profileEmailInput.value = '';
   profileRequestSequence += 1;
@@ -5013,6 +5148,9 @@ function setAuthMessage(message, { loading = false, error = false } = {}) {
 }
 
 function showAuthScreen(message = '') {
+  contactDialogTrigger = null;
+  if (contactDialog.open) contactDialog.close();
+  else resetContactForm();
   pageShell.hidden = true;
   authScreen.hidden = false;
   authAccessPanel.hidden = false;

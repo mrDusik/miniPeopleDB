@@ -59,3 +59,15 @@ export function getCronSecret({ env = process.env, envPath = defaultEnvPath } = 
 	}
 	return cronSecret || null;
 }
+
+export function getContactEmailConfig({ env = process.env, envPath = defaultEnvPath } = {}) {
+	const fileValues = readEnvFile(envPath);
+	const apiKey = env.RESEND_API_KEY || fileValues.RESEND_API_KEY;
+	const fromEmail = env.CONTACT_FROM_EMAIL || fileValues.CONTACT_FROM_EMAIL;
+	const recipientEmail = env.CONTACT_SUPPORT_EMAIL || fileValues.CONTACT_SUPPORT_EMAIL;
+	return {
+		apiKey: apiKey || null,
+		fromEmail: fromEmail || null,
+		recipientEmail: recipientEmail || null,
+	};
+}

@@ -18,10 +18,11 @@ import { BricksetPriceError, BricksetScraper } from './brickset-scraper.js';
 import { createBricksetSyncJobs } from './brickset-sync-jobs.js';
 import { CategoriasInvalidosError, CategoriasNoDisponiblesError, CategoriasRepository } from './categorias-repository.js';
 import { CategoryGamificationRecalculator } from './category-gamification-recalculator.js';
-import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from './services/supabase.js';
+import { getContactEmailConfig, getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from './services/supabase.js';
 import { createDailyAnalyticsJobs } from './daily-analytics-jobs.js';
 import { createDailyAnalyticsRepository } from './daily-analytics-repository.js';
 import { DailyAnalyticsHistoryRepository } from './daily-analytics-history-repository.js';
+import { createResendContactMailer } from './contact-email.js';
 import { AndroidPushRepository, AndroidPushRegistrationError } from './android-push-repository.js';
 import { createAndroidPushJobs, createFcmSender } from './android-push-jobs.js';
 import {
@@ -60,6 +61,7 @@ import {
   UserProfileRepository,
   UsernameInmutableError,
   UsernameOcupadoError,
+  isValidUsername,
 } from './user-profile-repository.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -69,6 +71,10 @@ const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/push\/registrations(?:\/[^/]+)?|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CONTACT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONTACT_MESSAGE_MAX_LENGTH = 1000;
+const CONTACT_SUBMISSION_LIMIT = 5;
+const CONTACT_SUBMISSION_WINDOW_MS = 60_000;
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
@@ -151,6 +157,13 @@ function isCalendarDate(value) {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function isContactEmail(value) {
+  return typeof value === 'string'
+    && value.length <= 254
+    && CONTACT_EMAIL_PATTERN.test(value)
+    && !/[\r\n]/.test(value);
+}
+
 function addCalendarDays(value, days) {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -177,6 +190,7 @@ export function createServer({
   pushEnabled = false,
   now = () => new Date(),
   fetchImpl,
+  contactEmailSender,
   scraper,
   minIntervalMs,
   maintenanceMode = process.env.MAINTENANCE_MODE,
@@ -192,6 +206,9 @@ export function createServer({
   const app = express();
   const bricksetFullNames = new Map();
   const emailHandoffRateLimits = new Map();
+  const contactSubmissionRateLimits = new Map();
+  const contactEmailConfig = getContactEmailConfig();
+  const sendContactEmail = contactEmailSender ?? createResendContactMailer({ ...contactEmailConfig, fetchImpl });
   const maintenanceEnabled = isMaintenanceModeEnabled(maintenanceMode);
   const isPushEnabled = () => typeof pushEnabled === 'function' ? pushEnabled() : Boolean(pushEnabled);
 
@@ -207,6 +224,21 @@ export function createServer({
     if (entry && entry.count >= 8) return false;
     if (entry) entry.count += 1;
     else emailHandoffRateLimits.set(key, { count: 1, resetAt: nowMs + 60_000 });
+    return true;
+  }
+
+  function allowContactSubmission(key) {
+    const nowMs = now().getTime();
+    for (const [candidate, entry] of contactSubmissionRateLimits) {
+      if (entry.resetAt <= nowMs) contactSubmissionRateLimits.delete(candidate);
+    }
+    if (contactSubmissionRateLimits.size >= 10000 && !contactSubmissionRateLimits.has(key)) {
+      contactSubmissionRateLimits.delete(contactSubmissionRateLimits.keys().next().value);
+    }
+    const entry = contactSubmissionRateLimits.get(key);
+    if (entry && entry.count >= CONTACT_SUBMISSION_LIMIT) return false;
+    if (entry) entry.count += 1;
+    else contactSubmissionRateLimits.set(key, { count: 1, resetAt: nowMs + CONTACT_SUBMISSION_WINDOW_MS });
     return true;
   }
 
@@ -316,6 +348,7 @@ export function createServer({
     });
     return {
       userId,
+      user,
       repository,
       rankingRepository,
       friendsRepository,
@@ -692,6 +725,83 @@ export function createServer({
         return;
       }
       ({ repository, userId, ensureGamificacion, rankingRepository, friendsRepository, notificationsRepository, androidPushRepository, historyRepository, readGamificationDna, readGamificationFeatured, setGamificationFeatured, userProfileRepository } = context);
+    }
+
+    if (requestUrl.pathname === '/api/contact') {
+      response.setHeader('cache-control', 'no-store');
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search) {
+        sendJson(response, 400, { error: 'CONTACTO_INVALIDO' });
+        return;
+      }
+
+      let body;
+      try {
+        body = await readJsonBody(request, 8192);
+      } catch {
+        sendJson(response, 400, { error: 'CONTACTO_INVALIDO' });
+        return;
+      }
+      if (Object.keys(body).some((key) => !['email', 'username', 'message'].includes(key))
+        || typeof body.message !== 'string'
+        || !body.message.trim()
+        || body.message.trim().length > CONTACT_MESSAGE_MAX_LENGTH
+        || (Object.hasOwn(body, 'email') && typeof body.email !== 'string')
+        || (Object.hasOwn(body, 'username') && typeof body.username !== 'string')) {
+        sendJson(response, 400, { error: 'CONTACTO_INVALIDO' });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      let contactEmail = body.email?.trim() || null;
+      let contactUsername = body.username?.trim() || null;
+      if (authorization !== undefined) {
+        const context = await authenticate(request);
+        if (context.error) {
+          sendJson(response, context.status, { error: context.error });
+          return;
+        }
+        try {
+          const profile = await context.userProfileRepository.read();
+          if (!isContactEmail(context.user?.email) || !isValidUsername(profile.username)) {
+            sendJson(response, 503, { error: 'CONTACTO_NO_DISPONIBLE' });
+            return;
+          }
+          contactEmail = context.user.email;
+          contactUsername = profile.username;
+        } catch {
+          sendJson(response, 503, { error: 'CONTACTO_NO_DISPONIBLE' });
+          return;
+        }
+      } else if ((!contactEmail && !contactUsername)
+        || (contactEmail && !isContactEmail(contactEmail))
+        || (contactUsername && !isValidUsername(contactUsername))) {
+        sendJson(response, 400, { error: 'CONTACTO_INVALIDO' });
+        return;
+      }
+
+      const rateLimitKey = request.ip || request.socket.remoteAddress || 'unknown';
+      if (!allowContactSubmission(rateLimitKey)) {
+        response.setHeader('retry-after', String(CONTACT_SUBMISSION_WINDOW_MS / 1000));
+        sendJson(response, 429, { error: 'CONTACTO_LIMITE_EXCEDIDO' });
+        return;
+      }
+
+      try {
+        await sendContactEmail({
+          email: contactEmail,
+          username: contactUsername,
+          message: body.message.trim(),
+        });
+        sendJson(response, 200, { ok: true });
+      } catch {
+        sendJson(response, 503, { error: 'CONTACTO_NO_DISPONIBLE' });
+      }
+      return;
     }
 
     if (requestUrl.pathname === '/api/amigos' || requestUrl.pathname.startsWith('/api/amigos/')) {

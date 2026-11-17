@@ -1,6 +1,10 @@
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 const PROFILE_FIELDS = ['username', 'avatarUrl', 'currency', 'language', 'favoriteCategories'];
 
+export function isValidUsername(value) {
+  return typeof value === 'string' && USERNAME_PATTERN.test(value);
+}
+
 export class PerfilNoDisponibleError extends Error {
   constructor() {
     super('El perfil no esta disponible');
@@ -58,8 +62,7 @@ function isValidProfile(profile) {
     && !Array.isArray(profile)
     && Object.keys(profile).length === PROFILE_FIELDS.length
     && PROFILE_FIELDS.every((field) => Object.hasOwn(profile, field))
-    && typeof profile.username === 'string'
-    && USERNAME_PATTERN.test(profile.username)
+    && isValidUsername(profile.username)
     && isValidAvatarUrl(profile.avatarUrl)
     && (profile.avatarUrl === null || typeof profile.avatarUrl === 'string')
     && profile.currency === 'EUR'

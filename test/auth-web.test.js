@@ -40,6 +40,24 @@ test('solo en monitor el boton iniciar sesion tiene separacion superior adiciona
   }
 });
 
+test('el acceso compacto no reserva espacio para avisos vacios pero muestra los errores', () => {
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.append(style);
+    const message = document.querySelector('#auth-message');
+    assert.equal(dom.window.getComputedStyle(message).display, 'none');
+    message.textContent = 'No se pudo iniciar sesión. Inténtalo de nuevo.';
+    assert.notEqual(dom.window.getComputedStyle(message).display, 'none');
+    message.textContent = '';
+    assert.equal(dom.window.getComputedStyle(message).display, 'none');
+  } finally {
+    dom.window.close();
+  }
+});
+
 function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -217,7 +235,7 @@ test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', asy
   assert.equal($('#auth-title img').alt, 'MiniPeopleDB');
   assert.equal($('#auth-title').textContent, '');
   assert.equal($('.auth-eyebrow'), null);
-  assert.match(styles, /\.auth-card h1 \{ width: min\(280px, 100%\); margin: 0; \}/);
+  assert.match(styles, /\.auth-card h1 \{ width: min\(280px, 100%\);[^}]*margin: 0; \}/);
   assert.match(styles, /\.brand-logo \{[^}]*aspect-ratio: 3 \/ 2; object-fit: contain; \}/);
   assert.equal($('#login-google').textContent, 'Inicia sesión con Google');
   assert.equal($('#login-google img').getAttribute('src'), '/logo_images/google-2.png');
@@ -1986,4 +2004,172 @@ test('sin configuracion de Supabase se muestra un error y se deshabilita el acce
   assert.equal(window.document.querySelector('#auth-message').textContent, 'No se pudo iniciar el servicio de autenticación.');
   assert.equal(window.document.querySelector('#login-google').disabled, true);
   dom.window.close();
+});
+
+for (const authenticated of [false, true]) {
+  test(`Contacto actualiza el contador y avisa del límite ${authenticated ? 'con' : 'sin'} sesión`, async () => {
+    const { dom, window, $ } = startApp({
+      session: authenticated
+        ? { access_token: 'token-contact', user: { id: 'user-a', email: 'account@example.com' } }
+        : null,
+    });
+    try {
+      await waitFor(() => $('#auth-screen').hidden === authenticated);
+      const openContact = () => {
+        if (authenticated) $('#user-menu-toggle').click();
+        $(authenticated ? '#open-contact-profile' : '#open-contact-auth').click();
+      };
+      openContact();
+      const input = $('#contact-message');
+      const count = $('#contact-message-count');
+      const warning = $('#contact-message-limit');
+      assert.equal(count.textContent, '0 / 1000');
+      assert.equal(warning.textContent, '');
+      assert.equal(input.getAttribute('aria-describedby'), `${count.id} ${warning.id}`);
+      assert.equal(warning.getAttribute('role'), 'status');
+
+      for (const [value, inputType, expected] of [
+        ['H', 'insertText', '1 / 1000'],
+        ['x'.repeat(1000), 'insertFromPaste', '1000 / 1000'],
+        ['x'.repeat(999), 'deleteContentBackward', '999 / 1000'],
+      ]) {
+        input.value = value;
+        input.dispatchEvent(new window.InputEvent('input', { bubbles: true, inputType }));
+        assert.equal(count.textContent, expected);
+        assert.equal(warning.textContent, value.length === 1000
+          ? 'Has alcanzado el límite de 1000 caracteres.'
+          : '');
+      }
+
+      input.value = 'x'.repeat(1000);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      $('#contact-close').click();
+      openContact();
+      assert.equal(input.value, '');
+      assert.equal(count.textContent, '0 / 1000');
+      assert.equal(warning.textContent, '');
+    } finally {
+      dom.window.close();
+    }
+  });
+}
+
+test('Contacto desde acceso permite email o usuario, confirma el envío y restaura el foco', async () => {
+  let submittedRequest;
+  const { dom, window, $ } = startApp({
+    session: null,
+    fetchImpl: async (url, init) => {
+      if (url !== '/api/contact') return undefined;
+      submittedRequest = { init, body: JSON.parse(init.body) };
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    },
+  });
+  await tick();
+  assert.equal($('#auth-screen').hidden, false);
+  assert.equal($('#open-contact-auth').textContent, 'Contacto');
+  $('#open-contact-auth').click();
+  assert.equal($('#contact-dialog').open, true);
+  assert.equal($('#contact-title').textContent, 'Contacto');
+  assert.deepEqual([...$('#contact-dialog').querySelectorAll('button')].map((button) => button.textContent), ['Cerrar', 'Enviar']);
+  assert.equal($('#contact-email').disabled, false);
+  assert.equal($('#contact-username').disabled, false);
+  assert.equal($('#contact-message').disabled, false);
+
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.equal($('#contact-status').textContent, 'Escribe un mensaje.');
+  $('#contact-message').value = 'No puedo iniciar sesión.';
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.equal($('#contact-status').textContent, 'Indica tu Email o Usuario.');
+
+  $('#contact-email').value = 'invalid-email';
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.equal($('#contact-status').textContent, 'Introduce un Email válido.');
+  $('#contact-email').value = 'person@example.com';
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#contact-status').textContent === 'Mensaje enviado correctamente. Pronto me pondré en contacto contigo por Email.');
+  assert.deepEqual(submittedRequest.body, {
+    email: 'person@example.com', username: '', message: 'No puedo iniciar sesión.',
+  });
+  assert.equal(Object.hasOwn(submittedRequest.init.headers, 'Authorization'), false);
+
+  $('#contact-close').click();
+  assert.equal($('#contact-dialog').open, false);
+  assert.equal(window.document.activeElement, $('#open-contact-auth'));
+  assert.equal($('#contact-message').value, '');
+
+  $('#open-contact-auth').click();
+  $('#contact-username').value = 'BrickFan';
+  $('#contact-message').value = 'Tengo una pregunta.';
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#contact-status').textContent === 'Mensaje enviado correctamente. Pronto me pondré en contacto contigo por Email.');
+  assert.deepEqual(submittedRequest.body, { email: '', username: 'BrickFan', message: 'Tengo una pregunta.' });
+  dom.window.close();
+});
+
+test('Contacto autenticado muestra identidad fija y envía solo el mensaje con JWT', async () => {
+  const session = { access_token: 'token-contact', user: { id: 'user-a', email: 'account@example.com' } };
+  let submittedRequest;
+  let attempts = 0;
+  const { dom, window, $ } = startApp({
+    session,
+    fetchImpl: async (url, init) => {
+      if (url !== '/api/contact') return undefined;
+      attempts += 1;
+      submittedRequest = { init, body: JSON.parse(init.body) };
+      return attempts === 1
+        ? { ok: false, status: 503, json: async () => ({ error: 'CONTACTO_NO_DISPONIBLE' }) }
+        : { ok: true, status: 200, json: async () => ({ ok: true }) };
+    },
+  });
+  await waitFor(() => $('#auth-screen').hidden);
+  $('#user-menu-toggle').click();
+  $('#open-contact-profile').click();
+  assert.equal($('#contact-dialog').open, true);
+  assert.equal($('#contact-email').value, 'account@example.com');
+  assert.equal($('#contact-email').disabled, true);
+  assert.equal($('#contact-username').value, completeProfile.username);
+  assert.equal($('#contact-username').disabled, true);
+  assert.equal($('#contact-message').disabled, false);
+
+  $('#contact-message').value = 'Tengo una pregunta.';
+  $('#contact-message').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal($('#contact-message-count').textContent, '19 / 1000');
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#contact-status').textContent === 'No se pudo enviar el mensaje. Inténtalo de nuevo.');
+  assert.equal($('#contact-message').value, 'Tengo una pregunta.');
+  assert.equal($('#contact-message-count').textContent, '19 / 1000');
+  assert.equal($('#contact-submit').disabled, false);
+
+  $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#contact-status').textContent === 'Mensaje enviado correctamente. Pronto me pondré en contacto contigo por Email.');
+  assert.equal($('#contact-message-count').textContent, '0 / 1000');
+  assert.equal($('#contact-message-limit').textContent, '');
+  assert.deepEqual(submittedRequest.body, { message: 'Tengo una pregunta.' });
+  assert.equal(submittedRequest.init.headers.Authorization, 'Bearer token-contact');
+  assert.equal(attempts, 2);
+
+  $('#contact-close').click();
+  assert.equal($('#contact-dialog').open, false);
+  assert.equal(window.document.activeElement, $('#open-contact-profile'));
+  dom.window.close();
+});
+
+test('el modal Contacto mantiene campos y acciones en una columna dentro del viewport móvil', () => {
+  const dom = new JSDOM(html);
+  try {
+    const style = dom.window.document.createElement('style');
+    style.textContent = styles;
+    dom.window.document.head.append(style);
+    const rules = [...style.sheet.cssRules].filter((rule) => rule.selectorText);
+    const declaration = (selector) => rules.find((rule) => rule.selectorText === selector)?.style;
+
+    assert.equal(declaration('.modal-contact').getPropertyValue('width'), 'min(520px, calc(100% - 24px))');
+    assert.equal(declaration('.modal-contact').getPropertyValue('max-height'), 'calc(100dvh - 24px)');
+    assert.equal(declaration('.modal-contact').getPropertyValue('overflow-x'), 'hidden');
+    assert.equal(declaration('.modal-contact').getPropertyValue('overflow-y'), 'auto');
+    assert.equal(declaration('.modal-contact .contact-form').getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
+    assert.equal(declaration('.user-profile-actions').getPropertyValue('display'), 'grid');
+  } finally {
+    dom.window.close();
+  }
 });

@@ -73,6 +73,7 @@
           <button type="submit" id="classic-auth-submit" class="button button-primary">Iniciar sesión</button>
         </form>
         <button type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
+        <button type="button" id="open-contact-auth" class="auth-text-button">Contacto</button>
       </div>
       <form id="password-recovery-form" class="auth-form" hidden>
         <label>
@@ -110,6 +111,29 @@
       <button type="button" id="auth-retry" class="auth-text-button" hidden>Reintentar conexión</button>
     </div>
   </section>
+  <dialog id="contact-dialog" class="modal modal-contact" aria-labelledby="contact-title">
+    <div class="form-dialog-heading modal-dialog-heading">
+      <h2 id="contact-title" tabindex="-1">Contacto</h2>
+      <button type="button" id="contact-close" class="button button-secondary">Cerrar</button>
+    </div>
+    <form id="contact-form" class="contact-form" novalidate>
+      <label for="contact-email">Email
+        <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254">
+      </label>
+      <label for="contact-username">Usuario
+        <input id="contact-username" name="username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}">
+      </label>
+      <label for="contact-message">Mensaje
+        <textarea id="contact-message" name="message" rows="5" maxlength="1000" aria-describedby="contact-message-count contact-message-limit" required></textarea>
+        <small id="contact-message-count" class="contact-message-count">0 / 1000</small>
+        <small id="contact-message-limit" role="status" aria-live="polite"></small>
+      </label>
+      <p id="contact-status" class="status" role="status" aria-live="polite"></p>
+      <div class="form-actions">
+        <button type="submit" id="contact-submit" class="button button-primary">Enviar</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="user-profile-dialog" class="modal user-profile-dialog" aria-labelledby="user-profile-dialog-title">
     <div class="form-dialog-heading profile-dialog-heading">
       <h2 id="user-profile-dialog-title" tabindex="-1">Completa tu perfil</h2>
@@ -258,6 +282,7 @@ Esta acción no se puede deshacer.</p>
                 <span id="user-name" class="user-name"></span>
                 <div class="user-profile-actions">
                   <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> Preferencias</button>
+                  <button type="button" id="open-contact-profile" class="button button-secondary"><span aria-hidden="true">✉️</span> Contacto</button>
                 </div>
                 <div class="user-profile-logout">
                   <button type="button" id="logout" class="logout-link">Cerrar sesión</button>

@@ -8,7 +8,7 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { calcularGamificacion, DNA_PONDERACIONES, LOGRO_REGALO, OBJETIVOS, proyectarPesosDnaSql } from '../src/gamificacion.js';
 import { GamificacionRepository } from '../src/gamificacion-repository.js';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
-import { getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
+import { getContactEmailConfig, getCronSecret, getSupabaseAdminConfig, getSupabaseConfig } from '../src/services/supabase.js';
 import { createSupabaseMock } from '../test-support/supabase-mock.js';
 
 test('backfill de usernames ordena perfiles legados, salta colisiones y es idempotente', async () => {
@@ -1205,6 +1205,33 @@ test('getCronSecret prioriza entorno y usa archivo backend sin revelar valores r
     assert.equal(getCronSecret({ env: {}, envPath }), 'file-secret-for-test');
     assert.equal(getCronSecret({ env: { CRON_SECRET: 'env-secret-for-test' }, envPath }), 'env-secret-for-test');
     assert.equal(getCronSecret({ env: {}, envPath: join(directory, 'missing.env') }), null);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('getContactEmailConfig prioriza variables de entorno y usa sup.env como alternativa', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'contact-email-config-'));
+  const envPath = join(directory, 'sup.env');
+  await writeFile(envPath, [
+    'RESEND_API_KEY=file-api-key',
+    'CONTACT_FROM_EMAIL=MiniPeopleDB <contact@example.com>',
+    'CONTACT_SUPPORT_EMAIL=mrdusik.gh@gmail.com',
+  ].join('\n'));
+  try {
+    assert.deepEqual(getContactEmailConfig({ env: {}, envPath }), {
+      apiKey: 'file-api-key',
+      fromEmail: 'MiniPeopleDB <contact@example.com>',
+      recipientEmail: 'mrdusik.gh@gmail.com',
+    });
+    assert.deepEqual(getContactEmailConfig({
+      env: { RESEND_API_KEY: 'environment-api-key' },
+      envPath,
+    }), {
+      apiKey: 'environment-api-key',
+      fromEmail: 'MiniPeopleDB <contact@example.com>',
+      recipientEmail: 'mrdusik.gh@gmail.com',
+    });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

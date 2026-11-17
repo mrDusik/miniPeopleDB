@@ -55,11 +55,13 @@ body {
 
 .page-shell { width: min(1280px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0 72px; }
 .page-shell[hidden], .auth-screen[hidden] { display: none; }
-.auth-screen { display: grid; min-height: 100vh; place-items: center; padding: 16px; }
-.auth-card { display: grid; justify-items: center; gap: 12px; width: min(420px, 100%); padding: 36px 28px; border-top: 4px solid var(--accent); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
-.auth-card h1 { width: min(280px, 100%); margin: 0; }
+.auth-screen { display: grid; min-height: 100dvh; place-items: center; padding: 8px 16px; }
+.auth-card { display: grid; justify-items: center; gap: 8px; width: min(420px, 100%); padding: 12px 28px; border-top: 4px solid var(--accent); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.auth-card h1 { width: min(280px, 100%); height: clamp(56px, 12dvh, 100px); margin: 0; }
+.auth-card .brand-logo { height: 100%; aspect-ratio: auto; }
 .auth-card .status { margin: 0; }
-.auth-access-panel { display: grid; justify-items: center; gap: 12px; width: 100%; }
+.auth-card .status:empty { display: none; }
+.auth-access-panel { display: grid; justify-items: center; gap: 8px; width: 100%; }
 .auth-access-panel > p { margin: 0; }
 #login-google { display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
 #login-google img { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
@@ -73,6 +75,7 @@ body {
 .auth-mode-toggle button + button { border-left: 1px solid var(--line); }
 .auth-mode-toggle button:focus-visible, .auth-text-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .auth-form { display: grid; justify-items: stretch; gap: 12px; width: 100%; text-align: left; }
+#classic-auth-form { gap: 8px; }
 .auth-form[hidden] { display: none; }
 .auth-form label { display: grid; gap: 5px; color: var(--ink); font-size: 0.88rem; font-weight: 700; }
 .auth-form input { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); font: 700 0.88rem var(--font-body); }
@@ -90,6 +93,12 @@ body {
 .auth-password-rules { margin: 0; padding-left: 20px; color: #b42318; font-size: 0.85rem; line-height: 1.6; }
 .auth-password-rules .is-met { color: #14733c; }
 .auth-text-button { justify-self: center; border: 0; padding: 3px; background: transparent; color: var(--blue); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+@media (max-height: 740px) {
+  .auth-card { padding: 8px 16px; }
+  .auth-card h1 { height: 56px; }
+  .auth-card, .auth-access-panel, #classic-auth-form { gap: 4px; }
+  #classic-auth-form .auth-password-rules { font-size: 0.8rem; line-height: 1.35; }
+}
 .user-session { position: relative; display: flex; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: 0.85rem var(--font-body); }
 .user-menu-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; color: var(--muted); background: transparent; cursor: pointer; font: inherit; }
 .user-menu-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
@@ -97,7 +106,7 @@ body {
 .user-menu-toggle[aria-expanded="true"] .user-menu-chevron { transform: rotate(180deg); }
 .user-profile { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; width: min(190.5px, calc(100vw - 32px)); padding: 12px 18px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
 .user-profile[hidden] { display: none; }
-.user-profile-actions { display: flex; justify-content: center; }
+.user-profile-actions { display: grid; justify-items: stretch; gap: 8px; }
 .user-name { min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
 .logout-link { border: 0; padding: 4px 0; color: var(--accent-dark); background: transparent; cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 .logout-link:hover { color: var(--accent); }
@@ -364,6 +373,19 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .difference-neutral { color: var(--muted); font-weight: 700; }
 
 .modal { width: min(860px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 4px; padding: 22px; box-shadow: var(--shadow); background: var(--surface); }
+.modal-contact { width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.modal-contact[open] { display: block; }
+.modal-contact .form-dialog-heading h2 { margin: 0; }
+.modal-contact .contact-form { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 12px; }
+.modal-contact .contact-form label { display: grid; gap: 6px; min-width: 0; text-align: left; }
+.modal-contact .contact-form input, .modal-contact .contact-form textarea { text-align: left; }
+.modal-contact .contact-form input:disabled { color: var(--muted); background: #ecebe6; opacity: 1; cursor: default; }
+.modal-contact .contact-form textarea { min-height: 120px; resize: vertical; }
+.modal-contact .contact-message-count { color: var(--muted); text-align: right; }
+.modal-contact #contact-message-limit { color: var(--accent-dark); }
+.modal-contact #contact-message-limit:empty { display: none; }
+.modal-contact .contact-form .form-actions { grid-column: 1; grid-row: auto; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--line); }
+.modal-contact #contact-status:empty { display: none; }
 #delete-dialog { width: min(400px, calc(100% - 32px)); }
 #delete-account-dialog { width: min(400px, calc(100% - 32px)); }
 #delete-account-error:empty { display: none; }

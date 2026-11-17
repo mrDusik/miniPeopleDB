@@ -17,6 +17,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 * **Ranking social:** Top 10 global ordenable por nivel, tamaño de colección o rasgo DNA, más un Top 10 semanal de Bricks netos; perfil público reducido, destacados de cada colección, logros de solo lectura y regalos únicos de 50 Bricks globales o 5 semanales. Los destacados ajenos ausentes se pueden añadir a las propias buscadas sin editar datos de terceros.
 * **Notificaciones en tiempo real:** avisos personales de entradas y salidas del Top 10, regalos recibidos y agradecimientos, además del resumen diario. La bandeja pagina resultados, actualiza el badge de no leídas y permite marcar avisos como leídos o agradecer regalos para dar 5 Bricks.
 * **API REST:** respuestas JSON y errores de negocio controlados; recursos de datos autenticados y aislamiento de colección por usuario.
+* **Contacto:** formulario disponible desde el acceso y el menú de usuario; los mensajes se envían desde el backend al correo de soporte.
 * **Analítica histórica:** capturas diarias privadas de valor, figuras, Bricks, nivel y DNA; gráficas y tablas accesibles sin reconstruir días ausentes.
 
 ### Sistema visual de bloques
@@ -38,6 +39,11 @@ contraseña en un modal con confirmación, mediante Supabase Auth y sin modifica
 los datos del perfil. Este modal comparte con el registro los requisitos en vivo
 y los controles para mostrar u ocultar ambas contraseñas; mantiene los campos
 apilados y los botones debajo.
+
+Acceso y Crear cuenta usan una tarjeta compacta con menos espacio vertical y
+separaciones adaptadas a la altura de pantalla, también en móvil y Android.
+Los avisos vacíos no reservan espacio; los errores siguen visibles y, si falta
+altura por el teclado, zoom o una pantalla muy baja, se conserva el desplazamiento.
 
 La interfaz web y Android comparte una estética geométrica: esquinas siempre rectas
 (`border-radius: 0`, incluidos controles nativos, avatares, progreso y tooltips),
@@ -163,6 +169,7 @@ El guardado intenta limpiar subidas descartadas y avatares administrados anterio
 | `/health` | `GET` | Público | Health check para hosting/monitorización |
 | `/config/supabase` | `GET` | Público | URL y clave pública `anon` del proyecto |
 | `/api/auth/login` | `POST` | Username y contraseña | Establecer sesión clásica; devuelve solo access/refresh tokens, sin caché |
+| `/api/contact` | `POST` | Público; JWT opcional | Enviar una consulta de soporte; la identidad autenticada se verifica en el servidor |
 | `/api/profile` | `GET`, `PUT`, `DELETE` | JWT propio | Consultar/guardar preferencias o eliminar la cuenta propia sin parámetros de identidad |
 | `/categorias` | `GET` | Público | Catálogo local validado de categorías |
 | `/minifiguras` | `GET`, `POST` | Autenticado | Listar/filtrar la colección propia y crear registros |
@@ -265,6 +272,8 @@ mi-proyecto/
 2. En Supabase › Authentication › Providers habilita **Google** (Client ID y Secret de Google Cloud).
 3. En Supabase › Authentication › URL Configuration configura las URLs de retorno como se explica abajo.
 4. Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` como variables de entorno o en `sup.env` (excluido de Git). El arranque normal requiere las tres: la clave de servicio inicializa el reconciliador backend. Para habilitar el trigger diario, configura además `CRON_SECRET` como secreto solo del backend y del proveedor cron. Sin él, las rutas cron responden `503 CRON_NO_CONFIGURADO`. Nunca copies claves o secretos al navegador, logs o repositorio. Las rutas de usuario siguen usando exclusivamente `anon` + JWT y RLS. `SUPABASE_URL` es la URL del proyecto Supabase, no la del hosting.
+
+Para habilitar el formulario de contacto, configura también en el backend `RESEND_API_KEY`, `CONTACT_FROM_EMAIL` y `CONTACT_SUPPORT_EMAIL`, como variables del entorno de despliegue o en `sup.env`. La primera es la clave API privada de Resend; `CONTACT_FROM_EMAIL` debe ser una dirección de un dominio verificado en Resend; `CONTACT_SUPPORT_EMAIL` es el buzón que recibirá los mensajes. Los nombres y placeholders están en `sup.env.example`. Sin configuración válida el endpoint informa que el servicio no está disponible, sin simular un envío exitoso. No configures la clave en el frontend ni en Android.
 
 ```bash
 npm install
