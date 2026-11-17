@@ -474,10 +474,13 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
 
 test('la identidad compacta del inventario se limita a smartphone vertical y horizontal', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
-  const dom = new JSDOM('<style></style>');
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const dom = new JSDOM(html);
   try {
-    dom.window.document.querySelector('style').textContent = css;
-    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const style = dom.window.document.createElement('style');
+    style.textContent = css;
+    dom.window.document.head.append(style);
+    const rules = [...style.sheet.cssRules];
     const defaults = rules.find((rule) => rule.selectorText === '.catalog-mobile-heading, .catalog-mobile-name');
     assert.equal(defaults.style.getPropertyValue('display'), 'none');
     const mobile = rules.find((rule) => rule.conditionText === '(max-width: 600px) and (orientation: portrait), (max-width: 900px) and (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse)'
@@ -487,6 +490,10 @@ test('la identidad compacta del inventario se limita a smartphone vertical y hor
     assert.equal(declarations.get('.results-panel .catalog-mobile-name').getPropertyValue('display'), 'block');
     assert.equal(declarations.get('.results-panel .catalog-mobile-heading').getPropertyValue('display'), 'inline');
     assert.equal(declarations.get('.results-panel .catalog-id-heading').getPropertyValue('display'), 'none');
+    const stateHeading = dom.window.document.querySelector('.results-panel th:nth-child(8)');
+    assert.equal(stateHeading.getAttribute('aria-label'), 'Estado');
+    assert.equal(stateHeading.querySelector('.catalog-state-heading').textContent, 'Estado');
+    assert.equal(declarations.get('.results-panel .catalog-state-heading').getPropertyValue('display'), 'none');
     assert.equal(declarations.get('.results-panel th, .results-panel td').getPropertyValue('overflow-wrap'), 'anywhere');
     assert.equal(declarations.get('.results-panel table').getPropertyValue('table-layout'), 'fixed');
     assert.equal([1, 3, 8, 9, 11].reduce((total, column) => total + Number.parseInt(declarations.get(`.results-panel th:nth-child(${column})`).getPropertyValue('width'), 10), 0), 100);
