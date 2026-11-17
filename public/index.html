@@ -483,11 +483,15 @@ Esta acción no se puede deshacer.</p>
 
     <dialog id="form-dialog" class="modal" aria-labelledby="form-dialog-title">
       <div class="form-dialog-heading modal-dialog-heading">
-        <h2 id="form-dialog-title">Nueva minipersona</h2>
+        <h2 id="form-dialog-title">Añadir a inventario</h2>
         <button type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
       </div>
+      <div id="creation-mode-tabs" class="creation-mode-tabs" role="group" aria-label="Modo de alta" hidden>
+        <button type="button" class="button button-secondary" data-creation-mode="individual" aria-pressed="true">Nueva minipersona</button>
+        <button type="button" class="button button-secondary" data-creation-mode="set" aria-pressed="false">Añadir por set</button>
+      </div>
       <form id="minifigura-form" novalidate>
-        <div class="modal-form-column">
+        <div id="individual-create-content" class="modal-form-column">
           <div class="modal-row modal-row-identity">
             <div class="modal-identity-fields">
               <label id="form-id-label" class="required-label" for="form-id"><span>ID</span><input id="form-id" name="id" required></label>
@@ -546,9 +550,40 @@ Esta acción no se puede deshacer.</p>
           </div>
           <p id="form-error" class="form-error" role="alert"></p>
         </div>
-        <aside class="modal-preview" aria-label="Previsualización Brickset">
+        <aside id="individual-create-preview" class="modal-preview" aria-label="Previsualización Brickset">
           <img id="form-preview-image" alt="">
         </aside>
+        <section id="set-create-section" class="set-create-section" aria-label="Minipersonas del set" hidden>
+          <div class="set-create-heading" hidden>
+            <h3><span id="set-create-title">Minipersonas en el set</span> <span id="set-create-number" class="set-number"></span></h3>
+            <p id="set-create-owned" class="set-create-owned" hidden></p>
+          </div>
+          <div id="set-create-empty" class="set-create-empty">
+            <button type="button" id="set-create-search" class="button button-primary">Buscar set</button>
+          </div>
+          <label id="set-purchase-date-label" class="set-purchase-date" hidden>
+            Fecha de compra
+            <input id="set-fechaCompra" name="setFechaCompra" type="date">
+          </label>
+          <div id="set-minifigures-wrap" class="table-wrap set-minifigures-wrap" hidden>
+            <table class="set-minifigures-table">
+              <thead>
+                <tr>
+                  <th scope="col" aria-label="Imagen"></th>
+                  <th scope="col">Seguimiento</th>
+                  <th scope="col"><button type="button" class="table-sort" data-set-sort="id">Minifigura</button></th>
+                  <th scope="col"><button type="button" class="table-sort" data-set-sort="categoria">Categoría</button></th>
+                  <th scope="col"><button type="button" class="table-sort" data-set-sort="subcategoria">Subcategoría</button></th>
+                  <th scope="col"><button type="button" class="table-sort" data-set-sort="anio">Año</button></th>
+                  <th scope="col">Estado</th>
+                  <th scope="col"><button type="button" class="table-sort" data-set-sort="precio">Precio</button></th>
+                </tr>
+              </thead>
+              <tbody id="set-minifigures-body"></tbody>
+            </table>
+          </div>
+          <p id="set-create-error" class="form-error" role="alert"></p>
+        </section>
         <div class="form-actions">
           <span id="brickset-loading" class="brickset-loading" role="status" aria-live="polite" hidden>
             <span class="brickset-loading-icon" aria-hidden="true"></span>
@@ -557,6 +592,20 @@ Esta acción no se puede deshacer.</p>
           <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="set-number-dialog" class="modal set-number-dialog" aria-labelledby="set-number-title">
+      <div class="form-dialog-heading modal-dialog-heading">
+        <h2 id="set-number-title">Buscar set</h2>
+        <button type="button" id="set-number-close" class="button button-secondary">Cerrar</button>
+      </div>
+      <label for="set-number-input">Número de set</label>
+      <input id="set-number-input" inputmode="text" autocomplete="off">
+      <p id="set-number-status" class="set-number-status" role="status" aria-live="polite"></p>
+      <div class="form-actions">
+        <button type="button" id="set-number-search" class="button button-primary">Buscar</button>
+        <button type="button" id="set-number-continue" class="button button-primary" disabled>Continuar</button>
+      </div>
     </dialog>
 
     <dialog id="image-modal" class="modal-overlay" aria-labelledby="image-modal-title">

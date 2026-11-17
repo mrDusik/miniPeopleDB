@@ -420,9 +420,10 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         if (existing && state.operation === 'insert') {
           return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
         }
-        prepared.push({ row, existing });
+        prepared.push({ row, existing, ignored: Boolean(existing && state.ignoreDuplicates) });
       }
-      for (const { row, existing } of prepared) {
+      for (const { row, existing, ignored } of prepared) {
+        if (ignored) continue;
         if (existing) {
           Object.assign(existing, row);
           result.push(existing);
@@ -1381,7 +1382,12 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         return builder;
       },
       insert(values) { state.operation = 'insert'; state.values = values; return builder; },
-      upsert(values) { state.operation = 'upsert'; state.values = values; return builder; },
+      upsert(values, options = {}) {
+        state.operation = 'upsert';
+        state.values = values;
+        state.ignoreDuplicates = options.ignoreDuplicates === true;
+        return builder;
+      },
       update(values) { state.operation = 'update'; state.values = values; return builder; },
       delete() { state.operation = 'delete'; return builder; },
       eq(column, value) { state.filters.push([column, value]); return builder; },

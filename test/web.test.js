@@ -92,7 +92,7 @@ test('sirve la interfaz estatica y conserva la API del catalogo', async () => {
     const iconDocument = new JSDOM(html);
     try {
       const icons = iconDocument.window.document.querySelectorAll('.auth-password-visibility svg');
-      assert.equal(icons.length, 4);
+      assert.equal(icons.length, iconDocument.window.document.querySelectorAll('input[type="password"]').length);
       for (const icon of icons) {
         const reference = icon.querySelector('use').getAttribute('href');
         const symbol = iconDocument.window.document.querySelector(reference);
@@ -131,7 +131,13 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     const html = await (await fetch(`${baseUrl}/`)).text();
     const script = await (await fetch(`${baseUrl}/app.js`)).text();
     const modalDocument = new JSDOM(html);
-    assert.equal(modalDocument.window.document.querySelectorAll('.modal-dialog-heading').length, 9);
+    for (const dialogId of [
+      'contact-dialog', 'form-dialog', 'set-number-dialog', 'gamification-dialog',
+      'notifications-dialog', 'friends-dialog', 'public-profile-dialog', 'dna-dialog',
+      'ranking-dialog', 'weekly-ranking-dialog', 'analytics-history-dialog',
+    ]) {
+      assert.ok(modalDocument.window.document.querySelector(`#${dialogId} > .modal-dialog-heading`), dialogId);
+    }
     modalDocument.window.close();
 
     for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
@@ -231,7 +237,7 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     const style = document.createElement('style');
     style.textContent = css;
     document.head.append(style);
-    const selector = '.modal:not(#form-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message))';
+    const selector = '.modal:not(#form-dialog):not(#set-number-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message))';
     const rule = [...style.sheet.cssRules].find((entry) => entry.selectorText === selector);
     const indicatorRule = [...style.sheet.cssRules].find((entry) => entry.selectorText === '.modal .loading-message, .modal .brickset-loading');
     assert.equal(rule?.style.display, 'none');
@@ -269,6 +275,11 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     bricksetLoading.classList.add('loading-message');
     assert.equal(dom.window.getComputedStyle(bricksetLoading).paddingLeft, '4px');
     assert.equal(formDialog.querySelector('form').matches(selector), false);
+    const setDialog = document.getElementById('set-number-dialog');
+    setDialog.querySelector('#set-number-status').classList.add('loading-message');
+    for (const control of setDialog.querySelectorAll('input, button')) {
+      assert.equal(control.matches(selector), false, control.id);
+    }
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-dialog-body \{ display: block; \}/);
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-legend-panel \{ width: 100%; \}/);
     assert.match(css, /#dna-status\.loading-message \{ justify-content: flex-start; text-align: left; \}/);
@@ -308,7 +319,7 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const levelPanel = [...smartphoneHeader.cssRules].find((rule) => rule.selectorText === '.notifications-entry-row > .gamification-summary');
   assert.equal(levelPanel.style.getPropertyValue('grid-column'), '1 / -1');
   assert.equal(levelPanel.style.getPropertyValue('grid-row'), '2');
-  const headerDeclarations = new Map([...smartphoneHeader.cssRules].map((rule) => [rule.selectorText, rule.style]));
+  const headerDeclarations = new Map([...smartphoneHeader.cssRules].map((rule) => [rule.selectorText.replace(/\s+/g, ' '), rule.style]));
   assert.equal(headerDeclarations.get('.page-header .header-top').getPropertyValue('display'), 'grid');
   assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('grid-area'), '1 / 1');
   assert.equal(headerDeclarations.get('.header-top > .brand-heading').getPropertyValue('justify-self'), 'start');
@@ -320,7 +331,7 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const friendsTrigger = headerDeclarations.get('.header-top > .notifications-entry-row > .friends-trigger');
   assert.equal(friendsTrigger.getPropertyValue('width'), '44px');
   assert.equal(friendsTrigger.getPropertyValue('height'), '44px');
-  const notificationBadges = headerDeclarations.get('.header-top > .notifications-entry-row .notifications-unread-badge,\n  .header-top > .notifications-entry-row .friends-count');
+  const notificationBadges = headerDeclarations.get('.header-top > .notifications-entry-row .notifications-unread-badge, .header-top > .notifications-entry-row .friends-count');
   assert.equal(notificationBadges.getPropertyValue('top'), '-16px');
   const avatarBadge = headerDeclarations.get('.header-top > .notifications-entry-row #ranking-main-globe');
   assert.equal(avatarBadge.getPropertyValue('top'), '-14px');
@@ -668,10 +679,8 @@ test('la interfaz centra el contenido, iguala la tipografia del resumen y elimin
   const monitorDom = new JSDOM('<style></style>');
   monitorDom.window.document.querySelector('style').textContent = css;
   const monitorRules = [...monitorDom.window.document.styleSheets[0].cssRules].filter((rule) => rule.conditionText === '(min-width: 761px) and (hover: hover) and (pointer: fine)');
-  const monitor = monitorRules[0];
-  const monitorStyles = new Map([...monitor.cssRules].map((rule) => [rule.selectorText, rule.style]));
-  const modalMonitorStyles = new Map([...monitorRules.at(-1).cssRules].map((rule) => [rule.selectorText, rule.style]));
-  assert.equal(modalMonitorStyles.get('.modal-public-profile').getPropertyValue('width'), 'min(1280px, calc(100% - 24px))');
+  const monitorStyles = new Map(monitorRules.flatMap((rule) => [...rule.cssRules]).map((rule) => [rule.selectorText, rule.style]));
+  assert.equal(monitorStyles.get('.modal-public-profile')?.getPropertyValue('width'), 'min(1280px, calc(100% - 24px))');
   assert.equal(monitorStyles.get('.notifications-entry-row').getPropertyValue('grid-template-columns'), '52px 52px 88px minmax(0, 1fr)');
   assert.equal(monitorStyles.get('.notifications-entry-row > .notifications-trigger').getPropertyValue('grid-column'), '1');
   assert.equal(monitorStyles.get('.notifications-entry-row > .friends-trigger').getPropertyValue('grid-column'), '2');
@@ -917,8 +926,9 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(identityRow.getAttribute('style'), null);
   const heading = dom.window.document.querySelector('#form-dialog .form-dialog-heading');
   assert.equal(heading.parentElement, form.parentElement);
-  assert.equal(heading.nextElementSibling, form);
-  assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Nueva minipersona');
+  assert.equal(heading.nextElementSibling.id, 'creation-mode-tabs');
+  assert.equal(heading.nextElementSibling.nextElementSibling, form);
+  assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Añadir a inventario');
   assert.equal(heading.querySelector('#form-cancel').textContent, 'Cerrar');
   assert.equal(heading.querySelector('#form-cancel').type, 'button');
   assert.equal(form.querySelector('#form-cancel'), null);
@@ -1013,7 +1023,9 @@ test('la terminologia minipersona se aplica a mensajes remotos sin cambiar datos
     window.eval(await readSessionScript());
     await new Promise((resolve) => setTimeout(resolve, 10));
     const body = window.document.body;
-    assert.doesNotMatch(body.textContent, /\bminifiguras?\b/i);
+    const sharedInterfaceText = body.cloneNode(true);
+    sharedInterfaceText.querySelector('#set-create-section').remove();
+    assert.doesNotMatch(sharedInterfaceText.textContent, /\bminifiguras?\b/i);
     for (const element of body.querySelectorAll('[aria-label], [title], [alt]')) {
       for (const attribute of ['aria-label', 'title', 'alt']) {
         assert.doesNotMatch(element.getAttribute(attribute) ?? '', /\bminifiguras?\b/i);
@@ -2057,6 +2069,7 @@ test('la creación desde el formulario normaliza el estado vacío a COLECCIÓN',
   assert.equal(window.document.querySelector('#form-descripcion').disabled, true);
   assert.equal(window.document.querySelector('#form-fechaCompra').disabled, true);
   assert.equal(window.document.querySelector('#form-fechaCompra').type, 'text');
+  assert.equal(window.document.querySelector('#set-create-section').hidden, true);
   assert.equal(window.document.querySelector('#form-precioCompra').disabled, true);
   idInput.value = 'new-f';
   idInput.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -2356,7 +2369,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(followToggle.getAttribute('aria-pressed'), 'true');
   assert.deepEqual(
     [...window.document.querySelectorAll('#minifigura-form input, #minifigura-form select, #minifigura-form textarea, #minifigura-form button')]
-      .filter((control) => !['form-cancel', 'form-observada'].includes(control.id) && !control.disabled),
+      .filter((control) => !control.closest('[hidden]') && !['form-cancel', 'form-observada'].includes(control.id) && !control.disabled),
     [],
   );
   window.document.querySelector('#form-cancel').click();
@@ -2473,5 +2486,578 @@ test('la fecha de actualización del valor solo cambia cuando cambia el total', 
   total = 20;
   await window.loadTotal();
   assert.equal(updatedAt.textContent, 'Última actualización: 20/10/2026 a las 13.35');
+  dom.window.close();
+});
+
+test('el modo Añadir por set distingue resultados de búsqueda, permite reintentar y cerrar', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() {
+    this.open = false;
+    this.dispatchEvent(new window.Event('close'));
+  };
+  const lookupResults = [
+    { ok: false, status: 404, json: async () => ({ error: 'BRICKSET_NO_ENCONTRADO' }) },
+    { ok: false, status: 502, json: async () => ({ error: 'BRICKSET_NO_DISPONIBLE' }) },
+    { ok: true, status: 200, json: async () => ({ setNumber: '31154-1', minifigures: [] }) },
+    { ok: true, status: 200, json: async () => ({
+      setNumber: '71851-1',
+      minifigures: [{ id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025, existente: false }],
+    }) },
+  ];
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url.startsWith('/minifiguras/sets/')) return lookupResults.shift();
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.document.querySelector('#new-minifigura').click();
+  const document = window.document;
+  assert.equal(document.querySelector('#form-dialog-title').textContent, 'Añadir a inventario');
+  assert.equal(document.querySelector('[data-creation-mode="individual"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('#individual-create-content').hidden, false);
+  assert.equal(document.querySelector('#form-id').disabled, false);
+
+  const setMode = document.querySelector('[data-creation-mode="set"]');
+  setMode.click();
+  assert.equal(document.querySelector('#set-number-dialog').open, true);
+  assert.equal(document.querySelector('#set-number-title').textContent, 'Buscar set');
+  assert.equal(setMode.getAttribute('aria-pressed'), 'true');
+  const searchSetButton = document.querySelector('#set-create-search');
+  assert.equal(document.querySelector('.set-create-heading').hidden, true);
+  assert.equal(document.querySelector('#set-purchase-date-label').hidden, true);
+  assert.equal(document.querySelector('#set-minifigures-wrap').hidden, true);
+  assert.equal(document.querySelector('#set-create-error').hidden, true);
+  assert.equal(document.querySelector('#set-create-empty').textContent.trim(), 'Buscar set');
+  assert.equal(document.querySelector('#set-create-empty').hidden, false);
+  assert.equal(searchSetButton.disabled, true);
+  document.querySelector('#set-number-dialog').dispatchEvent(new window.Event('cancel'));
+  document.querySelector('#set-number-dialog').close();
+  assert.equal(searchSetButton.disabled, false);
+  searchSetButton.click();
+  assert.equal(document.querySelector('#set-number-dialog').open, true);
+  assert.equal(searchSetButton.disabled, true);
+  document.querySelector('#set-number-input').value = '71851';
+  document.querySelector('#set-number-search').click();
+  assert.equal(document.querySelector('#set-number-status').textContent, 'Buscando...');
+  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
+  assert.equal(document.querySelector('#set-number-status').textContent, 'El set no se encuentra');
+  assert.equal(document.querySelector('#set-number-continue').disabled, true);
+
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#set-number-status').textContent, 'No se pudo consultar el set. Inténtalo de nuevo.');
+  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
+  assert.equal(document.querySelector('#set-number-search').disabled, false);
+  assert.equal(document.querySelector('#set-number-continue').disabled, true);
+
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(document.querySelector('#set-number-status').textContent, /no contiene minipersonas/);
+  assert.equal(document.querySelector('#set-number-continue').disabled, true);
+
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#set-number-status').textContent, 'Encontrado');
+  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
+  assert.equal(document.querySelector('#set-number-continue').disabled, false);
+  assert.equal(document.querySelector('#set-number-cancel'), null);
+  const closeButton = document.querySelector('#set-number-close');
+  assert.equal(closeButton.textContent, 'Cerrar');
+  closeButton.click();
+  assert.equal(document.querySelector('#set-number-dialog').open, false);
+  assert.equal(document.querySelector('#form-dialog').open, true);
+  assert.equal(setMode.getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('.set-create-heading').hidden, true);
+  assert.equal(document.querySelector('#set-minifigures-wrap').hidden, true);
+  assert.equal(searchSetButton.disabled, false);
+  searchSetButton.click();
+  assert.equal(document.querySelector('#set-number-dialog').open, true);
+  assert.equal(searchSetButton.disabled, true);
+  assert.equal(document.querySelector('#set-number-continue').disabled, false);
+  document.querySelector('#set-number-continue').click();
+  assert.equal(document.querySelector('#set-number-dialog').open, false);
+  assert.equal(document.querySelector('#set-create-number').textContent, '71851');
+  assert.equal(document.querySelector('.set-create-heading h3').textContent, '1 Minipersona en el set 71851');
+  assert.equal(document.querySelector('#set-create-owned').textContent, '');
+  assert.equal(document.querySelector('#set-create-owned').hidden, true);
+  assert.equal(document.querySelector('.set-create-heading').hidden, false);
+  assert.equal(document.querySelector('#set-create-empty').hidden, true);
+  assert.equal(document.querySelector('#set-purchase-date-label').hidden, false);
+  assert.equal(document.querySelector('#set-minifigures-wrap').hidden, false);
+  assert.equal(document.querySelectorAll('#set-minifigures-body tr').length, 1);
+  dom.window.close();
+});
+
+test('el encabezado del set conserva el número buscado frente a variantes por defecto, Complete y explícitas', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() {
+    this.open = false;
+    this.dispatchEvent(new window.Event('close'));
+  };
+  const variants = { 10774: '10774-1', 71001: '71001-17', '10774-2': '10774-2' };
+  const requests = [];
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url.startsWith('/minifiguras/sets/')) {
+      requests.push(url);
+      return { ok: true, json: async () => ({
+        setNumber: variants[url.split('/').at(-1)],
+        minifigures: [{ id: 'A', nombre: 'Figura', categoria: 'Space', anio: 2025, existente: false }],
+      }) };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const document = window.document;
+    for (const searched of Object.keys(variants)) {
+      document.querySelector('#new-minifigura').click();
+      document.querySelector('[data-creation-mode="set"]').click();
+      document.querySelector('#set-number-input').value = searched;
+      await window.eval('searchSetInventory()');
+      document.querySelector('#set-number-close').click();
+      document.querySelector('#set-create-search').click();
+      assert.equal(document.querySelector('#set-number-input').value, searched);
+      document.querySelector('#set-number-continue').click();
+      assert.equal(document.querySelector('.set-create-heading h3').textContent, `1 Minipersona en el set ${searched}`);
+      assert.equal(document.querySelectorAll('#set-minifigures-body tr').length, 1);
+      document.querySelector('#form-cancel').click();
+    }
+    assert.deepEqual(requests, Object.keys(variants).map((number) => `/minifiguras/sets/${number}`));
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la tabla del set conserva duplicados de solo lectura y permite editar las figuras nuevas', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  window.fetch = async (url) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url === '/minifiguras/sets/71851') return { ok: true, json: async () => ({
+      setNumber: '71851-1',
+      minifigures: [
+        {
+          id: 'NJO1030', nombre: 'Guardada', descripcion: 'Armadura dorada', categoria: 'Space', anio: 2024,
+          estadoColeccion: 'BUSCADA', observada: true, existente: true, precio: 12.5,
+        },
+        { id: 'NJO1034', nombre: 'Sora', descripcion: null, categoria: 'Space', subcategoria: 'NINJAGO', anio: 2025, existente: false },
+      ],
+    }) };
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const document = window.document;
+  document.querySelector('#new-minifigura').click();
+  document.querySelector('[data-creation-mode="set"]').click();
+  document.querySelector('#set-number-input').value = '71851';
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  document.querySelector('#set-number-continue').click();
+
+  const rows = [...document.querySelectorAll('#set-minifigures-body tr')];
+  assert.equal(document.querySelector('.set-create-heading h3').textContent, '2 Minipersonas en el set 71851');
+  assert.equal(document.querySelector('#set-create-owned').textContent, '(Ya tienes en el inventario 1 de ellas [NJO1030])');
+  assert.equal(document.querySelector('#set-create-owned').hidden, false);
+  assert.equal(document.querySelectorAll('.set-minifigures-table thead th').length, 8);
+  assert.equal(rows[0].lastElementChild.textContent, window.eval('formatPrice(12.5)'));
+  assert.equal(rows[1].lastElementChild.textContent, 'Sin precio');
+  assert.deepEqual(rows.map((row) => row.querySelector('.set-minifigure-id').textContent), ['NJO1030', 'NJO1034']);
+  assert.equal(rows[0].querySelector('.set-minifigure-name').nextElementSibling.textContent, 'Armadura dorada');
+  assert.equal(rows[0].querySelector('.set-minifigure-description').textContent, 'Armadura dorada');
+  assert.equal(rows[1].querySelector('.set-minifigure-description'), null);
+  assert.equal(rows[0].querySelector('.set-minifigure-id').tagName, 'SPAN');
+  assert.equal(rows[0].querySelectorAll('.id-link, [data-action="view"]').length, 0);
+  assert.deepEqual([...rows[0].querySelectorAll('.set-row-controls button')].map(({ disabled }) => disabled), [true, true]);
+  assert.equal(rows[0].querySelector('.eye-icon').disabled, true);
+  assert.equal(rows[0].querySelector('.eye-icon').getAttribute('aria-pressed'), 'true');
+  assert.equal(rows[1].querySelector('.eye-icon').disabled, false);
+  assert.equal(rows[1].querySelector('.eye-icon').getAttribute('aria-pressed'), 'false');
+  rows[1].querySelector('.eye-icon').click();
+  assert.equal(document.querySelectorAll('#set-minifigures-body tr')[1].querySelector('.eye-icon').getAttribute('aria-pressed'), 'true');
+  document.querySelectorAll('#set-minifigures-body tr')[1].querySelector('[aria-label="Búsqueda"]').click();
+  const updatedNewRow = document.querySelectorAll('#set-minifigures-body tr')[1];
+  assert.equal(updatedNewRow.querySelector('[aria-label="Búsqueda"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(updatedNewRow.querySelector('[aria-label="Colección"]').getAttribute('aria-pressed'), 'false');
+
+  document.querySelector('#set-fechaCompra').value = '9999-12-31';
+  document.querySelector('#set-fechaCompra').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(document.querySelector('#form-submit').disabled, true);
+  assert.equal(document.querySelector('#set-create-error').textContent, 'La fecha de compra no puede ser posterior a hoy.');
+  document.querySelector('#set-fechaCompra').value = '';
+  document.querySelector('#set-fechaCompra').dispatchEvent(new window.Event('input', { bubbles: true }));
+
+  document.querySelectorAll('.set-minifigure-image')[1].click();
+  assert.equal(document.querySelector('#image-modal').open, true);
+  assert.equal(document.querySelector('#image-modal-title').textContent, 'NJO1034');
+
+  assert.match(css, /#form-dialog\.set-create-mode \.set-minifigures-table th:nth-child\(4\)[\s\S]*nth-child\(6\)[\s\S]*display:\s*none/);
+  assert.match(css, /#form-dialog\.set-create-mode \.set-minifigures-table \{[^}]*min-width:\s*0/s);
+  assert.match(css, /\.set-number,\s*\.set-minifigure-id\s*\{[^}]*font-family:\s*var\(--font-code\)/s);
+  dom.window.close();
+});
+
+test('la tabla del set ordena Minifigura por ID y las demás columnas sin alterar el inventario ni perder cambios', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  const figures = [
+    { id: 'MF10', nombre: 'Álfa', categoria: 'Space', subcategoria: 'Zeta', anio: 2024, precio: 30 },
+    { id: 'MF2', nombre: 'Zeta', categoria: 'Collectible Minifigures', subcategoria: 'Series 4 Minifigures', anio: 2020, precio: 5 },
+    { id: 'MF3', nombre: 'Beta', categoria: 'Castle', subcategoria: 'Beta', anio: 2022, precio: 15 },
+    { id: 'MF4', nombre: 'Delta', categoria: 'Space', anio: 2023, precio: null, existente: true, estadoColeccion: 'COLECCIÓN', observada: false },
+  ];
+  let batchPayload;
+  window.fetch = async (url, options) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url.startsWith('/minifiguras/sets/')) return { ok: true, json: async () => ({ setNumber: '71851-1', minifigures: figures }) };
+    if (url === '/minifiguras/lote') {
+      batchPayload = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ creadas: batchPayload.minifiguras, duplicadas: [] }) };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const document = window.document;
+    document.querySelector('[data-sort="nombre"]').click();
+    document.querySelector('#new-minifigura').click();
+    document.querySelector('[data-creation-mode="set"]').click();
+    document.querySelector('#set-number-input').value = '71851';
+    await window.eval('searchSetInventory()');
+    document.querySelector('#set-number-continue').click();
+    document.querySelector('#set-fechaCompra').value = '2025-03-04';
+    const findRow = (id) => [...document.querySelectorAll('#set-minifigures-body tr')]
+      .find((row) => row.querySelector('.set-minifigure-id').textContent === id);
+    findRow('MF2').querySelector('.eye-icon').click();
+    findRow('MF2').querySelector('[aria-label="Búsqueda"]').click();
+    const expected = {
+      id: [['MF2', 'MF3', 'MF4', 'MF10'], ['MF10', 'MF4', 'MF3', 'MF2']],
+      categoria: [['MF3', 'MF2', 'MF10', 'MF4'], ['MF10', 'MF4', 'MF2', 'MF3']],
+      subcategoria: [['MF3', 'MF2', 'MF10', 'MF4'], ['MF10', 'MF2', 'MF3', 'MF4']],
+      anio: [['MF2', 'MF3', 'MF4', 'MF10'], ['MF10', 'MF4', 'MF3', 'MF2']],
+      precio: [['MF2', 'MF3', 'MF10', 'MF4'], ['MF10', 'MF3', 'MF2', 'MF4']],
+    };
+    assert.deepEqual([...document.querySelectorAll('.set-minifigures-table thead button')].map(({ textContent }) => textContent),
+      ['Minifigura', 'Categoría', 'Subcategoría', 'Año', 'Precio']);
+    assert.deepEqual([...document.querySelectorAll('[data-set-sort]')].map(({ dataset }) => dataset.setSort), Object.keys(expected));
+    for (const [field, orders] of Object.entries(expected)) {
+      const button = document.querySelector(`[data-set-sort="${field}"]`);
+      for (const [index, order] of orders.entries()) {
+        button.click();
+        assert.deepEqual([...document.querySelectorAll('#set-minifigures-body .set-minifigure-id')].map(({ textContent }) => textContent), order, field);
+        assert.equal(button.closest('th').getAttribute('aria-sort'), index === 0 ? 'ascending' : 'descending');
+        assert.equal(document.querySelectorAll('[data-set-sort][data-direction="asc"], [data-set-sort][data-direction="desc"]').length, 1);
+        assert.equal(findRow('MF2').querySelector('.eye-icon').getAttribute('aria-pressed'), 'true');
+        assert.equal(findRow('MF2').querySelector('[aria-label="Búsqueda"]').getAttribute('aria-pressed'), 'true');
+        assert.ok([...findRow('MF4').querySelectorAll('.eye-icon, .state-toggle')].every(({ disabled }) => disabled));
+      }
+    }
+    assert.equal(document.querySelector('#set-fechaCompra').value, '2025-03-04');
+    assert.equal(document.querySelector('[data-sort="nombre"]').dataset.direction, 'asc');
+    await window.eval('saveSetInventory()');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(batchPayload.minifiguras.map(({ id }) => id), ['MF10', 'MF2', 'MF3']);
+    assert.ok(batchPayload.minifiguras.every(({ fechaCompra }) => fechaCompra === '2025-03-04'));
+    assert.equal(batchPayload.minifiguras[1].estadoColeccion, 'BUSCADA');
+    assert.equal(batchPayload.minifiguras[1].observada, true);
+    document.querySelector('#new-minifigura').click();
+    assert.ok([...document.querySelectorAll('[data-set-sort]')].every(({ dataset }) => dataset.direction === ''));
+    assert.equal(document.querySelector('#set-create-owned').hidden, true);
+    assert.equal(document.querySelector('#set-create-owned').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('guardar un set envía solo figuras nuevas con fecha, seguimiento y estado seleccionados', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  let batchPayload;
+  window.fetch = async (url, options = {}) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url === '/minifiguras/sets/71851') return { ok: true, json: async () => ({
+      setNumber: '71851-1',
+      minifigures: [
+        {
+          id: 'NJO1030', nombre: 'Guardada', categoria: 'Space', anio: 2024,
+          estadoColeccion: 'BUSCADA', observada: true, existente: true,
+        },
+        { id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025, precio: 7.5, existente: false },
+      ],
+    }) };
+    if (url === '/minifiguras/lote' && options.method === 'POST') {
+      batchPayload = JSON.parse(options.body);
+      return { ok: true, status: 201, json: async () => ({
+        creadas: [{
+          id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025,
+          precio: 7.5, fechaCompra: '2025-03-04', observada: true,
+          estadoColeccion: 'BUSCADA', FechaRegistro: '2025-03-04T00:00:00.000Z',
+        }],
+        duplicadas: [],
+        gamificacion: { state: { logros: [], logrosDestacados: [] }, logrosNuevos: [], nivelesAlcanzados: [] },
+      }) };
+    }
+    if (url === '/minifiguras') return { ok: true, json: async () => [] };
+    return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const document = window.document;
+  document.querySelector('#new-minifigura').click();
+  document.querySelector('[data-creation-mode="set"]').click();
+  document.querySelector('#set-number-input').value = '71851';
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  document.querySelector('#set-number-continue').click();
+  document.querySelector('#set-fechaCompra').value = '2025-03-04';
+  document.querySelector('#set-fechaCompra').dispatchEvent(new window.Event('input', { bubbles: true }));
+  const newRow = document.querySelectorAll('#set-minifigures-body tr')[1];
+  newRow.querySelector('.eye-icon').click();
+  document.querySelectorAll('#set-minifigures-body tr')[1].querySelector('[aria-label="Búsqueda"]').click();
+  document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(batchPayload.minifiguras, [{
+    id: 'NJO1034',
+    nombre: 'Sora',
+    descripcion: '',
+    categoria: 'Space',
+    anio: 2025,
+    precio: 7.5,
+    observada: true,
+    estadoColeccion: 'BUSCADA',
+    fechaCompra: '2025-03-04',
+  }]);
+  assert.equal(document.querySelector('#form-dialog').open, false);
+  assert.match(document.querySelector('#toast-region').textContent, /Minipersonas añadidas correctamente/);
+  assert.match(document.querySelector('#toast-region').textContent, /La minipersona NJO1030 ya se encontraba en tu inventario/);
+  dom.window.close();
+});
+
+test('el alta por set guarda mediante la API descripciones vacías y precios desconocidos de Brickset', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const server = await startTestServer({
+    options: {
+      scraper: {
+        getSetMinifigures: async () => ({ setNumber: '72154-1', minifigures: ['PK002', 'PK003'] }),
+        getDetails: async (id) => ({
+          nombre: id === 'PK002' ? 'Red' : 'Picnicker',
+          descripcion: null,
+          categoria: 'Space',
+          anio: 2026,
+          precio: id === 'PK002' ? 36.83 : null,
+        }),
+      },
+    },
+  });
+  const dom = new JSDOM(html, { url: server.baseUrl, runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  window.fetch = (url, options = {}) => {
+    if (url.startsWith('/minifiguras/sets/') || url === '/minifiguras/lote') {
+      return fetch(new URL(url, server.baseUrl), {
+        ...options,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url === '/categorias') return Promise.resolve({ ok: true, json: async () => JSON.parse(officialCategoriasRaw) });
+    if (url === '/valoracion') return Promise.resolve({ ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) });
+    return Promise.resolve({ ok: true, json: async () => [] });
+  };
+
+  try {
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const document = window.document;
+    document.querySelector('#new-minifigura').click();
+    document.querySelector('[data-creation-mode="set"]').click();
+    document.querySelector('#set-number-input').value = '72154';
+    await window.eval('searchSetInventory()');
+    document.querySelector('#set-number-continue').click();
+    document.querySelector('#set-fechaCompra').value = '2026-11-17';
+    document.querySelectorAll('#set-minifigures-body tr')[1].querySelector('.eye-icon').click();
+    document.querySelectorAll('#set-minifigures-body tr')[1].querySelector('[aria-label="Búsqueda"]').click();
+    await window.eval('saveSetInventory()');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(document.querySelector('#set-create-error').textContent, '');
+    assert.equal(document.querySelector('#form-dialog').open, false);
+    assert.deepEqual(server.supabase.rows('minifiguras').map((row) => ({
+      id: row.id,
+      descripcion: row.descripcion,
+      precio: row.precio,
+      fechaCompra: row.fecha_compra,
+      precioCompra: row.precio_compra,
+      estado: row.estado_coleccion,
+      observada: row.observada,
+    })), [
+      {
+        id: 'PK002', descripcion: '', precio: 36.83, fechaCompra: '2026-11-17',
+        precioCompra: null, estado: 'COLECCIÓN', observada: false,
+      },
+      {
+        id: 'PK003', descripcion: '', precio: null, fechaCompra: '2026-11-17',
+        precioCompra: null, estado: 'BUSCADA', observada: true,
+      },
+    ]);
+  } finally {
+    dom.window.close();
+    await server.close();
+  }
+});
+
+test('la búsqueda de un set completo bloquea Continuar y permite buscar otro set o cerrar', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() {
+    this.open = false;
+    this.dispatchEvent(new window.Event('close'));
+  };
+  let batchRequests = 0;
+  window.fetch = async (url, options = {}) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url === '/minifiguras/sets/72154') return { ok: true, json: async () => ({
+      setNumber: '72154-1',
+      minifigures: [{
+        id: 'PK002', nombre: 'Red', categoria: 'Space', anio: 2025,
+        estadoColeccion: 'COLECCIÓN', observada: false, existente: true,
+      }, {
+        id: 'PK003', nombre: 'Picnicker', categoria: 'Space', anio: 2025,
+        estadoColeccion: 'BUSCADA', observada: true, existente: true,
+      }],
+    }) };
+    if (url === '/minifiguras/sets/71851') return { ok: true, json: async () => ({
+      setNumber: '71851-1',
+      minifigures: [{ id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025, existente: false }],
+    }) };
+    if (url === '/minifiguras/lote' && options.method === 'POST') batchRequests += 1;
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const document = window.document;
+  document.querySelector('#new-minifigura').click();
+  document.querySelector('[data-creation-mode="set"]').click();
+  document.querySelector('#set-number-input').value = '71851';
+  await window.eval('searchSetInventory()');
+  assert.equal(document.querySelector('#set-number-continue').disabled, false);
+
+  document.querySelector('#set-number-input').value = '72154';
+  document.querySelector('#set-number-input').dispatchEvent(new window.Event('input'));
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#set-number-status').textContent,
+    'Encontrado. Todas las minifiguras de este set están en tu inventario.');
+  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
+  assert.equal(document.querySelector('#set-number-status').classList.contains('error'), false);
+  assert.equal(document.querySelector('#set-number-continue').disabled, true);
+  assert.equal(document.querySelector('#set-number-search').disabled, false);
+  assert.equal(document.querySelector('#set-number-close').disabled, false);
+  document.querySelector('#set-number-continue').click();
+  assert.equal(document.querySelector('#set-number-dialog').open, true);
+  assert.equal(document.querySelector('#set-minifigures-wrap').hidden, true);
+  assert.equal(document.querySelectorAll('#set-minifigures-body tr').length, 0);
+
+  document.querySelector('#set-number-close').click();
+  assert.equal(document.querySelector('#set-number-dialog').open, false);
+  assert.equal(document.querySelector('#form-dialog').open, true);
+  assert.equal(document.querySelector('#set-create-search').disabled, false);
+  document.querySelector('#set-create-search').click();
+  assert.equal(document.querySelector('#set-number-continue').disabled, true);
+  document.querySelector('#set-number-input').value = '71851';
+  document.querySelector('#set-number-input').dispatchEvent(new window.Event('input'));
+  await window.eval('searchSetInventory()');
+  assert.equal(document.querySelector('#set-number-status').textContent, 'Encontrado');
+  assert.equal(document.querySelector('#set-number-continue').disabled, false);
+  document.querySelector('#set-number-continue').click();
+  assert.equal(document.querySelector('#set-number-dialog').open, false);
+  assert.equal(document.querySelector('#set-minifigures-wrap').hidden, false);
+  assert.equal(document.querySelector('#set-create-number').textContent, '71851');
+  assert.equal(batchRequests, 0);
+  dom.window.close();
+});
+
+test('un fallo al guardar el lote deja el modal abierto y no muestra éxito', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = await readSessionScript();
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+  const { window } = dom;
+  window.HTMLDialogElement.prototype.showModal = function showModal() { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function close() { this.open = false; };
+  window.fetch = async (url, options = {}) => {
+    if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
+    if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
+    if (url === '/minifiguras/sets/71851') return { ok: true, json: async () => ({
+      setNumber: '71851-1',
+      minifigures: [{ id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025, existente: false }],
+    }) };
+    if (url === '/minifiguras/lote' && options.method === 'POST') {
+      return { ok: false, status: 500, json: async () => ({ error: 'CATALOGO_NO_DISPONIBLE' }) };
+    }
+    return { ok: true, json: async () => [] };
+  };
+
+  window.eval(script);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const document = window.document;
+  document.querySelector('#new-minifigura').click();
+  document.querySelector('[data-creation-mode="set"]').click();
+  document.querySelector('#set-number-input').value = '71851';
+  document.querySelector('#set-number-search').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  document.querySelector('#set-number-continue').click();
+  document.querySelector('#minifigura-form').dispatchEvent(
+    new window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(document.querySelector('#form-dialog').open, true);
+  assert.equal(document.querySelector('#set-create-error').textContent, 'El catálogo no está disponible en este momento.');
+  assert.doesNotMatch(document.querySelector('#toast-region').textContent, /Minipersonas añadidas correctamente/);
   dom.window.close();
 });

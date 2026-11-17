@@ -107,6 +107,32 @@ function isCategoriasError(error) {
   return error instanceof CategoriasNoDisponiblesError || error instanceof CategoriasInvalidosError;
 }
 
+function mapBricksetDetailsToMinifigure(id, details, categories) {
+  const normalize = (value) => value.trim().normalize('NFKC').replace(/\s+/g, ' ').toLocaleLowerCase();
+  const category = categories.find(({ categoria }) => normalize(categoria) === normalize(details.categoria));
+  if (!category) return null;
+
+  const minifigura = {
+    id: id.trim().toUpperCase(),
+    ...(details.nombre ? { nombre: details.nombre, descripcion: details.descripcion ?? null } : {}),
+    categoria: category.categoria,
+    anio: Number.isInteger(details.anio) && details.anio > 0 ? details.anio : new Date().getFullYear(),
+    precio: details.precio,
+  };
+  if (details.subcategoria) {
+    const subcategory = category.subcategorias.find(
+      ({ subcategoria }) => normalize(subcategoria) === normalize(details.subcategoria),
+    );
+    if (subcategory) minifigura.subcategoria = subcategory.subcategoria;
+  }
+  return {
+    minifigura,
+    ...(typeof details.nombreCompleto === 'string' && details.nombreCompleto.trim() !== ''
+      ? { nombreCompleto: details.nombreCompleto }
+      : {}),
+  };
+}
+
 async function readJsonBody(request, maxBytes = Number.POSITIVE_INFINITY) {
   const chunks = [];
   let bytes = 0;
@@ -1515,6 +1541,65 @@ export function createServer({
       return;
     }
 
+    if (requestUrl.pathname === '/minifiguras/lote') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      let payload;
+      try {
+        payload = await readJsonBody(request);
+      } catch {
+        sendJson(response, 400, { error: 'MINIFIGURA_INVALIDA' });
+        return;
+      }
+      if (!payload || Array.isArray(payload) || typeof payload !== 'object'
+        || Object.keys(payload).length !== 1 || !Array.isArray(payload.minifiguras)) {
+        sendJson(response, 400, { error: 'MINIFIGURA_INVALIDA' });
+        return;
+      }
+
+      try {
+        await ensureGamificacion();
+        const nombreCompletoPorId = new Map();
+        for (const minifigura of payload.minifiguras) {
+          if (typeof minifigura?.id !== 'string') continue;
+          const id = minifigura.id.trim().toUpperCase();
+          const nombreCompleto = bricksetFullNames.get(id);
+          if (nombreCompleto) nombreCompletoPorId.set(id, nombreCompleto);
+        }
+
+        const result = await repository.createMany(payload.minifiguras, { nombreCompletoPorId });
+        for (const { id } of result.creadas) bricksetFullNames.delete(id);
+        for (const id of result.duplicadas) bricksetFullNames.delete(id);
+        const body = request.headers['x-gamificacion'] === 'true'
+          ? { ...result, gamificacion: repository.lastGamification }
+          : result;
+        sendJson(response, result.creadas.length > 0 ? 201 : 200, body);
+      } catch (error) {
+        if (isCategoriasError(error)) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        if (error instanceof MinifiguraInvalidaError) {
+          sendJson(response, 400, { error: error.code });
+          return;
+        }
+        if (error instanceof IdDuplicadoError) {
+          sendJson(response, 409, { error: error.code });
+          return;
+        }
+        if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
     const featuredRoute = /^\/gamificacion\/logros\/([^/]+)\/destacado$/.exec(requestUrl.pathname);
     if (featuredRoute) {
       response.setHeader('cache-control', 'no-store');
@@ -1601,6 +1686,68 @@ export function createServer({
       return;
     }
 
+    const setLookupMatch = requestUrl.pathname.match(/^\/minifiguras\/sets\/([^/]+)$/);
+    if (setLookupMatch) {
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+
+      let requestedSetNumber;
+      try {
+        requestedSetNumber = decodeURIComponent(setLookupMatch[1]);
+      } catch {
+        sendJson(response, 400, { error: 'BRICKSET_SET_INVALIDO' });
+        return;
+      }
+
+      try {
+        const { setNumber, minifigures: ids } = await brickset.getSetMinifigures(requestedSetNumber);
+        const [catalog, categories] = await Promise.all([repository.list(), categoriasRepository.read()]);
+        const catalogById = new Map(catalog.map((minifigura) => [minifigura.id, minifigura]));
+        const minifigures = [];
+
+        for (const id of ids) {
+          const existing = catalogById.get(id);
+          if (existing) {
+            minifigures.push({ ...existing, existente: true });
+            continue;
+          }
+
+          const details = await brickset.getDetails(id);
+          const mapped = mapBricksetDetailsToMinifigure(id, details, categories);
+          if (!mapped) {
+            throw new BricksetPriceError('BRICKSET_CATEGORIA_DESCONOCIDA');
+          }
+          if (!mapped.minifigura.nombre) {
+            throw new BricksetPriceError('BRICKSET_NOMBRE_NO_DISPONIBLE');
+          }
+          if (mapped.nombreCompleto) {
+            bricksetFullNames.set(id, mapped.nombreCompleto);
+          }
+          minifigures.push({ ...mapped.minifigura, existente: false });
+        }
+
+        sendJson(response, 200, { setNumber, minifigures });
+      } catch (error) {
+        if (error instanceof BricksetPriceError) {
+          sendJson(response, error.code === 'BRICKSET_NO_ENCONTRADO' ? 404 : 502, { error: error.code });
+          return;
+        }
+        if (isCategoriasError(error)) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        if (error instanceof CatalogoNoDisponibleError || error instanceof CatalogoInvalidoError) {
+          sendJson(response, 500, { error: error.code });
+          return;
+        }
+        sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
     const detailsMatch = requestUrl.pathname.match(/^\/minifiguras\/(.+)\/brickset$/);
     if (detailsMatch) {
       if (request.method !== 'GET') {
@@ -1619,33 +1766,16 @@ export function createServer({
 
       try {
         const detalles = await brickset.getDetails(id);
-        if (typeof detalles.nombreCompleto === 'string' && detalles.nombreCompleto.trim() !== '') {
-          bricksetFullNames.set(id.trim().toUpperCase(), detalles.nombreCompleto);
-        }
         const categorias = await categoriasRepository.read();
-        const normalize = (value) => value.trim().normalize('NFKC').replace(/\s+/g, ' ').toLocaleLowerCase();
-        const categoriaEncontrada = categorias.find((categoria) => normalize(categoria.categoria) === normalize(detalles.categoria));
-        if (!categoriaEncontrada) {
+        const mapped = mapBricksetDetailsToMinifigure(id, detalles, categorias);
+        if (!mapped) {
           sendJson(response, 502, { error: 'BRICKSET_CATEGORIA_DESCONOCIDA' });
           return;
         }
-
-        const resultado = {
-          id: id.trim().toUpperCase(),
-          ...(detalles.nombre ? { nombre: detalles.nombre, descripcion: detalles.descripcion ?? null } : {}),
-          categoria: categoriaEncontrada.categoria,
-          anio: Number.isInteger(detalles.anio) && detalles.anio > 0 ? detalles.anio : new Date().getFullYear(),
-          precio: detalles.precio,
-        };
-        if (detalles.subcategoria) {
-          const subcategoriaEncontrada = categoriaEncontrada.subcategorias.find(
-            (subcategoria) => normalize(subcategoria.subcategoria) === normalize(detalles.subcategoria),
-          );
-          if (subcategoriaEncontrada) {
-            resultado.subcategoria = subcategoriaEncontrada.subcategoria;
-          }
+        if (mapped.nombreCompleto) {
+          bricksetFullNames.set(id.trim().toUpperCase(), mapped.nombreCompleto);
         }
-        sendJson(response, 200, resultado);
+        sendJson(response, 200, mapped.minifigura);
       } catch (error) {
         if (error instanceof BricksetPriceError) {
           sendJson(response, 502, { error: error.code });

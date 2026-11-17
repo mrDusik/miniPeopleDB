@@ -454,3 +454,225 @@ test('no reintenta errores HTTP distintos de 429', async () => {
   await assert.rejects(() => scraper.getPrice('a'), (error) => error.code === 'BRICKSET_NO_DISPONIBLE');
   assert.equal(attempts, 1);
 });
+
+function bricksetSetPage(setId, hasMinifigures = true) {
+  const inventory = hasMinifigures
+    ? `<a href="/ajax/sets/minifigs?setID=${setId}">Minifigs</a>`
+    : '<a href="/ajax/sets/nominifigs">Minifigs</a>';
+  return `<a href="/ajax/sets/mainImage?setID=${setId}">Image</a>${inventory}`;
+}
+
+function bricksetMinifigureArticle(id) {
+  return `<article class='set'><div class="meta"><h1><a href="/minifigs/${id.toLowerCase()}/figure-name">${id}</a></h1></div></article>`;
+}
+
+function bricksetSetSearch(entries, { first = entries.length ? 1 : 0, last = entries.length, total = entries.length } = {}) {
+  return `<div class='results'>${first} to ${last} of ${total} matches</div>${entries.map(([number, name]) => (
+    `<article class='set'><div class='meta'><h1><a href="/sets/${number}/set-name"><span>${number.split('-')[0]}: </span>${name}</a></h1></div></article>`
+  )).join('')}`;
+}
+
+test('obtiene las minifiguras de 71851 y 72154 normalizando el número y usando el inventario AJAX', async () => {
+  const fixtures = new Map([
+    ['https://brickset.com/sets/71851-1', {
+      setId: '51787',
+      minifigures: ['NJO1030', 'NJO1034', 'NJO1040'],
+    }],
+    ['https://brickset.com/sets/72154-1', {
+      setId: '52054',
+      minifigures: ['PK002', 'PK003', 'PK004'],
+    }],
+  ]);
+
+  for (const [setUrl, fixture] of fixtures) {
+    const requests = [];
+    const scraper = new BricksetScraper({
+      minIntervalMs: 0,
+      fetchImpl: async (url, options) => {
+        requests.push({ url, options });
+        if (url === 'https://brickset.com/sets?query=71851') {
+          return new Response(bricksetSetSearch([['71851-1', "Kai's Dragon Mech Battle Pack"]]));
+        }
+        if (url === setUrl) return new Response(bricksetSetPage(fixture.setId));
+        if (url === `https://brickset.com/ajax/sets/minifigs?setID=${fixture.setId}`) {
+          return new Response(fixture.minifigures.map(bricksetMinifigureArticle).join(''));
+        }
+        return new Response('', { status: 404 });
+      },
+    });
+
+    const setNumber = setUrl.endsWith('71851-1') ? '71851' : '72154-1';
+    const result = await scraper.getSetMinifigures(setNumber);
+    assert.equal(result.setNumber, setUrl.split('/').at(-1));
+    assert.deepEqual(result.minifigures, fixture.minifigures);
+    assert.ok(requests.some(({ url }) => url === setUrl));
+    assert.equal(requests.at(-1).options.headers.referer, setUrl);
+    assert.equal(requests.at(-1).options.headers['x-requested-with'], 'XMLHttpRequest');
+  }
+});
+
+test('elige Complete por nombre para el número base CMF y respeta una variante explícita', async () => {
+  const requests = [];
+  const ids = Array.from({ length: 16 }, (_, index) => `COL${145 + index}`);
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      if (url === 'https://brickset.com/sets?query=71001') {
+        return new Response(bricksetSetSearch([
+          ['710010-17', 'Other series Complete'],
+          ['71001-1', 'Librarian'],
+          ['71001-2', 'Medusa'],
+          ['71001-16', 'Incomplete collection'],
+          ['71001-17', 'LEGO Minifigures - Series 10 - <em>Complete</em> (except Mr. Gold)'],
+        ]));
+      }
+      if (url === 'https://brickset.com/sets/71001-17') return new Response(bricksetSetPage('22589'));
+      if (url === 'https://brickset.com/sets/71001-2') return new Response(bricksetSetPage('22629'));
+      if (url === 'https://brickset.com/ajax/sets/minifigs?setID=22589') {
+        assert.equal(options.headers.referer, 'https://brickset.com/sets/71001-17');
+        return new Response(ids.map(bricksetMinifigureArticle).join(''));
+      }
+      if (url === 'https://brickset.com/ajax/sets/minifigs?setID=22629') {
+        return new Response(bricksetMinifigureArticle('COL146'));
+      }
+      throw new Error(`URL inesperada: ${url}`);
+    },
+  });
+
+  assert.deepEqual(await scraper.getSetMinifigures(' 71001 '), { setNumber: '71001-17', minifigures: ids });
+  assert.equal(requests.some(({ url }) => url === 'https://brickset.com/sets/71001-1'), false);
+  requests.length = 0;
+  assert.deepEqual(await scraper.getSetMinifigures('71001-2'), { setNumber: '71001-2', minifigures: ['COL146'] });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, 'https://brickset.com/sets/71001-2');
+});
+
+test('busca Complete en páginas posteriores y no sustituye errores por la variante -1', async () => {
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => {
+      if (url === 'https://brickset.com/sets?query=71001') {
+        return new Response(bricksetSetSearch([['71001-1', 'Librarian']], { last: 1, total: 2 }));
+      }
+      if (url === 'https://brickset.com/sets/page-2?query=71001') {
+        return new Response(bricksetSetSearch([['71001-17', 'Complete collection']], { first: 2, last: 2, total: 2 }));
+      }
+      assert.equal(url, 'https://brickset.com/sets/71001-17');
+      return new Response('', { status: 503 });
+    },
+  });
+  await assert.rejects(() => scraper.getSetMinifigures('71001'), { code: 'BRICKSET_NO_DISPONIBLE' });
+});
+
+test('rechaza resultados de búsqueda malformados y páginas que no avanzan', async () => {
+  for (const html of ['<html>Unavailable</html>', bricksetSetSearch([['71001-1', 'Librarian']], { last: 1, total: 2 })]) {
+    let requests = 0;
+    const scraper = new BricksetScraper({
+      minIntervalMs: 0,
+      fetchImpl: async () => { requests += 1; return new Response(html); },
+    });
+    await assert.rejects(() => scraper.getSetMinifigures('71001'), { code: 'BRICKSET_SET_DETALLES_NO_DISPONIBLES' });
+    assert.ok(requests <= 2);
+  }
+});
+
+test('acepta sufijo explícito, conserva la variante y rechaza números de set inválidos', async () => {
+  let requestedUrl;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => {
+      requestedUrl = url;
+      return new Response(bricksetSetPage('70001', false));
+    },
+  });
+
+  assert.deepEqual(await scraper.getSetMinifigures(' 71851-2 '), {
+    setNumber: '71851-2',
+    minifigures: [],
+  });
+  assert.equal(requestedUrl, 'https://brickset.com/sets/71851-2');
+  await assert.rejects(() => scraper.getSetMinifigures('../71851'), { code: 'BRICKSET_SET_INVALIDO' });
+});
+
+test('distingue un set sin minifiguras de un inventario AJAX malformado', async () => {
+  const emptySet = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => new Response(url.includes('?query=')
+      ? bricksetSetSearch([['70001-1', 'Empty set']])
+      : bricksetSetPage('70001', false)),
+  });
+  assert.deepEqual(await emptySet.getSetMinifigures('70001'), {
+    setNumber: '70001-1',
+    minifigures: [],
+  });
+
+  let requests = 0;
+  const malformedInventory = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => {
+      requests += 1;
+      if (url.includes('?query=')) return new Response(bricksetSetSearch([['70002-1', 'Set']]));
+      return new Response(url === 'https://brickset.com/sets/70002-1'
+        ? bricksetSetPage('70002')
+        : "<article class='set'><h1>No ID</h1></article>");
+    },
+  });
+  await assert.rejects(
+    () => malformedInventory.getSetMinifigures('70002'),
+    { code: 'BRICKSET_SET_DETALLES_NO_DISPONIBLES' },
+  );
+  assert.equal(requests, 3);
+});
+
+test('mapea un set inexistente a BRICKSET_NO_ENCONTRADO', async () => {
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    fetchImpl: async (url) => url.includes('?query=')
+      ? new Response(bricksetSetSearch([]))
+      : new Response('Not found', { status: 404 }),
+  });
+  await assert.rejects(
+    () => scraper.getSetMinifigures('999999'),
+    { code: 'BRICKSET_NO_ENCONTRADO' },
+  );
+});
+
+test('mapea fallos temporales de set a errores controlados', async () => {
+  const scraper = new BricksetScraper({
+    retries: 0,
+    minIntervalMs: 0,
+    fetchImpl: async () => {
+      const error = new Error('timeout');
+      error.name = 'AbortError';
+      throw error;
+    },
+  });
+  await assert.rejects(
+    () => scraper.getSetMinifigures('71851'),
+    { code: 'BRICKSET_TIMEOUT' },
+  );
+});
+
+test('respeta Retry-After al consultar el set y reanuda la búsqueda', async () => {
+  let clock = 0;
+  const waits = [];
+  let attempts = 0;
+  const scraper = new BricksetScraper({
+    minIntervalMs: 0,
+    maxRateLimitRetries: 1,
+    now: () => clock,
+    sleep: async (duration) => { waits.push(duration); clock += duration; },
+    fetchImpl: async (url) => {
+      attempts += 1;
+      if (attempts === 1) return new Response('', { status: 429, headers: { 'Retry-After': '2' } });
+      if (url.includes('?query=')) return new Response(bricksetSetSearch([['71851-1', 'Set']]));
+      if (url === 'https://brickset.com/sets/71851-1') return new Response(bricksetSetPage('51787'));
+      return new Response(bricksetMinifigureArticle('NJO1030'));
+    },
+  });
+
+  const result = await scraper.getSetMinifigures('71851');
+  assert.deepEqual(result.minifigures, ['NJO1030']);
+  assert.deepEqual(waits, [2_000]);
+});

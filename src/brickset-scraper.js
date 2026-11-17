@@ -1,4 +1,6 @@
 const BRICKSET_BASE_URL = 'https://brickset.com/minifigs/';
+const BRICKSET_SETS_BASE_URL = 'https://brickset.com/sets/';
+const BRICKSET_AJAX_BASE_URL = 'https://brickset.com';
 const ECB_USD_EUR_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const EXCHANGE_RATE_CACHE_MS = 24 * 60 * 60 * 1000;
 const EXCHANGE_RATE_RETRY_MS = 5 * 60 * 1000;
@@ -120,6 +122,49 @@ function parseBricksetName(name) {
     : { nombre: name.split(',')[0].trim(), descripcion: null };
 }
 
+function normalizeBricksetSetNumber(value) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new BricksetPriceError('BRICKSET_SET_INVALIDO');
+  }
+  const match = value.trim().toUpperCase().match(/^([A-Z0-9]+)(?:-(\d+))?$/);
+  if (!match) throw new BricksetPriceError('BRICKSET_SET_INVALIDO');
+  return `${match[1]}-${match[2] ?? '1'}`;
+}
+
+function parseBricksetSetSearch(html, baseNumber) {
+  const resultsText = html.match(/<div\b[^>]*class=['"][^'"]*\bresults\b[^'"]*['"][^>]*>([\s\S]*?)<\/div>/i)?.[1];
+  const range = resultsText && normalizeHtmlText(resultsText).match(/^(\d+) to (\d+) of (\d+) matches$/i);
+  const headings = [...html.matchAll(/<h1\b[^>]*>\s*<a\b[^>]*href=['"]\/sets\/([a-z0-9]+-\d+)(?:\/[^'"]*)?['"][^>]*>([\s\S]*?)<\/a>\s*<\/h1>/gi)];
+  if (!range || (Number(range[3]) > 0 && headings.length === 0)) {
+    throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+  }
+  const lastResult = Number(range[2]);
+  const total = Number(range[3]);
+  if (!Number.isSafeInteger(lastResult) || !Number.isSafeInteger(total) || lastResult > total) {
+    throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+  }
+  const complete = headings.find(([, number, name]) => (
+    number.toUpperCase().split('-')[0] === baseNumber && /\bComplete\b/i.test(normalizeHtmlText(name))
+  ));
+  return { completeSetNumber: complete?.[1].toUpperCase(), lastResult, total };
+}
+
+function parseBricksetSetMinifigureIds(html) {
+  const articles = [...html.matchAll(/<article\b[^>]*class=['"][^'"]*\bset\b[^'"]*['"][^>]*>[\s\S]*?<\/article>/gi)];
+  if (articles.length === 0) {
+    throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+  }
+
+  const ids = [];
+  for (const [article] of articles) {
+    const match = article.match(/<h1\b[^>]*>[\s\S]*?<a\b[^>]*href=['"]\/minifigs\/([a-z0-9_-]+)(?:\/[^'"]*)?['"]/i);
+    if (!match) throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+    const id = match[1].toUpperCase();
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
 export function parseBricksetDetails(html) {
   return { ...parseBricksetDetailFields(html), precio: parseBricksetPrice(html) };
 }
@@ -223,9 +268,55 @@ export class BricksetScraper {
       throw new BricksetPriceError('BRICKSET_ID_INVALIDO');
     }
 
-    const operation = this.queue.then(() => this._fetchHtmlQueued(id, signal));
+    return this._fetchUrl(`${BRICKSET_BASE_URL}${encodeURIComponent(id.trim())}`, signal);
+  }
+
+  async _fetchUrl(url, signal, additionalHeaders = {}) {
+    const operation = this.queue.then(() => this._fetchHtmlQueued(url, signal, additionalHeaders));
     this.queue = operation.catch(() => {});
     return operation;
+  }
+
+  async getSetMinifigures(input, { signal } = {}) {
+    let setNumber = normalizeBricksetSetNumber(input);
+    if (!input.trim().includes('-')) {
+      const baseNumber = input.trim().toUpperCase();
+      let lastResult = -1;
+      for (let page = 1; ; page += 1) {
+        const searchUrl = `https://brickset.com/sets${page === 1 ? '' : `/page-${page}`}?query=${encodeURIComponent(baseNumber)}`;
+        const { html: searchHtml } = await this._fetchUrl(searchUrl, signal);
+        const result = parseBricksetSetSearch(searchHtml, baseNumber);
+        if (result.lastResult <= lastResult) {
+          throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+        }
+        if (result.completeSetNumber) {
+          setNumber = result.completeSetNumber;
+          break;
+        }
+        if (result.lastResult === result.total) break;
+        lastResult = result.lastResult;
+      }
+    }
+    const setUrl = `${BRICKSET_SETS_BASE_URL}${encodeURIComponent(setNumber)}`;
+    const { html } = await this._fetchUrl(setUrl, signal);
+    if (/href=['"]\/ajax\/sets\/nominifigs(?:['"?])/i.test(html)) {
+      return { setNumber, minifigures: [] };
+    }
+
+    const inventoryPath = html.match(/href=['"](\/ajax\/sets\/minifigs\?setID=\d+)['"]/i)?.[1];
+    if (!inventoryPath) {
+      throw new BricksetPriceError('BRICKSET_SET_DETALLES_NO_DISPONIBLES');
+    }
+    const inventoryUrl = `${BRICKSET_AJAX_BASE_URL}${inventoryPath.replace(/&amp;/gi, '&')}`;
+    const { html: inventoryHtml } = await this._fetchUrl(inventoryUrl, signal, {
+      accept: 'text/html, */*; q=0.01',
+      referer: setUrl,
+      'x-requested-with': 'XMLHttpRequest',
+    });
+    return {
+      setNumber,
+      minifigures: parseBricksetSetMinifigureIds(inventoryHtml),
+    };
   }
 
   async _wait(duration, signal) {
@@ -264,8 +355,7 @@ export class BricksetScraper {
     return Number.isFinite(timestamp) ? Math.max(0, timestamp - this.now()) : this.defaultRetryAfterMs;
   }
 
-  async _fetchHtmlQueued(id, signal) {
-    const url = `${BRICKSET_BASE_URL}${encodeURIComponent(id)}`;
+  async _fetchHtmlQueued(url, signal, additionalHeaders = {}) {
     let lastError;
     let rateLimitRetries = 0;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
@@ -285,6 +375,7 @@ export class BricksetScraper {
             accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'accept-language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36',
+            ...additionalHeaders,
           },
           signal: controller.signal,
         });

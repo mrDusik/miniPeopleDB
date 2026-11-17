@@ -185,6 +185,23 @@ function normalizeId(id) {
   return typeof id === 'string' ? id.trim().toUpperCase() : id;
 }
 
+function prepareNewMinifigura(value, officialCategorias, registrationDate) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MinifiguraInvalidaError();
+  }
+  const minifigura = {
+    ...value,
+    id: normalizeId(value.id),
+    observada: value.observada ?? false,
+    estadoColeccion: value.estadoColeccion || 'COLECCIÓN',
+    FechaRegistro: registrationDate,
+  };
+  if (!isMinifigura(minifigura, officialCategorias)) {
+    throw new MinifiguraInvalidaError();
+  }
+  return minifigura;
+}
+
 function normalizeText(value) {
   return typeof value === 'string'
     ? value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -259,7 +276,7 @@ export class MinifigurasRepository {
     return result.data;
   }
 
-  async readCatalog() {
+  async readCatalog(officialCategorias = null) {
     const rows = await this.run(this.client.from(TABLE)
       .select(SELECT_COLUMNS)
       .order('fecha_registro', { ascending: true })
@@ -267,7 +284,7 @@ export class MinifigurasRepository {
     if (!Array.isArray(rows)) {
       throw new CatalogoNoDisponibleError();
     }
-    return validateCatalogo(rows.map(fromRow), await this.officialCategorias());
+    return validateCatalogo(rows.map(fromRow), officialCategorias ?? await this.officialCategorias());
   }
 
   async readGamificationCatalog() {
@@ -425,16 +442,7 @@ export class MinifigurasRepository {
 
   async create(minifigura, { nombreCompleto } = {}) {
     const officialCategorias = await this.officialCategorias();
-    const nextMinifigura = {
-      ...minifigura,
-      id: normalizeId(minifigura.id),
-      observada: minifigura.observada ?? false,
-      estadoColeccion: minifigura.estadoColeccion || 'COLECCIÓN',
-      FechaRegistro: new Date().toISOString(),
-    };
-    if (!isMinifigura(nextMinifigura, officialCategorias)) {
-      throw new MinifiguraInvalidaError();
-    }
+    const nextMinifigura = prepareNewMinifigura(minifigura, officialCategorias, new Date().toISOString());
 
     const row = toRow(nextMinifigura);
     if (typeof nombreCompleto === 'string' && nombreCompleto.trim() !== '') {
@@ -443,6 +451,55 @@ export class MinifigurasRepository {
     await this.run(this.client.from(TABLE).insert(row));
     await this.notifyPersisted();
     return nextMinifigura;
+  }
+
+  async createMany(minifiguras, { nombreCompletoPorId = new Map() } = {}) {
+    if (!Array.isArray(minifiguras)) throw new MinifiguraInvalidaError();
+    if (minifiguras.length === 0) return { creadas: [], duplicadas: [] };
+
+    const officialCategorias = await this.officialCategorias();
+    const catalog = await this.readCatalog(officialCategorias);
+    const existingIds = new Set(catalog.map(({ id }) => id));
+    const seenIds = new Set();
+    const duplicateIds = new Set();
+    const candidates = [];
+    const registrationDate = new Date().toISOString();
+
+    for (const value of minifiguras) {
+      const minifigura = prepareNewMinifigura(value, officialCategorias, registrationDate);
+      if (seenIds.has(minifigura.id)) throw new MinifiguraInvalidaError();
+      seenIds.add(minifigura.id);
+      if (existingIds.has(minifigura.id)) {
+        duplicateIds.add(minifigura.id);
+      } else {
+        candidates.push(minifigura);
+      }
+    }
+
+    if (candidates.length === 0) {
+      return { creadas: [], duplicadas: [...duplicateIds] };
+    }
+
+    const rows = candidates.map((minifigura) => {
+      const row = toRow(minifigura);
+      const nombreCompleto = nombreCompletoPorId.get(minifigura.id);
+      if (typeof nombreCompleto === 'string' && nombreCompleto.trim() !== '') {
+        row.nombre_completo = nombreCompleto;
+      }
+      return row;
+    });
+    const persistedRows = await this.run(this.client.from(TABLE)
+      .upsert(rows, { onConflict: 'user_id,id', ignoreDuplicates: true })
+      .select(SELECT_COLUMNS));
+    if (!Array.isArray(persistedRows)) throw new CatalogoNoDisponibleError();
+
+    const persistedIds = new Set(persistedRows.map(({ id }) => normalizeId(id)));
+    const creadas = candidates.filter(({ id }) => persistedIds.has(id));
+    for (const { id } of candidates) {
+      if (!persistedIds.has(id)) duplicateIds.add(id);
+    }
+    if (creadas.length > 0) await this.notifyPersisted();
+    return { creadas, duplicadas: [...duplicateIds] };
   }
 
   async replace(id, minifigura) {

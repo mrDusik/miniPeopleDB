@@ -9,6 +9,7 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 ## 🚀 Características Principales
 
 * **Colección e inventario:** alta, consulta, edición y borrado de minifiguras; categorías y subcategorías Brickset; estados `COLECCIÓN` y `BUSCADA`; fecha de alta, datos de compra e imagen de cada figura. Las altas y ediciones validan IDs, importes, fechas y la relación categoría-subcategoría.
+* **Alta por set:** búsqueda por número de set, incluidas series CMF completas, revisión de sus minipersonas y guardado conjunto sin modificar las que ya están en el inventario.
 * **Búsqueda y seguimiento:** filtros por ID, nombre, categoría, subcategoría, año, estado y observación. La búsqueda de la tabla se aplica sobre la colección cargada en el navegador; incluye ordenación, paginación y un límite de diez figuras observadas.
 * **Resumen y valoración:** valor total en euros, contadores de colección y buscadas, galería de observación y destacados Top 5 por precio y antigüedad. El valor de mercado Brickset tiene prioridad sobre el precio de compra; las buscadas no aportan al total.
 * **Sincronización Brickset:** consulta individual de nombre, descripción, categoría, subcategoría, año y precio, sin edición manual de estos campos; actualización masiva del precio en segundo plano, con progreso, pausa/reanudación, resultados parciales, límite global de peticiones y tratamiento de `429 Retry-After`.
@@ -87,6 +88,18 @@ desplaza la lista de categorías. En pantallas bajas apaisadas distribuye los
 campos en dos columnas para mantener visibles las acciones.
 En Consulta, los filtros de icono no tienen recuadro ni fondo: la opacidad
 distingue la selección y se conserva el contorno de foco por teclado.
+
+### Añadir minipersonas por set
+
+El modal **Añadir a inventario** permite elegir **Nueva minipersona** (alta individual predeterminada) o **Añadir por set**. Este último abre **Buscar set**. Mientras no haya tabla, el modal de inventario muestra un botón **Buscar set**, deshabilitado mientras el diálogo de búsqueda está abierto.
+
+* Al buscar un número base, se usa la variante del mismo número cuyo nombre incluya **Complete**, si existe; en caso contrario, se usa `-1`. Por ejemplo, `71001` selecciona `71001-17`, la serie 10 completa de 16 figuras, sin Mr. Gold. Una variante explícita como `71001-2` se respeta.
+* El encabezado muestra el número de figuras y el texto buscado, no el sufijo elegido por el backend: «2 Minipersonas en el set 10774». Con una figura usa «Minipersona». El resumen de figuras ya presentes y sus IDs solo aparece si hay alguna.
+* Si todas las figuras ya están en el inventario, se muestra «Encontrado. Todas las minifiguras de este set están en tu inventario.». **Continuar** permanece deshabilitado; se puede buscar otro set o cerrar.
+* La tabla muestra imagen ampliable, seguimiento, ID, nombre, descripción cuando exista, categoría, subcategoría, año, estado y precio de mercado. En smartphone y Android se ocultan categoría, subcategoría y año. Minifigura ordena por ID; también se pueden ordenar categoría, subcategoría, año y precio, sin cambiar la ordenación del inventario.
+* Las filas existentes muestran los datos guardados y son de solo lectura. Las nuevas permiten elegir seguimiento (desactivado por defecto) y estado (`COLECCIÓN` por defecto), con una fecha de compra común opcional, no posterior a hoy. El precio de compra queda vacío y puede editarse después.
+
+El guardado de las nuevas figuras es atómico y usa la sesión del usuario con JWT y RLS, sin `service_role`. Los duplicados, incluidos los añadidos concurrentemente después de buscar, no se sobrescriben. La consulta puede tardar: la búsqueda de variantes y los metadatos respetan la cola y el intervalo global de Brickset.
 
 ### Valoración y moneda
 
@@ -173,6 +186,8 @@ El guardado intenta limpiar subidas descartadas y avatares administrados anterio
 | `/api/profile` | `GET`, `PUT`, `DELETE` | JWT propio | Consultar/guardar preferencias o eliminar la cuenta propia sin parámetros de identidad |
 | `/categorias` | `GET` | Público | Catálogo local validado de categorías |
 | `/minifiguras` | `GET`, `POST` | Autenticado | Listar/filtrar la colección propia y crear registros |
+| `/minifiguras/sets/:number` | `GET` | Autenticado | Resolver el set y consultar sus figuras, marcando las propias ya existentes |
+| `/minifiguras/lote` | `POST` | Autenticado | Crear conjuntamente figuras nuevas sin sobrescribir duplicados |
 | `/minifiguras/:id` | `PUT`, `DELETE` | Autenticado | Editar o borrar una figura propia |
 | `/minifiguras/:id/observada` | `PUT` | Autenticado | Activar/desactivar seguimiento |
 | `/minifiguras/:id/brickset` | `GET` | Autenticado | Consultar metadatos y precio Brickset |
@@ -193,6 +208,8 @@ El guardado intenta limpiar subidas descartadas y avatares administrados anterio
 | `/api/analytics/history` | `GET` | JWT propio | Leer snapshots propios por rango y baseline |
 
 Los estados de colección aceptados son `COLECCIÓN` y `BUSCADA`. Los filtros de nombre e ID se aplican en el cliente sobre el catálogo cargado; los parámetros de `GET /minifiguras` también están disponibles para consumidores de la API.
+
+La consulta por set devuelve `{ setNumber, minifigures }`: `setNumber` identifica la variante resuelta y cada figura incluye `existente`. El alta por lote recibe `{ "minifiguras": [...] }` y devuelve `{ creadas, duplicadas }`, con estado `201` si inserta figuras o `200` si solo encuentra duplicados. Ambas rutas operan sobre el inventario del usuario autenticado.
 
 ### Notificaciones
 

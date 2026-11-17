@@ -76,6 +76,29 @@ const formPrecioInput = document.querySelector('#form-precio');
 const formObservedButton = document.querySelector('#form-observada');
 const formPreviewImage = document.querySelector('#form-preview-image');
 const bricksetLoading = document.querySelector('#brickset-loading');
+const creationModeTabs = document.querySelector('#creation-mode-tabs');
+const creationModeButtons = [...document.querySelectorAll('[data-creation-mode]')];
+const individualCreateContent = document.querySelector('#individual-create-content');
+const individualCreatePreview = document.querySelector('#individual-create-preview');
+const setCreateSection = document.querySelector('#set-create-section');
+const setCreateHeading = document.querySelector('.set-create-heading');
+const setCreateTitle = document.querySelector('#set-create-title');
+const setCreateNumber = document.querySelector('#set-create-number');
+const setCreateOwned = document.querySelector('#set-create-owned');
+const setCreateEmpty = document.querySelector('#set-create-empty');
+const setCreateSearchButton = document.querySelector('#set-create-search');
+const setPurchaseDateLabel = document.querySelector('#set-purchase-date-label');
+const setPurchaseDateInput = document.querySelector('#set-fechaCompra');
+const setMinifiguresWrap = document.querySelector('#set-minifigures-wrap');
+const setMinifiguresBody = document.querySelector('#set-minifigures-body');
+const setSortButtons = [...document.querySelectorAll('[data-set-sort]')];
+const setCreateError = document.querySelector('#set-create-error');
+const setNumberDialog = document.querySelector('#set-number-dialog');
+const setNumberInput = document.querySelector('#set-number-input');
+const setNumberStatus = document.querySelector('#set-number-status');
+const setNumberSearchButton = document.querySelector('#set-number-search');
+const setNumberCloseButton = document.querySelector('#set-number-close');
+const setNumberContinueButton = document.querySelector('#set-number-continue');
 
 const deleteDialog = document.querySelector('#delete-dialog');
 const deleteMessage = document.querySelector('#delete-message');
@@ -314,10 +337,16 @@ let catalogCache = [];
 let currentCatalog = [];
 let currentEditId = null;
 let currentFormMode = null;
+let creationMode = 'individual';
 let formSynced = false;
 let imageLookupSequence = 0;
 let formTrigger = null;
 let formSending = false;
+let setLookupSequence = 0;
+let pendingSetLookup = null;
+let selectedSetNumber = '';
+let setMinifigures = [];
+let setActiveSort = { field: null, direction: 'asc' };
 let pendingDeleteId = null;
 let activeSort = { field: null, direction: 'asc' };
 let isSyncingPrices = false;
@@ -759,8 +788,8 @@ function renderWatchlist(observed) {
   watchlistList.replaceChildren(fragment);
 }
 
-function sortCatalog(catalog) {
-  if (!activeSort.field) {
+function sortCatalog(catalog, sort = activeSort) {
+  if (!sort.field) {
     return catalog
       .map((minifigura, index) => ({ minifigura, index }))
       .sort((left, right) => {
@@ -774,13 +803,13 @@ function sortCatalog(catalog) {
       .map(({ minifigura }) => minifigura);
   }
 
-  const direction = activeSort.direction === 'asc' ? 1 : -1;
+  const direction = sort.direction === 'asc' ? 1 : -1;
   const textFields = ['id', 'nombre', 'categoria', 'subcategoria'];
-  const isText = textFields.includes(activeSort.field);
+  const isText = textFields.includes(sort.field);
   const sortValue = (minifigura) => {
-    if (activeSort.field === 'categoria') return categoryDisplayName(minifigura.categoria);
-    if (activeSort.field === 'subcategoria') return subcategoryDisplayName(minifigura.categoria, minifigura.subcategoria);
-    if (activeSort.field !== 'diferencia') return minifigura[activeSort.field];
+    if (sort.field === 'categoria') return categoryDisplayName(minifigura.categoria);
+    if (sort.field === 'subcategoria') return subcategoryDisplayName(minifigura.categoria, minifigura.subcategoria);
+    if (sort.field !== 'diferencia') return minifigura[sort.field];
     if (normalizedCollectionState(minifigura.estadoColeccion) === 'BUSCADA'
       || !Number.isFinite(minifigura.precio)
       || !Number.isFinite(minifigura.precioCompra)) return undefined;
@@ -2022,6 +2051,344 @@ function mostrarImagenMinifigura(id, nombre) {
   preloader.src = url;
 }
 
+function resetSetCreation() {
+  setLookupSequence += 1;
+  pendingSetLookup = null;
+  selectedSetNumber = '';
+  setMinifigures = [];
+  setActiveSort = { field: null, direction: 'asc' };
+  updateSetSortButtons();
+  setNumberInput.value = '';
+  setNumberStatus.textContent = '';
+  setNumberStatus.classList.remove('error', 'loading-message');
+  setNumberSearchButton.disabled = false;
+  setNumberContinueButton.disabled = true;
+  setPurchaseDateInput.value = '';
+  setCreateError.textContent = '';
+  setCreateTitle.textContent = 'Minipersonas en el set';
+  setCreateNumber.textContent = '';
+  setCreateOwned.textContent = '';
+  setCreateOwned.hidden = true;
+  setMinifiguresBody.replaceChildren();
+  if (setNumberDialog.open) setNumberDialog.close();
+}
+
+function updateSetSortButtons() {
+  setSortButtons.forEach((button) => {
+    button.dataset.direction = button.dataset.setSort === setActiveSort.field ? setActiveSort.direction : '';
+    button.closest('th').setAttribute('aria-sort', 'none');
+  });
+  const activeButton = setSortButtons.find((button) => button.dataset.setSort === setActiveSort.field);
+  activeButton?.closest('th').setAttribute('aria-sort', setActiveSort.direction === 'asc' ? 'ascending' : 'descending');
+}
+
+function renderSetMinifigures() {
+  const fragment = document.createDocumentFragment();
+  const sortedMinifigures = setActiveSort.field ? sortCatalog(setMinifigures, setActiveSort) : setMinifigures;
+  for (const minifigura of sortedMinifigures) {
+    const row = document.createElement('tr');
+
+    const imageCell = document.createElement('td');
+    const imageButton = document.createElement('button');
+    imageButton.type = 'button';
+    imageButton.className = 'set-minifigure-image';
+    imageButton.setAttribute('aria-label', `Ampliar imagen de ${minifigura.id}`);
+    imageButton.append(createLazyImage({
+      src: imagenUrlPara(minifigura.id),
+      alt: minifigura.nombre,
+      width: 40,
+      height: 40,
+    }));
+    imageButton.addEventListener('click', () => mostrarImagenMinifigura(minifigura.id, minifigura.nombre));
+    imageCell.append(imageButton);
+
+    const followCell = document.createElement('td');
+    const followButton = document.createElement('button');
+    followButton.type = 'button';
+    followButton.className = `eye-icon ${minifigura.observada ? 'active' : 'inactive'}`;
+    const eye = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    eye.setAttribute('viewBox', '0 0 24 24');
+    eye.setAttribute('fill', 'none');
+    eye.setAttribute('stroke', 'currentColor');
+    eye.setAttribute('stroke-width', '2');
+    eye.setAttribute('aria-hidden', 'true');
+    eye.setAttribute('focusable', 'false');
+    const eyeReference = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    eyeReference.setAttribute('href', '#observation-eye-icon');
+    eye.append(eyeReference);
+    followButton.append(eye);
+    followButton.title = 'Seguimiento';
+    followButton.setAttribute('aria-label', minifigura.observada ? 'Dejar de seguir' : 'Seguir');
+    followButton.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
+    followButton.disabled = Boolean(minifigura.existente) || formSending;
+    followButton.addEventListener('click', () => {
+      minifigura.observada = !minifigura.observada;
+      renderSetMinifigures();
+    });
+    followCell.append(followButton);
+
+    const identityCell = document.createElement('td');
+    const identity = document.createElement('span');
+    identity.className = 'set-minifigure-identity';
+    const id = document.createElement('span');
+    id.className = 'set-minifigure-id';
+    id.textContent = minifigura.id;
+    const name = document.createElement('span');
+    name.className = 'set-minifigure-name';
+    name.textContent = minifigura.nombre ?? '';
+    identity.append(id, name);
+    if (minifigura.descripcion?.trim()) {
+      const description = document.createElement('span');
+      description.className = 'set-minifigure-description';
+      description.textContent = minifigura.descripcion;
+      identity.append(description);
+    }
+    identityCell.append(identity);
+
+    const stateCell = document.createElement('td');
+    const stateControls = document.createElement('div');
+    stateControls.className = 'set-row-controls';
+    for (const state of ['COLECCIÓN', 'BUSCADA']) {
+      const stateButton = document.createElement('button');
+      stateButton.type = 'button';
+      stateButton.className = `state-toggle ${minifigura.estadoColeccion === state ? 'active' : 'inactive'}`;
+      stateButton.setAttribute('aria-label', collectionStateMeaning(state));
+      stateButton.setAttribute('aria-pressed', String(minifigura.estadoColeccion === state));
+      stateButton.title = collectionStateMeaning(state);
+      stateButton.disabled = Boolean(minifigura.existente) || formSending;
+      appendCollectionStateIcon(stateButton, state);
+      stateButton.addEventListener('click', () => {
+        minifigura.estadoColeccion = state;
+        renderSetMinifigures();
+      });
+      stateControls.append(stateButton);
+    }
+    stateCell.append(stateControls);
+
+    row.append(
+      imageCell,
+      followCell,
+      identityCell,
+      cell(categoryDisplayName(minifigura.categoria)),
+      cell(subcategoryDisplayName(minifigura.categoria, minifigura.subcategoria)),
+      cell(minifigura.anio),
+      stateCell,
+      priceCell(minifigura.precio),
+    );
+    if (minifigura.existente) row.className = 'set-minifigure-existing';
+    fragment.append(row);
+  }
+  setMinifiguresBody.replaceChildren(fragment);
+}
+
+function updateCreationModeButtons() {
+  for (const button of creationModeButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.creationMode === creationMode));
+  }
+}
+
+function chooseCreationMode(mode) {
+  if (currentFormMode !== 'create') return;
+  creationMode = mode;
+  updateCreationModeButtons();
+  if (mode === 'set') {
+    setNumberStatus.textContent = pendingSetLookup ? 'Encontrado' : '';
+    setNumberStatus.classList.remove('error', 'loading-message');
+    setNumberContinueButton.disabled = !pendingSetLookup;
+    if (pendingSetLookup) setNumberInput.value = pendingSetLookup.searchedSetNumber;
+    openDialog(setNumberDialog);
+    setNumberInput.focus();
+  }
+  updateFormMode();
+}
+
+async function searchSetInventory() {
+  const setNumber = setNumberInput.value.trim();
+  setLookupSequence += 1;
+  const lookupSequence = setLookupSequence;
+  pendingSetLookup = null;
+  setNumberContinueButton.disabled = true;
+  setNumberStatus.classList.remove('error', 'loading-message');
+  if (!setNumber) {
+    setNumberStatus.textContent = 'Introduce un número de set.';
+    setNumberStatus.classList.add('error');
+    return;
+  }
+
+  setNumberSearchButton.disabled = true;
+  setNumberStatus.textContent = 'Buscando...';
+  setNumberStatus.classList.add('loading-message');
+  try {
+    const response = await apiFetch(`/minifiguras/sets/${encodeURIComponent(setNumber)}`);
+    const result = await response.json();
+    if (lookupSequence !== setLookupSequence || !setNumberDialog.open) return;
+    if (response.status === 404) {
+      setNumberStatus.textContent = 'El set no se encuentra';
+      setNumberStatus.classList.add('error');
+      return;
+    }
+    if (response.status === 400 && result.error === 'BRICKSET_SET_INVALIDO') {
+      setNumberStatus.textContent = 'El número de set no es válido.';
+      setNumberStatus.classList.add('error');
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(result.error ?? 'BRICKSET_NO_DISPONIBLE');
+    }
+    if (typeof result.setNumber !== 'string' || !Array.isArray(result.minifigures)) {
+      throw new Error('BRICKSET_RESPUESTA_INVALIDA');
+    }
+    if (result.minifigures.length === 0) {
+      setNumberStatus.textContent = 'El set no contiene minipersonas.';
+      return;
+    }
+    if (result.minifigures.every(({ existente }) => existente)) {
+      setNumberStatus.textContent = 'Encontrado. Todas las minifiguras de este set están en tu inventario.';
+      return;
+    }
+    pendingSetLookup = { ...result, searchedSetNumber: setNumber };
+    setNumberStatus.textContent = 'Encontrado';
+    setNumberContinueButton.disabled = false;
+  } catch {
+    if (lookupSequence !== setLookupSequence || !setNumberDialog.open) return;
+    setNumberStatus.textContent = 'No se pudo consultar el set. Inténtalo de nuevo.';
+    setNumberStatus.classList.add('error');
+  } finally {
+    if (lookupSequence === setLookupSequence) {
+      setNumberSearchButton.disabled = false;
+      setNumberStatus.classList.remove('loading-message');
+    }
+  }
+}
+
+function continueWithSetInventory() {
+  if (!pendingSetLookup || !Array.isArray(pendingSetLookup.minifigures)) return;
+  selectedSetNumber = pendingSetLookup.setNumber;
+  setCreateNumber.textContent = pendingSetLookup.searchedSetNumber;
+  setMinifigures = pendingSetLookup.minifigures.map((minifigura) => ({
+    ...minifigura,
+    observada: minifigura.existente ? Boolean(minifigura.observada) : false,
+    estadoColeccion: minifigura.existente ? minifigura.estadoColeccion : 'COLECCIÓN',
+  }));
+  setCreateTitle.textContent = `${setMinifigures.length} ${setMinifigures.length === 1 ? 'Minipersona' : 'Minipersonas'} en el set`;
+  const existingIds = setMinifigures.filter(({ existente }) => existente).map(({ id }) => id);
+  setCreateOwned.textContent = existingIds.length > 0
+    ? `(Ya tienes en el inventario ${existingIds.length} de ellas [${existingIds.join(', ')}])`
+    : '';
+  setCreateOwned.hidden = existingIds.length === 0;
+  setCreateError.textContent = '';
+  setPurchaseDateInput.max = localToday();
+  setPurchaseDateLabel.hidden = false;
+  setMinifiguresWrap.hidden = false;
+  setCreateEmpty.hidden = true;
+  renderSetMinifigures();
+  setNumberDialog.close();
+  updateFormMode();
+}
+
+function setPurchaseValidationError() {
+  if (setPurchaseDateInput.validity.badInput
+    || (setPurchaseDateInput.value !== '' && setPurchaseDateInput.value > localToday())) {
+    return 'La fecha de compra no puede ser posterior a hoy.';
+  }
+  return null;
+}
+
+function duplicateSetMessage(ids) {
+  const uniqueIds = [...new Set(ids.map((id) => String(id).trim().toUpperCase()))];
+  if (uniqueIds.length === 1) return `La minipersona ${uniqueIds[0]} ya se encontraba en tu inventario`;
+  if (uniqueIds.length > 1) return `Las minipersonas ${uniqueIds.join(', ')} ya se encontraban en tu inventario`;
+  return '';
+}
+
+async function saveSetInventory() {
+  setCreateError.textContent = '';
+  const purchaseError = setPurchaseValidationError();
+  if (purchaseError) {
+    setCreateError.textContent = purchaseError;
+    return;
+  }
+  if (!selectedSetNumber) {
+    setCreateError.textContent = 'Busca un set antes de guardar.';
+    return;
+  }
+
+  const knownDuplicates = setMinifigures.filter(({ existente }) => existente).map(({ id }) => id);
+  const newMinifigures = setMinifigures.filter(({ existente }) => !existente).map((minifigura) => {
+    const payload = { ...minifigura };
+    delete payload.existente;
+    payload.descripcion = (payload.descripcion ?? '').trim();
+    if (payload.precio === null) delete payload.precio;
+    if (setPurchaseDateInput.value) payload.fechaCompra = setPurchaseDateInput.value;
+    return payload;
+  });
+  if (newMinifigures.length === 0) {
+    closeFormDialog();
+    showToast(duplicateSetMessage(knownDuplicates), 'success');
+    return;
+  }
+
+  const sessionUserId = currentSession?.user?.id;
+  const formSequence = imageLookupSequence;
+  const setSequence = setLookupSequence;
+  const isCurrent = () => formSequence === imageLookupSequence
+    && setSequence === setLookupSequence
+    && sessionUserId === currentSession?.user?.id
+    && formDialog.open;
+  formSending = true;
+  renderSetMinifigures();
+  updateFormMode();
+  try {
+    const response = await apiFetch('/minifiguras/lote', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
+      body: JSON.stringify({ minifiguras: newMinifigures }),
+    });
+    if (!isCurrent()) return;
+    if (!response.ok) {
+      let errorCode;
+      try {
+        errorCode = (await response.json())?.error;
+      } catch {
+        errorCode = undefined;
+      }
+      if (!isCurrent()) return;
+      const message = messageForErrorCode(errorCode);
+      setCreateError.textContent = message;
+      showToast(message, 'error');
+      return;
+    }
+
+    const result = await response.json();
+    if (!isCurrent()) return;
+    if (!Array.isArray(result.creadas) || !Array.isArray(result.duplicadas)) {
+      throw new Error('Respuesta inválida al guardar el lote.');
+    }
+    showGamificationToasts(result.gamificacion);
+    if (result.gamificacion?.state) ownGamification = {
+      ...result.gamificacion.state,
+      logrosDestacados: result.gamificacion.state.logrosDestacados ?? ownGamification?.logrosDestacados ?? [],
+    };
+    result.creadas.forEach(upsertCached);
+    applyFilters({ preservePage: true });
+    closeFormDialog();
+    if (result.creadas.length > 0) showToast('Minipersonas añadidas correctamente.', 'success');
+    const duplicateMessage = duplicateSetMessage([...knownDuplicates, ...result.duplicadas]);
+    if (duplicateMessage) showToast(duplicateMessage, 'success');
+    void revalidate();
+  } catch {
+    if (!isCurrent()) return;
+    setCreateError.textContent = 'No se pudo guardar el conjunto. Inténtalo de nuevo.';
+    showToast(setCreateError.textContent, 'error');
+  } finally {
+    if (formSequence === imageLookupSequence && setSequence === setLookupSequence) {
+      formSending = false;
+      renderSetMinifigures();
+      updateFormMode();
+    }
+  }
+}
+
 function openFormDialog(mode, minifigura, trigger = null) {
   if (!categoriasReady) {
     showToast('No se pueden crear minipersonas sin cargar las categorías oficiales.', 'error');
@@ -2029,6 +2396,8 @@ function openFormDialog(mode, minifigura, trigger = null) {
   }
   pauseSyncForModal();
   currentFormMode = mode;
+  creationMode = 'individual';
+  resetSetCreation();
   formTrigger = trigger;
   formSending = false;
   imageLookupSequence += 1;
@@ -2040,7 +2409,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   formPreviewImage.src = imageFallbackUrl;
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
-  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minipersona' : mode === 'view' ? 'Ver minipersona' : 'Nueva minipersona';
+  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minipersona' : mode === 'view' ? 'Ver minipersona' : 'Añadir a inventario';
 
   if (mode !== 'create') {
     formIdInput.value = minifigura.id ?? '';
@@ -2100,15 +2469,31 @@ async function openMinifiguraView(id) {
 
 function updateFormMode() {
   formFechaCompraInput.max = localToday();
+  setPurchaseDateInput.max = localToday();
   const isCreate = currentFormMode === 'create';
   const isRankingCreate = currentFormMode === 'ranking-create';
   const isView = currentFormMode === 'view';
+  const isSetCreate = isCreate && creationMode === 'set';
   const hasId = formIdInput.value.trim() !== '';
   const editableFields = [formEstadoInput];
   const purchaseFields = [formPrecioCompraInput, formFechaCompraInput];
   const bricksetFields = [formCategoriaInput, formSubcategoriaInput, formAnioInput, formPrecioInput];
 
   formDialog.classList.toggle('view-mode', isView);
+  formDialog.classList.toggle('create-mode', isCreate);
+  formDialog.classList.toggle('set-create-mode', isSetCreate);
+  creationModeTabs.hidden = !isCreate;
+  updateCreationModeButtons();
+  individualCreateContent.hidden = isSetCreate;
+  individualCreatePreview.hidden = isSetCreate;
+  setCreateSection.hidden = !isSetCreate;
+  setCreateHeading.hidden = !selectedSetNumber;
+  setCreateEmpty.hidden = Boolean(selectedSetNumber);
+  setCreateSearchButton.disabled = setNumberDialog.open || formSending;
+  setCreateError.hidden = !selectedSetNumber;
+  setPurchaseDateLabel.hidden = !selectedSetNumber;
+  setMinifiguresWrap.hidden = !selectedSetNumber;
+  setPurchaseDateInput.disabled = !selectedSetNumber || formSending;
   formIdInput.closest('.modal-row-identity').classList.toggle('view-mode', isView);
   formIdInput.readOnly = !isCreate;
   formIdInput.disabled = !isCreate;
@@ -2132,7 +2517,9 @@ function updateFormMode() {
   updateFormToggleStates();
   formDialogTitle.hidden = false;
   formSubmitButton.hidden = isView;
-  formSubmitButton.disabled = isView || formSending || (isRankingCreate && !formSynced) || !isFormValid();
+  formSubmitButton.disabled = isView || formSending || (isSetCreate
+    ? !selectedSetNumber || Boolean(setPurchaseValidationError())
+    : (isRankingCreate && !formSynced) || !isFormValid());
   formCancelButton.textContent = 'Cerrar';
   formPreviewImage.hidden = false;
 }
@@ -2191,6 +2578,7 @@ function purchaseValidationError() {
 }
 
 function closeFormDialog() {
+  if (setNumberDialog.open) setNumberDialog.close();
   if (formDialog.open) {
     formDialog.close();
   }
@@ -2368,6 +2756,48 @@ syncPricesButton.addEventListener('click', startSync);
 
 newMinifiguraButton.addEventListener('click', () => {
   openFormDialog('create');
+});
+
+creationModeButtons.forEach((button) => {
+  button.addEventListener('click', () => chooseCreationMode(button.dataset.creationMode));
+});
+
+setNumberSearchButton.addEventListener('click', () => { void searchSetInventory(); });
+setCreateSearchButton.addEventListener('click', () => chooseCreationMode('set'));
+setNumberContinueButton.addEventListener('click', continueWithSetInventory);
+setNumberDialog.addEventListener('close', updateFormMode);
+setNumberCloseButton.addEventListener('click', () => {
+  setLookupSequence += 1;
+  setNumberSearchButton.disabled = false;
+  setNumberStatus.classList.remove('loading-message');
+  setNumberDialog.close();
+});
+setNumberDialog.addEventListener('cancel', () => {
+  setLookupSequence += 1;
+  setNumberSearchButton.disabled = false;
+  setNumberStatus.classList.remove('loading-message');
+});
+setNumberInput.addEventListener('input', () => {
+  setLookupSequence += 1;
+  pendingSetLookup = null;
+  setNumberStatus.textContent = '';
+  setNumberStatus.classList.remove('error', 'loading-message');
+  setNumberSearchButton.disabled = false;
+  setNumberContinueButton.disabled = true;
+});
+setSortButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const field = button.dataset.setSort;
+    setActiveSort = setActiveSort.field === field
+      ? { field, direction: setActiveSort.direction === 'asc' ? 'desc' : 'asc' }
+      : { field, direction: 'asc' };
+    updateSetSortButtons();
+    renderSetMinifigures();
+  });
+});
+setPurchaseDateInput.addEventListener('input', () => {
+  setCreateError.textContent = setPurchaseValidationError() ?? '';
+  updateFormMode();
 });
 
 firstMinifiguraAccept.addEventListener('click', () => {
@@ -4687,6 +5117,7 @@ formCancelButton.addEventListener('click', () => {
 
 formDialog.addEventListener('close', () => {
   imageLookupSequence += 1;
+  setLookupSequence += 1;
   formSending = false;
   restoreRankingFocus(formTrigger);
   formTrigger = null;
@@ -4695,6 +5126,7 @@ formDialog.addEventListener('close', () => {
   formSynced = false;
   bricksetLoading.hidden = true;
   formPreviewImage.removeAttribute('src');
+  pendingSetLookup = null;
 });
 
 [formIdInput, formNombreInput, formCategoriaInput, formAnioInput, formPrecioInput, formEstadoInput, formFechaCompraInput, formPrecioCompraInput].forEach((input) => {
@@ -4741,6 +5173,10 @@ formStateToggleButtons.forEach((button) => {
 minifiguraForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!currentFormMode || currentFormMode === 'view' || formSending) return;
+  if (currentFormMode === 'create' && creationMode === 'set') {
+    await saveSetInventory();
+    return;
+  }
   formError.textContent = '';
 
   const isRankingCreate = currentFormMode === 'ranking-create';

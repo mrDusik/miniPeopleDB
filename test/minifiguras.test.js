@@ -4,6 +4,7 @@ import { MinifigurasRepository } from '../src/minifiguras-repository.js';
 import { categoriasMock, categoriasMockRaw } from '../test-support/fixtures.js';
 import {
   OTHER_TOKEN,
+  OTHER_USER,
   TEST_USER,
   authFetch,
   createTestClient,
@@ -1210,6 +1211,181 @@ test('POST /minifiguras rechaza un cuerpo con user_id y asocia el alta al usuari
   });
 });
 
+function setInventoryArticle(id) {
+  return `<article class='set'><div class="meta"><h1><a href="/minifigs/${id.toLowerCase()}/figure-name">${id}</a></h1></div></article>`;
+}
+
+function setLookupPage(setId, hasMinifigures = true) {
+  const inventoryLink = hasMinifigures
+    ? `<a href="/ajax/sets/minifigs?setID=${setId}">Minifigs</a>`
+    : '<a href="/ajax/sets/nominifigs">Minifigs</a>';
+  return `<a href="/ajax/sets/mainImage?setID=${setId}">Image</a>${inventoryLink}`;
+}
+
+test('GET /minifiguras/sets/:number normaliza set y combina Brickset con datos propios', async () => {
+  const savedA = makeMinifigura({
+    id: 'njo1030', nombre: 'Nombre guardado', categoria: 'Space', anio: 1999,
+    estadoColeccion: 'BUSCADA', observada: true, fechaCompra: '2020-01-02',
+  });
+  const savedB = makeMinifigura({
+    id: 'njo1030', nombre: 'Registro de B', categoria: 'Castle', anio: 2001,
+  });
+  const supabase = createTestSupabase([savedA]);
+  supabase.seed('minifiguras', OTHER_USER.id, [savedB].map((figure) => ({
+    id: figure.id,
+    nombre: figure.nombre,
+    descripcion: figure.descripcion,
+    categoria: figure.categoria,
+    anio: figure.anio,
+    estado_coleccion: figure.estadoColeccion,
+    observada: figure.observada,
+    fecha_compra: figure.fechaCompra,
+    fecha_registro: figure.FechaRegistro,
+  })));
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    if (url === 'https://brickset.com/sets?query=71851') {
+      return new Response('<div class="results">1 to 1 of 1 matches</div><h1><a href="/sets/71851-1/set-name">Battle Pack</a></h1>');
+    }
+    if (url === 'https://brickset.com/sets/71851-1') return new Response(setLookupPage('51787'));
+    if (url === 'https://brickset.com/ajax/sets/minifigs?setID=51787') {
+      return new Response(`${setInventoryArticle('NJO1030')}${setInventoryArticle('NJO1034')}`);
+    }
+    if (url === 'https://brickset.com/minifigs/NJO1034') {
+      return new Response('<dl><dt>Name</dt><dd>Sora - Dragon Form</dd><dt>Category</dt><dd>Space</dd><dt>Year released</dt><dd>2025</dd></dl><p>Current Value - New €7.50</p>');
+    }
+    throw new Error(`URL inesperada: ${url}`);
+  };
+  const server = await startTestServer({ supabase, options: { fetchImpl, minIntervalMs: 0 } });
+
+  try {
+    const ownResponse = await fetch(`${server.baseUrl}/minifiguras/sets/71851`);
+    assert.equal(ownResponse.status, 200);
+    const ownResult = await ownResponse.json();
+    assert.equal(ownResult.setNumber, '71851-1');
+    assert.deepEqual(ownResult.minifigures, [
+      { ...savedA, existente: true },
+      {
+        id: 'NJO1034', nombre: 'Sora', descripcion: 'Dragon Form', categoria: 'Space',
+        anio: 2025, precio: 7.5, existente: false,
+      },
+    ]);
+
+    const otherResponse = await authFetch(OTHER_TOKEN)(`${server.baseUrl}/minifiguras/sets/71851`);
+    assert.equal(otherResponse.status, 200);
+    const otherResult = await otherResponse.json();
+    assert.deepEqual(otherResult.minifigures[0], { ...savedB, existente: true });
+    assert.equal(otherResult.minifigures[1].existente, false);
+    assert.equal(requests.filter(({ url }) => url.endsWith('/NJO1030')).length, 0);
+    assert.equal(requests.filter(({ url }) => url.endsWith('/NJO1034')).length, 1);
+    assert.equal(requests.filter(({ options }) => options.headers?.['x-requested-with'] === 'XMLHttpRequest').length, 2);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /minifiguras/sets/:number resuelve Complete de una CMF y devuelve todas sus figuras con duplicados propios', async () => {
+  const ids = Array.from({ length: 16 }, (_, index) => `COL${145 + index}`);
+  const saved = makeMinifigura({
+    id: 'COL145', nombre: 'Nombre guardado', categoria: 'Collectible Minifigures',
+    subcategoria: 'Series 10 Minifigures', anio: 2013,
+  });
+  const detailRequests = [];
+  const server = await startTestServer({
+    catalog: [saved],
+    themesRaw: JSON.stringify([{
+      categoria: 'Collectible Minifigures', total: 16,
+      subcategorias: [{ subcategoria: 'Series 10 Minifigures', total: 16 }],
+    }]),
+    options: {
+      minIntervalMs: 0,
+      fetchImpl: async (url) => {
+        if (url === 'https://brickset.com/sets?query=71001') {
+          return new Response('<div class="results">1 to 2 of 2 matches</div><h1><a href="/sets/71001-1/Librarian">Librarian</a></h1><h1><a href="/sets/71001-17/Complete">Series 10 - Complete (except Mr. Gold)</a></h1>');
+        }
+        if (url === 'https://brickset.com/sets/71001-17') return new Response(setLookupPage('22589'));
+        if (url === 'https://brickset.com/ajax/sets/minifigs?setID=22589') {
+          return new Response(ids.map(setInventoryArticle).join(''));
+        }
+        const id = url.match(/^https:\/\/brickset\.com\/minifigs\/(COL\d+)$/)?.[1];
+        if (id) {
+          detailRequests.push(id);
+          return new Response(`<dl><dt>Name</dt><dd>Figure ${id}</dd><dt>Category</dt><dd>Collectible Minifigures</dd><dt>Subcategory</dt><dd>Series 10 Minifigures</dd><dt>Year released</dt><dd>2013</dd></dl><p>Current Value - New €4.00</p>`);
+        }
+        throw new Error(`URL inesperada: ${url}`);
+      },
+    },
+  });
+  try {
+    const response = await fetch(`${server.baseUrl}/minifiguras/sets/71001`);
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.setNumber, '71001-17');
+    assert.deepEqual(result.minifigures.map(({ id }) => id), ids);
+    assert.deepEqual(result.minifigures[0], { ...saved, existente: true });
+    assert.ok(result.minifigures.slice(1).every((figure) => (
+      figure.existente === false && figure.subcategoria === 'Series 10 Minifigures'
+    )));
+    assert.deepEqual(detailRequests, ids.slice(1));
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /minifiguras/sets/:number diferencia set sin minifiguras de errores de Brickset', async () => {
+  const emptyServer = await startTestServer({
+    options: {
+      minIntervalMs: 0,
+      fetchImpl: async (url) => new Response(url.includes('?query=')
+        ? '<div class="results">0 to 0 of 0 matches</div>'
+        : setLookupPage('48994', false)),
+    },
+  });
+  try {
+    const empty = await fetch(`${emptyServer.baseUrl}/minifiguras/sets/31154`);
+    assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), { setNumber: '31154-1', minifigures: [] });
+  } finally {
+    await emptyServer.close();
+  }
+
+  const missingServer = await startTestServer({
+    options: { minIntervalMs: 0, fetchImpl: async () => new Response('', { status: 404 }) },
+  });
+  try {
+    const missing = await fetch(`${missingServer.baseUrl}/minifiguras/sets/999999`);
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { error: 'BRICKSET_NO_ENCONTRADO' });
+  } finally {
+    await missingServer.close();
+  }
+
+  const unavailableServer = await startTestServer({
+    options: { minIntervalMs: 0, fetchImpl: async () => new Response('', { status: 503 }) },
+  });
+  try {
+    const unavailable = await fetch(`${unavailableServer.baseUrl}/minifiguras/sets/71851`);
+    assert.equal(unavailable.status, 502);
+    assert.deepEqual(await unavailable.json(), { error: 'BRICKSET_NO_DISPONIBLE' });
+  } finally {
+    await unavailableServer.close();
+  }
+});
+
+test('GET /minifiguras/sets/:number exige autenticacion y solo acepta GET', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const anonymous = await globalThis.fetch(`${baseUrl}/minifiguras/sets/71851`);
+    assert.equal(anonymous.status, 401);
+    assert.deepEqual(await anonymous.json(), { error: 'NO_AUTENTICADO' });
+
+    const unsupported = await fetch(`${baseUrl}/minifiguras/sets/71851`, { method: 'POST' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'GET');
+    assert.deepEqual(await unsupported.json(), { error: 'METODO_NO_PERMITIDO' });
+  });
+});
+
 test('GET /config/supabase expone solo la configuracion publica', async () => {
   await withServer('[]', async (baseUrl) => {
     const response = await globalThis.fetch(`${baseUrl}/config/supabase`);
@@ -1229,4 +1405,208 @@ test('GET /config/supabase expone solo la configuracion publica', async () => {
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: 'CONFIGURACION_NO_DISPONIBLE' });
   }, { supabaseConfig: null });
+});
+
+test('MinifigurasRepository.createMany valida el lote, aplica valores por defecto y notifica una vez', async () => {
+  const saved = makeMinifigura({
+    id: 'EXISTENTE',
+    nombre: 'Registro guardado',
+    estadoColeccion: 'BUSCADA',
+    observada: true,
+  });
+  const supabase = createTestSupabase([saved]);
+  const notifications = [];
+  const repository = new MinifigurasRepository({
+    client: createTestClient(supabase),
+    userId: TEST_USER.id,
+    categoriasRepository: { read: async () => categoriasMock },
+    onCatalogPersisted: async (catalog) => {
+      notifications.push(catalog);
+      return null;
+    },
+  });
+
+  const result = await repository.createMany([
+    { id: 'nuevo-1', nombre: 'Primera', categoria: 'Space', anio: 2025, fechaCompra: '2025-02-03' },
+    { id: 'nuevo-2', nombre: 'Segunda', categoria: 'Castle', anio: 2024 },
+    { ...saved, nombre: 'No debe reemplazar el registro' },
+  ], {
+    nombreCompletoPorId: new Map([['NUEVO-1', 'Primera figura completa']]),
+  });
+
+  assert.deepEqual(result.creadas.map(({ id }) => id), ['NUEVO-1', 'NUEVO-2']);
+  assert.deepEqual(result.duplicadas, ['EXISTENTE']);
+  assert.deepEqual(result.creadas.map(({ observada, estadoColeccion }) => ({ observada, estadoColeccion })), [
+    { observada: false, estadoColeccion: 'COLECCIÓN' },
+    { observada: false, estadoColeccion: 'COLECCIÓN' },
+  ]);
+  assert.equal(result.creadas[0].fechaCompra, '2025-02-03');
+  assert.equal(supabase.rows('minifiguras').find(({ id }) => id === 'NUEVO-1').nombre_completo, 'Primera figura completa');
+  assert.equal(supabase.rows('minifiguras').find(({ id }) => id === 'EXISTENTE').nombre, 'Registro guardado');
+  assert.equal(supabase.rows('minifiguras').find(({ id }) => id === 'EXISTENTE').observada, true);
+  assert.equal(notifications.length, 1);
+});
+
+test('MinifigurasRepository.createMany ignora conflictos concurrentes sin alterar el registro existente', async () => {
+  const { repository, supabase } = repositoryWith([]);
+  const readCatalog = repository.readCatalog.bind(repository);
+  let seedConcurrentRecord = true;
+  repository.readCatalog = async (...args) => {
+    const catalog = await readCatalog(...args);
+    if (seedConcurrentRecord) {
+      seedConcurrentRecord = false;
+      supabase.seed('minifiguras', TEST_USER.id, [{
+        id: 'RACE',
+        nombre: 'Guardada durante la operación',
+        categoria: 'Space',
+        anio: 2024,
+        estado_coleccion: 'BUSCADA',
+        observada: true,
+        fecha_registro: '2025-01-02T00:00:00.000Z',
+      }]);
+    }
+    return catalog;
+  };
+
+  const result = await repository.createMany([
+    { id: 'race', nombre: 'Propuesta obsoleta', categoria: 'Space', anio: 2025 },
+    { id: 'nuevo', nombre: 'Nueva', categoria: 'Space', anio: 2025 },
+  ]);
+
+  assert.deepEqual(result.creadas.map(({ id }) => id), ['NUEVO']);
+  assert.deepEqual(result.duplicadas, ['RACE']);
+  const race = supabase.rows('minifiguras').find(({ id }) => id === 'RACE');
+  assert.equal(race.nombre, 'Guardada durante la operación');
+  assert.equal(race.estado_coleccion, 'BUSCADA');
+  assert.equal(race.observada, true);
+});
+
+test('MinifigurasRepository.createMany no persiste un lote parcialmente si falla la escritura', async () => {
+  const { repository, supabase } = repositoryWith([]);
+  supabase.failNext('minifiguras', { code: 'PGRST000', message: 'fallo de escritura' }, 'upsert');
+
+  await assert.rejects(repository.createMany([
+    { id: 'primera', nombre: 'Primera', categoria: 'Space', anio: 2025 },
+    { id: 'segunda', nombre: 'Segunda', categoria: 'Castle', anio: 2025 },
+  ]), { code: 'CATALOGO_NO_DISPONIBLE' });
+  assert.deepEqual(supabase.rows('minifiguras'), []);
+});
+
+test('MinifigurasRepository.createMany rechaza el lote completo si una fila es inválida', async () => {
+  const { repository, supabase } = repositoryWith([]);
+
+  await assert.rejects(repository.createMany([
+    { id: 'valida', nombre: 'Válida', categoria: 'Space', anio: 2025 },
+    { id: 'invalida', nombre: 'Inválida', categoria: 'No oficial', anio: 2025 },
+  ]), { code: 'MINIFIGURA_INVALIDA' });
+  assert.deepEqual(supabase.rows('minifiguras'), []);
+});
+
+test('POST /minifiguras/lote guarda el lote con fecha común y devuelve el estado derivado', async () => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    const response = await fetch(`${baseUrl}/minifiguras/lote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-gamificacion': 'true' },
+      body: JSON.stringify({
+        minifiguras: [
+          makeMinifigura({
+            id: 'primera',
+            fechaCompra: '2025-03-04',
+            estadoColeccion: 'COLECCIÓN',
+            observada: true,
+          }),
+          makeMinifigura({
+            id: 'segunda',
+            fechaCompra: '2025-03-04',
+            estadoColeccion: 'BUSCADA',
+            observada: false,
+          }),
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.deepEqual(body.creadas.map(({ id }) => id), ['PRIMERA', 'SEGUNDA']);
+    assert.deepEqual(body.duplicadas, []);
+    assert.ok(body.gamificacion?.state);
+    assert.deepEqual(supabase.rows('minifiguras').map(({ id, fecha_compra, precio_compra }) => ({
+      id,
+      fecha_compra,
+      precio_compra,
+    })), [
+      { id: 'PRIMERA', fecha_compra: '2025-03-04', precio_compra: null },
+      { id: 'SEGUNDA', fecha_compra: '2025-03-04', precio_compra: null },
+    ]);
+  });
+});
+
+test('POST /minifiguras/lote conserva duplicados y permite una respuesta solo de duplicados', async () => {
+  const saved = makeMinifigura({ id: 'EXISTENTE', nombre: 'Registro guardado', observada: true });
+  await withServer(JSON.stringify([saved]), async (baseUrl, supabase) => {
+    const response = await fetch(`${baseUrl}/minifiguras/lote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ minifiguras: [{ ...saved, nombre: 'No reemplazar' }] }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { creadas: [], duplicadas: ['EXISTENTE'] });
+    assert.equal(supabase.rows('minifiguras').length, 1);
+    assert.equal(supabase.rows('minifiguras')[0].nombre, 'Registro guardado');
+    assert.equal(supabase.rows('minifiguras')[0].observada, true);
+  });
+});
+
+test('POST /minifiguras/lote rechaza lotes inválidos sin guardar filas', async () => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    const response = await fetch(`${baseUrl}/minifiguras/lote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        minifiguras: [
+          makeMinifigura({ id: 'valida' }),
+          makeMinifigura({ id: 'invalida', categoria: 'No oficial' }),
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'MINIFIGURA_INVALIDA' });
+    assert.deepEqual(supabase.rows('minifiguras'), []);
+  });
+});
+
+test('POST /minifiguras/lote no persiste filas parciales ante un fallo de Supabase', async () => {
+  await withServer('[]', async (baseUrl, supabase) => {
+    supabase.failNext('minifiguras', { code: 'PGRST000', message: 'fallo de escritura' }, 'upsert');
+    const response = await fetch(`${baseUrl}/minifiguras/lote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        minifiguras: [makeMinifigura({ id: 'primera' }), makeMinifigura({ id: 'segunda' })],
+      }),
+    });
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: 'CATALOGO_NO_DISPONIBLE' });
+    assert.deepEqual(supabase.rows('minifiguras'), []);
+  });
+});
+
+test('POST /minifiguras/lote exige autenticación y solo acepta POST', async () => {
+  await withServer('[]', async (baseUrl) => {
+    const anonymous = await globalThis.fetch(`${baseUrl}/minifiguras/lote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ minifiguras: [] }),
+    });
+    assert.equal(anonymous.status, 401);
+    assert.deepEqual(await anonymous.json(), { error: 'NO_AUTENTICADO' });
+
+    const unsupported = await fetch(`${baseUrl}/minifiguras/lote`, { method: 'GET' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'POST');
+    assert.deepEqual(await unsupported.json(), { error: 'METODO_NO_PERMITIDO' });
+  });
 });
