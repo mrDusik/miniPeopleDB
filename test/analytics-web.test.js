@@ -145,6 +145,10 @@ for (const days of [30, 90, 365]) {
         const status = nav.querySelector('[role="status"]');
         const pages = Math.ceil(days / 7);
         assert.equal(nav.hidden, false);
+        assert.equal(previous.textContent, '<');
+        assert.equal(previous.getAttribute('aria-label'), 'Anterior');
+        assert.equal(next.textContent, '>');
+        assert.equal(next.getAttribute('aria-label'), 'Siguiente');
         assert.equal(previous.disabled, true);
         const dates = [];
         for (let page = 1; page <= pages; page += 1) {
@@ -178,6 +182,8 @@ for (const days of [30, 90, 365]) {
         focus.focus();
         await window.MiniPeopleI18n.setLanguage('en');
         assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Collection and Value');
+        assert.equal(focus.getAttribute('aria-label'), 'Previous');
+        assert.equal(sections[0].querySelector('[data-history-page="1"]').getAttribute('aria-label'), 'Next');
         assert.equal(document.activeElement, focus);
         assert.equal(sections[0].open, true);
         assert.equal(sections[1].open, false);

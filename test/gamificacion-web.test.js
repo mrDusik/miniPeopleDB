@@ -786,6 +786,10 @@ test('pagina la tabla en bloques de diez filas', async () => {
   const rows = () => window.document.querySelectorAll('#catalog-body tr');
   assert.equal(rows().length, 10);
   assert.equal(window.document.querySelector('#page-status').textContent, 'Página 1 de 3');
+  assert.equal(window.document.querySelector('#previous-page').textContent, '<');
+  assert.equal(window.document.querySelector('#previous-page').getAttribute('aria-label'), 'Anterior');
+  assert.equal(window.document.querySelector('#next-page').textContent, '>');
+  assert.equal(window.document.querySelector('#next-page').getAttribute('aria-label'), 'Siguiente');
   assert.equal(window.document.querySelector('#previous-page').disabled, true);
   window.document.querySelector('#next-page').click();
   assert.equal(rows().length, 10);

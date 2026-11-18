@@ -2357,7 +2357,7 @@ async function searchSetInventory() {
   }
 
   setNumberSearchButton.disabled = true;
-  setNumberStatus.textContent = 'Buscando...';
+  bindI18n(setNumberStatus, 'text', () => t('common.searching'));
   setNumberStatus.classList.add('loading-message');
   try {
     const response = await apiFetch(`/minifiguras/sets/${encodeURIComponent(setNumber)}`);
@@ -3811,7 +3811,7 @@ function renderFriendRows(rows, type) {
       sendButton.disabled = friendsActionRequests.has(`send:${friend.userId}`);
       if (sendButton.disabled) sendButton.setAttribute('aria-busy', 'true');
       item.append(sendButton);
-    } else if (type === 'sent' && ['pending', 'rejected'].includes(friend.status)) {
+    } else if (type === 'sent' && friend.status === 'pending') {
       const revokeButton = document.createElement('button');
       revokeButton.type = 'button';
       revokeButton.className = 'button button-secondary button-icon friends-revoke-request';
@@ -3829,16 +3829,10 @@ function renderFriendRows(rows, type) {
       bindI18n(acceptedButton, 'text', () => t('friends.accepted'));
       acceptedButton.disabled = true;
       item.append(acceptedButton);
-    } else if (type === 'received' && ['pending', 'rejected'].includes(friend.status)) {
+    } else if (type === 'received' && friend.status === 'pending') {
       const actions = document.createElement('div');
       actions.className = 'friends-request-actions friends-request-controls';
-      if (friend.status === 'pending') actions.classList.add('friends-request-pending');
-      if (friend.status === 'rejected') {
-        const state = document.createElement('span');
-        state.className = 'friends-request-state state-rejected';
-        bindI18n(state, 'text', () => t('friends.rejected'));
-        actions.append(state);
-      }
+      actions.classList.add('friends-request-pending');
       const acceptButton = document.createElement('button');
       acceptButton.type = 'button';
       acceptButton.className = 'button button-secondary notification-accept-friend friends-accept-request';
@@ -3878,7 +3872,7 @@ function renderFriendRows(rows, type) {
       const state = type === 'search' ? friend.relationshipStatus : friend.status;
       status.className = `friends-request-state state-${state}`;
       bindI18n(status, 'text', () => ({
-        rejected: t('friends.rejected'), request_rejected: t('friends.rejected'), accepted: t('friends.accepted'), friend: t('common.friends'),
+        accepted: t('friends.accepted'), friend: t('common.friends'),
         request_sent: t('friends.sent'), request_received: t('friends.received'), pending: t('friends.pending'),
       })[state] ?? t('friends.pending'));
       item.append(status);
@@ -3946,7 +3940,7 @@ async function loadFriendsList(tab = friendsActiveTab) {
   if (!sessionUserId) return;
   const requestId = ++friendsRequestSequence;
   const status = document.querySelector(`#friends-status-${tab}`);
-  status.textContent = 'Cargando...';
+  bindI18n(status, 'text', () => t('common.loading'));
   status.className = 'status loading-message';
   try {
     const response = await apiFetch(`/api/amigos?tipo=${tab}`);
@@ -3969,7 +3963,7 @@ async function searchFriends(query, sequence) {
   const sessionUserId = currentSession?.user?.id;
   if (!sessionUserId || sequence !== friendsSearchSequence || friendsActiveTab !== 'search') return;
   const status = document.querySelector('#friends-status-search');
-  status.textContent = 'Buscando...';
+  bindI18n(status, 'text', () => t('common.searching'));
   status.className = 'status loading-message';
   try {
     const response = await apiFetch(`/api/amigos/buscar?q=${encodeURIComponent(query)}`);
@@ -4114,10 +4108,22 @@ async function changeFriendRequest(requestId, action) {
     const response = await apiFetch(`/api/amigos/solicitudes/${encodeURIComponent(requestId)}/${action === 'accept' ? 'aceptar' : 'rechazar'}`, { method: 'POST' });
     if (!response.ok) throw new Error('request unavailable');
     if (sessionUserId !== currentSession?.user?.id) return;
-    friend.status = action === 'accept' ? 'accepted' : 'rejected';
+    if (friendsActiveTab === 'received') friendsRequestSequence += 1;
+    if (action === 'accept') {
+      friend.status = 'accepted';
+    } else {
+      friendsRows.received.delete(friend.userId);
+      const searchRow = friendsRows.search.get(friend.userId);
+      if (searchRow?.relationshipStatus === 'request_received') searchRow.relationshipStatus = 'none';
+      renderFriendRows([...friendsRows.search.values()], 'search');
+      const status = document.querySelector('#friends-status-received');
+      bindI18n(status, 'text', () => friendsRows.received.size ? '' : t('friends.noRequests'));
+      status.className = 'status';
+      if (friendsActiveTab === 'search') scheduleFriendsSearch();
+    }
     refreshSocialGamification();
     void loadFriendsCounts();
-    if (action === 'accept') void loadNotifications({ reset: true });
+    void loadNotifications({ reset: true });
   } catch {
     if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, tr('friends.updateError'));
   } finally {

@@ -137,7 +137,7 @@ export class NotificacionesRepository {
         ...(row.type === 'gift_received' ? { canThank: row.gift_thanked_at == null } : {}),
         ...(row.type === 'friend_request' ? {
           accepted: row.social_request_accepted === true,
-          canAccept: row.social_request_accepted !== true,
+          canAccept: typeof row.social_request_id === 'string' && row.social_request_accepted !== true,
         } : {}),
       })),
       unreadCount,

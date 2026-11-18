@@ -197,6 +197,15 @@ test('los modales usan bordes neutros como los paneles principales', async () =>
   assert.match(css, /\.modal-content\s*\{[^}]*border:\s*1px solid var\(--line\)/s);
 });
 
+test('los campos de fecha mantienen el contenido centrado', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const document = new JSDOM(html).window.document;
+  assert.equal(document.querySelectorAll('input[type="date"]').length, 2);
+  assert.match(css, /input\[type="date"\]\s*\{[^}]*text-align:\s*center/s);
+  assert.match(css, /input\[type="date"\]::-webkit-date-and-time-value\s*\{[^}]*text-align:\s*center/s);
+});
+
 test('cualquier modal bloquea el scroll del fondo hasta cerrar el ultimo dialogo', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
@@ -2498,6 +2507,9 @@ test('el modo Añadir por set distingue resultados de búsqueda, permite reinten
   };
   const lookupResults = [
     { ok: false, status: 404, json: async () => ({ error: 'BRICKSET_NO_ENCONTRADO' }) },
+    { ok: false, status: 404, json: async () => ({ error: 'BRICKSET_NO_ENCONTRADO' }) },
+    { ok: false, status: 404, json: async () => ({ error: 'BRICKSET_NO_ENCONTRADO' }) },
+    { ok: false, status: 404, json: async () => ({ error: 'BRICKSET_NO_ENCONTRADO' }) },
     { ok: false, status: 502, json: async () => ({ error: 'BRICKSET_NO_DISPONIBLE' }) },
     { ok: true, status: 200, json: async () => ({ setNumber: '31154-1', minifigures: [] }) },
     { ok: true, status: 200, json: async () => ({
@@ -2505,10 +2517,16 @@ test('el modo Añadir por set distingue resultados de búsqueda, permite reinten
       minifigures: [{ id: 'NJO1034', nombre: 'Sora', categoria: 'Space', anio: 2025, existente: false }],
     }) },
   ];
+  let delaySetLookup = false;
+  let resolveSetLookup;
   window.fetch = async (url) => {
     if (url === '/categorias') return { ok: true, json: async () => JSON.parse(officialCategoriasRaw) };
     if (url === '/valoracion') return { ok: true, json: async () => ({ total: 0, enColeccion: 0, buscadas: 0 }) };
-    if (url.startsWith('/minifiguras/sets/')) return lookupResults.shift();
+    if (url.startsWith('/minifiguras/sets/')) {
+      const result = lookupResults.shift();
+      if (delaySetLookup) await new Promise((resolve) => { resolveSetLookup = resolve; });
+      return result;
+    }
     return { ok: true, json: async () => [] };
   };
 
@@ -2540,13 +2558,21 @@ test('el modo Añadir por set distingue resultados de búsqueda, permite reinten
   searchSetButton.click();
   assert.equal(document.querySelector('#set-number-dialog').open, true);
   assert.equal(searchSetButton.disabled, true);
-  document.querySelector('#set-number-input').value = '71851';
-  document.querySelector('#set-number-search').click();
-  assert.equal(document.querySelector('#set-number-status').textContent, 'Buscando...');
-  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), true);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
-  assert.equal(document.querySelector('#set-number-status').textContent, 'El set no se encuentra');
+  delaySetLookup = true;
+  for (const language of ['es', 'en', 'it', 'fr']) {
+    await window.MiniPeopleI18n.setLanguage(language);
+    document.querySelector('#set-number-input').value = '71851';
+    document.querySelector('#set-number-search').click();
+    const locale = JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8'));
+    assert.equal(document.querySelector('#set-number-status').textContent, locale['common.searching']);
+    assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), true);
+    resolveSetLookup();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
+    assert.equal(document.querySelector('#set-number-status').textContent, locale['inventory.setNotFound']);
+  }
+  delaySetLookup = false;
+  await window.MiniPeopleI18n.setLanguage('es');
   assert.equal(document.querySelector('#set-number-continue').disabled, true);
 
   document.querySelector('#set-number-search').click();
@@ -2745,6 +2771,19 @@ test('la tabla del set ordena Minipersona por ID y las demás columnas sin alter
     window.eval(script);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const document = window.document;
+    const watchlistHeader = document.querySelector('.set-minifigures-table thead th:nth-child(2)');
+    const statusHeader = document.querySelector('.set-minifigures-table thead th:nth-child(7)');
+    assert.equal(watchlistHeader.textContent, '');
+    assert.equal(statusHeader.textContent, '');
+    for (const language of ['es', 'en', 'it', 'fr']) {
+      await window.MiniPeopleI18n.setLanguage(language);
+      const locale = JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8'));
+      assert.equal(watchlistHeader.getAttribute('aria-label'), locale['common.following']);
+      assert.equal(statusHeader.getAttribute('aria-label'), locale['common.state']);
+      assert.equal(watchlistHeader.textContent, '');
+      assert.equal(statusHeader.textContent, '');
+    }
+    await window.MiniPeopleI18n.setLanguage('es');
     document.querySelector('[data-sort="nombre"]').click();
     document.querySelector('#new-minifigura').click();
     document.querySelector('[data-creation-mode="set"]').click();

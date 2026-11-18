@@ -236,13 +236,9 @@ test('revocar solicitudes propias respeta permisos, estados, cascadas y rollback
         await db.exec(upgrade);
         await db.exec(upgrade);
       }
-      for (const state of ['pending', 'rejected']) {
+      {
         await setActor(sender);
         const requestId = (await db.query('select public.amigos_enviar($1) as data', [recipient])).rows[0].data.requestId;
-        if (state === 'rejected') {
-          await setActor(recipient);
-          await db.query('select public.amigos_rechazar($1)', [requestId]);
-        }
         for (const actor of [recipient, stranger]) {
           await setActor(actor);
           await assert.rejects(db.query('select public.amigos_revocar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
@@ -364,6 +360,35 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await db.query('insert into public.user_profiles(user_id, username) values ($1, $2), ($3, $4), ($5, $6)', [
       userA, 'SpaceFan', userB, 'BrickFan', userC, 'CastleFan',
     ]);
+    await db.exec(`
+      alter table public.friend_requests drop constraint friend_requests_status_check;
+      alter table public.friend_requests add constraint friend_requests_status_check
+        check (status in ('pending', 'rejected', 'accepted'));
+    `);
+    const legacyRequest = (await db.query(`
+      insert into public.friend_requests(sender_id, recipient_id, status)
+      values ($1, $2, 'rejected') returning id
+    `, [userA, userC])).rows[0].id;
+    await db.query(`
+      insert into public.notificaciones(user_id, type, payload, social_request_id)
+      values ($1, 'friend_request', '{"user":"SpaceFan"}'::jsonb, $2)
+    `, [userC, legacyRequest]);
+    const rejectionMigration = await readFile(new URL('../supabase/friend-request-rejection-delete.sql', import.meta.url), 'utf8');
+    await db.exec(rejectionMigration);
+    await db.exec(rejectionMigration);
+    assert.equal((await db.query('select count(*)::integer as total from public.friend_requests where status = $1', ['rejected'])).rows[0].total, 0);
+    assert.deepEqual((await db.query(`
+      select type, social_request_id, social_request_accepted
+      from public.notificaciones where user_id = $1 and type = 'friend_request'
+    `, [userC])).rows, [{ type: 'friend_request', social_request_id: null, social_request_accepted: false }]);
+    await assert.rejects(
+      db.query("insert into public.friend_requests(sender_id, recipient_id, status) values ($1, $2, 'rejected')", [userA, userC]),
+      /friend_requests_status_check/,
+    );
+    for (const role of ['anon', 'service_role', 'authenticated']) {
+      assert.equal((await db.query("select has_function_privilege($1, 'public.amigos_rechazar(uuid)', 'EXECUTE') as allowed", [role])).rows[0].allowed,
+        role === 'authenticated');
+    }
     await db.query('insert into public.gamificacion(user_id, bricks) values ($1, 20), ($2, 40)', [userA, userB]);
 
     assert.equal((await db.query("select has_function_privilege('anon', 'public.amigos_enviar(uuid)', 'EXECUTE') as allowed")).rows[0].allowed, false);
@@ -414,7 +439,7 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     );
     await assert.rejects(db.query('select public.amigos_enviar($1)', [userA]), /AUTORRELACION_NO_PERMITIDA/);
     const sent = (await db.query('select public.amigos_enviar($1) as result', [userB])).rows[0].result;
-    const requestId = sent.requestId;
+    let requestId = sent.requestId;
     assert.equal(sent.status, 'pending');
     assert.equal((await socialSourceCounts()).sent_pending, 1);
     assert.equal((await readGamificationLogros(userA)).find(({ id }) => id === 'first-contact')?.total, 2);
@@ -435,6 +460,10 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     await setActor(userB);
     assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'pending' }]);
     await db.query('select public.amigos_rechazar($1)', [requestId]);
+    assert.deepEqual((await db.query(`
+      select type, social_request_id, social_request_accepted
+      from public.notificaciones where user_id = $1 and type = 'friend_request'
+    `, [userB])).rows, [{ type: 'friend_request', social_request_id: null, social_request_accepted: false }]);
     await setActor(userA);
     assert.deepEqual((await db.query('select status from public.friend_requests')).rows, []);
     assert.equal((await readGamificationLogros(userA)).some(({ id }) => id === 'first-contact'), false);
@@ -442,13 +471,23 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
       friends: 0, sent_pending: 0, accepted_sent: 0, accepted_received: 0,
       global_gifts_received: 1, weekly_gifts_received: 1, thanks_sent: 1, thanks_received: 0,
     });
-    assert.deepEqual((await db.query("select status from public.amigos_listar('sent')")).rows, [{ status: 'pending' }]);
+    assert.deepEqual((await db.query("select status from public.amigos_listar('sent')")).rows, []);
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 0 });
+    assert.equal((await db.query("select relationship_status from public.amigos_buscar('Brick')")).rows[0].relationship_status, 'none');
+    await assert.rejects(db.query('select public.amigos_aceptar($1)', [requestId]), /SOLICITUD_NO_ENCONTRADA/);
+    await setActor(userB);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, []);
+    assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 0 });
+    assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request'")).rows[0].total, 1);
+    await setActor(userA);
+    const resentRequest = (await db.query('select public.amigos_enviar($1) as result', [userB])).rows[0].result;
+    assert.notEqual(resentRequest.requestId, requestId);
+    requestId = resentRequest.requestId;
     assert.equal((await db.query("select relationship_status from public.amigos_buscar('Brick')")).rows[0].relationship_status, 'request_sent');
     assert.equal((await db.query("select public.amigos_resumen('sent') as data")).rows[0].data[0].status, 'pending');
-    await assert.rejects(db.query('select public.amigos_enviar($1)', [userB]), /SOLICITUD_EXISTENTE/);
     await setActor(userB);
+    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'pending' }]);
     assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 0, sent: 0, received: 1 });
-    assert.deepEqual((await db.query('select status from public.amigos_listar($1)', ['received'])).rows, [{ status: 'rejected' }]);
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
     await db.query('select public.amigos_aceptar($1)', [requestId]);
     assert.deepEqual((await db.query('select public.amigos_contadores() as data')).rows[0].data, { friends: 1, sent: 0, received: 0 });
@@ -458,7 +497,7 @@ test('RPC de amigos aísla participantes y gestiona solicitudes de forma atómic
     assert.equal((await db.query("select count(*)::integer as total from public.notificaciones where type = 'friend_request_accepted'")).rows[0].total, 0);
     await setActor(userB);
     assert.equal((await socialSourceCounts()).accepted_received, 1);
-    assert.deepEqual((await db.query("select social_request_accepted, is_read from public.notificaciones where type = 'friend_request'")).rows, [
+    assert.deepEqual((await db.query("select social_request_accepted, is_read from public.notificaciones where type = 'friend_request' and social_request_id = $1", [requestId])).rows, [
       { social_request_accepted: true, is_read: false },
     ]);
     await setActor(userA);
@@ -1504,11 +1543,19 @@ test('el mock social deriva identidad del JWT, limita lecturas y revierte acepta
 
   const sent = await clientA.rpc('amigos_enviar', { p_receptor_id: 'user-b' });
   assert.equal(sent.error, null);
-  const requestId = sent.data.requestId;
+  let requestId = sent.data.requestId;
   assert.equal(mock.rows('notificaciones', 'user-b')[0].type, 'friend_request');
   assert.equal((await clientA.rpc('amigos_enviar', { p_receptor_id: 'user-b' })).error.message, 'SOLICITUD_EXISTENTE');
   assert.equal((await clientB.rpc('amigos_rechazar', { p_solicitud_id: requestId })).data.status, 'rejected');
-  assert.deepEqual((await clientB.rpc('amigos_listar', { p_tipo: 'received' })).data.map(({ status }) => status), ['rejected']);
+  assert.deepEqual((await clientB.rpc('amigos_listar', { p_tipo: 'received' })).data, []);
+  assert.equal(mock.rows('notificaciones', 'user-b').length, 1);
+  assert.equal(mock.rows('notificaciones', 'user-b')[0].social_request_id, null);
+  assert.equal(mock.rows('notificaciones', 'user-b')[0].payload.user, 'SpaceFan');
+  assert.equal((await clientB.rpc('amigos_aceptar', { p_solicitud_id: requestId })).error.message, 'SOLICITUD_NO_ENCONTRADA');
+  const resent = await clientA.rpc('amigos_enviar', { p_receptor_id: 'user-b' });
+  assert.equal(resent.error, null);
+  assert.notEqual(resent.data.requestId, requestId);
+  requestId = resent.data.requestId;
   assert.equal((await clientB.rpc('amigos_aceptar', { p_solicitud_id: requestId })).data.status, 'accepted');
   assert.equal((await clientA.rpc('amigos_listar', { p_tipo: 'friends' })).data[0].user_id, 'user-b');
   assert.equal((await clientA.rpc('amigos_aceptar', { p_solicitud_id: requestId })).error.message, 'SOLICITUD_NO_ENCONTRADA');

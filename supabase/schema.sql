@@ -1539,7 +1539,7 @@ create table if not exists public.friend_requests (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint friend_requests_distinct_users_check check (sender_id <> recipient_id),
-  constraint friend_requests_status_check check (status in ('pending', 'rejected', 'accepted')),
+  constraint friend_requests_status_check check (status in ('pending', 'accepted')),
   constraint friend_requests_pair_key unique (pair_low_id, pair_high_id)
 );
 
@@ -1562,7 +1562,8 @@ alter table public.notificaciones add column if not exists social_request_id uui
 alter table public.notificaciones add column if not exists social_request_accepted boolean not null default false;
 alter table public.notificaciones drop constraint if exists notificaciones_social_reference_check;
 alter table public.notificaciones add constraint notificaciones_social_reference_check check (
-  (type in ('friend_request', 'friend_request_accepted') and social_request_id is not null)
+  (type = 'friend_request' and (social_request_id is not null or social_request_accepted = false))
+  or (type = 'friend_request_accepted' and social_request_id is not null)
   or (type not in ('friend_request', 'friend_request_accepted') and social_request_id is null)
 );
 alter table public.notificaciones drop constraint if exists notificaciones_social_payload_check;
@@ -1919,9 +1920,8 @@ begin
     case
       when friendship.user_low_id is not null then 'friend'
       when request.id is null then 'none'
-      when request.sender_id = current_user_id and request.status in ('pending', 'rejected') then 'request_sent'
+      when request.sender_id = current_user_id and request.status = 'pending' then 'request_sent'
       when request.recipient_id = current_user_id and request.status = 'pending' then 'request_received'
-      when request.status = 'rejected' then 'request_rejected'
       else 'none'
     end
   from public.user_profiles profile
@@ -1986,7 +1986,7 @@ begin
     from public.friend_requests request
     where ((p_tipo = 'sent' and request.sender_id = current_user_id)
       or (p_tipo = 'received' and request.recipient_id = current_user_id))
-      and request.status in ('pending', 'rejected')
+      and request.status = 'pending'
   )
   select relations.relation_id, profile.user_id, profile.username,
     coalesce(profile.avatar_url, public_profile.avatar_url),
@@ -2067,9 +2067,10 @@ begin
   if request_status = 'accepted' then
     raise exception using errcode = '23514', message = 'SOLICITUD_YA_ACEPTADA';
   end if;
-  if request_status = 'pending' then
-    update public.friend_requests set status = 'rejected', updated_at = now() where id = p_solicitud_id;
-  end if;
+  update public.notificaciones
+  set social_request_id = null
+  where type = 'friend_request' and social_request_id = p_solicitud_id and user_id = current_user_id;
+  delete from public.friend_requests where id = p_solicitud_id;
   perform private.gamificacion_reconstruir_social(array[request_sender_id, current_user_id]);
   return jsonb_build_object('ok', true, 'status', 'rejected');
 end;
@@ -2122,7 +2123,7 @@ $$;
 revoke all on function public.amigos_buscar(text) from public, anon;
 revoke all on function public.amigos_listar(text) from public, anon;
 revoke all on function public.amigos_enviar(uuid) from public, anon;
-revoke all on function public.amigos_rechazar(uuid) from public, anon;
+revoke all on function public.amigos_rechazar(uuid) from public, anon, service_role;
 revoke all on function public.amigos_aceptar(uuid) from public, anon;
 grant execute on function public.amigos_buscar(text) to authenticated;
 grant execute on function public.amigos_listar(text) to authenticated;
@@ -2384,7 +2385,7 @@ begin
   select request.recipient_id into recipient_id
   from public.friend_requests request
   where request.id = p_solicitud_id and request.sender_id = actor_id
-    and request.status in ('pending', 'rejected')
+    and request.status = 'pending'
   for update;
   if not found then
     raise exception using errcode = 'P0002', message = 'SOLICITUD_NO_ENCONTRADA';
@@ -2413,8 +2414,8 @@ begin
   end if;
   return jsonb_build_object(
     'friends', (select count(*) from public.friendships where actor_id in (user_low_id, user_high_id)),
-    'sent', (select count(*) from public.friend_requests where sender_id = actor_id and status in ('pending', 'rejected')),
-    'received', (select count(*) from public.friend_requests where recipient_id = actor_id and status in ('pending', 'rejected'))
+    'sent', (select count(*) from public.friend_requests where sender_id = actor_id and status = 'pending'),
+    'received', (select count(*) from public.friend_requests where recipient_id = actor_id and status = 'pending')
   );
 end;
 $$;

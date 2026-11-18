@@ -55,6 +55,20 @@ function createBrowser({ fetchCatalog, remembered, unavailableStorage = false } 
   return { dom, window, i18n: window.MiniPeopleI18n, requests, warnings };
 }
 
+test('la interfaz no muestra Brickset en etiquetas o mensajes del formulario', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const document = new JSDOM(html).window.document;
+  assert.equal(document.querySelector('#form-brickset-price-label').textContent, 'Precio de mercado');
+  assert.equal(document.querySelector('#individual-create-preview').getAttribute('aria-label'), 'Vista previa');
+
+  for (const language of ['es', 'en', 'fr', 'it']) {
+    const catalog = JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8'));
+    for (const key of ['inventory.bricksetPrice', 'inventory.bricksetPreview', 'inventory.priceInvalid', 'inventory.categoryInvalid']) {
+      assert.doesNotMatch(catalog[key], /brickset/i, `${language}:${key}`);
+    }
+  }
+});
+
 test('idioma inicial, plurales, respaldo diagnosticado y parametros seguros sin traducir datos externos', async () => {
   const { dom, window, i18n, requests, warnings } = createBrowser();
   try {

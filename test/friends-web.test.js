@@ -18,7 +18,11 @@ const friendRows = {
   received: [{ userId: 'friend-c', username: 'SpaceFan', avatarUrl: null, bricks: 120, level: { id: 3, name: 'Level' }, globalPosition: 7, relationshipId: 'request-c', status: 'pending' }],
 };
 
-function createApp({ failLists = false, failSearch = false, failActions = false, failProfile = false, searchFriend = false, profileOverrides = {}, catalog = [], minifiguraError = null, rankingEntries = [] } = {}) {
+function createApp({
+  failLists = false, failSearch = false, failActions = false, failProfile = false,
+  searchFriend = false, searchRelationshipStatus = 'none', receivedRows = friendRows.received,
+  profileOverrides = {}, catalog = [], minifiguraError = null, rankingEntries = [],
+} = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.HTMLCanvasElement.prototype.getContext = () => ({});
@@ -38,6 +42,7 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
   };
   const requests = [];
   const revokedRequests = new Set();
+  const rejectedRequests = new Set();
   const storedCatalog = structuredClone(catalog);
   let removed = false;
   let gamificationState = { bricks: 0, nivel: { id: 0, nombre: 'Duplo' }, progreso: { porcentaje: 0 }, logros: [] };
@@ -62,7 +67,7 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     if (url === '/sincronizacion/brickset') return { ok: true, json: async () => ({ estado: 'idle' }) };
     if (url === '/api/profile') return { ok: true, json: async () => ({ username: 'Viewer', onboardingCompleted: true, favoriteCategories: [], currency: 'EUR', language: 'es', avatarUrl: null }) };
     if (url.startsWith('/api/notificaciones')) return { ok: true, json: async () => ({ notifications: [], unreadCount: 0, nextCursor: null }) };
-    if (url === '/api/amigos/contadores') return { ok: true, json: async () => ({ friends: removed ? 0 : 1, sent: 2 - revokedRequests.size, received: 3 }) };
+    if (url === '/api/amigos/contadores') return { ok: true, json: async () => ({ friends: removed ? 0 : 1, sent: 2 - revokedRequests.size, received: 3 - rejectedRequests.size }) };
     if (init.method === 'DELETE' && url.startsWith('/api/amigos/solicitudes/')) {
       if (!failActions) revokedRequests.add(url.split('/').at(-1));
       return { ok: !failActions, json: async () => ({ ok: !failActions }) };
@@ -76,16 +81,19 @@ function createApp({ failLists = false, failSearch = false, failActions = false,
     }
     if (url.startsWith('/api/amigos?tipo=')) {
       const type = new URL(url, 'http://localhost').searchParams.get('tipo');
+      const rows = type === 'received' ? receivedRows : friendRows[type] ?? [];
       return { ok: !failLists, json: async () => failLists ? { error: 'AMIGOS_NO_DISPONIBLES' } : {
-        users: structuredClone((friendRows[type] ?? []).filter(({ relationshipId }) => !revokedRequests.has(relationshipId))),
+        users: structuredClone(rows.filter(({ relationshipId }) => !revokedRequests.has(relationshipId) && !rejectedRequests.has(relationshipId))),
       } };
     }
     if (url.startsWith('/api/amigos/buscar?')) {
       return { ok: !failSearch, json: async () => failSearch ? { error: 'AMIGOS_NO_DISPONIBLES' } : { users: [
-        { userId: 'search-user', username: 'SpaceFan', avatarUrl: null, bricks: 35, level: { id: 1, name: 'Level' }, globalPosition: 8, relationshipStatus: searchFriend && !removed ? 'friend' : 'none' },
+        { userId: 'search-user', username: 'SpaceFan', avatarUrl: null, bricks: 35, level: { id: 1, name: 'Level' }, globalPosition: 8, relationshipStatus: searchFriend && !removed ? 'friend' : rejectedRequests.size ? 'none' : searchRelationshipStatus },
       ] } };
     }
     if (url === '/api/amigos/solicitudes' || url.startsWith('/api/amigos/solicitudes/')) {
+      const rejection = url.match(/^\/api\/amigos\/solicitudes\/([^/]+)\/rechazar$/);
+      if (init.method === 'POST' && rejection && !failActions) rejectedRequests.add(rejection[1]);
       return { ok: !failActions, status: failActions ? 500 : 200, json: async () => failActions ? { error: 'AMIGOS_NO_DISPONIBLES' } : { ok: true, requestId: '00000000-0000-4000-8000-000000000001', status: 'accepted' } };
     }
     if (url.startsWith('/api/amigos/') && url.endsWith('/perfil')) {
@@ -808,7 +816,97 @@ test('las listas anuncian errores controlados y las cuatro pestañas consultan s
   }
 });
 
-test('busca solo desde tres caracteres, envía una vez y conserva acciones de rechazo y aceptación', async () => {
+test('los estados de carga y búsqueda de amistades siguen el idioma activo', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    await window.MiniPeopleI18n.setLanguage('es');
+    let resolveList;
+    let resolveSearch;
+    const originalFetch = window.fetch;
+    window.fetch = (url, init) => {
+      if (url === '/api/amigos?tipo=friends') return new Promise((resolve) => { resolveList = resolve; });
+      if (url.startsWith('/api/amigos/buscar?')) return new Promise((resolve) => { resolveSearch = resolve; });
+      return originalFetch(url, init);
+    };
+
+    const document = window.document;
+    document.querySelector('#open-friends').click();
+    const listStatus = document.querySelector('#friends-status-friends');
+    for (const language of ['es', 'en', 'it', 'fr']) {
+      await window.MiniPeopleI18n.setLanguage(language);
+      const locale = JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8'));
+      assert.equal(listStatus.textContent, locale['common.loading']);
+    }
+    resolveList({ ok: true, json: async () => ({ users: [] }) });
+    await tick();
+
+    document.querySelector('#friends-tab-search').click();
+    const search = document.querySelector('#friends-search');
+    search.value = 'Spa';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const searchStatus = document.querySelector('#friends-status-search');
+    for (const language of ['es', 'en', 'it', 'fr']) {
+      await window.MiniPeopleI18n.setLanguage(language);
+      const locale = JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8'));
+      assert.equal(searchStatus.textContent, locale['common.searching']);
+    }
+    resolveSearch({ ok: true, json: async () => ({ users: [] }) });
+    await tick();
+    const frenchLocale = JSON.parse(await readFile(new URL('../public/locales/fr.json', import.meta.url), 'utf8'));
+    assert.equal(searchStatus.textContent, frenchLocale['friends.noResults']);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('rechazar elimina la solicitud y habilita un nuevo envio desde la busqueda', async () => {
+  const { dom, window, requests } = createApp({
+    receivedRows: [{
+      userId: 'search-user', username: 'SpaceFan', avatarUrl: null, bricks: 35,
+      level: { id: 1, name: 'Level' }, globalPosition: 8, relationshipId: 'request-search', status: 'pending',
+    }],
+    searchRelationshipStatus: 'request_received',
+  });
+  try {
+    await tick();
+    await tick();
+    const document = window.document;
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-search').click();
+    const search = document.querySelector('#friends-search');
+    search.value = 'Spa';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(document.querySelector('.friends-send-request'), null);
+    assert.equal(document.querySelector('#friends-list-search .friends-request-state').textContent, 'Recibida');
+
+    document.querySelector('#friends-tab-received').click();
+    await tick();
+    document.querySelector('.friends-reject-request').click();
+    await tick();
+    await tick();
+    assert.equal(document.querySelectorAll('#friends-list-received .friends-username').length, 0);
+    assert.equal(document.querySelector('#friends-status-received').textContent, 'No hay solicitudes.');
+
+    document.querySelector('#friends-tab-search').click();
+    await tick();
+    assert.equal(document.querySelector('#friends-list-search .friends-request-state'), null);
+    assert.ok(document.querySelector('.friends-send-request'));
+    document.querySelector('.friends-send-request').click();
+    await tick();
+    await tick();
+    assert.equal(document.querySelector('#friends-list-search .friends-request-state').textContent, 'Enviada');
+    assert.equal(requests.some(({ url }) => url.endsWith('/request-search/rechazar')), true);
+    assert.equal(requests.filter(({ url, init }) => url === '/api/amigos/solicitudes' && init.method === 'POST').length, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('busca solo desde tres caracteres, envía una vez y conserva la aceptación', async () => {
   const { dom, window, requests, setGamificationState } = createApp();
   try {
     await tick();
@@ -853,12 +951,7 @@ test('busca solo desde tres caracteres, envía una vez y conserva acciones de re
 
     document.querySelector('#friends-tab-received').click();
     await tick();
-    const reject = document.querySelector('.friends-reject-request');
-    const requestId = reject.dataset.requestId;
-    reject.click();
-    await tick();
-    assert.equal(document.querySelector('#friends-list-received .friends-request-state').textContent, 'Rechazada');
-    assert.equal(document.querySelector('.friends-reject-request'), null);
+    const requestId = document.querySelector('.friends-accept-request').dataset.requestId;
     setGamificationState({
       bricks: 5,
       nivel: { id: 0, nombre: 'Duplo' },
@@ -879,7 +972,6 @@ test('busca solo desde tres caracteres, envía una vez y conserva acciones de re
     await new Promise((resolve) => setTimeout(resolve, 350));
     assert.ok([...document.querySelectorAll('#toast-region .toast-task')]
       .some((toast) => toast.textContent.trim() === 'Handshake +3 Bricks'));
-    assert.equal(requests.some(({ url }) => url.endsWith(`/${requestId}/rechazar`)), true);
     assert.equal(requests.some(({ url }) => url.endsWith(`/${requestId}/aceptar`)), true);
 
     document.querySelector('#friends-tab-friends').click();

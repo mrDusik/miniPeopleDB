@@ -470,9 +470,9 @@ Esta acción no se puede deshacer.</p>
         </table>
       </div>
       <nav data-i18n-aria-label="inventory.pagination" id="catalog-pagination" class="catalog-pagination" aria-label="Paginación del catálogo">
-        <button data-i18n="common.previous" type="button" id="previous-page" class="button button-secondary button-small">Anterior</button>
+        <button data-i18n-aria-label="common.previous" type="button" id="previous-page" class="button button-secondary button-small" aria-label="Anterior">&lt;</button>
         <span data-i18n="inventory.initialPage" id="page-status" aria-live="polite">Página 1 de 1</span>
-        <button data-i18n="common.next" type="button" id="next-page" class="button button-secondary button-small">Siguiente</button>
+        <button data-i18n-aria-label="common.next" type="button" id="next-page" class="button button-secondary button-small" aria-label="Siguiente">&gt;</button>
       </nav>
     </section>
 
@@ -545,14 +545,14 @@ Esta acción no se puede deshacer.</p>
                 <input id="form-anio" name="anio" type="number" class="input-readonly" readonly required>
               </label>
               <label>
-                <span id="form-brickset-price-label" data-i18n="inventory.bricksetPrice">Precio Brickset</span>
+                <span id="form-brickset-price-label" data-i18n="inventory.bricksetPrice">Precio de mercado</span>
                 <input id="form-precio" name="precio" type="number" min="0" step="0.01" class="input-readonly" readonly required>
               </label>
             </div>
           </div>
           <p id="form-error" class="form-error" role="alert"></p>
         </div>
-        <aside data-i18n-aria-label="inventory.bricksetPreview" id="individual-create-preview" class="modal-preview" aria-label="Previsualización Brickset">
+        <aside data-i18n-aria-label="inventory.bricksetPreview" id="individual-create-preview" class="modal-preview" aria-label="Vista previa">
           <img id="form-preview-image" alt="">
         </aside>
         <section data-i18n-aria-label="inventory.setFigures" id="set-create-section" class="set-create-section" aria-label="Minipersonas del set" hidden>
@@ -572,12 +572,12 @@ Esta acción no se puede deshacer.</p>
               <thead>
                 <tr>
                   <th data-i18n-aria-label="common.image" scope="col" aria-label="Imagen"></th>
-                  <th data-i18n="common.following" scope="col">Seguimiento</th>
+                  <th data-i18n-aria-label="common.following" scope="col" aria-label="Seguimiento"></th>
                   <th scope="col"><button data-i18n="inventory.figureHeading" type="button" class="table-sort" data-set-sort="id">Minipersona</button></th>
                   <th scope="col"><button data-i18n="common.category" type="button" class="table-sort" data-set-sort="categoria">Categoría</button></th>
                   <th scope="col"><button data-i18n="common.subcategory" type="button" class="table-sort" data-set-sort="subcategoria">Subcategoría</button></th>
                   <th scope="col"><button data-i18n="common.year" type="button" class="table-sort" data-set-sort="anio">Año</button></th>
-                  <th data-i18n="common.state" scope="col">Estado</th>
+                  <th data-i18n-aria-label="common.state" scope="col" aria-label="Estado"></th>
                   <th scope="col"><button data-i18n="common.price" type="button" class="table-sort" data-set-sort="precio">Precio</button></th>
                 </tr>
               </thead>
@@ -822,9 +822,9 @@ Esta acción no se puede deshacer.</p>
               <tbody></tbody>
             </table>
             <nav data-i18n-aria-label="history.valuePages" class="analytics-history-pagination" aria-label="Paginación de Colección y Valor" hidden>
-              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-value-table">Anterior</button>
+              <button data-i18n-aria-label="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-label="Anterior" aria-controls="analytics-history-value-table">&lt;</button>
               <span role="status" aria-live="polite"></span>
-              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-value-table">Siguiente</button>
+              <button data-i18n-aria-label="common.next" type="button" class="button button-secondary" data-history-page="1" aria-label="Siguiente" aria-controls="analytics-history-value-table">&gt;</button>
             </nav>
           </details>
         </details>
@@ -839,9 +839,9 @@ Esta acción no se puede deshacer.</p>
               <tbody></tbody>
             </table>
             <nav data-i18n-aria-label="history.dnaPages" class="analytics-history-pagination" aria-label="Paginación de DNA" hidden>
-              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-dna-table">Anterior</button>
+              <button data-i18n-aria-label="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-label="Anterior" aria-controls="analytics-history-dna-table">&lt;</button>
               <span role="status" aria-live="polite"></span>
-              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-dna-table">Siguiente</button>
+              <button data-i18n-aria-label="common.next" type="button" class="button button-secondary" data-history-page="1" aria-label="Siguiente" aria-controls="analytics-history-dna-table">&gt;</button>
             </nav>
           </details>
         </details>
@@ -856,9 +856,9 @@ Esta acción no se puede deshacer.</p>
               <tbody></tbody>
             </table>
             <nav data-i18n-aria-label="history.bricksPages" class="analytics-history-pagination" aria-label="Paginación de Bricks y Nivel" hidden>
-              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-progression-table">Anterior</button>
+              <button data-i18n-aria-label="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-label="Anterior" aria-controls="analytics-history-progression-table">&lt;</button>
               <span role="status" aria-live="polite"></span>
-              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-progression-table">Siguiente</button>
+              <button data-i18n-aria-label="common.next" type="button" class="button button-secondary" data-history-page="1" aria-label="Siguiente" aria-controls="analytics-history-progression-table">&gt;</button>
             </nav>
           </details>
         </details>

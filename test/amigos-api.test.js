@@ -63,7 +63,7 @@ test('amigos exige sesión y búsqueda parcial con mínimo de tres caracteres', 
   }
 });
 
-test('solicitudes se envían una vez, se pueden rechazar y aceptar después con listas recíprocas', async () => {
+test('el rechazo elimina la solicitud y permite reenviar antes de aceptar', async () => {
   const mock = friendsMock();
   const context = await startTestServer({ supabase: mock });
   const sender = authFetch(TOKEN_A);
@@ -81,7 +81,7 @@ test('solicitudes se envían una vez, se pueden rechazar y aceptar después con 
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receptorId: USER_B }),
     });
     assert.equal(sent.status, 201);
-    const request = await sent.json();
+    let request = await sent.json();
     assert.equal(request.status, 'pending');
     assert.equal(mock.rows('notificaciones', USER_B)[0].payload.user, 'SpaceFan');
 
@@ -94,16 +94,34 @@ test('solicitudes se envían una vez, se pueden rechazar y aceptar después con 
 
     const received = await receiver(`${context.baseUrl}/api/amigos?tipo=received`);
     assert.equal((await received.json()).users[0].status, 'pending');
-    const sentBeforeRejection = await (await sender(`${context.baseUrl}/api/amigos?tipo=sent`)).json();
-    const searchBeforeRejection = await (await sender(`${context.baseUrl}/api/amigos/buscar?q=Brick`)).json();
-    const countsBeforeRejection = await (await sender(`${context.baseUrl}/api/amigos/contadores`)).json();
-    const rejected = await receiver(`${context.baseUrl}/api/amigos/solicitudes/${request.requestId}/rechazar`, { method: 'POST' });
+    const rejectedRequestId = request.requestId;
+    const originalNotification = mock.rows('notificaciones', USER_B)[0];
+    const rejected = await receiver(`${context.baseUrl}/api/amigos/solicitudes/${rejectedRequestId}/rechazar`, { method: 'POST' });
     assert.deepEqual(await rejected.json(), { ok: true, status: 'rejected', alreadyAccepted: false });
-    assert.deepEqual((await (await receiver(`${context.baseUrl}/api/amigos?tipo=received`)).json()).users.map(({ status }) => status), ['rejected']);
-    assert.equal(mock.rows('notificaciones', USER_A).length, 0);
-    assert.deepEqual(await (await sender(`${context.baseUrl}/api/amigos?tipo=sent`)).json(), sentBeforeRejection);
-    assert.deepEqual(await (await sender(`${context.baseUrl}/api/amigos/buscar?q=Brick`)).json(), searchBeforeRejection);
-    assert.deepEqual(await (await sender(`${context.baseUrl}/api/amigos/contadores`)).json(), countsBeforeRejection);
+    const staleAccept = await receiver(`${context.baseUrl}/api/amigos/solicitudes/${rejectedRequestId}/aceptar`, { method: 'POST' });
+    assert.equal(staleAccept.status, 404);
+    assert.deepEqual(await staleAccept.json(), { error: 'SOLICITUD_NO_ENCONTRADA' });
+    assert.deepEqual((await (await receiver(`${context.baseUrl}/api/amigos?tipo=received`)).json()).users, []);
+    assert.deepEqual(mock.rows('notificaciones', USER_B), [{ ...originalNotification, social_request_id: null }]);
+    const inboxAfterReject = await (await receiver(`${context.baseUrl}/api/notificaciones`)).json();
+    assert.equal(inboxAfterReject.notifications.length, 1);
+    assert.equal(inboxAfterReject.notifications[0].id, originalNotification.id);
+    assert.equal(inboxAfterReject.notifications[0].data.user, 'SpaceFan');
+    assert.equal(inboxAfterReject.notifications[0].canAccept, false);
+    assert.equal((await receiver(`${context.baseUrl}/api/notificaciones/${originalNotification.id}/aceptar`, { method: 'POST' })).status, 404);
+    assert.deepEqual((await (await sender(`${context.baseUrl}/api/amigos?tipo=sent`)).json()).users, []);
+    assert.equal((await (await sender(`${context.baseUrl}/api/amigos/buscar?q=Brick`)).json()).users[0].relationshipStatus, 'none');
+    assert.deepEqual(await (await sender(`${context.baseUrl}/api/amigos/contadores`)).json(), { friends: 0, sent: 0, received: 0 });
+    assert.deepEqual(await (await receiver(`${context.baseUrl}/api/amigos/contadores`)).json(), { friends: 0, sent: 0, received: 0 });
+    const resent = await sender(sendUrl, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ receptorId: USER_B }),
+    });
+    assert.equal(resent.status, 201);
+    request = await resent.json();
+    assert.equal(request.status, 'pending');
+    assert.notEqual(request.requestId, rejectedRequestId);
+    assert.deepEqual(mock.rows('notificaciones', USER_B).map(({ social_request_id }) => social_request_id), [null, request.requestId]);
+    assert.deepEqual((await (await receiver(`${context.baseUrl}/api/amigos?tipo=received`)).json()).users.map(({ status }) => status), ['pending']);
 
     const accepted = await receiver(`${context.baseUrl}/api/amigos/solicitudes/${request.requestId}/aceptar`, { method: 'POST' });
     assert.deepEqual(await accepted.json(), { ok: true, status: 'accepted', alreadyAccepted: false });
@@ -120,7 +138,7 @@ test('solicitudes se envían una vez, se pueden rechazar y aceptar después con 
   }
 });
 
-test('revocar solicitudes retira ambas listas y permite reiniciar sin revelar rechazos', async () => {
+test('revocar solicitudes pendientes retira ambas listas y permite reiniciar', async () => {
   const mock = friendsMock();
   const context = await startTestServer({ supabase: mock });
   const sender = authFetch(TOKEN_A);
@@ -133,33 +151,30 @@ test('revocar solicitudes retira ambas listas y permite reiniciar sin revelar re
     assert.equal((await sender(`${base}/${USER_B}?userId=${USER_A}`, { method: 'DELETE' })).status, 400);
     assert.equal((await sender(`${base}/${USER_B}`, { method: 'DELETE', body: '{}' })).status, 400);
     assert.equal((await sender(`${base}/${USER_B}`, { method: 'POST' })).status, 405);
-    for (const rejected of [false, true]) {
-      const request = await (await sender(base, { method: 'POST', body: JSON.stringify({ receptorId: USER_B }) })).json();
-      const url = `${base}/${request.requestId}`;
-      if (rejected) await receiver(`${url}/rechazar`, { method: 'POST' });
-      for (const caller of [receiver, outsider]) {
-        const denied = await caller(url, { method: 'DELETE' });
-        assert.equal(denied.status, 404);
-        assert.deepEqual(await denied.json(), { error: 'SOLICITUD_NO_ENCONTRADA' });
-      }
-      mock.failNext('friend_requests', { code: 'XX000', message: 'private SQL detail' }, 'delete');
-      const failed = await sender(url, { method: 'DELETE' });
-      assert.equal(failed.status, 500);
-      assert.deepEqual(await failed.json(), { error: 'AMIGOS_NO_DISPONIBLES' });
-      assert.equal(mock.rows('friend_requests').length, 1);
-      assert.equal(mock.rows('notificaciones', USER_B).length, 1);
-      const revoked = await sender(url, { method: 'DELETE' });
-      assert.equal(revoked.status, 200);
-      assert.equal(revoked.headers.get('cache-control'), 'no-store');
-      assert.deepEqual(await revoked.json(), { ok: true });
-      for (const [caller, type] of [[sender, 'sent'], [receiver, 'received']]) {
-        assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos?tipo=${type}`)).json(), { users: [] });
-        assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos/contadores`)).json(), { friends: 0, sent: 0, received: 0 });
-      }
-      assert.equal(mock.rows('notificaciones', USER_B).length, 0);
-      assert.equal((await receiver(`${url}/aceptar`, { method: 'POST' })).status, 404);
-      assert.equal((await sender(url, { method: 'DELETE' })).status, 404);
+    const request = await (await sender(base, { method: 'POST', body: JSON.stringify({ receptorId: USER_B }) })).json();
+    const url = `${base}/${request.requestId}`;
+    for (const caller of [receiver, outsider]) {
+      const denied = await caller(url, { method: 'DELETE' });
+      assert.equal(denied.status, 404);
+      assert.deepEqual(await denied.json(), { error: 'SOLICITUD_NO_ENCONTRADA' });
     }
+    mock.failNext('friend_requests', { code: 'XX000', message: 'private SQL detail' }, 'delete');
+    const failed = await sender(url, { method: 'DELETE' });
+    assert.equal(failed.status, 500);
+    assert.deepEqual(await failed.json(), { error: 'AMIGOS_NO_DISPONIBLES' });
+    assert.equal(mock.rows('friend_requests').length, 1);
+    assert.equal(mock.rows('notificaciones', USER_B).length, 1);
+    const revoked = await sender(url, { method: 'DELETE' });
+    assert.equal(revoked.status, 200);
+    assert.equal(revoked.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await revoked.json(), { ok: true });
+    for (const [caller, type] of [[sender, 'sent'], [receiver, 'received']]) {
+      assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos?tipo=${type}`)).json(), { users: [] });
+      assert.deepEqual(await (await caller(`${context.baseUrl}/api/amigos/contadores`)).json(), { friends: 0, sent: 0, received: 0 });
+    }
+    assert.equal(mock.rows('notificaciones', USER_B).length, 0);
+    assert.equal((await receiver(`${url}/aceptar`, { method: 'POST' })).status, 404);
+    assert.equal((await sender(url, { method: 'DELETE' })).status, 404);
     const next = await (await sender(base, { method: 'POST', body: JSON.stringify({ receptorId: USER_B }) })).json();
     await receiver(`${base}/${next.requestId}/aceptar`, { method: 'POST' });
     assert.equal((await sender(`${base}/${next.requestId}`, { method: 'DELETE' })).status, 404);

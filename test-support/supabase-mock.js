@@ -600,7 +600,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
 
     if (name === 'amigos_revocar') {
       const request = tables.friend_requests.find(({ id, sender_id, status }) =>
-        id === parameters?.p_solicitud_id && sender_id === uid && ['pending', 'rejected'].includes(status));
+        id === parameters?.p_solicitud_id && sender_id === uid && status === 'pending');
       if (!request) return { data: null, error: { code: 'P0002', message: 'SOLICITUD_NO_ENCONTRADA' } };
       const failure = takeFailure('friend_requests', 'delete') ?? takeFailure('notificaciones', 'delete');
       if (failure) return { data: null, error: failure };
@@ -614,8 +614,8 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     if (name === 'amigos_contadores') {
       return { data: {
         friends: tables.friendships.filter((row) => [row.user_low_id, row.user_high_id].includes(uid)).length,
-        sent: tables.friend_requests.filter((row) => row.sender_id === uid && ['pending', 'rejected'].includes(row.status)).length,
-        received: tables.friend_requests.filter((row) => row.recipient_id === uid && ['pending', 'rejected'].includes(row.status)).length,
+        sent: tables.friend_requests.filter((row) => row.sender_id === uid && row.status === 'pending').length,
+        received: tables.friend_requests.filter((row) => row.recipient_id === uid && row.status === 'pending').length,
       }, error: null };
     }
 
@@ -633,8 +633,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
           const request = requestForPair(uid, user_id);
           const relationshipStatus = friendship ? 'friend'
             : !request ? 'none'
-              : request.sender_id === uid ? 'request_sent'
-                : request.status === 'rejected' ? 'request_rejected' : 'request_received';
+              : request.sender_id === uid ? 'request_sent' : 'request_received';
           return { ...summary, relationship_status: relationshipStatus };
         });
       return { data, error: null };
@@ -655,7 +654,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
             created_at: friendship.created_at,
           }));
       } else {
-        relations = tables.friend_requests.filter((request) => request.status !== 'accepted'
+        relations = tables.friend_requests.filter((request) => request.status === 'pending'
           && (type === 'sent' ? request.sender_id === uid : request.recipient_id === uid))
           .map((request) => ({
             relationship_id: request.id,
@@ -758,8 +757,13 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
       if (!request) return { data: null, error: { code: 'P0002', message: 'SOLICITUD_NO_ENCONTRADA' } };
       if (name === 'amigos_rechazar') {
         if (request.status === 'accepted') return { data: null, error: { code: '23514', message: 'SOLICITUD_YA_ACEPTADA' } };
-        request.status = 'rejected';
-        request.updated_at = timestamp();
+        const failure = takeFailure('friend_requests', 'delete');
+        if (failure) return { data: null, error: failure };
+        for (const notification of tables.notificaciones) {
+          if (notification.type === 'friend_request' && notification.social_request_id === request.id
+            && notification.user_id === uid) notification.social_request_id = null;
+        }
+        tables.friend_requests = tables.friend_requests.filter((row) => row !== request);
         rebuildSocialGamification(request.sender_id);
         rebuildSocialGamification(uid);
         return { data: { ok: true, status: 'rejected' }, error: null };
