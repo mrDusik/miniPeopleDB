@@ -138,22 +138,27 @@ test('la pagina referencia controles y estados necesarios para la consulta', asy
     ]) {
       assert.ok(modalDocument.window.document.querySelector(`#${dialogId} > .modal-dialog-heading`), dialogId);
     }
-    modalDocument.window.close();
-
-    for (const expected of ['name="id"', 'name="categoria"', '<option value="" selected>Todas</option>', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', '<option value="BUSCADA">Búsqueda</option>', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
+    for (const expected of ['name="id"', 'name="categoria"', 'name="subcategoria"', 'name="anio"', 'name="estadoColeccion"', 'Buscar', 'Reestablecer', 'id="catalog-body"']) {
       assert.match(html, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       assert.match(html, /id="filter-coleccion"/);
       assert.match(html, /id="filter-buscada"/);
     }
     assert.ok(html.indexOf('name="nombre"') < html.indexOf('name="id"'));
-    assert.match(html, /id="show-all"[^>]*>Reestablecer<\/button>\s*<div class="form-actions">\s*<button type="submit" id="filter-submit"/);
+    const reset = modalDocument.window.document.querySelector('#show-all');
+    assert.equal(reset.textContent, 'Reestablecer');
+    assert.ok(reset.nextElementSibling.querySelector('#filter-submit[type="submit"]'));
     assert.match(html, /aria-label="Filtrar observadas"[^>]*title="Filtrar observadas"/);
-    assert.match(html, /<span class="filter-symbol status-icon-image box-icon" title="Colección" aria-hidden="true">📦<\/span>/);
-    assert.match(html, /<span class="filter-symbol status-icon-image magnifier-icon" title="Búsqueda" aria-hidden="true">🔍<\/span>/);
-    assert.match(html, /<span class="eye-symbol" title="Seguimiento" aria-hidden="true"><svg /);
+    assert.equal(modalDocument.window.document.querySelector('#categoria option[value=""]').textContent, 'Todas');
+    assert.equal(modalDocument.window.document.querySelector('option[value="BUSCADA"]').textContent, 'Búsqueda');
+    for (const [selector, title] of [['.box-icon', 'Colección'], ['.magnifier-icon', 'Búsqueda'], ['.eye-symbol', 'Seguimiento']]) {
+      const icon = modalDocument.window.document.querySelector(`#filters-form ${selector}`);
+      assert.equal(icon.title, title);
+      assert.equal(icon.getAttribute('aria-hidden'), 'true');
+    }
     assert.match(script, /matchesClientFilters/);
     assert.match(script, /replaceChildren/);
-    assert.match(script, /No se pudo cargar el catálogo/);
+    assert.match(script, /t\('inventory.loadError'\)/);
+    modalDocument.window.close();
   });
 });
 
@@ -885,7 +890,8 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(countsPanel.querySelector('.magnifier-icon').textContent, '🔍');
     assert.equal(document.querySelector('#sync-prices').textContent.trim(), '🔄 Sincronizar Precios');
     assert.ok(document.querySelector('#sync-prices').classList.contains('button-secondary'));
-    assert.match(css, /\.summary-achievements-row \.button \{ flex: 1 1 0; min-width: 0; white-space: nowrap; \}/);
+    assert.match(css, /\.summary-achievements-row \{ flex-wrap: wrap; \}/);
+    assert.match(css, /\.summary-achievements-row \.button \{ flex: 1 1 auto; min-width: min-content; white-space: normal; \}/);
     assert.match(css, /\.summary-sync-row, \.summary-achievements-row, \.summary-ranking-row \{ display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12px; \}/);
     assert.equal(document.querySelector('#lookup-brickset'), null);
     assert.equal(document.querySelector('.brand-heading img').alt, 'MiniPeopleDB');
@@ -1011,7 +1017,7 @@ test('El servidor expone correctamente los elementos del formulario y la integra
     assert.match(script, /apiFetch\((['"`])\/minifiguras/, 'El script del cliente debe invocar el endpoint de la API');  });
 });
 
-test('la terminologia minipersona se aplica a mensajes remotos sin cambiar datos ni identificadores', async () => {
+test('la traduccion conserva nombres de logros y usa su ID sin reescribir contenido remoto', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
@@ -1022,25 +1028,16 @@ test('la terminologia minipersona se aplica a mensajes remotos sin cambiar datos
   try {
     window.eval(await readSessionScript());
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const body = window.document.body;
-    const sharedInterfaceText = body.cloneNode(true);
-    sharedInterfaceText.querySelector('#set-create-section').remove();
-    assert.doesNotMatch(sharedInterfaceText.textContent, /\bminifiguras?\b/i);
-    for (const element of body.querySelectorAll('[aria-label], [title], [alt]')) {
-      for (const attribute of ['aria-label', 'title', 'alt']) {
-        assert.doesNotMatch(element.getAttribute(attribute) ?? '', /\bminifiguras?\b/i);
-      }
-    }
-    const achievement = { nombre: 'Minifigura destacada', descripcion: 'Consigue 10 minifiguras y MINIFIGURAS.', cantidad: 2, total: 20 };
+    const achievement = { id: 'block-by-block', nombre: 'Minifigura destacada', descripcion: 'Consigue 10 minifiguras y MINIFIGURAS.', cantidad: 2, total: 20 };
     window.remoteAchievement = achievement;
     const item = window.eval('createAchievementItem(remoteAchievement)');
-    assert.equal(item.querySelector('.achievement-name').textContent, 'Minipersona destacada');
-    assert.equal(item.querySelector('.achievement-description').textContent, 'Consigue 10 minipersonas y MINIPERSONAS.');
+    assert.equal(item.querySelector('.achievement-name').textContent, 'Minifigura destacada');
+    assert.equal(item.querySelector('.achievement-description').textContent, 'Has añadido una minipersona');
     assert.equal(achievement.nombre, 'Minifigura destacada');
     const notification = window.eval("renderNotificationMessage({type:'system', data:{message:'Tu minifigura y tus minifiguras'}})");
-    assert.equal(notification.textContent, 'Tu minipersona y tus minipersonas');
+    assert.equal(notification.textContent, 'Tienes una notificación.');
     window.eval("showToast('Minifigura: 10 minifiguras')");
-    assert.match(window.document.querySelector('#toast-region').textContent, /Minipersona: 10 minipersonas/);
+    assert.match(window.document.querySelector('#toast-region').textContent, /Minifigura: 10 minifiguras/);
     assert.ok(window.document.querySelector('#new-minifigura'));
     assert.ok(window.document.querySelector('#minifigura-form'));
   } finally {
@@ -1453,7 +1450,7 @@ test('la interfaz muestra imágenes en la tabla y tarjetas de ranking', async ()
   assert.equal(thumbnail.dataset.action, 'preview');
   const idHeader = window.document.querySelector('[data-sort="id"]');
   assert.equal(idHeader.querySelector('.catalog-id-heading').textContent, 'ID');
-  assert.equal(idHeader.querySelector('.catalog-mobile-heading').textContent, 'Minifigura');
+  assert.equal(idHeader.querySelector('.catalog-mobile-heading').textContent, 'Minipersona');
   assert.match(idHeader.querySelector('.visually-hidden').textContent, /ordenar por ID/);
   const identity = window.document.querySelector('#catalog-body tr td:nth-child(3)');
   assert.equal(identity.querySelector('.id-link').textContent, 'ST008');
@@ -2720,7 +2717,7 @@ test('la tabla del set conserva duplicados de solo lectura y permite editar las 
   dom.window.close();
 });
 
-test('la tabla del set ordena Minifigura por ID y las demás columnas sin alterar el inventario ni perder cambios', async () => {
+test('la tabla del set ordena Minipersona por ID y las demás columnas sin alterar el inventario ni perder cambios', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -2767,7 +2764,7 @@ test('la tabla del set ordena Minifigura por ID y las demás columnas sin altera
       precio: [['MF2', 'MF3', 'MF10', 'MF4'], ['MF10', 'MF3', 'MF2', 'MF4']],
     };
     assert.deepEqual([...document.querySelectorAll('.set-minifigures-table thead button')].map(({ textContent }) => textContent),
-      ['Minifigura', 'Categoría', 'Subcategoría', 'Año', 'Precio']);
+      ['Minipersona', 'Categoría', 'Subcategoría', 'Año', 'Precio']);
     assert.deepEqual([...document.querySelectorAll('[data-set-sort]')].map(({ dataset }) => dataset.setSort), Object.keys(expected));
     for (const [field, orders] of Object.entries(expected)) {
       const button = document.querySelector(`[data-set-sort="${field}"]`);
@@ -2992,7 +2989,7 @@ test('la búsqueda de un set completo bloquea Continuar y permite buscar otro se
   document.querySelector('#set-number-search').click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(document.querySelector('#set-number-status').textContent,
-    'Encontrado. Todas las minifiguras de este set están en tu inventario.');
+    'Encontrado. Todas las minipersonas de este set están en tu inventario.');
   assert.equal(document.querySelector('#set-number-status').classList.contains('loading-message'), false);
   assert.equal(document.querySelector('#set-number-status').classList.contains('error'), false);
   assert.equal(document.querySelector('#set-number-continue').disabled, true);

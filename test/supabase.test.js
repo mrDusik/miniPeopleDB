@@ -976,6 +976,7 @@ test('schema persiste perfiles y favoritos con unicidad, RLS y borrado en cascad
 test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y rollback atomico', async () => {
   const db = new PGlite();
   const userId = '00000000-0000-4000-8000-0000000000c1';
+  const otherId = '00000000-0000-4000-8000-0000000000c2';
   try {
     await db.exec(`
       create schema auth;
@@ -996,8 +997,23 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
     await db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [userId, 'Collector_1']);
     await db.query('insert into public.user_profile_favorite_categories(user_id, category_name) values ($1, $2)', [userId, 'Space']);
     await db.query('insert into public.perfiles_publicos(user_id, display_name, avatar_url) values ($1, $2, $3)', [userId, 'Ada', 'https://google.example/avatar.png']);
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [otherId, 'other-profile@example.invalid']);
+    await db.query("insert into public.user_profiles(user_id, username, language) values ($1, 'OtherCollector', 'en')", [otherId]);
+    await db.query("update public.user_profiles set language = 'es' where user_id = $1", [otherId]);
+    await db.exec(`
+      alter table public.user_profiles drop constraint user_profiles_language_check;
+      alter table public.user_profiles add constraint user_profiles_language_check check (language in ('es'));
+    `);
+    const migration = await readFile(new URL('../supabase/interface-languages.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+    assert.deepEqual((await db.query('select language from public.user_profiles order by user_id')).rows, [
+      { language: 'es' }, { language: 'es' },
+    ]);
 
     assert.equal((await db.query("select has_function_privilege('anon', 'public.guardar_perfil_usuario(text,text,text,text,text[])', 'EXECUTE') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_function_privilege('authenticated', 'public.guardar_perfil_usuario(text,text,text,text,text[])', 'EXECUTE') as allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select prosecdef from pg_proc where oid = 'public.guardar_perfil_usuario(text,text,text,text,text[])'::regprocedure")).rows[0].prosecdef, false);
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
     await db.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
     await db.exec('set role authenticated');
@@ -1012,6 +1028,26 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
       { category_name: 'Castle' }, { category_name: 'Space' },
     ]);
     assert.equal((await db.query('select display_name, avatar_url from public.perfiles_publicos')).rows[0].avatar_url, 'https://custom.example/avatar.png');
+    await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', 'https://custom.example/avatar.png', 'EUR', 'en', ['Castle', 'Space'],
+    ]);
+    assert.equal((await db.query('select language from public.user_profiles')).rows[0].language, 'en');
+    for (const language of ['it', 'fr', 'EN', '', null]) {
+      await assert.rejects(db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+        'Collector_1', 'https://changed.example/avatar.png', 'EUR', language, ['Pirates'],
+      ]), /constraint|null/i);
+      assert.deepEqual((await db.query('select language, avatar_url from public.user_profiles')).rows, [
+        { language: 'en', avatar_url: 'https://custom.example/avatar.png' },
+      ]);
+      assert.deepEqual((await db.query('select category_name from public.user_profile_favorite_categories order by category_name')).rows, [
+        { category_name: 'Castle' }, { category_name: 'Space' },
+      ]);
+    }
+    assert.equal((await db.query("update public.user_profiles set language = 'en' where user_id = $1 returning user_id", [otherId])).rows.length, 0);
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [otherId]);
+    await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', ['OtherCollector', null, 'EUR', 'en', []]);
+    assert.equal((await db.query('select language from public.user_profiles')).rows[0].language, 'en');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
     await assert.rejects(db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
       'Collector_1', null, 'EUR', 'es', ['Castle', 'Space', 'City', 'Star Wars'],
     ]), /PERFIL_INVALIDO/);
@@ -1040,7 +1076,7 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
     );
     await db.exec('reset role');
     assert.equal((await db.query('select avatar_url from public.user_profiles where user_id = $1', [userId])).rows[0].avatar_url, 'https://custom.example/avatar.png');
-    assert.deepEqual((await db.query('select category_name from public.user_profile_favorite_categories order by category_name')).rows, [
+    assert.deepEqual((await db.query('select category_name from public.user_profile_favorite_categories where user_id = $1 order by category_name', [userId])).rows, [
       { category_name: 'Castle' }, { category_name: 'Space' },
     ]);
   } finally {

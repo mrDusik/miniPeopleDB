@@ -30,6 +30,7 @@ await mkdir(vendorDirectory, { recursive: true });
 await Promise.all([
   cp(resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js'), resolve(vendorDirectory, 'supabase.js')),
   cp(resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), resolve(vendorDirectory, 'chart.js')),
+  cp(resolve(projectRoot, 'node_modules', 'i18next', 'dist', 'umd', 'i18next.min.js'), resolve(vendorDirectory, 'i18next.js')),
   cp(resolve(projectRoot, 'node_modules', 'lucide-static', 'icons', 'star.svg'), resolve(vendorDirectory, 'star.svg')),
 ]);
 

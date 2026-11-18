@@ -9,6 +9,8 @@
   <script src="/vendor/supabase.js" defer></script>
   <script src="/vendor/chart.js" defer></script>
   <script src="/runtime-config.js" defer></script>
+  <script src="/vendor/i18next.js" defer></script>
+  <script src="/i18n.js" defer></script>
   <script src="/app.js?v=panel-toggles-1" defer></script>
 </head>
 <body>
@@ -34,12 +36,12 @@
     <div class="auth-card">
       <h1 id="auth-title"><img class="brand-logo" src="/logo_images/mini-people-db-header.png" alt="MiniPeopleDB"></h1>
       <div id="auth-access-panel" class="auth-access-panel">
-        <p>¡Empieza a gestionar tu colección y consigue Bricks para conquistar el ranking!</p>
-        <button type="button" id="login-google" class="button button-primary"><img src="/logo_images/google-2.png" alt="" width="20" height="20" aria-hidden="true"><span id="auth-google-label">Inicia sesión con Google</span></button>
-        <p id="auth-divider" class="auth-divider" aria-hidden="true">o con tu usuario de MiniPeopleDB</p>
-        <div class="auth-mode-toggle" role="group" aria-label="Tipo de acceso">
-          <button type="button" id="auth-mode-login" aria-pressed="true">Iniciar sesión</button>
-          <button type="button" id="auth-mode-register" aria-pressed="false">Crear cuenta</button>
+        <p data-i18n="auth.introduction">¡Empieza a gestionar tu colección y consigue Bricks para conquistar el ranking!</p>
+        <button type="button" id="login-google" class="button button-primary"><img src="/logo_images/google-2.png" alt="" width="20" height="20" aria-hidden="true"><span data-i18n="auth.googleSignIn" id="auth-google-label">Inicia sesión con Google</span></button>
+        <p data-i18n="auth.divider" id="auth-divider" class="auth-divider" aria-hidden="true">o con tu usuario de MiniPeopleDB</p>
+        <div data-i18n-aria-label="auth.accessType" class="auth-mode-toggle" role="group" aria-label="Tipo de acceso">
+          <button data-i18n="auth.signIn" type="button" id="auth-mode-login" aria-pressed="true">Iniciar sesión</button>
+          <button data-i18n="auth.register" type="button" id="auth-mode-register" aria-pressed="false">Crear cuenta</button>
         </div>
         <form id="classic-auth-form" class="auth-form">
           <label id="auth-username-field">
@@ -51,93 +53,93 @@
             <input id="auth-email" name="email" type="email" autocomplete="email" disabled>
           </label>
           <div class="auth-password-field">
-            <label for="auth-password">Contraseña</label>
+            <label data-i18n="auth.password" for="auth-password">Contraseña</label>
             <div class="auth-password-control">
               <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
-              <button type="button" id="auth-show-password" class="auth-password-visibility" aria-label="Mostrar contraseña" title="Mostrar contraseña" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+              <button data-i18n-aria-label="auth.showPassword" data-i18n-title="auth.showPassword" type="button" id="auth-show-password" class="auth-password-visibility" aria-label="Mostrar contraseña" title="Mostrar contraseña" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
             </div>
           </div>
           <div id="auth-password-repeat-field" class="auth-password-field" hidden>
-            <label for="auth-password-repeat">Repetir Contraseña</label>
+            <label data-i18n="auth.repeatPassword" for="auth-password-repeat">Repetir Contraseña</label>
             <div class="auth-password-control">
               <input id="auth-password-repeat" name="password-repeat" type="password" autocomplete="new-password" disabled>
-              <button type="button" id="auth-show-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+              <button data-i18n-aria-label="auth.showPasswords" data-i18n-title="auth.showPasswords" type="button" id="auth-show-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="auth-password auth-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
             </div>
           </div>
           <ul id="auth-password-rules" class="auth-password-rules" aria-live="polite" hidden>
-            <li data-rule="length">Al menos 5 caracteres</li>
-            <li data-rule="uppercase">Al menos una letra mayúscula</li>
-            <li data-rule="lowercase">Al menos una letra minúscula</li>
-            <li data-rule="number">Al menos un número</li>
+            <li data-i18n="auth.minimumLength" data-rule="length">Al menos 5 caracteres</li>
+            <li data-i18n="auth.uppercase" data-rule="uppercase">Al menos una letra mayúscula</li>
+            <li data-i18n="auth.lowercase" data-rule="lowercase">Al menos una letra minúscula</li>
+            <li data-i18n="auth.number" data-rule="number">Al menos un número</li>
           </ul>
-          <button type="submit" id="classic-auth-submit" class="button button-primary">Iniciar sesión</button>
+          <button data-i18n="auth.signIn" type="submit" id="classic-auth-submit" class="button button-primary">Iniciar sesión</button>
         </form>
-        <button type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
-        <button type="button" id="open-contact-auth" class="auth-text-button">Contacto</button>
+        <button data-i18n="auth.forgotPassword" type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
+        <button data-i18n="common.contact" type="button" id="open-contact-auth" class="auth-text-button">Contacto</button>
       </div>
       <form id="password-recovery-form" class="auth-form" hidden>
         <label>
           Email
           <input id="recovery-email" name="email" type="email" autocomplete="email" required>
         </label>
-        <button type="submit" class="button button-secondary">Enviar enlace de recuperación</button>
-        <button type="button" id="cancel-password-recovery" class="auth-text-button">Volver al acceso</button>
+        <button data-i18n="auth.recoveryLink" type="submit" class="button button-secondary">Enviar enlace de recuperación</button>
+        <button data-i18n="auth.back" type="button" id="cancel-password-recovery" class="auth-text-button">Volver al acceso</button>
       </form>
       <form id="password-update-form" class="auth-form" hidden>
         <div class="auth-password-field">
-          <label for="new-password">Nueva contraseña</label>
+          <label data-i18n="auth.newPassword" for="new-password">Nueva contraseña</label>
           <div class="auth-password-control">
             <input id="new-password" name="password" type="password" autocomplete="new-password" aria-describedby="new-password-rules" required>
-            <button type="button" id="show-new-password" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+            <button data-i18n-aria-label="auth.showPasswords" data-i18n-title="auth.showPasswords" type="button" id="show-new-password" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
           </div>
         </div>
         <div class="auth-password-field">
-          <label for="new-password-repeat">Repetir contraseña</label>
+          <label data-i18n="auth.repeatPasswordLower" for="new-password-repeat">Repetir contraseña</label>
           <div class="auth-password-control">
             <input id="new-password-repeat" name="password-repeat" type="password" autocomplete="new-password" required>
-            <button type="button" id="show-new-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+            <button data-i18n-aria-label="auth.showPasswords" data-i18n-title="auth.showPasswords" type="button" id="show-new-password-repeat" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="new-password new-password-repeat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
           </div>
         </div>
         <ul id="new-password-rules" class="auth-password-rules" aria-live="polite">
-          <li data-rule="length">Al menos 5 caracteres</li>
-          <li data-rule="uppercase">Al menos una letra mayúscula</li>
-          <li data-rule="lowercase">Al menos una letra minúscula</li>
-          <li data-rule="number">Al menos un número</li>
+          <li data-i18n="auth.minimumLength" data-rule="length">Al menos 5 caracteres</li>
+          <li data-i18n="auth.uppercase" data-rule="uppercase">Al menos una letra mayúscula</li>
+          <li data-i18n="auth.lowercase" data-rule="lowercase">Al menos una letra minúscula</li>
+          <li data-i18n="auth.number" data-rule="number">Al menos un número</li>
         </ul>
-        <button type="submit" class="button button-secondary">Cambiar contraseña</button>
+        <button data-i18n="auth.changePassword" type="submit" class="button button-secondary">Cambiar contraseña</button>
       </form>
-      <button type="button" id="profile-check-retry" class="button button-secondary" hidden>Reintentar</button>
+      <button data-i18n="common.retry" type="button" id="profile-check-retry" class="button button-secondary" hidden>Reintentar</button>
       <p id="auth-message" class="status error" role="alert"></p>
-      <button type="button" id="auth-retry" class="auth-text-button" hidden>Reintentar conexión</button>
+      <button data-i18n="common.retryConnection" type="button" id="auth-retry" class="auth-text-button" hidden>Reintentar conexión</button>
     </div>
   </section>
   <dialog id="contact-dialog" class="modal modal-contact" aria-labelledby="contact-title">
     <div class="form-dialog-heading modal-dialog-heading">
-      <h2 id="contact-title" tabindex="-1">Contacto</h2>
-      <button type="button" id="contact-close" class="button button-secondary">Cerrar</button>
+      <h2 data-i18n="common.contact" id="contact-title" tabindex="-1">Contacto</h2>
+      <button data-i18n="common.close" type="button" id="contact-close" class="button button-secondary">Cerrar</button>
     </div>
     <form id="contact-form" class="contact-form" novalidate>
       <label for="contact-email">Email
         <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254">
       </label>
-      <label for="contact-username">Usuario
+      <label for="contact-username"><span data-i18n="common.user">Usuario</span>
         <input id="contact-username" name="username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}">
       </label>
-      <label for="contact-message">Mensaje
+      <label for="contact-message"><span data-i18n="common.message">Mensaje</span>
         <textarea id="contact-message" name="message" rows="5" maxlength="1000" aria-describedby="contact-message-count contact-message-limit" required></textarea>
         <small id="contact-message-count" class="contact-message-count">0 / 1000</small>
         <small id="contact-message-limit" role="status" aria-live="polite"></small>
       </label>
       <p id="contact-status" class="status" role="status" aria-live="polite"></p>
       <div class="form-actions">
-        <button type="submit" id="contact-submit" class="button button-primary">Enviar</button>
+        <button data-i18n="common.send" type="submit" id="contact-submit" class="button button-primary">Enviar</button>
       </div>
     </form>
   </dialog>
   <dialog id="user-profile-dialog" class="modal user-profile-dialog" aria-labelledby="user-profile-dialog-title">
     <div class="form-dialog-heading profile-dialog-heading">
-      <h2 id="user-profile-dialog-title" tabindex="-1">Completa tu perfil</h2>
-      <button type="button" id="user-profile-close" class="button button-secondary" hidden>Cerrar</button>
+      <h2 data-i18n="profile.complete" id="user-profile-dialog-title" tabindex="-1">Completa tu perfil</h2>
+      <button data-i18n="common.close" type="button" id="user-profile-close" class="button button-secondary" hidden>Cerrar</button>
     </div>
     <form id="user-profile-form" class="user-profile-form" novalidate>
       <div class="profile-two-column-row">
@@ -149,11 +151,11 @@
           <label for="profile-avatar-file">Avatar</label>
           <div class="profile-avatar-controls">
             <div class="profile-avatar-preview">
-              <img id="profile-avatar-preview" alt="Vista previa del avatar" hidden>
+              <img data-i18n-alt="profile.avatarPreview" id="profile-avatar-preview" alt="Vista previa del avatar" hidden>
               <span id="profile-avatar-placeholder" aria-hidden="true">👤</span>
             </div>
-            <button type="button" id="profile-avatar-load" class="logout-link">Cargar</button>
-            <button type="button" id="profile-avatar-remove" class="profile-remove-button" aria-label="Quitar avatar" title="Quitar avatar">×</button>
+            <button data-i18n="profile.loadAvatar" type="button" id="profile-avatar-load" class="logout-link">Cargar</button>
+            <button data-i18n-aria-label="profile.removeAvatar" data-i18n-title="profile.removeAvatar" type="button" id="profile-avatar-remove" class="profile-remove-button" aria-label="Quitar avatar" title="Quitar avatar">×</button>
           </div>
           <input id="profile-avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
           <input id="profile-avatar-url" name="avatarUrl" type="hidden">
@@ -161,95 +163,95 @@
       </div>
       <div id="profile-account-settings" class="profile-two-column-row" hidden>
         <div class="profile-field">
-          <label for="profile-email">Email registrado</label>
+          <label data-i18n="profile.registeredEmail" for="profile-email">Email registrado</label>
           <input id="profile-email" type="email" autocomplete="email" readonly>
         </div>
         <div class="profile-field profile-password-action">
-          <button type="button" id="open-change-password" class="button button-secondary" aria-haspopup="dialog" aria-controls="change-password-dialog">Cambiar contraseña</button>
+          <button data-i18n="auth.changePassword" type="button" id="open-change-password" class="button button-secondary" aria-haspopup="dialog" aria-controls="change-password-dialog">Cambiar contraseña</button>
         </div>
       </div>
       <div class="profile-two-column-row">
         <div class="profile-field">
-          <label for="profile-language">Idioma</label>
+          <label data-i18n="profile.language" for="profile-language">Idioma</label>
           <select id="profile-language" name="language">
-            <option value="es">Español</option>
-            <option value="en" disabled>Inglés, próximamente</option>
-            <option value="it" disabled>Italiano, próximamente</option>
-            <option value="fr" disabled>Francés, próximamente</option>
+            <option data-i18n="profile.spanish" value="es">Español</option>
+            <option data-i18n="profile.english" value="en">Inglés</option>
+            <option data-i18n="profile.italianFuture" value="it" disabled>Italiano, próximamente</option>
+            <option data-i18n="profile.frenchFuture" value="fr" disabled>Francés, próximamente</option>
           </select>
         </div>
         <div class="profile-field">
-          <label for="profile-currency">Moneda</label>
+          <label data-i18n="profile.currency" for="profile-currency">Moneda</label>
           <select id="profile-currency" name="currency">
-            <option value="EUR">Euro (€)</option>
-            <option value="USD" disabled>Dólar ($), próximamente</option>
+            <option data-i18n="profile.euro" value="EUR">Euro (€)</option>
+            <option data-i18n="profile.dollarFuture" value="USD" disabled>Dólar ($), próximamente</option>
           </select>
         </div>
       </div>
       <div id="system-notifications-setting" class="profile-system-notifications" hidden>
         <label for="system-notifications-enabled">
-          <span>Notificaciones del sistema</span>
+          <span data-i18n="profile.systemNotifications">Notificaciones del sistema</span>
           <input id="system-notifications-enabled" type="checkbox" role="switch" disabled>
         </label>
         <p id="system-notifications-status" class="visually-hidden" role="status" aria-live="polite"></p>
       </div>
       <fieldset class="profile-favorites-fieldset">
-        <legend>Categorías favoritas</legend>
+        <legend data-i18n="profile.favoriteCategories">Categorías favoritas</legend>
         <div class="profile-favorite-toolbar">
-          <input id="profile-favorite-search" type="search" autocomplete="off" aria-label="Buscar categoría" placeholder="Buscar categoría">
+          <input data-i18n-aria-label="profile.searchCategory" data-i18n-placeholder="profile.searchCategory" id="profile-favorite-search" type="search" autocomplete="off" aria-label="Buscar categoría" placeholder="Buscar categoría">
           <span id="profile-favorites-count" class="profile-favorites-count" role="status">0/3</span>
         </div>
-        <div id="profile-selected-categories" class="profile-selected-categories" aria-label="Categorías seleccionadas"></div>
-        <div id="profile-favorite-categories" class="profile-favorite-categories" role="group" aria-label="Categorías favoritas"></div>
+        <div data-i18n-aria-label="profile.selectedCategories" id="profile-selected-categories" class="profile-selected-categories" aria-label="Categorías seleccionadas"></div>
+        <div data-i18n-aria-label="profile.favoriteCategories" id="profile-favorite-categories" class="profile-favorite-categories" role="group" aria-label="Categorías favoritas"></div>
       </fieldset>
       <p id="profile-form-message" class="status error" role="alert"></p>
       <div class="profile-form-actions">
-        <button type="submit" id="user-profile-save" class="button button-primary">Guardar perfil</button>
+        <button data-i18n="profile.save" type="submit" id="user-profile-save" class="button button-primary">Guardar perfil</button>
       </div>
     </form>
     <div class="profile-account-actions">
-      <button type="button" id="open-delete-account" class="logout-link" hidden>Eliminar cuenta</button>
+      <button data-i18n="profile.deleteAccount" type="button" id="open-delete-account" class="logout-link" hidden>Eliminar cuenta</button>
     </div>
   </dialog>
   <dialog id="change-password-dialog" class="modal" aria-labelledby="change-password-title">
-    <h2 id="change-password-title">Cambiar contraseña</h2>
+    <h2 data-i18n="auth.changePassword" id="change-password-title">Cambiar contraseña</h2>
     <form id="change-password-form" class="auth-form">
       <div class="auth-password-field">
-        <label for="settings-password">Nueva contraseña</label>
+        <label data-i18n="auth.newPassword" for="settings-password">Nueva contraseña</label>
         <div class="auth-password-control">
           <input id="settings-password" type="password" autocomplete="new-password" aria-describedby="settings-password-rules" required>
-          <button type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+          <button data-i18n-aria-label="auth.showPasswords" data-i18n-title="auth.showPasswords" type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
         </div>
       </div>
       <div class="auth-password-field">
-        <label for="settings-password-confirm">Confirmar nueva contraseña</label>
+        <label data-i18n="auth.confirmPassword" for="settings-password-confirm">Confirmar nueva contraseña</label>
         <div class="auth-password-control">
           <input id="settings-password-confirm" type="password" autocomplete="new-password" required>
-          <button type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
+          <button data-i18n-aria-label="auth.showPasswords" data-i18n-title="auth.showPasswords" type="button" class="auth-password-visibility" aria-label="Mostrar contraseñas" title="Mostrar contraseñas" aria-pressed="false" aria-controls="settings-password settings-password-confirm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#auth-eye-off-icon" /></svg></button>
         </div>
       </div>
       <ul id="settings-password-rules" class="auth-password-rules" aria-live="polite">
-        <li data-rule="length">Al menos 5 caracteres</li>
-        <li data-rule="uppercase">Al menos una letra mayúscula</li>
-        <li data-rule="lowercase">Al menos una letra minúscula</li>
-        <li data-rule="number">Al menos un número</li>
+        <li data-i18n="auth.minimumLength" data-rule="length">Al menos 5 caracteres</li>
+        <li data-i18n="auth.uppercase" data-rule="uppercase">Al menos una letra mayúscula</li>
+        <li data-i18n="auth.lowercase" data-rule="lowercase">Al menos una letra minúscula</li>
+        <li data-i18n="auth.number" data-rule="number">Al menos un número</li>
       </ul>
       <p id="settings-password-message" class="status error" role="alert"></p>
       <div class="form-actions">
-        <button type="submit" id="settings-password-save" class="button button-primary">Cambiar contraseña</button>
-        <button type="button" id="settings-password-cancel" class="button button-secondary">Cancelar</button>
+        <button data-i18n="auth.changePassword" type="submit" id="settings-password-save" class="button button-primary">Cambiar contraseña</button>
+        <button data-i18n="common.cancel" type="button" id="settings-password-cancel" class="button button-secondary">Cancelar</button>
       </div>
     </form>
   </dialog>
   <dialog id="delete-account-dialog" class="modal" aria-labelledby="delete-account-title" aria-describedby="delete-account-message">
-    <h2 id="delete-account-title">Eliminar cuenta</h2>
-    <p id="delete-account-message">Se eliminarán tu cuenta y todos sus datos de colección, preferencias e histórico.
+    <h2 data-i18n="profile.deleteAccount" id="delete-account-title">Eliminar cuenta</h2>
+    <p data-i18n="profile.deleteWarning" id="delete-account-message">Se eliminarán tu cuenta y todos sus datos de colección, preferencias e histórico.
 
 Esta acción no se puede deshacer.</p>
     <p id="delete-account-error" class="status error" role="alert"></p>
     <div class="form-actions">
-      <button type="button" id="delete-account-confirm" class="button button-danger">Eliminar cuenta</button>
-      <button type="button" id="delete-account-cancel" class="button button-secondary">Cancelar</button>
+      <button data-i18n="profile.deleteAccount" type="button" id="delete-account-confirm" class="button button-danger">Eliminar cuenta</button>
+      <button data-i18n="common.cancel" type="button" id="delete-account-cancel" class="button button-secondary">Cancelar</button>
     </div>
   </dialog>
   <main class="page-shell" hidden>
@@ -259,20 +261,20 @@ Esta acción no se puede deshacer.</p>
           <h1><img class="brand-logo" src="/logo_images/mini-people-db-header.png" alt="MiniPeopleDB"></h1>
         </div>
         <div class="notifications-entry-row">
-            <button type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
+            <button data-i18n-aria-label="common.notifications" data-i18n-title="common.notifications" type="button" id="open-notifications" class="notifications-trigger" aria-label="Notificaciones" title="Notificaciones" aria-haspopup="dialog" aria-controls="notifications-dialog">
               <img src="/status_images/sobre.png" alt="">
               <span id="notifications-unread-badge" class="notifications-unread-badge" aria-hidden="true" hidden></span>
             </button>
-            <button type="button" id="open-friends" class="notifications-trigger friends-trigger" aria-label="Amigos" title="Amigos" aria-haspopup="dialog" aria-controls="friends-dialog">
+            <button data-i18n-aria-label="common.friends" data-i18n-title="common.friends" type="button" id="open-friends" class="notifications-trigger friends-trigger" aria-label="Amigos" title="Amigos" aria-haspopup="dialog" aria-controls="friends-dialog">
               <img src="/status_images/friends.png" alt="">
               <span id="friends-count" class="friends-count" aria-hidden="true" hidden></span>
             </button>
             <div class="user-session">
-              <button type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
+              <button data-i18n-aria-label="profile.menu" data-i18n-title="profile.menu" type="button" id="user-menu-toggle" class="user-menu-toggle" aria-expanded="false" aria-controls="user-profile" aria-label="Mostrar menú de usuario" title="Mostrar menú de usuario">
                 <span class="user-avatar-frame">
                   <img id="user-avatar" class="user-avatar" alt="" hidden>
                   <span class="user-avatar-fallback" aria-hidden="true">👤</span>
-                  <span id="ranking-main-globe" class="ranking-avatar-badge" role="img" aria-label="En Top Global" title="En Top Global" hidden>
+                  <span data-i18n-aria-label="ranking.inTop" data-i18n-title="ranking.inTop" id="ranking-main-globe" class="ranking-avatar-badge" role="img" aria-label="En Top Global" title="En Top Global" hidden>
                     <span id="ranking-main-position" aria-hidden="true"></span>
                   </span>
                 </span>
@@ -281,11 +283,11 @@ Esta acción no se puede deshacer.</p>
               <div id="user-profile" class="user-profile" hidden>
                 <span id="user-name" class="user-name"></span>
                 <div class="user-profile-actions">
-                  <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> Preferencias</button>
-                  <button type="button" id="open-contact-profile" class="button button-secondary"><span aria-hidden="true">✉️</span> Contacto</button>
+                  <button type="button" id="open-user-settings" class="button button-secondary"><span aria-hidden="true">⚙️</span> <span data-i18n="profile.preferences">Preferencias</span></button>
+                  <button type="button" id="open-contact-profile" class="button button-secondary"><span aria-hidden="true">✉️</span> <span data-i18n="common.contact">Contacto</span></button>
                 </div>
                 <div class="user-profile-logout">
-                  <button type="button" id="logout" class="logout-link">Cerrar sesión</button>
+                  <button data-i18n="auth.logout" type="button" id="logout" class="logout-link">Cerrar sesión</button>
                 </div>
               </div>
             </div>
@@ -296,7 +298,7 @@ Esta acción no se puede deshacer.</p>
                 <span id="gamification-title" class="gamification-level-title"><img class="gamification-level-image" src="/level_images/0_duplo.png" alt=""><span class="gamification-level-label"><span id="gamification-level-number">0</span> <span id="gamification-level-name">Duplo</span></span></span>
               </button>
               <div class="gamification-dna-row">
-                <button type="button" id="open-dna-inline" class="gamification-dna-name" aria-label="Abrir DNA" title="Abrir DNA" aria-haspopup="dialog" aria-controls="dna-dialog"><span id="gamification-dna-percentage" hidden></span><span id="gamification-dna-principal">Newbie</span></button>
+                <button data-i18n-aria-label="gamification.openDna" data-i18n-title="gamification.openDna" type="button" id="open-dna-inline" class="gamification-dna-name" aria-label="Abrir DNA" title="Abrir DNA" aria-haspopup="dialog" aria-controls="dna-dialog"><span id="gamification-dna-percentage" hidden></span><span id="gamification-dna-principal">Newbie</span></button>
               </div>
             </div>
             <div class="gamification-metrics">
@@ -305,12 +307,12 @@ Esta acción no se puede deshacer.</p>
                   <strong id="gamification-bricks">0</strong>
                   <img class="gamification-brick-icon" src="/toast_images/brick.png" alt="Bricks">
                 </span>
-                <div class="collection-counts-panel" aria-label="Recuento de minipersonas">
-                  <span><span class="count-icon status-icon-image box-icon" role="img" aria-label="Colección" title="Colección">📦</span><strong id="collection-count">0</strong></span>
-                  <span><span class="count-icon status-icon-image magnifier-icon" role="img" aria-label="Búsqueda" title="Búsqueda">🔍</span><strong id="wanted-count">0</strong></span>
+                <div data-i18n-aria-label="inventory.count" class="collection-counts-panel" aria-label="Recuento de minipersonas">
+                  <span><span data-i18n-aria-label="common.collection" data-i18n-title="common.collection" class="count-icon status-icon-image box-icon" role="img" aria-label="Colección" title="Colección">📦</span><strong id="collection-count">0</strong></span>
+                  <span><span data-i18n-aria-label="common.wanted" data-i18n-title="common.wanted" class="count-icon status-icon-image magnifier-icon" role="img" aria-label="Búsqueda" title="Búsqueda">🔍</span><strong id="wanted-count">0</strong></span>
                 </div>
               </div>
-              <button type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
+              <button data-i18n-aria-label="inventory.showSummary" data-i18n-title="inventory.showSummary" type="button" id="gamification-toggle" class="gamification-toggle" aria-expanded="false" aria-controls="gamification-details" aria-label="Mostrar resumen de colección" title="Mostrar resumen de colección">▾</button>
             </div>
           </div>
           <div id="gamification-details" class="gamification-details" hidden>
@@ -322,24 +324,24 @@ Esta acción no se puede deshacer.</p>
               <span id="gamification-next" class="gamification-next">Próximo nivel: Stud</span>
             </div>
             <div class="summary-achievements-row">
-              <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> Logros</button>
+              <button type="button" id="open-achievements" class="button button-secondary"><span aria-hidden="true">🏆</span> <span data-i18n="common.achievements">Logros</span></button>
               <button type="button" id="open-dna" class="button button-secondary" aria-haspopup="dialog" aria-controls="dna-dialog"><span aria-hidden="true">🧬</span> DNA</button>
-              <button type="button" id="open-analytics-history" class="button button-secondary" title="Progreso" aria-haspopup="dialog" aria-controls="analytics-history-dialog"><span aria-hidden="true">📈</span> Progreso</button>
+              <button data-i18n-title="gamification.progress" type="button" id="open-analytics-history" class="button button-secondary" title="Progreso" aria-haspopup="dialog" aria-controls="analytics-history-dialog"><span aria-hidden="true">📈</span> <span data-i18n="gamification.progress">Progreso</span></button>
             </div>
             <div class="summary-ranking-row">
-              <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> Ranking Global</button>
-              <button type="button" id="open-weekly-ranking" class="button button-secondary summary-ranking-link" aria-haspopup="dialog" aria-controls="weekly-ranking-dialog"><span aria-hidden="true">🗓️</span> Ranking Semanal</button>
+              <button type="button" id="open-global-ranking" class="button button-secondary summary-ranking-link"><span aria-hidden="true">🌐</span> <span data-i18n="ranking.global">Ranking Global</span></button>
+              <button type="button" id="open-weekly-ranking" class="button button-secondary summary-ranking-link" aria-haspopup="dialog" aria-controls="weekly-ranking-dialog"><span aria-hidden="true">🗓️</span> <span data-i18n="ranking.weekly">Ranking Semanal</span></button>
             </div>
             <div class="summary-sync-row">
-              <button type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
+              <button data-i18n="sync.action" type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
               <div class="collection-total-group">
-                <span class="collection-value"><img class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
+                <span class="collection-value"><img data-i18n-alt="inventory.totalValue" data-i18n-title="inventory.totalValue" class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
                 <small id="collection-total-updated" class="collection-total-updated" aria-live="polite"></small>
               </div>
             </div>
             <div id="sync-progress" class="sync-progress" hidden>
               <progress id="sync-progress-bar" max="0" value="0"></progress>
-              <span id="sync-progress-label">Actualizando precios: 0 / 0</span>
+              <span data-i18n="sync.initial" id="sync-progress-label">Actualizando precios: 0 / 0</span>
             </div>
           </div>
         </section>
@@ -350,17 +352,17 @@ Esta acción no se puede deshacer.</p>
     <section class="rankings-panel" aria-labelledby="rankings-title">
       <div class="section-heading">
         <div>
-          <p id="rankings-title" class="eyebrow">Rankings</p>
+          <p data-i18n="ranking.rankings" id="rankings-title" class="eyebrow">Rankings</p>
         </div>
-        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="rankings-content" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
+        <button data-i18n-aria-label="inventory.hidePanel" data-i18n-title="inventory.hidePanel" type="button" class="panel-toggle" aria-expanded="true" aria-controls="rankings-content" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
       </div>
       <div id="rankings-content" class="rankings">
         <section class="top-five" aria-labelledby="top-five-title">
-          <h2 id="top-five-title">Top 5 por precio</h2>
+          <h2 data-i18n="inventory.topPrice" id="top-five-title">Top 5 por precio</h2>
           <div id="top-five-list" class="ranking-row"></div>
         </section>
         <section class="top-five" aria-labelledby="oldest-five-title">
-          <h2 id="oldest-five-title">Top 5 por antiguedad</h2>
+          <h2 data-i18n="inventory.topOldestPlain" id="oldest-five-title">Top 5 por antiguedad</h2>
           <div id="oldest-five-list" class="ranking-row"></div>
         </section>
       </div>
@@ -369,9 +371,9 @@ Esta acción no se puede deshacer.</p>
     <section class="watchlist-panel" aria-labelledby="watchlist-title">
       <div class="section-heading">
         <div>
-          <p id="watchlist-title" class="eyebrow">Seguimiento</p>
+          <p data-i18n="common.following" id="watchlist-title" class="eyebrow">Seguimiento</p>
         </div>
-        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="watchlist-list" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
+        <button data-i18n-aria-label="inventory.hidePanel" data-i18n-title="inventory.hidePanel" type="button" class="panel-toggle" aria-expanded="true" aria-controls="watchlist-list" aria-label="Ocultar panel" title="Ocultar panel">▾</button>
       </div>
       <div id="watchlist-list" class="watchlist-row"></div>
     </section>
@@ -379,12 +381,12 @@ Esta acción no se puede deshacer.</p>
     <section class="search-panel" aria-labelledby="search-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Consulta</p>
+          <p data-i18n="inventory.query" class="eyebrow">Consulta</p>
         </div>
       </div>
       <form id="filters-form" class="filters-form">
         <label>
-          Nombre
+          <span data-i18n="common.name">Nombre</span>
           <input id="nombre" name="nombre">
         </label>
         <label>
@@ -392,44 +394,44 @@ Esta acción no se puede deshacer.</p>
           <input id="id" name="id">
         </label>
         <label>
-          Categoría
+          <span data-i18n="common.category">Categoría</span>
           <select id="categoria" name="categoria">
-            <option value="" selected>Todas</option>
+            <option data-i18n="common.allFeminine" value="" selected>Todas</option>
           </select>
         </label>
         <label>
-          Subcategoría
+          <span data-i18n="common.subcategory">Subcategoría</span>
           <select id="subcategoria" name="subcategoria" disabled>
-            <option value="" selected>Todas</option>
+            <option data-i18n="common.allFeminine" value="" selected>Todas</option>
           </select>
         </label>
         <label>
-          Año
+          <span data-i18n="common.year">Año</span>
           <select id="anio" name="anio">
-            <option value="" selected>Todos</option>
+            <option data-i18n="common.allMasculine" value="" selected>Todos</option>
           </select>
         </label>
         <div class="filter-state-row">
-          <fieldset class="filter-state-toggles" aria-label="Filtrar por estado">
-            <legend class="visually-hidden">Estado</legend>
-            <label class="filter-toggle" title="Colección">
-              <input id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
-              <span class="filter-symbol status-icon-image box-icon" title="Colección" aria-hidden="true">📦</span>
+          <fieldset data-i18n-aria-label="filter.byState" class="filter-state-toggles" aria-label="Filtrar por estado">
+            <legend data-i18n="common.state" class="visually-hidden">Estado</legend>
+            <label data-i18n-title="common.collection" class="filter-toggle" title="Colección">
+              <input data-i18n-aria-label="filter.collection" id="filter-coleccion" type="checkbox" aria-label="Filtrar colección">
+              <span data-i18n-title="common.collection" class="filter-symbol status-icon-image box-icon" title="Colección" aria-hidden="true">📦</span>
             </label>
-            <label class="filter-toggle" title="Búsqueda">
-              <input id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
-              <span class="filter-symbol status-icon-image magnifier-icon" title="Búsqueda" aria-hidden="true">🔍</span>
+            <label data-i18n-title="common.wanted" class="filter-toggle" title="Búsqueda">
+              <input data-i18n-aria-label="filter.wanted" id="filter-buscada" type="checkbox" aria-label="Filtrar búsqueda">
+              <span data-i18n-title="common.wanted" class="filter-symbol status-icon-image magnifier-icon" title="Búsqueda" aria-hidden="true">🔍</span>
             </label>
           </fieldset>
           <label class="filter-toggle">
-            <span class="visually-hidden">Observadas</span>
-            <input id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
-            <span class="eye-symbol" title="Seguimiento" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" focusable="false"><use href="#observation-eye-icon"/></svg></span>
+            <span data-i18n="filter.observed" class="visually-hidden">Observadas</span>
+            <input data-i18n-aria-label="filter.observedAction" data-i18n-title="filter.observedAction" id="observada" name="observada" type="checkbox" aria-label="Filtrar observadas" title="Filtrar observadas">
+            <span data-i18n-title="common.following" class="eye-symbol" title="Seguimiento" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" focusable="false"><use href="#observation-eye-icon"/></svg></span>
           </label>
         </div>
-        <button type="button" id="show-all" class="button button-secondary">Reestablecer</button>
+        <button data-i18n="filter.reset" type="button" id="show-all" class="button button-secondary">Reestablecer</button>
         <div class="form-actions">
-          <button type="submit" id="filter-submit" class="button button-primary">Buscar</button>
+          <button data-i18n="common.search" type="submit" id="filter-submit" class="button button-primary">Buscar</button>
         </div>
       </form>
     </section>
@@ -437,146 +439,146 @@ Esta acción no se puede deshacer.</p>
     <section class="results-panel" aria-labelledby="results-title">
       <div class="results-heading">
         <div>
-          <p class="eyebrow">Inventario</p>
+          <p data-i18n="inventory.title" class="eyebrow">Inventario</p>
         </div>
         <div class="results-heading-actions">
           <p id="result-count" class="result-count" aria-live="polite"></p>
-          <button type="button" id="new-minifigura" class="button button-primary button-icon" aria-label="Nueva minipersona" title="Nueva minipersona">
+          <button data-i18n-aria-label="inventory.new" data-i18n-title="inventory.new" type="button" id="new-minifigura" class="button button-primary button-icon" aria-label="Nueva minipersona" title="Nueva minipersona">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
           </button>
         </div>
       </div>
-      <p id="status" class="status" role="status" aria-live="polite">Cargando catálogo...</p>
+      <p data-i18n="inventory.loading" id="status" class="status" role="status" aria-live="polite">Cargando catálogo...</p>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th scope="col" aria-label="Imagen"></th>
-              <th scope="col">Seguimiento</th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="id"><span class="catalog-id-heading">ID</span><span class="catalog-mobile-heading">Minifigura</span><span class="visually-hidden">, ordenar por ID</span></button></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="nombre">Nombre</button></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="categoria">Categoría</button></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="subcategoria">Subcategoría</button></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="anio">Año</button></th>
-              <th scope="col" aria-label="Estado"><span class="catalog-state-heading">Estado</span></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="precio">Precio</button></th>
-              <th scope="col"><button type="button" class="table-sort" data-sort="diferencia">Diferencia</button></th>
-              <th scope="col" aria-label="Acciones"></th>
+              <th data-i18n-aria-label="common.image" scope="col" aria-label="Imagen"></th>
+              <th data-i18n="common.following" scope="col">Seguimiento</th>
+              <th scope="col"><button type="button" class="table-sort" data-sort="id"><span class="catalog-id-heading">ID</span><span data-i18n="inventory.figureHeading" class="catalog-mobile-heading">Minipersona</span><span data-i18n="inventory.sortId" class="visually-hidden">, ordenar por ID</span></button></th>
+              <th scope="col"><button data-i18n="common.name" type="button" class="table-sort" data-sort="nombre">Nombre</button></th>
+              <th scope="col"><button data-i18n="common.category" type="button" class="table-sort" data-sort="categoria">Categoría</button></th>
+              <th scope="col"><button data-i18n="common.subcategory" type="button" class="table-sort" data-sort="subcategoria">Subcategoría</button></th>
+              <th scope="col"><button data-i18n="common.year" type="button" class="table-sort" data-sort="anio">Año</button></th>
+              <th data-i18n-aria-label="common.state" scope="col" aria-label="Estado"><span data-i18n="common.state" class="catalog-state-heading">Estado</span></th>
+              <th scope="col"><button data-i18n="common.price" type="button" class="table-sort" data-sort="precio">Precio</button></th>
+              <th scope="col"><button data-i18n="common.difference" type="button" class="table-sort" data-sort="diferencia">Diferencia</button></th>
+              <th data-i18n-aria-label="common.actions" scope="col" aria-label="Acciones"></th>
             </tr>
           </thead>
           <tbody id="catalog-body"></tbody>
         </table>
       </div>
-      <nav id="catalog-pagination" class="catalog-pagination" aria-label="Paginación del catálogo">
-        <button type="button" id="previous-page" class="button button-secondary button-small">Anterior</button>
-        <span id="page-status" aria-live="polite">Página 1 de 1</span>
-        <button type="button" id="next-page" class="button button-secondary button-small">Siguiente</button>
+      <nav data-i18n-aria-label="inventory.pagination" id="catalog-pagination" class="catalog-pagination" aria-label="Paginación del catálogo">
+        <button data-i18n="common.previous" type="button" id="previous-page" class="button button-secondary button-small">Anterior</button>
+        <span data-i18n="inventory.initialPage" id="page-status" aria-live="polite">Página 1 de 1</span>
+        <button data-i18n="common.next" type="button" id="next-page" class="button button-secondary button-small">Siguiente</button>
       </nav>
     </section>
 
     <dialog id="first-minifigura-dialog" class="modal first-minifigura-dialog" aria-labelledby="first-minifigura-title">
       <img src="/toast_images/brick.png" alt="" class="first-minifigura-icon">
-      <h2 id="first-minifigura-title" tabindex="-1">Tu colección empieza aquí</h2>
-      <p>Añade tu primera minipersona para ganar unos Bricks</p>
-      <button type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
+      <h2 data-i18n="inventory.startTitle" id="first-minifigura-title" tabindex="-1">Tu colección empieza aquí</h2>
+      <p data-i18n="inventory.startHint">Añade tu primera minipersona para ganar unos Bricks</p>
+      <button data-i18n="common.accept" type="button" id="first-minifigura-accept" class="button button-primary">Aceptar</button>
     </dialog>
 
     <dialog id="form-dialog" class="modal" aria-labelledby="form-dialog-title">
       <div class="form-dialog-heading modal-dialog-heading">
-        <h2 id="form-dialog-title">Añadir a inventario</h2>
-        <button type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
+        <h2 data-i18n="inventory.add" id="form-dialog-title">Añadir a inventario</h2>
+        <button data-i18n="common.close" type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
       </div>
-      <div id="creation-mode-tabs" class="creation-mode-tabs" role="group" aria-label="Modo de alta" hidden>
-        <button type="button" class="button button-secondary" data-creation-mode="individual" aria-pressed="true">Nueva minipersona</button>
-        <button type="button" class="button button-secondary" data-creation-mode="set" aria-pressed="false">Añadir por set</button>
+      <div data-i18n-aria-label="inventory.creationMode" id="creation-mode-tabs" class="creation-mode-tabs" role="group" aria-label="Modo de alta" hidden>
+        <button data-i18n="inventory.new" type="button" class="button button-secondary" data-creation-mode="individual" aria-pressed="true">Nueva minipersona</button>
+        <button data-i18n="inventory.addSet" type="button" class="button button-secondary" data-creation-mode="set" aria-pressed="false">Añadir por set</button>
       </div>
       <form id="minifigura-form" novalidate>
         <div id="individual-create-content" class="modal-form-column">
           <div class="modal-row modal-row-identity">
             <div class="modal-identity-fields">
               <label id="form-id-label" class="required-label" for="form-id"><span>ID</span><input id="form-id" name="id" required></label>
-              <label id="form-nombre-label" for="form-nombre"><span>Nombre</span><input id="form-nombre" name="nombre" class="input-readonly" readonly disabled required></label>
+              <label id="form-nombre-label" for="form-nombre"><span data-i18n="common.name">Nombre</span><input id="form-nombre" name="nombre" class="input-readonly" readonly disabled required></label>
             </div>
             <label class="description-field">
-              <span>Descripción</span>
+              <span data-i18n="common.description">Descripción</span>
               <textarea id="form-descripcion" name="descripcion" rows="2" class="input-readonly" readonly disabled></textarea>
             </label>
           </div>
           <div class="modal-fields">
             <div class="modal-row modal-row-status">
               <div class="modal-state-control">
-                <label class="visually-hidden" for="form-estadoColeccion">Estado</label>
+                <label data-i18n="common.state" class="visually-hidden" for="form-estadoColeccion">Estado</label>
                 <select id="form-estadoColeccion" name="estadoColeccion" class="visually-hidden">
-                  <option value="COLECCIÓN" selected>Colección</option>
-                  <option value="BUSCADA">Búsqueda</option>
+                  <option data-i18n="common.collection" value="COLECCIÓN" selected>Colección</option>
+                  <option data-i18n="common.wanted" value="BUSCADA">Búsqueda</option>
                 </select>
-                <div id="form-state-toggles" class="form-state-toggles" role="group" aria-label="Estado">
-                  <button type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección"><span class="status-icon-image box-icon" aria-hidden="true">📦</span></button>
-                  <button type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda"><span class="status-icon-image magnifier-icon" aria-hidden="true">🔍</span></button>
+                <div data-i18n-aria-label="common.state" id="form-state-toggles" class="form-state-toggles" role="group" aria-label="Estado">
+                  <button data-i18n-aria-label="common.collection" data-i18n-title="common.collection" type="button" class="state-toggle active" data-form-state="COLECCIÓN" aria-label="Colección" aria-pressed="true" title="Colección"><span class="status-icon-image box-icon" aria-hidden="true">📦</span></button>
+                  <button data-i18n-aria-label="common.wanted" data-i18n-title="common.wanted" type="button" class="state-toggle inactive" data-form-state="BUSCADA" aria-label="Búsqueda" aria-pressed="false" title="Búsqueda"><span class="status-icon-image magnifier-icon" aria-hidden="true">🔍</span></button>
                 </div>
               </div>
-              <button type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><use href="#observation-eye-icon"/></svg></button>
+              <button data-i18n-aria-label="common.follow" data-i18n-title="common.follow" type="button" id="form-observada" class="eye-icon inactive eye-toggle" aria-label="Seguir" title="Seguir" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><use href="#observation-eye-icon"/></svg></button>
             </div>
             <div class="modal-row modal-row-purchase">
               <label>
-                Fecha de compra
+                <span data-i18n="inventory.purchaseDate">Fecha de compra</span>
                 <input id="form-fechaCompra" name="fechaCompra" type="date">
               </label>
               <label>
-                Precio de compra (€)
+                <span data-i18n="inventory.purchasePrice">Precio de compra (€)</span>
                 <input id="form-precioCompra" name="precioCompra" type="number" min="0" step="0.01">
               </label>
             </div>
             <div class="modal-row modal-row-category">
               <label>
-                <span>Categoría</span>
+                <span data-i18n="common.category">Categoría</span>
                 <input id="form-categoria" name="categoria" class="input-readonly" readonly required>
               </label>
               <label>
-                Subcategoría
+                <span data-i18n="common.subcategory">Subcategoría</span>
                 <input id="form-subcategoria" name="subcategoria" class="input-readonly" readonly>
               </label>
             </div>
             <div class="modal-row modal-row-brickset">
               <label>
-                <span>Año</span>
+                <span data-i18n="common.year">Año</span>
                 <input id="form-anio" name="anio" type="number" class="input-readonly" readonly required>
               </label>
               <label>
-                <span>Precio Brickset (€)</span>
+                <span data-i18n="inventory.bricksetPrice">Precio Brickset (€)</span>
                 <input id="form-precio" name="precio" type="number" min="0" step="0.01" class="input-readonly" readonly required>
               </label>
             </div>
           </div>
           <p id="form-error" class="form-error" role="alert"></p>
         </div>
-        <aside id="individual-create-preview" class="modal-preview" aria-label="Previsualización Brickset">
+        <aside data-i18n-aria-label="inventory.bricksetPreview" id="individual-create-preview" class="modal-preview" aria-label="Previsualización Brickset">
           <img id="form-preview-image" alt="">
         </aside>
-        <section id="set-create-section" class="set-create-section" aria-label="Minipersonas del set" hidden>
+        <section data-i18n-aria-label="inventory.setFigures" id="set-create-section" class="set-create-section" aria-label="Minipersonas del set" hidden>
           <div class="set-create-heading" hidden>
-            <h3><span id="set-create-title">Minipersonas en el set</span> <span id="set-create-number" class="set-number"></span></h3>
+            <h3><span data-i18n="inventory.setCaption" id="set-create-title">Minipersonas en el set</span> <span id="set-create-number" class="set-number"></span></h3>
             <p id="set-create-owned" class="set-create-owned" hidden></p>
           </div>
           <div id="set-create-empty" class="set-create-empty">
-            <button type="button" id="set-create-search" class="button button-primary">Buscar set</button>
+            <button data-i18n="inventory.searchSet" type="button" id="set-create-search" class="button button-primary">Buscar set</button>
           </div>
           <label id="set-purchase-date-label" class="set-purchase-date" hidden>
-            Fecha de compra
+            <span data-i18n="inventory.purchaseDate">Fecha de compra</span>
             <input id="set-fechaCompra" name="setFechaCompra" type="date">
           </label>
           <div id="set-minifigures-wrap" class="table-wrap set-minifigures-wrap" hidden>
             <table class="set-minifigures-table">
               <thead>
                 <tr>
-                  <th scope="col" aria-label="Imagen"></th>
-                  <th scope="col">Seguimiento</th>
-                  <th scope="col"><button type="button" class="table-sort" data-set-sort="id">Minifigura</button></th>
-                  <th scope="col"><button type="button" class="table-sort" data-set-sort="categoria">Categoría</button></th>
-                  <th scope="col"><button type="button" class="table-sort" data-set-sort="subcategoria">Subcategoría</button></th>
-                  <th scope="col"><button type="button" class="table-sort" data-set-sort="anio">Año</button></th>
-                  <th scope="col">Estado</th>
-                  <th scope="col"><button type="button" class="table-sort" data-set-sort="precio">Precio</button></th>
+                  <th data-i18n-aria-label="common.image" scope="col" aria-label="Imagen"></th>
+                  <th data-i18n="common.following" scope="col">Seguimiento</th>
+                  <th scope="col"><button data-i18n="inventory.figureHeading" type="button" class="table-sort" data-set-sort="id">Minipersona</button></th>
+                  <th scope="col"><button data-i18n="common.category" type="button" class="table-sort" data-set-sort="categoria">Categoría</button></th>
+                  <th scope="col"><button data-i18n="common.subcategory" type="button" class="table-sort" data-set-sort="subcategoria">Subcategoría</button></th>
+                  <th scope="col"><button data-i18n="common.year" type="button" class="table-sort" data-set-sort="anio">Año</button></th>
+                  <th data-i18n="common.state" scope="col">Estado</th>
+                  <th scope="col"><button data-i18n="common.price" type="button" class="table-sort" data-set-sort="precio">Precio</button></th>
                 </tr>
               </thead>
               <tbody id="set-minifigures-body"></tbody>
@@ -587,24 +589,24 @@ Esta acción no se puede deshacer.</p>
         <div class="form-actions">
           <span id="brickset-loading" class="brickset-loading" role="status" aria-live="polite" hidden>
             <span class="brickset-loading-icon" aria-hidden="true"></span>
-            <span>Autocompletando...</span>
+            <span data-i18n="inventory.autocompleting">Autocompletando...</span>
           </span>
-          <button type="submit" id="form-submit" class="button button-primary">Guardar</button>
+          <button data-i18n="common.save" type="submit" id="form-submit" class="button button-primary">Guardar</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="set-number-dialog" class="modal set-number-dialog" aria-labelledby="set-number-title">
       <div class="form-dialog-heading modal-dialog-heading">
-        <h2 id="set-number-title">Buscar set</h2>
-        <button type="button" id="set-number-close" class="button button-secondary">Cerrar</button>
+        <h2 data-i18n="inventory.searchSet" id="set-number-title">Buscar set</h2>
+        <button data-i18n="common.close" type="button" id="set-number-close" class="button button-secondary">Cerrar</button>
       </div>
-      <label for="set-number-input">Número de set</label>
+      <label data-i18n="inventory.setNumber" for="set-number-input">Número de set</label>
       <input id="set-number-input" inputmode="text" autocomplete="off">
       <p id="set-number-status" class="set-number-status" role="status" aria-live="polite"></p>
       <div class="form-actions">
-        <button type="button" id="set-number-search" class="button button-primary">Buscar</button>
-        <button type="button" id="set-number-continue" class="button button-primary" disabled>Continuar</button>
+        <button data-i18n="common.search" type="button" id="set-number-search" class="button button-primary">Buscar</button>
+        <button data-i18n="common.continue" type="button" id="set-number-continue" class="button button-primary" disabled>Continuar</button>
       </div>
     </dialog>
 
@@ -613,16 +615,16 @@ Esta acción no se puede deshacer.</p>
         <h2 id="image-modal-title">ID</h2>
         <p id="image-modal-name"></p>
         <img id="image-modal-image" alt="">
-        <button type="button" id="image-modal-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="image-modal-close" class="button button-secondary">Cerrar</button>
       </div>
     </dialog>
 
     <dialog id="delete-dialog" class="modal">
-      <h2>Eliminar minipersona</h2>
+      <h2 data-i18n="inventory.remove">Eliminar minipersona</h2>
       <p id="delete-message"></p>
       <div class="form-actions">
-        <button type="button" id="delete-confirm" class="button button-danger">Eliminar</button>
-        <button type="button" id="delete-cancel" class="button button-secondary">Cancelar</button>
+        <button data-i18n="common.delete" type="button" id="delete-confirm" class="button button-danger">Eliminar</button>
+        <button data-i18n="common.cancel" type="button" id="delete-cancel" class="button button-secondary">Cancelar</button>
       </div>
     </dialog>
 
@@ -630,14 +632,14 @@ Esta acción no se puede deshacer.</p>
       <div class="achievements-heading modal-dialog-heading">
         <img class="achievements-heading-icon" src="/level_images/0_duplo.png" alt="">
         <div class="achievements-heading-text">
-          <h2 id="gamification-dialog-title">Logros</h2>
+          <h2 data-i18n="common.achievements" id="gamification-dialog-title">Logros</h2>
           <p id="gamification-dialog-level" class="eyebrow">0 Duplo</p>
         </div>
         <span class="gamification-bricks-value achievements-heading-bricks">
           <strong id="gamification-dialog-bricks">0</strong>
           <img class="gamification-brick-icon" src="/toast_images/brick.png" alt="Bricks">
         </span>
-        <button type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="achievements-status" class="status" role="status" aria-live="polite"></p>
       <ul id="gamification-achievements" class="achievements-list"></ul>
@@ -647,35 +649,35 @@ Esta acción no se puede deshacer.</p>
       <div class="achievements-heading modal-dialog-heading">
         <img class="achievements-heading-icon" src="/status_images/sobre.png" alt="">
         <div class="achievements-heading-text">
-          <h2 id="notifications-dialog-title">Notificaciones</h2>
+          <h2 data-i18n="common.notifications" id="notifications-dialog-title">Notificaciones</h2>
         </div>
-        <button type="button" id="notifications-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="notifications-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="notifications-toolbar" hidden>
-        <button type="button" id="notifications-mark-all" class="button button-secondary" disabled>Marcar todas como leídas</button>
+        <button data-i18n="notifications.markAll" type="button" id="notifications-mark-all" class="button button-secondary" disabled>Marcar todas como leídas</button>
       </div>
-      <p id="notifications-status" class="status loading-message" role="status" aria-live="polite">Cargando notificaciones...</p>
+      <p data-i18n="notifications.loading" id="notifications-status" class="status loading-message" role="status" aria-live="polite">Cargando notificaciones...</p>
       <ul id="notifications-list" class="achievements-list notifications-list"></ul>
     </dialog>
 
     <dialog id="friends-dialog" class="modal modal-friends" aria-labelledby="friends-dialog-title">
       <div class="friends-dialog-heading modal-dialog-heading">
         <img src="/status_images/friends.png" alt="" aria-hidden="true">
-        <h2 id="friends-dialog-title">Amigos</h2>
-        <button type="button" id="friends-close" class="button button-secondary">Cerrar</button>
+        <h2 data-i18n="common.friends" id="friends-dialog-title">Amigos</h2>
+        <button data-i18n="common.close" type="button" id="friends-close" class="button button-secondary">Cerrar</button>
       </div>
-      <div class="friends-tabs" role="tablist" aria-label="Amigos y solicitudes">
-        <button type="button" id="friends-tab-friends" class="button button-secondary" role="tab" aria-selected="true" aria-controls="friends-panel-friends" data-friends-tab="friends">Amigos</button>
-        <button type="button" id="friends-tab-search" class="button button-secondary" role="tab" aria-selected="false" aria-controls="friends-panel-search" data-friends-tab="search" tabindex="-1">Buscador</button>
-        <button type="button" id="friends-tab-sent" class="button button-secondary" role="tab" aria-label="Solicitudes Enviadas" aria-selected="false" aria-controls="friends-panel-sent" data-friends-tab="sent" tabindex="-1"><span class="friends-tab-label-full">Solicitudes Enviadas</span><span class="friends-tab-label-short" aria-hidden="true">Sol. Enviadas</span></button>
-        <button type="button" id="friends-tab-received" class="button button-secondary" role="tab" aria-label="Solicitudes Recibidas" aria-selected="false" aria-controls="friends-panel-received" data-friends-tab="received" tabindex="-1"><span class="friends-tab-label-full">Solicitudes Recibidas</span><span class="friends-tab-label-short" aria-hidden="true">Sol. Recibidas</span></button>
+      <div data-i18n-aria-label="friends.title" class="friends-tabs" role="tablist" aria-label="Amigos y solicitudes">
+        <button data-i18n="common.friends" type="button" id="friends-tab-friends" class="button button-secondary" role="tab" aria-selected="true" aria-controls="friends-panel-friends" data-friends-tab="friends">Amigos</button>
+        <button data-i18n="friends.search" type="button" id="friends-tab-search" class="button button-secondary" role="tab" aria-selected="false" aria-controls="friends-panel-search" data-friends-tab="search" tabindex="-1">Buscador</button>
+        <button data-i18n-aria-label="friends.sentTitle" type="button" id="friends-tab-sent" class="button button-secondary" role="tab" aria-label="Solicitudes Enviadas" aria-selected="false" aria-controls="friends-panel-sent" data-friends-tab="sent" tabindex="-1"><span data-i18n="friends.sentTitle" class="friends-tab-label-full">Solicitudes Enviadas</span><span data-i18n="friends.sentShort" class="friends-tab-label-short" aria-hidden="true">Sol. Enviadas</span></button>
+        <button data-i18n-aria-label="friends.receivedTitle" type="button" id="friends-tab-received" class="button button-secondary" role="tab" aria-label="Solicitudes Recibidas" aria-selected="false" aria-controls="friends-panel-received" data-friends-tab="received" tabindex="-1"><span data-i18n="friends.receivedTitle" class="friends-tab-label-full">Solicitudes Recibidas</span><span data-i18n="friends.receivedShort" class="friends-tab-label-short" aria-hidden="true">Sol. Recibidas</span></button>
       </div>
       <section id="friends-panel-friends" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-friends">
         <p id="friends-status-friends" class="status" role="status" aria-live="polite"></p>
         <ul id="friends-list-friends" class="friends-list"></ul>
       </section>
       <section id="friends-panel-search" class="friends-panel" role="tabpanel" aria-labelledby="friends-tab-search" hidden>
-        <label class="friends-search-label" for="friends-search">Buscar por username</label>
+        <label data-i18n="friends.searchUsername" class="friends-search-label" for="friends-search">Buscar por username</label>
         <input id="friends-search" type="search" minlength="3" autocomplete="off">
         <p id="friends-status-search" class="status" role="status" aria-live="polite"></p>
         <ul id="friends-list-search" class="friends-list"></ul>
@@ -695,48 +697,48 @@ Esta acción no se puede deshacer.</p>
         <img id="public-profile-avatar" class="public-profile-avatar" alt="" hidden>
         <span id="public-profile-avatar-fallback" class="public-profile-avatar-fallback" aria-hidden="true">👤</span>
         <h2 id="public-profile-title"></h2>
-        <button type="button" id="public-profile-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="public-profile-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="public-profile-status" class="status" role="status" aria-live="polite"></p>
-      <button type="button" id="public-profile-retry" class="button button-secondary" hidden>Reintentar</button>
+      <button data-i18n="common.retry" type="button" id="public-profile-retry" class="button button-secondary" hidden>Reintentar</button>
       <div id="public-profile-content" class="public-profile-content" hidden>
-        <section class="public-profile-stats" aria-label="Resumen">
+        <section data-i18n-aria-label="common.summary" class="public-profile-stats" aria-label="Resumen">
           <div role="group" aria-label="Bricks" title="Bricks"><img class="public-profile-stat-icon" src="/toast_images/brick.png" alt=""><strong id="public-profile-bricks"></strong></div>
-          <div role="group" aria-label="Nivel" title="Nivel"><img id="public-profile-level-image" class="public-profile-stat-icon" alt=""><strong id="public-profile-level"></strong></div>
-          <div role="group" aria-label="En colección" title="En colección"><span class="public-profile-stat-icon box-icon" aria-hidden="true">📦</span><strong id="public-profile-collection-count"></strong></div>
-          <div role="group" aria-label="En búsqueda" title="En búsqueda"><span class="public-profile-stat-icon magnifier-icon" aria-hidden="true">🔍</span><strong id="public-profile-wanted-count"></strong></div>
+          <div data-i18n-aria-label="common.level" data-i18n-title="common.level" role="group" aria-label="Nivel" title="Nivel"><img id="public-profile-level-image" class="public-profile-stat-icon" alt=""><strong id="public-profile-level"></strong></div>
+          <div data-i18n-aria-label="friends.inCollection" data-i18n-title="friends.inCollection" role="group" aria-label="En colección" title="En colección"><span class="public-profile-stat-icon box-icon" aria-hidden="true">📦</span><strong id="public-profile-collection-count"></strong></div>
+          <div data-i18n-aria-label="friends.inWanted" data-i18n-title="friends.inWanted" role="group" aria-label="En búsqueda" title="En búsqueda"><span class="public-profile-stat-icon magnifier-icon" aria-hidden="true">🔍</span><strong id="public-profile-wanted-count"></strong></div>
         </section>
         <div class="public-profile-overview">
         <section class="public-profile-section public-profile-dna-section" aria-label="DNA">
           <div class="public-profile-dna-body">
-            <div id="public-profile-dna-chart" class="dna-chart" role="img" aria-label="DNA del coleccionista" hidden>
+            <div data-i18n-aria-label="friends.collectorDna" id="public-profile-dna-chart" class="dna-chart" role="img" aria-label="DNA del coleccionista" hidden>
               <canvas id="public-profile-dna-canvas" aria-hidden="true"></canvas>
               <div class="dna-chart-label" aria-hidden="true"><strong id="public-profile-dna-percentage"></strong><span id="public-profile-dna-trait"></span></div>
             </div>
           </div>
         </section>
         <section class="public-profile-section public-profile-awards" aria-labelledby="public-profile-achievements-title">
-          <h3 id="public-profile-achievements-title">Logros Destacados</h3>
+          <h3 data-i18n="friends.featuredAchievements" id="public-profile-achievements-title">Logros Destacados</h3>
           <ul id="public-profile-achievements" class="achievements-list public-profile-achievements"></ul>
         </section>
         </div>
         <div class="public-profile-tops">
           <section class="public-profile-section" aria-labelledby="public-profile-price-title">
-            <h3 id="public-profile-price-title">Top 5 por precio</h3>
+            <h3 data-i18n="inventory.topPrice" id="public-profile-price-title">Top 5 por precio</h3>
             <ul id="public-profile-top-price" class="ranking-row public-profile-figures"></ul>
           </section>
           <section class="public-profile-section" aria-labelledby="public-profile-age-title">
-            <h3 id="public-profile-age-title">Top 5 por antigüedad</h3>
+            <h3 data-i18n="inventory.topOldest" id="public-profile-age-title">Top 5 por antigüedad</h3>
             <ul id="public-profile-top-age" class="ranking-row public-profile-figures"></ul>
           </section>
         </div>
         <div class="public-profile-tops">
           <section class="public-profile-section" aria-labelledby="public-profile-latest-title">
-            <h3 id="public-profile-latest-title">Últimas de colección</h3>
+            <h3 data-i18n="friends.latestCollection" id="public-profile-latest-title">Últimas de colección</h3>
             <ul id="public-profile-latest-collection" class="ranking-row public-profile-figures"></ul>
           </section>
           <section class="public-profile-section" aria-labelledby="public-profile-latest-wanted-title">
-            <h3 id="public-profile-latest-wanted-title">Últimas buscadas</h3>
+            <h3 data-i18n="friends.latestWanted" id="public-profile-latest-wanted-title">Últimas buscadas</h3>
             <ul id="public-profile-latest-wanted" class="ranking-row public-profile-figures"></ul>
           </section>
         </div>
@@ -746,33 +748,33 @@ Esta acción no se puede deshacer.</p>
     <dialog id="dna-dialog" class="modal modal-dna" aria-labelledby="dna-dialog-title">
       <div class="dna-dialog-heading modal-dialog-heading">
         <h2 id="dna-dialog-title">DNA</h2>
-        <button type="button" id="dna-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="dna-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="dna-dialog-body">
-        <div id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden>
+        <div data-i18n-aria-label="gamification.dnaTitle" id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden>
           <canvas id="dna-canvas" aria-hidden="true"></canvas>
           <div class="dna-chart-label" aria-hidden="true"><strong id="dna-chart-percentage"></strong><span id="dna-chart-trait"></span></div>
         </div>
         <div class="dna-legend-panel">
-          <p id="dna-status" class="dna-status" role="status" aria-live="polite">Cargando DNA…</p>
-          <ul id="dna-legend" class="dna-legend" aria-label="Rasgos DNA" hidden></ul>
+          <p data-i18n="gamification.dnaLoadingEllipsis" id="dna-status" class="dna-status" role="status" aria-live="polite">Cargando DNA…</p>
+          <ul data-i18n-aria-label="gamification.dnaTraits" id="dna-legend" class="dna-legend" aria-label="Rasgos DNA" hidden></ul>
         </div>
       </div>
-      <button type="button" id="dna-retry" class="button button-secondary" hidden>Reintentar</button>
+      <button data-i18n="common.retry" type="button" id="dna-retry" class="button button-secondary" hidden>Reintentar</button>
     </dialog>
 
     <dialog id="ranking-dialog" class="modal modal-ranking" aria-labelledby="ranking-dialog-title">
       <div class="ranking-dialog-heading modal-dialog-heading">
         <div>
-          <h2 id="ranking-dialog-title">Ranking Global</h2>
+          <h2 data-i18n="ranking.global" id="ranking-dialog-title">Ranking Global</h2>
         </div>
-        <button type="button" id="ranking-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="ranking-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="ranking-status" class="status" role="status" aria-live="polite"></p>
       <div class="ranking-order-toolbar">
-        <div id="ranking-order" class="analytics-history-ranges ranking-criteria" role="group" aria-label="Ordenar ranking por">
-          <button type="button" class="button button-secondary" data-ranking-criterion="nivel" aria-pressed="true">Nivel</button>
-          <button type="button" class="button button-secondary" data-ranking-criterion="coleccion" aria-label="Colección" title="Colección" aria-pressed="false"><span class="ranking-criterion-icon status-icon-image box-icon" aria-hidden="true">📦</span></button>
+        <div data-i18n-aria-label="ranking.order" id="ranking-order" class="analytics-history-ranges ranking-criteria" role="group" aria-label="Ordenar ranking por">
+          <button data-i18n="common.level" type="button" class="button button-secondary" data-ranking-criterion="nivel" aria-pressed="true">Nivel</button>
+          <button data-i18n-aria-label="common.collection" data-i18n-title="common.collection" type="button" class="button button-secondary" data-ranking-criterion="coleccion" aria-label="Colección" title="Colección" aria-pressed="false"><span class="ranking-criterion-icon status-icon-image box-icon" aria-hidden="true">📦</span></button>
           <button type="button" class="button button-secondary" data-ranking-criterion="rarityHunter" aria-pressed="false">Rarity Hunter</button>
           <button type="button" class="button button-secondary" data-ranking-criterion="collector" aria-pressed="false">Collector</button>
           <button type="button" class="button button-secondary" data-ranking-criterion="explorer" aria-pressed="false">Explorer</button>
@@ -785,9 +787,9 @@ Esta acción no se puede deshacer.</p>
     <dialog id="weekly-ranking-dialog" class="modal modal-ranking" aria-labelledby="weekly-ranking-title">
       <div class="ranking-dialog-heading modal-dialog-heading">
         <div>
-          <h2 id="weekly-ranking-title">Ranking Semanal</h2>
+          <h2 data-i18n="ranking.weekly" id="weekly-ranking-title">Ranking Semanal</h2>
         </div>
-        <button type="button" id="weekly-ranking-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n="common.close" type="button" id="weekly-ranking-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="weekly-ranking-status" class="status" role="status" aria-live="polite"></p>
       <div id="weekly-ranking-list" class="global-ranking-list"></div>
@@ -795,68 +797,68 @@ Esta acción no se puede deshacer.</p>
 
     <dialog id="analytics-history-dialog" class="modal modal-analytics-history" aria-labelledby="analytics-history-title">
       <div class="analytics-history-heading modal-dialog-heading">
-        <h2 id="analytics-history-title">Progreso</h2>
-        <button type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
+        <h2 data-i18n="gamification.progress" id="analytics-history-title">Progreso</h2>
+        <button data-i18n="common.close" type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="analytics-history-controls">
-        <div id="analytics-history-ranges" class="analytics-history-ranges" role="group" aria-label="Rango temporal">
-          <button type="button" class="button button-secondary" data-history-days="7" aria-pressed="true">7 días</button>
-          <button type="button" class="button button-secondary" data-history-days="30" aria-pressed="false">30 días</button>
-          <button type="button" class="button button-secondary" data-history-days="90" aria-pressed="true">90 días</button>
-          <button type="button" class="button button-secondary" data-history-days="365" aria-pressed="false">365 días</button>
+        <div data-i18n-aria-label="history.period" id="analytics-history-ranges" class="analytics-history-ranges" role="group" aria-label="Rango temporal">
+          <button data-i18n="history.week" type="button" class="button button-secondary" data-history-days="7" aria-pressed="true">7 días</button>
+          <button data-i18n="history.month" type="button" class="button button-secondary" data-history-days="30" aria-pressed="false">30 días</button>
+          <button data-i18n="history.quarter" type="button" class="button button-secondary" data-history-days="90" aria-pressed="true">90 días</button>
+          <button data-i18n="history.year" type="button" class="button button-secondary" data-history-days="365" aria-pressed="false">365 días</button>
         </div>
       </div>
       <p id="analytics-history-status" class="status" role="status" aria-live="polite"></p>
-      <button type="button" id="analytics-history-retry" class="button button-secondary" hidden>Reintentar</button>
+      <button data-i18n="common.retry" type="button" id="analytics-history-retry" class="button button-secondary" hidden>Reintentar</button>
       <div class="analytics-history-charts">
         <details class="analytics-history-chart" data-history-section="value" aria-labelledby="analytics-history-value-title">
-          <summary><h3 id="analytics-history-value-title">Colección y Valor</h3></summary>
-          <div class="analytics-history-plot"><canvas id="analytics-history-value-chart" role="img" aria-label="Colección y Valor"></canvas></div>
+          <summary><h3 data-i18n="history.collectionValue" id="analytics-history-value-title">Colección y Valor</h3></summary>
+          <div class="analytics-history-plot"><canvas data-i18n-aria-label="history.collectionValue" id="analytics-history-value-chart" role="img" aria-label="Colección y Valor"></canvas></div>
           <details class="analytics-history-table-wrap">
-            <summary>Datos</summary>
+            <summary data-i18n="history.data">Datos</summary>
             <table id="analytics-history-value-table">
-              <caption>Colección y Valor por fecha</caption>
-              <thead><tr><th scope="col">Fecha</th><th scope="col">Valor</th><th scope="col">Figuras</th><th scope="col">Colección</th></tr></thead>
+              <caption data-i18n="history.valueByDate">Colección y Valor por fecha</caption>
+              <thead><tr><th data-i18n="common.date" scope="col">Fecha</th><th data-i18n="common.value" scope="col">Valor</th><th data-i18n="common.figures" scope="col">Figuras</th><th data-i18n="common.collection" scope="col">Colección</th></tr></thead>
               <tbody></tbody>
             </table>
-            <nav class="analytics-history-pagination" aria-label="Paginación de Colección y Valor" hidden>
-              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-value-table">Anterior</button>
+            <nav data-i18n-aria-label="history.valuePages" class="analytics-history-pagination" aria-label="Paginación de Colección y Valor" hidden>
+              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-value-table">Anterior</button>
               <span role="status" aria-live="polite"></span>
-              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-value-table">Siguiente</button>
+              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-value-table">Siguiente</button>
             </nav>
           </details>
         </details>
         <details class="analytics-history-chart" data-history-section="dna" aria-labelledby="analytics-history-dna-title">
           <summary><h3 id="analytics-history-dna-title">DNA</h3></summary>
-          <div class="analytics-history-plot"><canvas id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas></div>
+          <div class="analytics-history-plot"><canvas data-i18n-aria-label="history.dnaComposition" id="analytics-history-dna-chart" role="img" aria-label="Composición histórica de DNA"></canvas></div>
           <details class="analytics-history-table-wrap">
-            <summary>Datos</summary>
+            <summary data-i18n="history.data">Datos</summary>
             <table id="analytics-history-dna-table">
-              <caption>Porcentajes de DNA por fecha</caption>
-              <thead><tr><th scope="col">Fecha</th><th scope="col">Collector</th><th scope="col">Explorer</th><th scope="col">Rarity Hunter</th><th scope="col">Fan</th></tr></thead>
+              <caption data-i18n="history.dnaByDate">Porcentajes de DNA por fecha</caption>
+              <thead><tr><th data-i18n="common.date" scope="col">Fecha</th><th scope="col">Collector</th><th scope="col">Explorer</th><th scope="col">Rarity Hunter</th><th scope="col">Fan</th></tr></thead>
               <tbody></tbody>
             </table>
-            <nav class="analytics-history-pagination" aria-label="Paginación de DNA" hidden>
-              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-dna-table">Anterior</button>
+            <nav data-i18n-aria-label="history.dnaPages" class="analytics-history-pagination" aria-label="Paginación de DNA" hidden>
+              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-dna-table">Anterior</button>
               <span role="status" aria-live="polite"></span>
-              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-dna-table">Siguiente</button>
+              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-dna-table">Siguiente</button>
             </nav>
           </details>
         </details>
         <details class="analytics-history-chart" data-history-section="progression" aria-labelledby="analytics-history-progression-title">
-          <summary><h3 id="analytics-history-progression-title">Bricks y Nivel</h3></summary>
-          <div class="analytics-history-plot"><canvas id="analytics-history-progression-chart" role="img" aria-label="Bricks y Nivel por fecha"></canvas></div>
+          <summary><h3 data-i18n="history.bricksLevel" id="analytics-history-progression-title">Bricks y Nivel</h3></summary>
+          <div class="analytics-history-plot"><canvas data-i18n-aria-label="history.bricksByDate" id="analytics-history-progression-chart" role="img" aria-label="Bricks y Nivel por fecha"></canvas></div>
           <details class="analytics-history-table-wrap">
-            <summary>Datos</summary>
+            <summary data-i18n="history.data">Datos</summary>
             <table id="analytics-history-progression-table">
-              <caption>Bricks y Nivel por fecha</caption>
-              <thead><tr><th scope="col">Fecha</th><th scope="col">Bricks</th><th scope="col">Nivel</th></tr></thead>
+              <caption data-i18n="history.bricksByDate">Bricks y Nivel por fecha</caption>
+              <thead><tr><th data-i18n="common.date" scope="col">Fecha</th><th scope="col">Bricks</th><th data-i18n="common.level" scope="col">Nivel</th></tr></thead>
               <tbody></tbody>
             </table>
-            <nav class="analytics-history-pagination" aria-label="Paginación de Bricks y Nivel" hidden>
-              <button type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-progression-table">Anterior</button>
+            <nav data-i18n-aria-label="history.bricksPages" class="analytics-history-pagination" aria-label="Paginación de Bricks y Nivel" hidden>
+              <button data-i18n="common.previous" type="button" class="button button-secondary" data-history-page="-1" aria-controls="analytics-history-progression-table">Anterior</button>
               <span role="status" aria-live="polite"></span>
-              <button type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-progression-table">Siguiente</button>
+              <button data-i18n="common.next" type="button" class="button button-secondary" data-history-page="1" aria-controls="analytics-history-progression-table">Siguiente</button>
             </nav>
           </details>
         </details>

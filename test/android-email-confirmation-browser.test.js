@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { webcrypto } from 'node:crypto';
 import { JSDOM } from 'jsdom';
+import { withI18n } from '../test-support/browser-auth.js';
 import { startTestServer } from '../test-support/server.js';
 
 const page = await readFile(new URL('../public/android-email-confirmation.html', import.meta.url), 'utf8');
@@ -20,6 +21,7 @@ function decodeBase64Url(value) {
 async function createCallback({
   search = `?handoff_id=${HANDOFF_ID}&token_hash=one-time-token-hash&type=email`,
   verifyError = null,
+  language = 'es',
 } = {}) {
   const keyPair = await webcrypto.subtle.generateKey({
     name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256',
@@ -28,6 +30,7 @@ async function createCallback({
   const calls = { verifyOtp: [], publish: [], fetch: [], createClient: [] };
   const dom = new JSDOM(page, { url: `https://backend.test/android-email-confirmation${search}`, runScripts: 'outside-only' });
   const { window } = dom;
+  window.localStorage.setItem('minipeople.language', language);
   Object.defineProperty(window, 'crypto', { value: webcrypto });
   Object.defineProperty(window, 'TextEncoder', { value: TextEncoder });
   window.supabase = {
@@ -65,7 +68,7 @@ async function createCallback({
     }
     throw new Error(`Unexpected request: ${url.pathname}`);
   };
-  window.eval(callbackScript);
+  window.eval(withI18n(callbackScript));
   return { dom, window, keyPair, calls };
 }
 
@@ -121,6 +124,7 @@ test('callback rejects duplicate, malformed and non-signup parameters without ca
       assert.equal(window.location.search, '');
       assert.equal(calls.verifyOtp.length, 0);
       assert.equal(calls.publish.length, 0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       assert.match(window.document.querySelector('#confirmation-message').textContent, /No se pudo confirmar/);
     } finally {
       dom.window.close();
@@ -164,6 +168,39 @@ test('hosted callback response has no-store and restrictive security headers', a
   }
 });
 
+test('confirmaciones web y Android usan EN recordado sin agregar parametros ni interpretar detalles del proveedor', async () => {
+  const { dom, window, calls } = await createCallback({ language: 'en' });
+  try {
+    assert.equal(window.location.search, '');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let attempt = 0; attempt < 100
+      && !window.document.querySelector('#confirmation-message').textContent.startsWith('Email confirmed.'); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(window.document.documentElement.lang, 'en');
+    assert.equal(window.document.querySelector('h1').textContent, 'Email confirmation');
+    assert.equal(window.document.querySelector('#confirmation-message').textContent, 'Email confirmed. Return to the Android app to continue.');
+    assert.equal(calls.publish.length, 1);
+  } finally {
+    dom.window.close();
+  }
+  const invalid = new JSDOM(webPage, {
+    url: 'https://backend.test/email-confirmation?flow=signup&token_hash=secret&type=email&lang=en',
+    runScripts: 'outside-only',
+  });
+  try {
+    invalid.window.localStorage.setItem('minipeople.language', 'en');
+    invalid.window.eval(withI18n(webCallbackScript));
+    assert.equal(invalid.window.location.search, '');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(invalid.window.document.documentElement.lang, 'en');
+    assert.equal(invalid.window.document.querySelector('#confirmation-message').textContent,
+      'Unable to confirm your email. Request a new link and try again.');
+  } finally {
+    invalid.window.close();
+  }
+});
+
 test('web confirmation persists the Supabase session for the original tab without redirecting the callback tab', async () => {
   const dom = new JSDOM(webPage, {
     url: 'https://backend.test/email-confirmation?flow=signup&token_hash=one-time-token-hash&type=email',
@@ -192,7 +229,7 @@ test('web confirmation persists the Supabase session for the original tab withou
     };
   };
   try {
-    window.eval(webCallbackScript);
+    window.eval(withI18n(webCallbackScript));
     assert.equal(window.location.search, '');
     for (let attempt = 0; attempt < 20 && calls.verifyOtp.length === 0; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -222,8 +259,9 @@ test('web confirmation rejects unrelated or duplicate parameters and reports ver
       runScripts: 'outside-only',
     });
     try {
-      dom.window.eval(webCallbackScript);
+      dom.window.eval(withI18n(webCallbackScript));
       assert.equal(dom.window.location.search, '');
+      await new Promise((resolve) => setTimeout(resolve, 0));
       assert.match(dom.window.document.querySelector('#confirmation-message').textContent, /No se pudo confirmar/);
     } finally {
       dom.window.close();
@@ -247,7 +285,7 @@ test('web confirmation rejects unrelated or duplicate parameters and reports ver
     json: async () => ({ url: 'https://project.supabase.test', anonKey: 'anon' }),
   });
   try {
-    window.eval(webCallbackScript);
+    window.eval(withI18n(webCallbackScript));
     for (let attempt = 0; attempt < 20 && verifyCalls === 0; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }

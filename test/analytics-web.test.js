@@ -165,6 +165,23 @@ for (const days of [30, 90, 365]) {
       }
       assert.equal(requests.length, requestCount);
       assert.deepEqual(chartInstances, charts);
+      if (days === 30) {
+        const focus = sections[0].querySelector('[data-history-page="-1"]');
+        focus.focus();
+        await window.MiniPeopleI18n.setLanguage('en');
+        assert.equal(document.querySelector('#analytics-history-value-title').textContent, 'Collection and Value');
+        assert.equal(document.activeElement, focus);
+        assert.equal(sections[0].open, true);
+        assert.equal(sections[1].open, false);
+        for (const section of sections) {
+          assert.equal(section.querySelector('[role="status"]').textContent, `Page ${Math.ceil(days / 7) - 1} of ${Math.ceil(days / 7)}`);
+        }
+        assert.equal(sections[0].querySelector('tbody tr td:nth-child(2)').textContent, '€210.00');
+        assert.equal(requests.length, requestCount);
+        await window.MiniPeopleI18n.setLanguage('es');
+        assert.match(sections[0].querySelector('tbody tr td:nth-child(2)').textContent, /210,00\s€/);
+        assert.equal(document.activeElement, focus);
+      }
       for (const chart of chartInstances.slice(-3)) {
         assert.equal(chart.configuration.data.datasets[0].data.length, days);
       }

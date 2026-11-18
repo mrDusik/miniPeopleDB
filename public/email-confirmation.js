@@ -13,15 +13,12 @@
   window.history.replaceState(null, '', window.location.pathname);
 
   const showError = () => {
-    message.textContent = 'No se pudo confirmar el email. Solicita un nuevo enlace e inténtalo otra vez.';
+    message.textContent = window.MiniPeopleI18n.t('confirmation.error');
   };
 
-  if (flow !== 'signup' || !tokenHash || tokenHash.length > 2048 || type !== 'email'
+  const invalid = flow !== 'signup' || !tokenHash || tokenHash.length > 2048 || type !== 'email'
     || parameterNames.length !== 3
-    || parameterNames.some((name) => !['flow', 'token_hash', 'type'].includes(name))) {
-    showError();
-    return;
-  }
+    || parameterNames.some((name) => !['flow', 'token_hash', 'type'].includes(name));
 
   async function confirmEmail() {
     const configResponse = await fetch('/config/supabase', { cache: 'no-store' });
@@ -34,8 +31,23 @@
     if (error || !data?.session?.access_token || !data.session.refresh_token) {
       throw new Error('CONFIRMACION_INVALIDA');
     }
-    message.textContent = 'Email confirmado. Vuelve a la pestaña donde iniciaste el registro; debería continuar automáticamente.';
+    message.textContent = window.MiniPeopleI18n.t('confirmation.webSuccess');
   }
 
-  void confirmEmail().catch(showError);
+  async function start() {
+    try {
+      await window.MiniPeopleI18n.initialize();
+    } catch {
+      message.textContent = 'No se pudieron cargar las traducciones. Reintenta para continuar.';
+      const retry = document.createElement('button');
+      retry.textContent = 'Reintentar';
+      retry.addEventListener('click', () => { retry.remove(); void start(); }, { once: true });
+      message.after(retry);
+      return;
+    }
+    message.textContent = window.MiniPeopleI18n.t('confirmation.checking');
+    if (invalid) showError();
+    else await confirmEmail().catch(showError);
+  }
+  void start();
 })();

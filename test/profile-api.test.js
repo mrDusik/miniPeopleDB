@@ -11,6 +11,39 @@ const PROFILE = {
   favoriteCategories: ['Castle', 'Space'],
 };
 
+test('el perfil guarda ES/EN y rechaza idiomas o monedas no soportados sin cambios parciales', async () => {
+  const mock = createSupabaseMock({ users: { [TEST_TOKEN]: TEST_USER, [OTHER_TOKEN]: OTHER_USER } });
+  mock.seed('user_profiles', OTHER_USER.id, [{ username: 'OtherFan', language: 'es', onboarding_completed: true }]);
+  const context = await startTestServer({ supabase: mock });
+  const save = (profile) => authFetch()(`${context.baseUrl}/api/profile`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(profile),
+  });
+  try {
+    for (const language of ['en', 'es', 'en']) {
+      const response = await save({ ...PROFILE, language });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).language, language);
+      assert.equal((await (await authFetch()(`${context.baseUrl}/api/profile`)).json()).language, language);
+    }
+    for (const invalid of [
+      ...['it', 'fr', 'EN', '', null, 1, {}, ['en']].map((language) => ({ language })),
+      { currency: 'USD' }, { username: 'ChangedName' },
+    ]) {
+      const response = await save({ ...PROFILE, ...invalid, favoriteCategories: ['Space'] });
+      assert.equal(response.status, Object.hasOwn(invalid, 'username') ? 409 : 400);
+      const current = await (await authFetch()(`${context.baseUrl}/api/profile`)).json();
+      assert.deepEqual(current, { ...PROFILE, language: 'en', onboardingCompleted: true });
+    }
+    mock.failNext('user_profile_favorite_categories', { message: 'unavailable' }, 'replace');
+    assert.equal((await save({ ...PROFILE, language: 'es' })).status, 500);
+    assert.equal((await (await authFetch()(`${context.baseUrl}/api/profile`)).json()).language, 'en');
+    assert.equal(mock.rows('user_profiles', OTHER_USER.id)[0].language, 'es');
+    assert.deepEqual(mock.adminCalls(), []);
+  } finally {
+    await context.close();
+  }
+});
+
 test('eliminar cuenta exige JWT y borra solo la identidad propia sin aceptar IDs ni usar admin', async () => {
   const mock = createSupabaseMock({ users: { [TEST_TOKEN]: TEST_USER, [OTHER_TOKEN]: OTHER_USER } });
   for (const user of [TEST_USER, OTHER_USER]) {

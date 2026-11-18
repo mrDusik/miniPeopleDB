@@ -27,7 +27,7 @@ npm ci
 npm run android:apk
 ```
 
-El build prepara los recursos locales de `public/`, copia los bundles locales de Supabase JS y Chart.js, registra el deep link Android y compila el APK debug. El backend se configura con la URL HTTPS confirmada `https://minipeopledb.onrender.com`. Para usar otro origen en un entorno autorizado, se puede sustituir al compilar:
+El build prepara los recursos locales de `public/`, copia los bundles locales de Supabase JS, Chart.js e i18next junto a los catálogos ES/EN, registra el deep link Android y compila el APK debug. El backend se configura con la URL HTTPS confirmada `https://minipeopledb.onrender.com`. Para usar otro origen en un entorno autorizado, se puede sustituir al compilar:
 
 ```sh
 ANDROID_API_BASE_URL="https://tu-backend.example" npm run android:apk
@@ -49,6 +49,31 @@ Conecta un dispositivo Android con la depuración USB autorizada y ejecuta:
 Si el dispositivo no aparece, acepta el diálogo de depuración USB y vuelve a ejecutar `adb devices`. Para abrir el proyecto en Android Studio, usa `npx cap open android`.
 
 El APK se firma con la clave debug local de Android. No compartas esa clave ni la uses para una publicación de producción. Cambiar la identidad confirmada puede impedir actualizar una instalación existente.
+
+## Idioma
+
+Onboarding y Preferencias reutilizan el selector de Español/Inglés de la web.
+El idioma cambia tras guardar el perfil y se recupera desde Supabase en futuras
+sesiones. La aplicación conserva solo el código confirmado en almacenamiento
+local para las pantallas sin sesión; el perfil activo tiene prioridad. No se
+traduce contenido de Brickset ni nombres de logros; sus descripciones sí.
+Los importes siguen siendo EUR, sin conversión de moneda.
+
+Antes de probar el guardado en inglés en una base existente, aplica
+`supabase/interface-languages.sql` en el proyecto autorizado y despliega el
+backend con validación ES/EN. No basta con habilitar el selector en el APK.
+`npm run android:web` prepara `dist/android/locales/es.json`,
+`dist/android/locales/en.json`, `dist/android/i18n.js` y
+`dist/android/vendor/i18next.js`. Verifica su presencia antes de sincronizar
+Capacitor. No se necesita un CDN para traducir, pero las operaciones de datos
+siguen requiriendo conexión.
+
+La confirmación de email alojada en el backend lee la preferencia del navegador
+que abre el enlace: puede aparecer en español si se confirma desde otro
+dispositivo sin preferencia local. No se agregan parámetros a enlaces de
+autenticación para transportar el idioma. Los emails de proveedores, diálogos
+nativos y el texto de push del sistema operativo no se traducen en esta fase;
+la bandeja dentro de la aplicación sí.
 
 ## OAuth y servicios
 

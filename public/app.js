@@ -22,6 +22,86 @@ function apiUrl(path) {
   return apiBaseUrl ? new URL(path, apiBaseUrl).toString() : path;
 }
 
+const i18n = window.MiniPeopleI18n;
+const i18nBindings = new WeakMap();
+let i18nReady = false;
+
+function t(key, params = {}) {
+  return i18n.t(key, params);
+}
+
+function tr(key, params = {}) {
+  return () => t(key, params);
+}
+
+function messageText(message) {
+  return typeof message === 'function' ? message() : String(message ?? '');
+}
+
+function activeLocale() {
+  return i18n.locale;
+}
+
+function bindingValue(element, slot) {
+  return slot === 'text' || slot === 'children' ? element.textContent : element.getAttribute(slot);
+}
+
+function writeBinding(element, slot, value) {
+  if (slot === 'children') element.replaceChildren(...value);
+  else if (slot === 'text') element.textContent = value;
+  else if (value !== null) element.setAttribute(slot, value);
+}
+
+function bindI18n(element, slot, render) {
+  element.removeAttribute(slot === 'text' || slot === 'children' ? 'data-i18n' : `data-i18n-${slot}`);
+  if (i18nReady) writeBinding(element, slot, render());
+  const value = bindingValue(element, slot);
+  let bindings = i18nBindings.get(element);
+  if (!bindings) {
+    bindings = new Map();
+    i18nBindings.set(element, bindings);
+  }
+  bindings.set(slot, { render, value });
+  element.setAttribute('data-i18n-dynamic', '');
+  return value;
+}
+
+function setMessage(element, message) {
+  if (typeof message === 'function') return bindI18n(element, 'text', message);
+  i18nBindings.get(element)?.delete('text');
+  element.textContent = message ?? '';
+  return element.textContent;
+}
+
+function refreshDynamicI18n() {
+  if (!i18nReady) return;
+  for (const element of document.querySelectorAll('[data-i18n-dynamic]')) {
+    const bindings = i18nBindings.get(element);
+    if (!bindings) continue;
+    for (const [slot, binding] of bindings) {
+      const current = bindingValue(element, slot);
+      if (current !== binding.value) {
+        bindings.delete(slot);
+        continue;
+      }
+      writeBinding(element, slot, binding.render());
+      binding.value = bindingValue(element, slot);
+    }
+  }
+}
+
+function bindTranslatedContent(element, key, parameters, slots) {
+  bindI18n(element, 'children', () => {
+    const markers = Object.fromEntries(Object.keys(slots).map((name) => [name, `[[i18n-slot-${name}]]`]));
+    return t(key, { ...parameters(), ...markers }).split(/(\[\[i18n-slot-[a-z]+\]\])/g)
+      .map((part) => {
+        const name = /^\[\[i18n-slot-([a-z]+)\]\]$/.exec(part)?.[1];
+        return name && slots[name] ? slots[name] : document.createTextNode(part);
+      });
+  });
+}
+
+
 const form = document.querySelector('#filters-form');
 const showAllButton = document.querySelector('#show-all');
 const statusMessage = document.querySelector('#status');
@@ -141,7 +221,7 @@ function hideLevelImageTooltip() {
 
 gamificationLevelTooltip.className = 'gamification-level-tooltip';
 gamificationLevelTooltipImage.className = 'gamification-level-tooltip-image';
-gamificationLevelTooltipImage.alt = 'Vista ampliada del nivel';
+bindI18n(gamificationLevelTooltipImage, 'alt', () => t('gamification.levelImageZoom'));
 gamificationLevelTooltip.append(gamificationLevelTooltipImage);
 gamificationTitle.append(gamificationLevelTooltip);
 gamificationLevelTooltip.style.display = 'none';
@@ -314,20 +394,20 @@ const profileSaveButton = document.querySelector('#user-profile-save');
 userAvatar.addEventListener('error', () => {
   userAvatar.hidden = true;
 });
-const SESSION_EXPIRED_MESSAGE = 'Tu sesión ha caducado. Inicia sesión de nuevo.';
+const SESSION_EXPIRED_MESSAGE = tr('auth.sessionExpired');
 const GAMIFICATION_UI_VERSION = 'v2';
 const GAMIFICATION_UI_VERSION_KEY = 'minipeople.gamificationVersion';
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 
 const ERROR_MESSAGES = {
-  ID_INVALIDO: 'El ID proporcionado no tiene un formato válido.',
-  MINIFIGURA_INVALIDA: 'Los datos de la minipersona no son válidos.',
-  ID_DUPLICADO: 'Esta minipersona ya está registrada en tu inventario.',
-  MINIFIGURA_NO_ENCONTRADA: 'La minipersona ya no existe.',
-  CATALOGO_NO_DISPONIBLE: 'El catálogo no está disponible en este momento.',
-  CATALOGO_INVALIDO: 'El catálogo no tiene un formato válido.',
-  CATEGORIAS_NO_DISPONIBLES: 'El catálogo de categorías no está disponible en este momento.',
-  CATEGORIAS_INVALIDOS: 'El catálogo de categorías no tiene un formato válido.',
+  ID_INVALIDO: tr('errors.invalidId'),
+  MINIFIGURA_INVALIDA: tr('errors.invalidMiniperson'),
+  ID_DUPLICADO: tr('errors.duplicateId'),
+  MINIFIGURA_NO_ENCONTRADA: tr('errors.minipersonNotFound'),
+  CATALOGO_NO_DISPONIBLE: tr('errors.catalogUnavailable'),
+  CATALOGO_INVALIDO: tr('errors.catalogInvalid'),
+  CATEGORIAS_NO_DISPONIBLES: tr('errors.categoriesUnavailable'),
+  CATEGORIAS_INVALIDOS: tr('errors.categoriesInvalid'),
 };
 
 let requestSequence = 0;
@@ -463,16 +543,8 @@ function catalogMatchingStateFilters() {
 
 function formatFilterOption(nombre, count, total) {
   if (!Number.isInteger(total) || total <= 0) return `${nombre} (${count})`;
-  const percentage = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(count * 100 / total);
-  return `${nombre}: ${count} de ${total} (${percentage}%)`;
-}
-
-function interfaceText(text) {
-  return String(text ?? '').replace(/\bminifiguras?\b/gi, (word) => {
-    const replacement = word.toLowerCase().endsWith('s') ? 'minipersonas' : 'minipersona';
-    if (word === word.toUpperCase()) return replacement.toUpperCase();
-    return word[0] === word[0].toUpperCase() ? replacement[0].toUpperCase() + replacement.slice(1) : replacement;
-  });
+  const percentage = new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 1 }).format(count * 100 / total);
+  return t('filter.progress', { name: nombre, count: count, total: total, percentage: percentage });
 }
 
 function categoryDisplayName(category) {
@@ -503,7 +575,7 @@ function renderSubcategoryOptions(selectElement, categoria, placeholderText) {
   const counts = new Map(subcategorias.map((subcategoria) => [subcategoria, matchingCatalog.filter((minifigura) => minifigura.subcategoria === subcategoria).length]));
   const officialSubcategories = officialCategorias.find((item) => item.categoria === categoria)?.subcategorias ?? [];
   selectElement.replaceChildren(new Option(`${placeholderText} (${matchingCatalog.length})`, ''));
-  for (const subcategoria of subcategorias.sort()) {
+  for (const subcategoria of subcategorias.sort((left, right) => left.localeCompare(right, activeLocale()))) {
     const total = officialSubcategories.find((item) => item.subcategoria === subcategoria)?.total;
     selectElement.append(new Option(formatFilterOption(subcategoryDisplayName(categoria, subcategoria), counts.get(subcategoria), total), subcategoria));
   }
@@ -517,16 +589,16 @@ function renderCategoryOptions(categorias) {
   for (const minifigura of matchingCatalog) {
     categoryCounts.set(minifigura.categoria, (categoryCounts.get(minifigura.categoria) ?? 0) + 1);
   }
-  const categoryNames = [...categoryCounts.keys()].sort();
+  const categoryNames = [...categoryCounts.keys()].sort((left, right) => left.localeCompare(right, activeLocale()));
 
   const selectedCategoria = categoriaInput.value;
-  categoriaInput.replaceChildren(new Option(`Todas (${matchingCatalog.length})`, ''));
+  categoriaInput.replaceChildren(new Option(t('filter.allCategories', { total: matchingCatalog.length }), ''));
   for (const categoria of categoryNames) {
     const total = categorias.find((item) => item.categoria === categoria)?.total;
     categoriaInput.append(new Option(formatFilterOption(categoryDisplayName(categoria), categoryCounts.get(categoria), total), categoria));
   }
   categoriaInput.value = categoryNames.includes(selectedCategoria) ? selectedCategoria : '';
-  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, t('common.allFeminine'));
 }
 
 function renderYearOptions() {
@@ -539,7 +611,7 @@ function renderYearOptions() {
   for (const { anio } of matchingCatalog) {
     if (Number.isInteger(anio) && anio > 0) yearCounts.set(anio, (yearCounts.get(anio) ?? 0) + 1);
   }
-  anioInput.replaceChildren(new Option(`Todos (${matchingCatalog.length})`, ''));
+  anioInput.replaceChildren(new Option(t('filter.allYears', { total: matchingCatalog.length }), ''));
   for (const anio of [...yearCounts.keys()].sort((left, right) => right - left)) {
     anioInput.append(new Option(`${anio} (${yearCounts.get(anio)})`, String(anio)));
   }
@@ -554,13 +626,13 @@ function renderDynamicFilterOptions(catalog) {
 
 function setCategoriaControlsEnabled(enabled) {
   categoriaInput.disabled = !enabled;
-  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, t('common.allFeminine'));
   newMinifiguraButton.disabled = !enabled;
   syncPricesButton.disabled = !enabled || isSyncingPrices;
 }
 
 categoriaInput.addEventListener('change', () => {
-  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, 'Todas');
+  renderSubcategoryOptions(subcategoriaInput, categoriaInput.value, t('common.allFeminine'));
   renderYearOptions();
 });
 
@@ -622,7 +694,7 @@ async function loadCategorias() {
 }
 
 function setStatus(message, type = '') {
-  statusMessage.textContent = message;
+  setMessage(statusMessage, message);
   statusMessage.className = type ? `status ${type}` : 'status';
 }
 
@@ -634,12 +706,14 @@ function cell(value) {
 
 function formatPrice(value) {
   return Number.isFinite(value)
-    ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value)
-    : 'Sin precio';
+    ? new Intl.NumberFormat(activeLocale(), { style: 'currency', currency: 'EUR' }).format(value)
+    : t('common.priceMissing');
 }
 
 function priceCell(value) {
-  return cell(formatPrice(value));
+  const element = cell('');
+  bindI18n(element, 'text', () => formatPrice(value));
+  return element;
 }
 
 function normalizedCollectionState(value) {
@@ -663,7 +737,7 @@ function appendCollectionStateIcon(element, value) {
 
 function collectionStateMeaning(value) {
   const state = normalizedCollectionState(value);
-  return state === 'COLECCION' ? 'Colección' : state === 'BUSCADA' ? 'Búsqueda' : String(value ?? '');
+  return state === 'COLECCION' ? t('common.collection') : state === 'BUSCADA' ? t('common.wanted') : String(value ?? '');
 }
 
 function differenceCell(minifigura) {
@@ -677,7 +751,7 @@ function differenceCell(minifigura) {
     difference.textContent = '?';
   } else {
     const value = minifigura.precio - minifigura.precioCompra;
-    difference.textContent = formatPrice(value);
+    bindI18n(difference, 'text', () => formatPrice(value));
     difference.className = value > 0 ? 'difference-positive' : value < 0 ? 'difference-negative' : 'difference-neutral';
   }
 
@@ -701,7 +775,7 @@ function rankingCard(minifigura, position, detail, interactive = true) {
 
   const caption = document.createElement('span');
   caption.className = 'ranking-caption';
-  caption.textContent = `#${position} - ${detail}`;
+  bindI18n(caption, 'text', () => `#${position} - ${messageText(detail)}`);
 
   card.append(image, caption);
   return card;
@@ -742,7 +816,7 @@ function levelImagePath(levelId) {
 function renderTopFive(topFive) {
   const fragment = document.createDocumentFragment();
   topFive.forEach((minifigura, index) => {
-    fragment.append(rankingCard(minifigura, index + 1, formatPrice(minifigura.precio)));
+    fragment.append(rankingCard(minifigura, index + 1, () => formatPrice(minifigura.precio)));
   });
   topFiveList.replaceChildren(fragment);
 }
@@ -757,7 +831,7 @@ function renderOldestFive(oldestFive) {
 
 function renderWatchlist(observed) {
   const fragment = document.createDocumentFragment();
-  watchlistTitle.textContent = `Seguimiento (${observed.length} / ${maxWatchlistItems})`;
+  bindI18n(watchlistTitle, 'text', () => t('inventory.watchCount', { count: observed.length, limit: maxWatchlistItems }));
   for (const minifigura of observed) {
     const card = document.createElement('button');
     card.type = 'button';
@@ -773,13 +847,13 @@ function renderWatchlist(observed) {
     const stateIcon = document.createElement('span');
     stateIcon.className = 'watchlist-state-icon';
     appendCollectionStateIcon(stateIcon, minifigura.estadoColeccion);
-    stateIcon.title = collectionStateMeaning(minifigura.estadoColeccion);
+    bindI18n(stateIcon, 'title', () => collectionStateMeaning(minifigura.estadoColeccion));
     const code = document.createElement('span');
     code.className = 'watchlist-code';
     code.textContent = minifigura.id;
     const price = document.createElement('span');
     price.className = 'watchlist-price';
-    price.textContent = formatPrice(minifigura.precioBrickset);
+    bindI18n(price, 'text', () => formatPrice(minifigura.precioBrickset));
     identity.append(stateIcon, document.createTextNode(' '), code);
     caption.append(identity, document.createTextNode(' '), price);
     card.append(image, caption);
@@ -824,7 +898,7 @@ function sortCatalog(catalog, sort = activeSort) {
     if (leftMissing || rightMissing) {
       return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
     }
-    return (isText ? leftValue.localeCompare(rightValue, 'es', { sensitivity: 'base', numeric: true }) : leftValue - rightValue) * direction;
+    return (isText ? leftValue.localeCompare(rightValue, activeLocale(), { sensitivity: 'base', numeric: true }) : leftValue - rightValue) * direction;
   });
 }
 
@@ -840,8 +914,8 @@ function badgeCell(value) {
   const badge = document.createElement('span');
   const state = normalizedCollectionState(value);
   badge.className = `badge ${badgeClassFor(value)}`;
-  badge.title = collectionStateMeaning(value);
-  badge.setAttribute('aria-label', collectionStateMeaning(value));
+  bindI18n(badge, 'title', () => collectionStateMeaning(value));
+  bindI18n(badge, 'aria-label', () => collectionStateMeaning(value));
   appendCollectionStateIcon(badge, value);
   element.append(badge);
   return element;
@@ -882,7 +956,7 @@ function idCell(minifigura) {
   link.textContent = minifigura.id;
   link.dataset.action = 'view';
   link.dataset.id = minifigura.id;
-  link.setAttribute('aria-label', `Ver ${minifigura.id}`);
+  bindI18n(link, 'aria-label', () => t('inventory.viewNamed', { name: minifigura.id }));
   const name = document.createElement('span');
   name.className = 'catalog-mobile-name';
   name.textContent = minifigura.nombre ?? '';
@@ -906,8 +980,8 @@ function observedCell(minifigura) {
   reference.setAttribute('href', '#observation-eye-icon');
   icon.append(reference);
   button.append(icon);
-  button.title = 'Seguimiento';
-  button.setAttribute('aria-label', minifigura.observada ? 'Dejar de observar' : 'Observar');
+  bindI18n(button, 'title', () => t('common.following'));
+  bindI18n(button, 'aria-label', () => minifigura.observada ? t('common.unwatch') : t('common.watch'));
   button.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
   button.dataset.action = 'observe';
   button.dataset.id = minifigura.id;
@@ -924,8 +998,8 @@ function actionsCell(minifigura) {
   const editButton = document.createElement('button');
   editButton.type = 'button';
   editButton.className = 'button button-secondary button-small button-icon';
-  editButton.setAttribute('aria-label', 'Editar');
-  editButton.title = 'Editar';
+  bindI18n(editButton, 'aria-label', () => t('common.edit'));
+  bindI18n(editButton, 'title', () => t('common.edit'));
   editButton.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 20h4L18.5 9.5a2.121 2.121 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   editButton.dataset.action = 'edit';
   editButton.dataset.id = minifigura.id;
@@ -933,8 +1007,8 @@ function actionsCell(minifigura) {
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'button button-danger button-small button-icon';
-  deleteButton.setAttribute('aria-label', 'Eliminar');
-  deleteButton.title = 'Eliminar';
+  bindI18n(deleteButton, 'aria-label', () => t('common.delete'));
+  bindI18n(deleteButton, 'title', () => t('common.delete'));
   deleteButton.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   deleteButton.dataset.action = 'delete';
   deleteButton.dataset.id = minifigura.id;
@@ -993,7 +1067,7 @@ function removeCached(id) {
 }
 
 function renderCatalogPage() {
-  resultCount.textContent = `${currentCatalog.length} ${currentCatalog.length === 1 ? 'figura' : 'figuras'}`;
+  bindI18n(resultCount, 'text', () => t('inventory.count', { count: currentCatalog.length }));
   const sortedCatalog = sortCatalog(currentCatalog);
   const totalPages = Math.max(1, Math.ceil(sortedCatalog.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
@@ -1018,14 +1092,14 @@ function renderCatalogPage() {
     fragment.append(row);
   }
   catalogBody.replaceChildren(fragment);
-  pageStatus.textContent = `Página ${currentPage} de ${totalPages}`;
+  bindI18n(pageStatus, 'text', () => t('common.page', { page: currentPage, total: totalPages }));
   previousPageButton.disabled = currentPage === 1;
   nextPageButton.disabled = currentPage === totalPages;
 
   if (currentCatalog.length === 0) {
-    setStatus(hasLoadedFullCatalog && catalogForOptions.length === 0
-      ? 'No hay ninguna minipersona registrada en tu cuenta.'
-      : 'No hay minipersonas que coincidan con la consulta.');
+    setStatus(() => hasLoadedFullCatalog && catalogForOptions.length === 0
+      ? t('inventory.empty')
+      : t('inventory.noMatches'));
   } else {
     setStatus('');
   }
@@ -1036,7 +1110,7 @@ function setLoading(isLoading) {
   previousPageButton.disabled = isLoading;
   nextPageButton.disabled = isLoading;
   if (isLoading) {
-    setStatus('Cargando catálogo...');
+    setStatus(() => t('inventory.loading'));
   } else if (currentCatalog.length > 0) {
     renderCatalogPage();
   }
@@ -1049,7 +1123,7 @@ function showSyncProgress(state) {
   if (isSyncingPrices) {
     syncProgressBar.max = state.total;
     syncProgressBar.value = state.procesados;
-    syncProgressLabel.textContent = `Actualizando precios: ${state.procesados} / ${state.total}`;
+    bindI18n(syncProgressLabel, 'text', () => t('sync.progress', { completed: state.procesados, total: state.total }));
   }
 }
 
@@ -1063,7 +1137,7 @@ async function finishSync(state) {
   syncPricesButton.disabled = !categoriasReady;
   await revalidate({ notifyAchievements: true });
   const sinPrecio = state.sinPrecio?.length ?? 0;
-  showToast(`Actualización de precios terminada: ${state.actualizados.length} actualizadas, ${sinPrecio} sin precio publicado, ${state.fallidos.length} fallidas.`, 'success');
+  showToast(() => t('sync.complete', { updated: state.actualizados.length, unpriced: sinPrecio, failed: state.fallidos.length }), 'success');
 }
 
 function scheduleSyncPoll() {
@@ -1105,7 +1179,7 @@ async function startSync() {
     isSyncingPrices = false;
     syncProgress.hidden = true;
     syncPricesButton.disabled = !categoriasReady;
-    showToast('No se pudieron actualizar los precios.', 'error');
+    showToast(() => t('sync.failed'), 'error');
   }
 }
 
@@ -1133,7 +1207,7 @@ async function loadCatalog() {
       resultCount.textContent = '';
       categoriasReady = false;
       officialCategorias = [];
-      setStatus('No se pudo cargar el catálogo. Inténtalo de nuevo.', 'error');
+      setStatus(() => t('inventory.loadError'), 'error');
       setLoading(false);
       setCategoriaControlsEnabled(false);
     }
@@ -1177,16 +1251,17 @@ async function loadTotal() {
     const total = summary.total ?? 0;
     if (lastCollectionTotal === null || total !== lastCollectionTotal) {
       lastCollectionTotal = total;
-      collectionTotalUpdated.textContent = formatCollectionTotalUpdatedAt(new Date());
+      const updatedAt = new Date();
+      bindI18n(collectionTotalUpdated, 'text', () => formatCollectionTotalUpdatedAt(updatedAt));
     }
-    collectionTotal.textContent = formatPrice(total);
+    bindI18n(collectionTotal, 'text', () => formatPrice(total));
     collectionCount.textContent = `${summary.enColeccion ?? 0}`;
     wantedCount.textContent = `${summary.buscadas ?? 0}`;
     renderTopFive(Array.isArray(summary.top5) ? summary.top5 : []);
     renderOldestFive(Array.isArray(summary.top5Antiguas) ? summary.top5Antiguas : []);
     renderWatchlist(Array.isArray(summary.observadas) ? summary.observadas : []);
   } catch {
-    collectionTotal.textContent = 'No disponible';
+    bindI18n(collectionTotal, 'text', () => t('common.unavailable'));
     collectionCount.textContent = '0';
     wantedCount.textContent = '0';
     renderTopFive([]);
@@ -1198,7 +1273,7 @@ async function loadTotal() {
 function formatCollectionTotalUpdatedAt(date) {
   const [year, month, day] = madridDateString(date).split('-');
   const time = notificationClockTime(date).replace(':', '.');
-  return `Última actualización: ${day}/${month}/${year} a las ${time}`;
+  return t('sync.lastUpdated', { day: day, month: month, year: year, time: time });
 }
 
 function renderGamification(state) {
@@ -1207,7 +1282,7 @@ function renderGamification(state) {
   const imagePath = levelImagePath(level.id);
   gamificationLevelImage.src = imagePath;
   gamificationLevelTooltipImage.src = imagePath;
-  gamificationLevelTooltipImage.alt = `Nivel ${level.id} ${level.nombre}`;
+  bindI18n(gamificationLevelTooltipImage, 'alt', () => t('gamification.level', { level: level.id, name: level.nombre }));
   gamificationLevelNumber.textContent = level.id;
   gamificationLevelName.textContent = level.nombre;
   gamificationBricks.textContent = `${state.bricks ?? 0}`;
@@ -1215,17 +1290,17 @@ function renderGamification(state) {
   gamificationPercentage.textContent = `${Math.round(gamificationProgress.value)}%`;
   gamificationPercentage.classList.toggle('on-accent', gamificationProgress.value >= 50);
   gamificationProgress.setAttribute('aria-valuetext', `${gamificationProgress.value}%`);
-  gamificationNext.textContent = state.siguienteNivel
-    ? `Próximo nivel: ${state.siguienteNivel.id} ${state.siguienteNivel.nombre}`
-    : 'Nivel máximo alcanzado';
+  bindI18n(gamificationNext, 'text', () => state.siguienteNivel
+    ? t('gamification.nextLevel', { level: state.siguienteNivel.id, name: state.siguienteNivel.nombre })
+    : t('gamification.maxLevel'));
   if (!gamificationDialog.open || achievementsMode === 'own') {
-    renderAchievements(ownGamification, 'Logros', { editable: true });
+    renderAchievements(ownGamification, tr('common.achievements'), { editable: true });
   }
 }
 
 function renderGamificationDna(state) {
   ownDnaState = state;
-  const principal = state?.principal ?? 'DNA no disponible';
+  const principal = state?.principal ?? t('gamification.dnaUnavailable');
   gamificationDnaPrincipal.textContent = principal;
   const primaryPercentage = document.querySelector('#gamification-dna-percentage');
   const primaryTrait = DNA_TRAITS.find(({ name }) => name === principal);
@@ -1234,19 +1309,19 @@ function renderGamificationDna(state) {
   primaryPercentage.textContent = '';
   let summary = principal;
   if (hasPercentages) {
-    const formatPercentage = (key) => `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[key] ?? 0)}%`;
-    primaryPercentage.textContent = `${formatPercentage(primaryTrait.key)} `;
+    const formatPercentage = (key) => `${new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 1 }).format(state.porcentajes[key] ?? 0)}%`;
+    bindI18n(primaryPercentage, 'text', () => `${formatPercentage(primaryTrait.key)} `);
     summary = `${primaryPercentage.textContent}${principal}`;
   }
-  dnaOpenButtons[0].setAttribute('aria-label', `Abrir DNA: ${summary}`);
+  bindI18n(dnaOpenButtons[0], 'aria-label', () => t('gamification.openNamedDna', { trait: summary }));
   dnaOpenButtons[0].title = summary;
 }
 
 const DNA_TRAITS = [
-  { key: 'collector', name: 'Collector', description: 'Amplías tu colección y completas series.', color: 'collector' },
-  { key: 'explorer', name: 'Explorer', description: 'Abres nuevas rutas entre categorías.', color: 'explorer' },
-  { key: 'fan', name: 'Fan', description: 'Sigues tus temáticas favoritas.', color: 'fan' },
-  { key: 'rarityHunter', name: 'Rarity Hunter', description: 'Persigues piezas raras y valiosas.', color: 'rarity' },
+  { key: 'collector', name: 'Collector', description: tr('gamification.collectorDescription'), color: 'collector' },
+  { key: 'explorer', name: 'Explorer', description: tr('gamification.explorerDescription'), color: 'explorer' },
+  { key: 'fan', name: 'Fan', description: tr('gamification.fanDescription'), color: 'fan' },
+  { key: 'rarityHunter', name: 'Rarity Hunter', description: tr('gamification.rarityDescription'), color: 'rarity' },
 ];
 
 let dnaChartInstance = null;
@@ -1258,7 +1333,7 @@ function destroyDnaChart() {
 
 function renderDnaLoading() {
   destroyDnaChart();
-  dnaDialogStatus.textContent = 'Cargando DNA...';
+  bindI18n(dnaDialogStatus, 'text', () => t('gamification.dnaLoading'));
   dnaDialogStatus.classList.add('loading-message');
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
@@ -1269,7 +1344,7 @@ function renderDnaLoading() {
 function renderDnaError() {
   destroyDnaChart();
   dnaDialogStatus.classList.remove('loading-message');
-  dnaDialogStatus.textContent = 'No se pudo cargar el DNA.';
+  bindI18n(dnaDialogStatus, 'text', () => t('gamification.dnaError'));
   dnaChart.hidden = true;
   dnaLegend.hidden = true;
   dnaRetryButton.hidden = false;
@@ -1290,15 +1365,15 @@ function renderDnaView(state, { chart, status, legend, canvas, centerLabel, perc
   const isNewbie = state.principal === 'Newbie';
   chart.hidden = false;
   chart.classList.toggle('dna-chart-empty', isNewbie);
-  chart.setAttribute('aria-label', isNewbie
-    ? 'DNA Newbie: cuatro proporciones en cero'
-    : `DNA de tu colección: ${DNA_TRAITS.map(({ key, name }) => `${name} ${state.porcentajes[key]}%`).join(', ')}`);
+  bindI18n(chart, 'aria-label', () => isNewbie
+    ? t('gamification.dnaZero')
+    : t('gamification.dnaSummary', { traits: DNA_TRAITS.map(({ key, name }) => `${name} ${formatAnalyticsHistoryPercent(state.porcentajes[key])}`).join(', ') }));
   if (status) status.textContent = isNewbie ? 'Newbie' : '';
   if (centerLabel) centerLabel.hidden = false;
   const principal = DNA_TRAITS.find(({ name }) => name === state.principal);
-  if (percentageLabel) percentageLabel.textContent = isNewbie
+  if (percentageLabel) bindI18n(percentageLabel, 'text', () => isNewbie
     ? '0%'
-    : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[principal?.key] ?? 0)}%`;
+    : `${new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 1 }).format(state.porcentajes[principal?.key] ?? 0)}%`);
   if (traitLabel) traitLabel.textContent = state.principal;
   let instance = null;
   if (!isNewbie && typeof Chart === 'function') {
@@ -1343,10 +1418,10 @@ function renderDnaView(state, { chart, status, legend, canvas, centerLabel, perc
     label.textContent = name;
     const percentage = document.createElement('strong');
     percentage.className = 'dna-percentage';
-    percentage.textContent = `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(state.porcentajes[key])}%`;
+    bindI18n(percentage, 'text', () => `${new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 1 }).format(state.porcentajes[key])}%`);
     const detail = document.createElement('span');
     detail.className = 'dna-description';
-    detail.textContent = description;
+    setMessage(detail, description);
     item.append(swatch, label, percentage, detail);
     return item;
   }));
@@ -1378,16 +1453,16 @@ function sortedAchievements(logros, selectedIds) {
     .sort(compareAchievements);
 }
 
-function renderAchievements(state, title = 'Logros', { editable = false } = {}) {
+function renderAchievements(state, title = tr('common.achievements'), { editable = false } = {}) {
   const mode = editable ? 'own' : 'public';
   if (achievementsMode !== mode) achievementsViewSequence += 1;
   achievementsMode = mode;
   const level = state.nivel ?? { id: 0, nombre: 'Duplo' };
-  gamificationDialogTitle.textContent = title;
+  setMessage(gamificationDialogTitle, title);
   achievementsHeadingImage.src = levelImagePath(level.id);
   gamificationDialogLevel.textContent = `${level.id} ${level.nombre}`;
   gamificationDialogBricks.textContent = `${state.bricks ?? 0}`;
-  achievementsStatus.textContent = state.logros?.length ? '' : 'No hay logros.';
+  bindI18n(achievementsStatus, 'text', () => state.logros?.length ? '' : t('gamification.empty'));
   gamificationAchievements.replaceChildren();
   const achievements = sortedAchievements(state.logros ?? [], editable ? state.logrosDestacados ?? [] : undefined);
   for (const logro of achievements) {
@@ -1398,7 +1473,7 @@ function renderAchievements(state, title = 'Logros', { editable = false } = {}) 
 async function saveFeaturedAchievement(id, destacado) {
   if (featuredSaving || achievementsMode !== 'own' || !gamificationDialog.open || !currentSession) return;
   if (destacado && (ownGamification?.logrosDestacados?.length ?? 0) >= 5) {
-    achievementsStatus.textContent = 'Puedes destacar hasta 5 logros';
+    bindI18n(achievementsStatus, 'text', () => t('gamification.featureLimit'));
     return;
   }
   const userId = currentSession.user.id;
@@ -1420,19 +1495,19 @@ async function saveFeaturedAchievement(id, destacado) {
     const result = await response.json();
     if (!isCurrent()) return;
     if (!response.ok) throw new Error(result.error === 'LIMITE_LOGROS_DESTACADOS'
-      ? 'Puedes destacar hasta 5 logros' : 'No se ha podido guardar el logro destacado.');
+      ? t('gamification.featureLimit') : t('gamification.featureError'));
     if (!Array.isArray(result.logrosDestacados) || result.logrosDestacados.length > 5
       || new Set(result.logrosDestacados).size !== result.logrosDestacados.length
-      || result.logrosDestacados.some((value) => typeof value !== 'string')) throw new Error('No se ha podido guardar el logro destacado.');
+      || result.logrosDestacados.some((value) => typeof value !== 'string')) throw new Error(t('gamification.featureError'));
     ownGamification = { ...ownGamification, logrosDestacados: result.logrosDestacados };
     if (isCurrentView()) {
       featuredSaving = false;
-      renderAchievements(ownGamification, 'Logros', { editable: true });
+      renderAchievements(ownGamification, tr('common.achievements'), { editable: true });
       [...gamificationAchievements.querySelectorAll('.achievement-star-toggle')]
         .find((button) => button.dataset.featuredId === id)?.focus();
     }
   } catch (error) {
-    if (isCurrentView()) achievementsStatus.textContent = error.message || 'No se ha podido guardar el logro destacado.';
+    if (isCurrentView()) bindI18n(achievementsStatus, 'text', () => error.message || t('gamification.featureError'));
   } finally {
     if (isCurrent()) {
       featuredSaving = false;
@@ -1462,7 +1537,7 @@ function createAchievementItem(logro, { editable = false } = {}) {
     if (logro.type === 'regalo') {
       icon.textContent = '🎁';
       icon.setAttribute('role', 'img');
-      icon.setAttribute('aria-label', 'Regalo');
+      bindI18n(icon, 'aria-label', () => t('gamification.gift'));
     } else {
       icon.textContent = '🏆';
       icon.setAttribute('aria-hidden', 'true');
@@ -1472,10 +1547,10 @@ function createAchievementItem(logro, { editable = false } = {}) {
     info.className = 'achievement-info';
     const name = document.createElement('span');
     name.className = 'achievement-name';
-    name.textContent = interfaceText(logro.nombre);
+    name.textContent = logro.nombre;
     const description = document.createElement('span');
     description.className = 'achievement-description';
-    description.textContent = interfaceText(logro.descripcion);
+    bindI18n(description, 'text', () => t(`achievements.${logro.id}.description`));
     info.append(name, description);
 
     const count = document.createElement('span');
@@ -1504,15 +1579,15 @@ function createAchievementItem(logro, { editable = false } = {}) {
         star.type = 'button';
         star.classList.add('achievement-star-toggle');
         star.dataset.featuredId = logro.id;
-        star.title = logro.destacado ? 'Quitar destacado' : 'Destacar';
+        bindI18n(star, 'title', () => logro.destacado ? t('gamification.unfeature') : t('gamification.feature'));
         star.setAttribute('aria-label', star.title);
         star.setAttribute('aria-pressed', String(logro.destacado === true));
         star.disabled = featuredSaving;
         star.addEventListener('click', () => { void saveFeaturedAchievement(logro.id, !logro.destacado); });
       } else {
         star.setAttribute('role', 'img');
-        star.setAttribute('aria-label', 'Logro destacado');
-        star.title = 'Logro destacado';
+        bindI18n(star, 'aria-label', () => t('gamification.featured'));
+        bindI18n(star, 'title', () => t('gamification.featured'));
       }
       item.append(star);
     }
@@ -1551,16 +1626,16 @@ async function loadGamification({ notifyAchievements = false } = {}) {
   } catch {
     if (sequence !== gamificationRequestSequence || sessionUserId !== currentSession?.user?.id) return;
     gamificationLevelNumber.textContent = '';
-    gamificationLevelName.textContent = 'Nivel no disponible';
+    bindI18n(gamificationLevelName, 'text', () => t('gamification.levelUnavailable'));
     gamificationBricks.textContent = '0';
     if (!gamificationDialog.open || achievementsMode === 'own') {
-      gamificationDialogLevel.textContent = 'Nivel no disponible';
+      bindI18n(gamificationDialogLevel, 'text', () => t('gamification.levelUnavailable'));
       gamificationDialogBricks.textContent = '0';
     }
     gamificationProgress.value = 0;
     gamificationPercentage.textContent = '0%';
     gamificationPercentage.classList.remove('on-accent');
-    gamificationNext.textContent = 'Progreso no disponible';
+    bindI18n(gamificationNext, 'text', () => t('gamification.progressUnavailable'));
   }
 }
 
@@ -1577,7 +1652,7 @@ async function loadGamificationDna(showLoading = false) {
     if (dnaDialog.open) renderDnaDialog(state);
   } catch {
     if (sequence !== dnaRequestSequence || sessionUserId !== currentSession?.user?.id) return;
-    if (!ownDnaState) gamificationDnaPrincipal.textContent = 'DNA no disponible';
+    if (!ownDnaState) bindI18n(gamificationDnaPrincipal, 'text', () => t('gamification.dnaUnavailable'));
     if (dnaDialog.open) renderDnaError();
   }
 }
@@ -1595,8 +1670,8 @@ function ownsMinifigura(id) {
 function duplicateMinifiguraMessage(id) {
   const canonicalId = String(id).trim().toUpperCase();
   const existing = catalogCache.find((item) => String(item.id).trim().toUpperCase() === canonicalId);
-  if (existing?.estadoColeccion === 'BUSCADA') return 'Ya la estás buscando';
-  if (existing?.estadoColeccion === 'COLECCIÓN') return 'Ya está incluída en tu colección';
+  if (existing?.estadoColeccion === 'BUSCADA') return t('inventory.alreadyWanted');
+  if (existing?.estadoColeccion === 'COLECCIÓN') return t('inventory.alreadyOwned');
   return null;
 }
 
@@ -1617,8 +1692,8 @@ function updateRankingWantedActions(list) {
     button.dataset.wantedId = card.dataset.rankingId;
     button.dataset.ownerUser = card.dataset.ownerUser;
     if (card.closest('#public-profile-content')) button.dataset.profileWanted = 'true';
-    button.title = 'Añadir a buscadas';
-    button.setAttribute('aria-label', 'Añadir a buscadas');
+    bindI18n(button, 'title', () => t('inventory.addWanted'));
+    bindI18n(button, 'aria-label', () => t('inventory.addWanted'));
     const icon = document.createElement('span');
     icon.className = 'magnifier-icon';
     icon.textContent = '🔍';
@@ -1632,11 +1707,11 @@ function highlightGroup(title, items, mode, ownerUserId) {
   const section = document.createElement('section');
   section.className = 'ranking-highlight-group';
   const heading = document.createElement('h3');
-  heading.textContent = `Top 5 ${title}`;
+  bindI18n(heading, 'text', () => t('inventory.top', { criterion: title }));
   const row = document.createElement('div');
   row.className = 'ranking-row';
   for (const [index, minifigura] of items.entries()) {
-    const detail = mode === 'precio' ? formatPrice(minifigura.precio) : minifigura.anio;
+    const detail = () => mode === 'precio' ? formatPrice(minifigura.precio) : minifigura.anio;
     const card = rankingCard(minifigura, index + 1, detail, false);
     card.dataset.rankingId = minifigura.id;
     card.dataset.ownerUser = ownerUserId;
@@ -1648,7 +1723,7 @@ function highlightGroup(title, items, mode, ownerUserId) {
 
 function formatRankingDisplayName(displayName) {
   const [firstName, ...rest] = String(displayName ?? '').trim().split(/\s+/).filter(Boolean);
-  if (!firstName) return 'Usuario';
+  if (!firstName) return t('common.user');
   return [firstName, ...rest.map((name) => `${Array.from(name)[0]}.`)].join(' ');
 }
 
@@ -1671,8 +1746,8 @@ function renderGlobalRanking() {
   rankingMainGlobe.hidden = currentUserIndex === -1;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = currentUserIndex === -1
     ? '' : ['🥇', '🥈', '🥉'][currentUserIndex] ?? `#${currentUserIndex + 1}`;
-  rankingMainGlobe.setAttribute('aria-label', currentUserIndex === -1
-    ? 'En Top Global' : `En Top Global, posición ${currentUserIndex + 1}`);
+  bindI18n(rankingMainGlobe, 'aria-label', () => currentUserIndex === -1
+    ? t('ranking.inTop') : t('ranking.position', { position: currentUserIndex + 1 }));
   rankingMainGlobe.title = rankingMainGlobe.getAttribute('aria-label');
   if (currentUserIndex === -1) userMenuToggle.removeAttribute('aria-describedby');
   else userMenuToggle.setAttribute('aria-describedby', 'ranking-main-globe');
@@ -1724,11 +1799,11 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
   levelName.textContent = entry.nombreNivel;
   const dna = document.createElement('span');
   dna.className = 'ranking-dna-principal';
-  dna.textContent = (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
+  bindI18n(dna, 'text', () => (entry.dnaPrincipal === 'Newbie' && ['nivel', 'coleccion'].includes(criterion)) || !entry.dnaRasgos?.length
     ? entry.dnaPrincipal ?? 'Newbie'
     : entry.dnaRasgos.slice(0, 1).map(({ nombre, porcentaje }) => (
-      `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
-    )).join(' / ');
+      `${new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 1 }).format(porcentaje)}% ${nombre}`
+    )).join(' / '));
   level.append(levelImage, levelNumber, levelName, dna);
   const bricks = document.createElement('span');
   bricks.className = 'gamification-bricks-value ranking-bricks';
@@ -1742,8 +1817,8 @@ function appendRankingSummary(container, entry, positionText, criterion = 'nivel
   bricks.append(bricksValue, brickIcon);
   const collection = document.createElement('span');
   collection.className = 'ranking-collection-count';
-  collection.setAttribute('aria-label', `${entry.totalColeccion} en colección`);
-  collection.title = `${entry.totalColeccion} en colección`;
+  bindI18n(collection, 'aria-label', () => t('ranking.collectionCount', { count: entry.totalColeccion }));
+  bindI18n(collection, 'title', () => t('ranking.collectionCount', { count: entry.totalColeccion }));
   const collectionIcon = document.createElement('span');
   collectionIcon.className = 'count-icon status-icon-image ranking-collection-icon box-icon';
   collectionIcon.textContent = '📦';
@@ -1800,8 +1875,8 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
       gift.className = 'button button-secondary ranking-gift';
       gift.dataset.giftUser = entry.userId;
       gift.disabled = entry.regaloEnviado;
-      gift.setAttribute('aria-label', entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`);
-      gift.title = entry.regaloEnviado ? 'Regalo ya enviado' : `Enviar ${weekly ? 5 : 50} Bricks`;
+      bindI18n(gift, 'aria-label', () => entry.regaloEnviado ? t('ranking.giftSent') : t('ranking.sendGift', { amount: weekly ? 5 : 50 }));
+      bindI18n(gift, 'title', () => entry.regaloEnviado ? t('ranking.giftSent') : t('ranking.sendGift', { amount: weekly ? 5 : 50 }));
       appendRankingGiftContent(gift, weekly);
       row.append(gift);
     } else {
@@ -1816,8 +1891,8 @@ function renderRankingRows({ entries, list, criterion, expandedUserId, dialog, c
     details.className = 'ranking-user-details';
     details.hidden = true;
     details.append(
-      highlightGroup('por precio', (entry.top5Precio ?? []).slice(0, 5), 'precio', entry.userId),
-      highlightGroup('por antigüedad', (entry.top5Antiguedad ?? []).slice(0, 5), 'antiguedad', entry.userId),
+      highlightGroup(t('inventory.priceOrder'), (entry.top5Precio ?? []).slice(0, 5), 'precio', entry.userId),
+      highlightGroup(t('inventory.ageOrder'), (entry.top5Antiguedad ?? []).slice(0, 5), 'antiguedad', entry.userId),
     );
     row.append(details);
     article.append(row);
@@ -1841,7 +1916,7 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   const requestId = ++rankingRequestId;
   const criterio = selectedRankingCriterion;
   if (showState) {
-    rankingStatus.textContent = 'Cargando Ranking...';
+    bindI18n(rankingStatus, 'text', () => t('ranking.loading'));
     rankingStatus.className = 'status loading-message';
     globalRankingList.replaceChildren();
   }
@@ -1861,7 +1936,7 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
     rankingEntries = result;
     defaultRankingEntries = defaultResult ?? result;
     renderGlobalRanking();
-    rankingStatus.textContent = result.length ? '' : 'Todavía no hay usuarios en el ranking.';
+    bindI18n(rankingStatus, 'text', () => result.length ? '' : t('ranking.empty'));
     rankingStatus.className = 'status';
     return result;
   } catch {
@@ -1870,7 +1945,7 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
     rankingEntries = [];
     renderGlobalRanking();
     if (showState) {
-      rankingStatus.textContent = 'No se pudo cargar el ranking global.';
+      bindI18n(rankingStatus, 'text', () => t('ranking.globalError'));
       rankingStatus.className = 'status error';
     }
     return [];
@@ -1881,7 +1956,7 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
   const sessionUserId = currentSession?.user?.id;
   const requestId = ++weeklyRankingRequestId;
   if (showState) {
-    weeklyRankingStatus.textContent = 'Cargando Ranking...';
+    bindI18n(weeklyRankingStatus, 'text', () => t('ranking.loading'));
     weeklyRankingStatus.className = 'status loading-message';
     weeklyRankingList.replaceChildren();
   }
@@ -1895,13 +1970,13 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
     if (sessionUserId !== currentSession?.user?.id || requestId !== weeklyRankingRequestId) return;
     weeklyRankingEntries = result.available ? result.entries : [];
     renderWeeklyRanking();
-    weeklyRankingStatus.textContent = result.available ? '' : 'No disponible';
+    bindI18n(weeklyRankingStatus, 'text', () => result.available ? '' : t('common.unavailable'));
     weeklyRankingStatus.className = 'status';
   } catch {
     if (sessionUserId !== currentSession?.user?.id || requestId !== weeklyRankingRequestId || !showState) return;
     weeklyRankingEntries = [];
     renderWeeklyRanking();
-    weeklyRankingStatus.textContent = 'No se pudo cargar el ranking semanal.';
+    bindI18n(weeklyRankingStatus, 'text', () => t('ranking.weeklyError'));
     weeklyRankingStatus.className = 'status error';
   }
 }
@@ -1940,7 +2015,9 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
   toast.className = `toast toast-${type}`;
   if (type === 'gift') toast.classList.add('toast-task', 'toast-gift');
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  const messageNode = typeof message === 'string' ? document.createTextNode(interfaceText(message)) : message;
+  const messageNode = typeof message === 'string' || typeof message === 'function'
+    ? document.createElement('span') : message;
+  if (typeof message === 'string' || typeof message === 'function') setMessage(messageNode, message);
   if (iconSrc === null) iconSrc = '/toast_images/87X2Rz8y2ZY.png';
   iconPosition = iconPosition === 'after' && type !== 'task' && type !== 'level' ? 'before' : iconPosition;
   const icon = type === 'level' || type === 'gift' ? document.createElement('span') : iconSrc ? document.createElement('img') : null;
@@ -1951,8 +2028,8 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
       icon.setAttribute('aria-hidden', 'true');
     } else {
       icon.src = iconSrc;
-      icon.alt = type === 'notification' ? 'Notificaciones'
-        : type === 'task' || type === 'gift' ? 'Bricks' : 'Separador de ladrillos';
+      bindI18n(icon, 'alt', () => type === 'notification' ? t('common.notifications')
+        : type === 'task' || type === 'gift' ? 'Bricks' : t('notifications.separator'));
     }
   }
   if (icon && iconPosition === 'before') toast.append(icon);
@@ -1969,16 +2046,21 @@ function showToast(message, type = 'success', iconSrc = null, iconPosition = 'af
 function showRealtimeNotificationToast(notification) {
   if (notification?.type === 'gift_received' || notification?.type === 'gift_thanks') {
     const payload = notification.payload ?? {};
-    const user = typeof payload.user === 'string' && payload.user.trim() ? payload.user : 'Coleccionista';
+    const user = typeof payload.user === 'string' && payload.user.trim() ? payload.user : null;
     const isThanks = notification.type === 'gift_thanks';
-    const amount = Number.isFinite(payload.amount) ? payload.amount : isThanks ? 5 : 50;
-    const message = isThanks
-      ? `¡${user} te ha dado las gracias por tu regalo: +${amount} Bricks!`
-      : `¡Has recibido un regalo de ${user}: +${amount} Bricks!`;
+    const amount = payload.amount;
+    if (!user || !Number.isFinite(amount) || amount <= 0) {
+      console.warn('[i18n] DATOS_NOTIFICACION_INSUFICIENTES');
+      showToast(tr(isThanks ? 'notifications.giftThanksGeneric' : 'notifications.giftReceivedGeneric'), 'gift', '', 'before');
+      return;
+    }
+    const message = () => isThanks
+      ? t('notifications.thanksToast', { username: user, amount: amount })
+      : t('notifications.giftToast', { username: user, amount: amount });
     showToast(message, 'gift', '', 'before');
     return;
   }
-  showToast('Tienes una nueva notificación', 'notification', '/status_images/sobre.png', 'before');
+  showToast(() => t('notifications.new'), 'notification', '/status_images/sobre.png', 'before');
 }
 
 function showPendingNotificationToast() {
@@ -2012,7 +2094,7 @@ function showGamificationToasts(gamification) {
       return;
     }
     if (logro.kind === 'level') {
-      showToast(`NIVEL ${logro.id} ${logro.nombre}`, 'level', null, 'before');
+      showToast(() => t('gamification.levelToast', { level: logro.id, name: logro.nombre }), 'level', null, 'before');
     } else {
       showToast(`${logro.nombre} +${logro.bricksNuevos} Bricks`, logro.type === 'regalo' ? 'gift' : 'task', '/toast_images/brick.png', 'before');
     }
@@ -2022,7 +2104,9 @@ function showGamificationToasts(gamification) {
 }
 
 function messageForErrorCode(code) {
-  return ERROR_MESSAGES[code] ?? 'Ocurrio un error inesperado. Intentalo de nuevo.';
+  if (Object.hasOwn(ERROR_MESSAGES, code)) return ERROR_MESSAGES[code];
+  console.warn('[i18n] CODIGO_ERROR_DESCONOCIDO');
+  return tr('common.unexpectedError');
 }
 
 function closeImageModal() {
@@ -2039,7 +2123,7 @@ function mostrarImagenMinifigura(id, nombre) {
   const requestSequence = ++imageModalImageSequence;
   const preloader = new Image();
   imageModalImage.src = imageFallbackUrl;
-  imageModalImage.alt = `Imagen de la minipersona ${upperId}`;
+  bindI18n(imageModalImage, 'alt', () => t('inventory.image', { id: upperId }));
   imageModalTitle.textContent = upperId;
   imageModalName.textContent = nombre ?? '';
   openDialog(imageModal);
@@ -2065,7 +2149,7 @@ function resetSetCreation() {
   setNumberContinueButton.disabled = true;
   setPurchaseDateInput.value = '';
   setCreateError.textContent = '';
-  setCreateTitle.textContent = 'Minipersonas en el set';
+  bindI18n(setCreateTitle, 'text', () => t('inventory.setCaption'));
   setCreateNumber.textContent = '';
   setCreateOwned.textContent = '';
   setCreateOwned.hidden = true;
@@ -2092,7 +2176,7 @@ function renderSetMinifigures() {
     const imageButton = document.createElement('button');
     imageButton.type = 'button';
     imageButton.className = 'set-minifigure-image';
-    imageButton.setAttribute('aria-label', `Ampliar imagen de ${minifigura.id}`);
+    bindI18n(imageButton, 'aria-label', () => t('inventory.zoomImage', { name: minifigura.id }));
     imageButton.append(createLazyImage({
       src: imagenUrlPara(minifigura.id),
       alt: minifigura.nombre,
@@ -2117,8 +2201,8 @@ function renderSetMinifigures() {
     eyeReference.setAttribute('href', '#observation-eye-icon');
     eye.append(eyeReference);
     followButton.append(eye);
-    followButton.title = 'Seguimiento';
-    followButton.setAttribute('aria-label', minifigura.observada ? 'Dejar de seguir' : 'Seguir');
+    bindI18n(followButton, 'title', () => t('common.following'));
+    bindI18n(followButton, 'aria-label', () => minifigura.observada ? t('common.unfollow') : t('common.follow'));
     followButton.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
     followButton.disabled = Boolean(minifigura.existente) || formSending;
     followButton.addEventListener('click', () => {
@@ -2154,7 +2238,7 @@ function renderSetMinifigures() {
       stateButton.className = `state-toggle ${minifigura.estadoColeccion === state ? 'active' : 'inactive'}`;
       stateButton.setAttribute('aria-label', collectionStateMeaning(state));
       stateButton.setAttribute('aria-pressed', String(minifigura.estadoColeccion === state));
-      stateButton.title = collectionStateMeaning(state);
+      bindI18n(stateButton, 'title', () => collectionStateMeaning(state));
       stateButton.disabled = Boolean(minifigura.existente) || formSending;
       appendCollectionStateIcon(stateButton, state);
       stateButton.addEventListener('click', () => {
@@ -2192,7 +2276,7 @@ function chooseCreationMode(mode) {
   creationMode = mode;
   updateCreationModeButtons();
   if (mode === 'set') {
-    setNumberStatus.textContent = pendingSetLookup ? 'Encontrado' : '';
+    bindI18n(setNumberStatus, 'text', () => pendingSetLookup ? t('inventory.found') : '');
     setNumberStatus.classList.remove('error', 'loading-message');
     setNumberContinueButton.disabled = !pendingSetLookup;
     if (pendingSetLookup) setNumberInput.value = pendingSetLookup.searchedSetNumber;
@@ -2210,7 +2294,7 @@ async function searchSetInventory() {
   setNumberContinueButton.disabled = true;
   setNumberStatus.classList.remove('error', 'loading-message');
   if (!setNumber) {
-    setNumberStatus.textContent = 'Introduce un número de set.';
+    bindI18n(setNumberStatus, 'text', () => t('inventory.setRequired'));
     setNumberStatus.classList.add('error');
     return;
   }
@@ -2223,12 +2307,12 @@ async function searchSetInventory() {
     const result = await response.json();
     if (lookupSequence !== setLookupSequence || !setNumberDialog.open) return;
     if (response.status === 404) {
-      setNumberStatus.textContent = 'El set no se encuentra';
+      bindI18n(setNumberStatus, 'text', () => t('inventory.setNotFound'));
       setNumberStatus.classList.add('error');
       return;
     }
     if (response.status === 400 && result.error === 'BRICKSET_SET_INVALIDO') {
-      setNumberStatus.textContent = 'El número de set no es válido.';
+      bindI18n(setNumberStatus, 'text', () => t('inventory.setInvalid'));
       setNumberStatus.classList.add('error');
       return;
     }
@@ -2239,19 +2323,19 @@ async function searchSetInventory() {
       throw new Error('BRICKSET_RESPUESTA_INVALIDA');
     }
     if (result.minifigures.length === 0) {
-      setNumberStatus.textContent = 'El set no contiene minipersonas.';
+      bindI18n(setNumberStatus, 'text', () => t('inventory.setEmpty'));
       return;
     }
     if (result.minifigures.every(({ existente }) => existente)) {
-      setNumberStatus.textContent = 'Encontrado. Todas las minifiguras de este set están en tu inventario.';
+      bindI18n(setNumberStatus, 'text', () => t('inventory.setOwned'));
       return;
     }
     pendingSetLookup = { ...result, searchedSetNumber: setNumber };
-    setNumberStatus.textContent = 'Encontrado';
+    bindI18n(setNumberStatus, 'text', () => t('inventory.found'));
     setNumberContinueButton.disabled = false;
   } catch {
     if (lookupSequence !== setLookupSequence || !setNumberDialog.open) return;
-    setNumberStatus.textContent = 'No se pudo consultar el set. Inténtalo de nuevo.';
+    bindI18n(setNumberStatus, 'text', () => t('inventory.setError'));
     setNumberStatus.classList.add('error');
   } finally {
     if (lookupSequence === setLookupSequence) {
@@ -2270,11 +2354,11 @@ function continueWithSetInventory() {
     observada: minifigura.existente ? Boolean(minifigura.observada) : false,
     estadoColeccion: minifigura.existente ? minifigura.estadoColeccion : 'COLECCIÓN',
   }));
-  setCreateTitle.textContent = `${setMinifigures.length} ${setMinifigures.length === 1 ? 'Minipersona' : 'Minipersonas'} en el set`;
+  bindI18n(setCreateTitle, 'text', () => t('inventory.setCount', { count: setMinifigures.length }));
   const existingIds = setMinifigures.filter(({ existente }) => existente).map(({ id }) => id);
-  setCreateOwned.textContent = existingIds.length > 0
-    ? `(Ya tienes en el inventario ${existingIds.length} de ellas [${existingIds.join(', ')}])`
-    : '';
+  bindI18n(setCreateOwned, 'text', () => existingIds.length > 0
+    ? t('inventory.setAlreadyOwned', { count: existingIds.length, ids: existingIds.join(', ') })
+    : '');
   setCreateOwned.hidden = existingIds.length === 0;
   setCreateError.textContent = '';
   setPurchaseDateInput.max = localToday();
@@ -2289,15 +2373,15 @@ function continueWithSetInventory() {
 function setPurchaseValidationError() {
   if (setPurchaseDateInput.validity.badInput
     || (setPurchaseDateInput.value !== '' && setPurchaseDateInput.value > localToday())) {
-    return 'La fecha de compra no puede ser posterior a hoy.';
+    return t('inventory.futurePurchase');
   }
   return null;
 }
 
 function duplicateSetMessage(ids) {
   const uniqueIds = [...new Set(ids.map((id) => String(id).trim().toUpperCase()))];
-  if (uniqueIds.length === 1) return `La minipersona ${uniqueIds[0]} ya se encontraba en tu inventario`;
-  if (uniqueIds.length > 1) return `Las minipersonas ${uniqueIds.join(', ')} ya se encontraban en tu inventario`;
+  if (uniqueIds.length === 1) return t('inventory.duplicateOne', { ids: uniqueIds[0] });
+  if (uniqueIds.length > 1) return t('inventory.duplicateMany', { ids: uniqueIds.join(', ') });
   return '';
 }
 
@@ -2305,11 +2389,11 @@ async function saveSetInventory() {
   setCreateError.textContent = '';
   const purchaseError = setPurchaseValidationError();
   if (purchaseError) {
-    setCreateError.textContent = purchaseError;
+    setMessage(setCreateError, purchaseError);
     return;
   }
   if (!selectedSetNumber) {
-    setCreateError.textContent = 'Busca un set antes de guardar.';
+    bindI18n(setCreateError, 'text', () => t('inventory.setSearchFirst'));
     return;
   }
 
@@ -2354,7 +2438,7 @@ async function saveSetInventory() {
       }
       if (!isCurrent()) return;
       const message = messageForErrorCode(errorCode);
-      setCreateError.textContent = message;
+      setMessage(setCreateError, message);
       showToast(message, 'error');
       return;
     }
@@ -2372,13 +2456,13 @@ async function saveSetInventory() {
     result.creadas.forEach(upsertCached);
     applyFilters({ preservePage: true });
     closeFormDialog();
-    if (result.creadas.length > 0) showToast('Minipersonas añadidas correctamente.', 'success');
+    if (result.creadas.length > 0) showToast(() => t('inventory.setSaved'), 'success');
     const duplicateMessage = duplicateSetMessage([...knownDuplicates, ...result.duplicadas]);
     if (duplicateMessage) showToast(duplicateMessage, 'success');
     void revalidate();
   } catch {
     if (!isCurrent()) return;
-    setCreateError.textContent = 'No se pudo guardar el conjunto. Inténtalo de nuevo.';
+    bindI18n(setCreateError, 'text', () => t('inventory.setSaveError'));
     showToast(setCreateError.textContent, 'error');
   } finally {
     if (formSequence === imageLookupSequence && setSequence === setLookupSequence) {
@@ -2391,7 +2475,7 @@ async function saveSetInventory() {
 
 function openFormDialog(mode, minifigura, trigger = null) {
   if (!categoriasReady) {
-    showToast('No se pueden crear minipersonas sin cargar las categorías oficiales.', 'error');
+    showToast(() => t('inventory.categoriesRequired'), 'error');
     return;
   }
   pauseSyncForModal();
@@ -2409,7 +2493,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   formPreviewImage.src = imageFallbackUrl;
   formObservedButton.setAttribute('aria-pressed', 'false');
   formError.textContent = '';
-  formDialogTitle.textContent = mode === 'edit' || mode === 'ranking-create' ? 'Editar minipersona' : mode === 'view' ? 'Ver minipersona' : 'Añadir a inventario';
+  bindI18n(formDialogTitle, 'text', () => mode === 'edit' || mode === 'ranking-create' ? t('inventory.edit') : mode === 'view' ? t('inventory.view') : t('inventory.add'));
 
   if (mode !== 'create') {
     formIdInput.value = minifigura.id ?? '';
@@ -2456,14 +2540,14 @@ async function openMinifiguraView(id) {
       const matches = await response.json();
       minifigura = Array.isArray(matches) ? matches.find((item) => item.id === id) : null;
     } catch {
-      showToast('No se pudo cargar la minipersona.', 'error');
+      showToast(() => t('inventory.figureLoadError'), 'error');
       return;
     }
   }
   if (minifigura) {
     openFormDialog('view', minifigura);
   } else {
-    showToast('No se pudo cargar la minipersona.', 'error');
+    showToast(() => t('inventory.figureLoadError'), 'error');
   }
 }
 
@@ -2503,7 +2587,7 @@ function updateFormMode() {
     field.disabled = isView || formEstadoInput.value === 'BUSCADA' || (isCreate && !formSynced);
   });
   formFechaCompraInput.type = formFechaCompraInput.disabled && !formFechaCompraInput.value ? 'text' : 'date';
-  formPrecioInput.placeholder = formSynced && !formPrecioInput.value ? 'Sin precio' : '';
+  bindI18n(formPrecioInput, 'placeholder', () => formSynced && !formPrecioInput.value ? t('common.priceMissing') : '');
   formStateToggleButtons.forEach((button) => { button.disabled = isView || isRankingCreate || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);
@@ -2520,7 +2604,7 @@ function updateFormMode() {
   formSubmitButton.disabled = isView || formSending || (isSetCreate
     ? !selectedSetNumber || Boolean(setPurchaseValidationError())
     : (isRankingCreate && !formSynced) || !isFormValid());
-  formCancelButton.textContent = 'Cerrar';
+  bindI18n(formCancelButton, 'text', () => t('common.close'));
   formPreviewImage.hidden = false;
 }
 
@@ -2536,8 +2620,8 @@ function updateFormToggleStates() {
   const isObserved = formObservedButton.getAttribute('aria-pressed') === 'true';
   formObservedButton.classList.toggle('active', isObserved);
   formObservedButton.classList.toggle('inactive', !isObserved);
-  formObservedButton.setAttribute('aria-label', isObserved ? 'Dejar de seguir' : 'Seguir');
-  formObservedButton.title = 'Seguimiento';
+  bindI18n(formObservedButton, 'aria-label', () => isObserved ? t('common.unfollow') : t('common.follow'));
+  bindI18n(formObservedButton, 'title', () => t('common.following'));
 }
 
 function hasFormMetadata() {
@@ -2567,12 +2651,12 @@ function localToday() {
 function purchaseValidationError() {
   if (!formFechaCompraInput.disabled && (formFechaCompraInput.validity.badInput
     || (formFechaCompraInput.value !== '' && formFechaCompraInput.value > localToday()))) {
-    return 'La fecha de compra no puede ser posterior a hoy.';
+    return t('inventory.futurePurchase');
   }
   const price = formPrecioCompraInput.value.trim();
   if (!formPrecioCompraInput.disabled && (formPrecioCompraInput.validity.badInput
     || (price !== '' && (!Number.isFinite(Number(price)) || Number(price) < 0)))) {
-    return 'El precio de compra debe ser un número mayor o igual a cero.';
+    return t('inventory.purchasePriceInvalid');
   }
   return null;
 }
@@ -2655,35 +2739,35 @@ function validatePayload(payload) {
   const purchaseError = purchaseValidationError();
   if (purchaseError) return purchaseError;
   if (!payload.id) {
-    return 'El id es obligatorio.';
+    return t('inventory.idRequired');
   }
   if (!payload.nombre) {
-    return 'El nombre es obligatorio.';
+    return t('inventory.nameRequired');
   }
   if (!payload.categoria) {
-    return 'La categoría es obligatoria.';
+    return t('inventory.categoryRequired');
   }
   if (payload.anio === undefined || payload.anio <= 0) {
-    return 'El año es obligatorio.';
+    return t('inventory.yearRequired');
   }
   if (payload.precio !== undefined && (!Number.isFinite(payload.precio) || payload.precio < 0)) {
-    return 'El precio Brickset no es válido.';
+    return t('inventory.priceInvalid');
   }
   if (!officialCategorias.some(({ categoria }) => categoria === payload.categoria)) {
-    return 'La categoría debe ser una categoría oficial de Brickset.';
+    return t('inventory.categoryInvalid');
   }
   if (payload.subcategoria && !(subcategoriasPorCategoria.get(payload.categoria) ?? []).includes(payload.subcategoria)) {
-    return 'La subcategoría debe pertenecer a la categoría seleccionada.';
+    return t('inventory.subcategoryInvalid');
   }
   if (payload.anio !== undefined && (!Number.isInteger(payload.anio) || payload.anio < 1978 || payload.anio > currentYear)) {
-    return `El año debe ser un número entero entre 1978 y ${currentYear}.`;
+    return t('inventory.yearRange', { year: currentYear });
   }
   return null;
 }
 
 function openDeleteDialog(minifigura) {
   pendingDeleteId = minifigura.id;
-  deleteMessage.textContent = `Se eliminará la minipersona "${minifigura.nombre}" (${minifigura.id}).\n\nEsta acción no se puede deshacer.`;
+  bindI18n(deleteMessage, 'text', () => t('inventory.deleteWarning', { name: minifigura.nombre, id: minifigura.id }));
   openDialog(deleteDialog);
 }
 
@@ -2808,7 +2892,7 @@ firstMinifiguraAccept.addEventListener('click', () => {
 function openOwnAchievements(trigger) {
   achievementsViewSequence += 1;
   achievementsTrigger = trigger;
-  renderAchievements(ownGamification ?? {}, 'Logros', { editable: true });
+  renderAchievements(ownGamification ?? {}, tr('common.achievements'), { editable: true });
   openDialog(gamificationDialog);
   gamificationCloseButton.focus();
   void loadGamification();
@@ -2816,32 +2900,32 @@ function openOwnAchievements(trigger) {
 
 function setNotificationsUnreadCount(count) {
   const unreadCount = Number.isInteger(count) && count > 0 ? count : 0;
-  const label = unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones';
+  const label = () => unreadCount > 0 ? t('notifications.unread', { count: unreadCount }) : t('common.notifications');
   notificationsUnreadBadge.hidden = unreadCount === 0;
   notificationsUnreadBadge.textContent = unreadCount === 0 ? '' : String(unreadCount);
   notificationsMarkAllButton.disabled = unreadCount === 0;
-  notificationsOpenButton.setAttribute('aria-label', label);
-  notificationsOpenButton.title = label;
+  bindI18n(notificationsOpenButton, 'aria-label', label);
+  bindI18n(notificationsOpenButton, 'title', label);
 }
 
 function notificationDateGroup(createdAt, now = notificationsClock()) {
   const timestamp = new Date(createdAt);
-  if (Number.isNaN(timestamp.getTime())) return 'Hace más de dos semanas';
+  if (Number.isNaN(timestamp.getTime())) return t('notifications.older');
   const age = now.getTime() - timestamp.getTime();
-  if (age >= 0 && age < 60_000) return 'Hace un instante';
+  if (age >= 0 && age < 60_000) return t('notifications.justNow');
   const date = madridDateString(timestamp);
   const today = madridDateString(now);
-  if (date === today) return 'Hoy';
-  if (date === shiftCalendarDate(today, -1)) return 'Ayer';
+  if (date === today) return t('notifications.today');
+  if (date === shiftCalendarDate(today, -1)) return t('notifications.yesterday');
   const weekday = (new Date(`${today}T00:00:00.000Z`).getUTCDay() + 6) % 7;
   const thisWeekStart = shiftCalendarDate(today, -weekday);
-  if (date >= thisWeekStart) return 'Esta semana';
-  if (date >= shiftCalendarDate(thisWeekStart, -7)) return 'La semana pasada';
-  return 'Hace más de dos semanas';
+  if (date >= thisWeekStart) return t('notifications.thisWeek');
+  if (date >= shiftCalendarDate(thisWeekStart, -7)) return t('notifications.lastWeek');
+  return t('notifications.older');
 }
 
 function exactNotificationTimestamp(createdAt) {
-  const parts = new Intl.DateTimeFormat('es-ES', {
+  const parts = new Intl.DateTimeFormat(activeLocale(), {
     timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date(createdAt));
@@ -2850,7 +2934,7 @@ function exactNotificationTimestamp(createdAt) {
 }
 
 function notificationClockTime(createdAt) {
-  const parts = new Intl.DateTimeFormat('es-ES', {
+  const parts = new Intl.DateTimeFormat(activeLocale(), {
     timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date(createdAt));
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
@@ -2870,27 +2954,41 @@ function renderNotificationMessage(notification) {
   const data = notification.data ?? {};
   const message = document.createElement('p');
   message.className = 'notification-message';
+  const genericKeys = {
+    friend_request: 'notifications.friendRequestGeneric',
+    friend_request_accepted: 'notifications.friendAcceptedGeneric',
+    gift_received: 'notifications.giftReceivedGeneric',
+    gift_thanks: 'notifications.giftThanksGeneric',
+  };
+  if (Object.hasOwn(genericKeys, notification.type)
+    && (typeof data.user !== 'string' || !data.user.trim()
+      || (notification.type.startsWith('gift_') && (!Number.isFinite(data.amount) || data.amount <= 0)))) {
+    console.warn('[i18n] DATOS_NOTIFICACION_INSUFICIENTES');
+    bindI18n(message, 'text', () => t(genericKeys[notification.type]));
+    return message;
+  }
   if (notification.type === 'friend_request' || notification.type === 'friend_request_accepted') {
     const username = document.createElement('strong');
-    username.textContent = data.user ?? 'Coleccionista';
-    message.append(username, document.createTextNode(notification.type === 'friend_request'
-      ? ' quiere ser tu amigo.' : ' ha aceptado tu solicitud de amistad.'));
+    bindI18n(username, 'text', () => data.user ?? t('common.collector'));
+    bindTranslatedContent(message, notification.type === 'friend_request'
+      ? 'notifications.friendRequest' : 'notifications.friendAccepted', () => ({}), { username });
     return message;
   }
   if (notification.type === 'gift_received' || notification.type === 'gift_thanks') {
     const userName = document.createElement('strong');
-    userName.textContent = data.user ?? 'Coleccionista';
+    bindI18n(userName, 'text', () => data.user ?? t('common.collector'));
     const amount = document.createElement('span');
-    amount.textContent = String(Number.isFinite(data.amount) ? data.amount : notification.type === 'gift_received' ? 50 : 5);
+    amount.textContent = String(data.amount);
+    const bricks = document.createElement('img');
+    bricks.className = 'ranking-gift-icon notification-brick-icon';
+    bricks.src = '/toast_images/brick.png';
+    bricks.alt = 'Bricks';
     if (notification.type === 'gift_received') {
-      const rankingName = data.amount === 5 ? 'Ranking Semanal' : 'Ranking Global';
-      message.append(userName, document.createTextNode(` vio tus tops en el ${rankingName} y te regaló `), amount);
-      appendNotificationBrick(message);
-      message.append(document.createTextNode('.'));
+      bindTranslatedContent(message, 'notifications.giftReceived',
+        () => ({ ranking: data.amount === 5 ? t('ranking.weekly') : t('ranking.global') }),
+        { username: userName, amount, bricks });
     } else {
-      message.append(userName, document.createTextNode(' agradeció tu regalo con '), amount);
-      appendNotificationBrick(message);
-      message.append(document.createTextNode('.'));
+      bindTranslatedContent(message, 'notifications.giftThanks', () => ({}), { username: userName, amount, bricks });
     }
     return message;
   }
@@ -2900,7 +2998,17 @@ function renderNotificationMessage(notification) {
     marker.setAttribute('aria-hidden', 'true');
     marker.textContent = notification.type === 'ranking_exited'
       ? '❌' : data.ranking === 'weekly' ? '🗓️' : '🌐';
-    message.append(marker, document.createTextNode(` ${interfaceText(data.message ?? 'Tienes una notificación de ranking.')}`));
+    const text = document.createElement('span');
+    const validRanking = data.ranking === 'global' || data.ranking === 'weekly';
+    if (!validRanking) console.warn('[i18n] DATOS_NOTIFICACION_INSUFICIENTES');
+    bindI18n(text, 'text', () => ` ${validRanking
+      ? t(notification.type === 'ranking_exited' ? 'notifications.rankingExited'
+        : Number.isInteger(data.position) && data.position > 0
+          ? 'notifications.rankingEnteredPosition' : 'notifications.rankingEntered', {
+        ranking: t(data.ranking === 'weekly' ? 'ranking.weekly' : 'ranking.global'), position: data.position,
+      })
+      : t('notifications.rankingGeneric')}`);
+    message.append(marker, text);
     return message;
   }
   if (notification.type === 'weekly_ranking_available') {
@@ -2908,10 +3016,13 @@ function renderNotificationMessage(notification) {
     marker.className = 'notification-leading-emoji';
     marker.setAttribute('aria-hidden', 'true');
     marker.textContent = '🗓️';
-    message.append(marker, document.createTextNode(` ${interfaceText(data.message ?? 'El Ranking Semanal de esta semana ya está disponible.')}`));
+    const text = document.createElement('span');
+    bindI18n(text, 'text', () => ` ${t('notifications.weeklyAvailable')}`);
+    message.append(marker, text);
     return message;
   }
-  message.textContent = interfaceText(data.message ?? 'Tienes una notificación.');
+  console.warn('[i18n] TIPO_NOTIFICACION_DESCONOCIDO');
+  bindI18n(message, 'text', () => t('notifications.unknown'));
   return message;
 }
 
@@ -2926,7 +3037,7 @@ function renderNotifications() {
       const heading = document.createElement('li');
       heading.className = 'notification-date-group';
       const label = document.createElement('h3');
-      label.textContent = group;
+      bindI18n(label, 'text', () => notificationDateGroup(notification.createdAt, now));
       heading.append(label);
       notificationsList.append(heading);
       currentGroup = group;
@@ -2956,8 +3067,8 @@ function renderNotifications() {
       const openButton = document.createElement('button');
       openButton.type = 'button';
       openButton.className = 'button button-secondary notification-open-weekly-ranking';
-      openButton.setAttribute('aria-label', 'Ver Ranking Semanal');
-      openButton.append(document.createTextNode('Ver'));
+      bindI18n(openButton, 'aria-label', () => t('notifications.viewWeekly'));
+      openButton.append(document.createTextNode(t('notifications.view')));
       const rankingEmoji = document.createElement('span');
       rankingEmoji.className = 'notification-leading-emoji';
       rankingEmoji.setAttribute('aria-hidden', 'true');
@@ -2972,12 +3083,12 @@ function renderNotifications() {
       acceptButton.type = 'button';
       acceptButton.className = 'button button-secondary notification-accept-friend';
       acceptButton.dataset.notificationId = notification.id;
-      acceptButton.setAttribute('aria-label', isAccepted ? 'Solicitud de amistad aceptada' : `Aceptar solicitud de amistad de ${notification.data?.user ?? 'Coleccionista'}`);
+      bindI18n(acceptButton, 'aria-label', () => isAccepted ? t('notifications.accepted') : t('friends.acceptNamed', { username: notification.data?.user ?? t('common.collector') }));
       acceptButton.title = acceptButton.getAttribute('aria-label');
       const plus = document.createElement('span');
       plus.className = 'notification-friend-plus';
       plus.setAttribute('aria-hidden', 'true');
-      plus.textContent = isAccepted ? 'Aceptada' : '+';
+      bindI18n(plus, 'text', () => isAccepted ? t('friends.accepted') : '+');
       const icon = document.createElement('img');
       icon.className = 'notification-friend-icon';
       icon.src = '/status_images/friends.png';
@@ -2991,7 +3102,7 @@ function renderNotifications() {
         const errorMessage = document.createElement('p');
         errorMessage.className = 'notification-error';
         errorMessage.setAttribute('role', 'alert');
-        errorMessage.textContent = error;
+        setMessage(errorMessage, error);
         actions.append(errorMessage);
       }
     }
@@ -3001,7 +3112,7 @@ function renderNotifications() {
       thankButton.type = 'button';
       thankButton.className = 'button button-secondary ranking-gift notification-thank';
       thankButton.dataset.notificationId = notification.id;
-      thankButton.append(document.createTextNode('¡Gracias! +5 '));
+      thankButton.append(document.createTextNode(t('notifications.thanks')));
       appendNotificationBrick(thankButton);
       thankButton.disabled = isPending || notification.canThank === false;
       if (isPending) thankButton.setAttribute('aria-busy', 'true');
@@ -3011,7 +3122,7 @@ function renderNotifications() {
         const errorMessage = document.createElement('p');
         errorMessage.className = 'notification-error';
         errorMessage.setAttribute('role', 'alert');
-        errorMessage.textContent = error;
+        setMessage(errorMessage, error);
         actions.append(errorMessage);
       }
     }
@@ -3022,8 +3133,8 @@ function renderNotifications() {
     markReadButton.type = 'button';
     markReadButton.className = 'button button-secondary notification-mark-read';
     markReadButton.dataset.notificationId = notification.id;
-    markReadButton.setAttribute('aria-label', notification.isRead ? 'Notificación leída' : 'Marcar notificación como leída');
-    markReadButton.title = notification.isRead ? 'Notificación leída' : 'Marcar como leída';
+    bindI18n(markReadButton, 'aria-label', () => notification.isRead ? t('notifications.read') : t('notifications.markReadLabel'));
+    bindI18n(markReadButton, 'title', () => notification.isRead ? t('notifications.read') : t('notifications.markRead'));
     markReadButton.textContent = '✅';
     markReadButton.disabled = notification.isRead || notificationReadRequests.has(notification.id);
     const readError = notificationReadErrors.get(notification.id);
@@ -3032,7 +3143,7 @@ function renderNotifications() {
       const errorMessage = document.createElement('p');
       errorMessage.className = 'notification-error';
       errorMessage.setAttribute('role', 'alert');
-      errorMessage.textContent = readError;
+      setMessage(errorMessage, readError);
       content.append(errorMessage);
     }
     item.append(content, controls);
@@ -3042,26 +3153,28 @@ function renderNotifications() {
 
 function formatSignedNumber(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return `${value > 0 ? '+' : ''}${value}`;
+  return `${value > 0 ? '+' : ''}${i18n.formatNumber(value, { maximumFractionDigits: 20 })}`;
 }
 
 function formatSignedCurrency(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  const amount = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(value));
-  return `${value > 0 ? '+' : value < 0 ? '-' : ''}${amount} €`;
+  const amount = i18n.formatNumber(Math.abs(value), {
+    style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).replace(/\u00a0/g, ' ');
+  return `${value > 0 ? '+' : value < 0 ? '-' : ''}${amount}`;
 }
 
 function renderDailyNotification(notification) {
   const details = document.createElement('details');
   details.className = 'daily-notification';
   const summary = document.createElement('summary');
-  summary.textContent = 'Resumen diario';
+  bindI18n(summary, 'text', () => t('notifications.dailySummary'));
   details.append(summary);
-  const deltas = notification.data.deltas;
+  const deltas = notification.data?.deltas;
   if (!deltas) {
     const noBaseline = document.createElement('p');
     noBaseline.className = 'daily-no-baseline';
-    noBaseline.textContent = 'Sin medición previa.';
+    bindI18n(noBaseline, 'text', () => t('notifications.noPrevious'));
     details.append(noBaseline);
     return details;
   }
@@ -3091,20 +3204,24 @@ function renderDailyNotification(notification) {
     }
     const name = document.createElement('span');
     name.className = 'daily-summary-label';
-    name.textContent = label;
+    setMessage(name, label);
     const amount = document.createElement('strong');
     amount.className = 'daily-summary-value';
-    amount.textContent = value;
+    setMessage(amount, value);
     metric.append(name, amount);
     target.append(metric);
   };
-  addMetric('Colección', formatSignedNumber(deltas.figures), '📦');
-  addMetric('Valor', formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
+  addMetric(tr('common.collection'), () => formatSignedNumber(deltas.figures), '📦');
+  addMetric(tr('common.value'), () => formatSignedCurrency(deltas.valueEur), '/toast_images/billete.png');
   addMetric('Bricks', formatSignedNumber(deltas.bricks), '/toast_images/brick.png');
-  addMetric('Nivel', formatSignedNumber(deltas.level), '🏆');
+  addMetric(tr('common.level'), () => formatSignedNumber(deltas.level), '🏆');
   details.append(metrics);
-  if (Number.isFinite(deltas.globalPosition)) addMetric('🌐 Ranking Global', `${formatSignedNumber(deltas.globalPosition)} puestos`, null, rankingMetrics);
-  if (Number.isFinite(deltas.weeklyPosition)) addMetric('🗓️ Ranking Semanal', `${formatSignedNumber(deltas.weeklyPosition)} puestos`, null, rankingMetrics);
+  if (Number.isFinite(deltas.globalPosition)) addMetric(tr('notifications.globalPosition'), () => t('notifications.positions', {
+    count: Math.abs(deltas.globalPosition), value: formatSignedNumber(deltas.globalPosition),
+  }), null, rankingMetrics);
+  if (Number.isFinite(deltas.weeklyPosition)) addMetric(tr('notifications.weeklyPosition'), () => t('notifications.positions', {
+    count: Math.abs(deltas.weeklyPosition), value: formatSignedNumber(deltas.weeklyPosition),
+  }), null, rankingMetrics);
   if (rankingMetrics.childElementCount) details.append(rankingMetrics);
 
   const traits = [
@@ -3125,7 +3242,7 @@ function renderDailyNotification(notification) {
     label.className = 'daily-dna-name';
     label.textContent = name;
     const percentage = document.createElement('strong');
-    percentage.textContent = `${formatSignedNumber(deltas.dna?.[key])}%`;
+    bindI18n(percentage, 'text', () => `${formatSignedNumber(deltas.dna?.[key])}%`);
     trait.append(swatch, label, percentage);
     dnaGrid.append(trait);
   }
@@ -3154,7 +3271,7 @@ async function acceptFriendNotification(notificationId) {
     if (friendsDialog.open && friendsActiveTab !== 'search') void loadFriendsList();
   } catch {
     if (sessionUserId === currentSession?.user?.id) {
-      notificationFriendAcceptErrors.set(notificationId, 'No se pudo aceptar la solicitud. Inténtalo de nuevo.');
+      notificationFriendAcceptErrors.set(notificationId, tr('notifications.acceptError'));
     }
   } finally {
     notificationFriendAcceptRequests.delete(notificationId);
@@ -3180,7 +3297,7 @@ async function thankNotification(notificationId) {
       throw new Error('thanks unavailable');
     }
   } catch {
-    if (sessionUserId === currentSession?.user?.id) notificationThankErrors.set(notificationId, 'No se pudo enviar el agradecimiento.');
+    if (sessionUserId === currentSession?.user?.id) notificationThankErrors.set(notificationId, tr('notifications.thanksError'));
   } finally {
     notificationThankRequests.delete(notificationId);
     if (sessionUserId === currentSession?.user?.id) renderNotifications();
@@ -3202,7 +3319,7 @@ async function markNotificationRead(notificationId) {
     notificationsItems = notificationsItems.map((item) => item.id === notificationId ? { ...item, isRead: true } : item);
     setNotificationsUnreadCount(result.unreadCount);
   } catch {
-    if (sessionUserId === currentSession?.user?.id) notificationReadErrors.set(notificationId, 'No se pudo marcar como leída.');
+    if (sessionUserId === currentSession?.user?.id) notificationReadErrors.set(notificationId, tr('notifications.readError'));
   } finally {
     notificationReadRequests.delete(notificationId);
     if (sessionUserId === currentSession?.user?.id) renderNotifications();
@@ -3224,7 +3341,7 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
   notificationsLoading = true;
   notificationsMarkAllButton.parentElement.hidden = true;
   if (notificationsDialog.open) {
-    notificationsStatus.textContent = 'Cargando notificaciones...';
+    bindI18n(notificationsStatus, 'text', () => t('notifications.loading'));
     notificationsStatus.className = 'status loading-message';
   }
   const cursor = reset ? null : notificationsNextCursor;
@@ -3246,10 +3363,10 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
       : result.nextCursor !== null;
     setNotificationsUnreadCount(result.unreadCount);
     renderNotifications();
-    notificationsStatus.textContent = notificationsItems.length ? '' : 'No tienes notificaciones.';
+    bindI18n(notificationsStatus, 'text', () => notificationsItems.length ? '' : t('notifications.empty'));
   } catch {
     if (requestId === notificationsRequestSequence && sessionUserId === currentSession?.user?.id) {
-      notificationsStatus.textContent = 'No se pudieron cargar las notificaciones.';
+      bindI18n(notificationsStatus, 'text', () => t('notifications.loadError'));
     }
   } finally {
     if (requestId === notificationsRequestSequence) {
@@ -3279,7 +3396,7 @@ async function syncNativePushPermission() {
     await nativePush.register();
   } catch {
     if (profileDialog.open && profileDialogMode === 'settings') {
-      systemNotificationsStatus.textContent = 'No se pudo comprobar el estado de las notificaciones.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.checkError'));
     }
   }
 }
@@ -3300,11 +3417,11 @@ async function refreshSystemNotificationsSetting() {
     const state = await nativePush.getNotificationState();
     if (typeof state?.enabled !== 'boolean') throw new Error('ANDROID_PUSH_STATE_UNAVAILABLE');
     systemNotificationsEnabled.checked = state.enabled;
-    systemNotificationsStatus.textContent = state.enabled
-      ? 'Notificaciones permitidas en los ajustes de Android.'
-      : 'Notificaciones bloqueadas en los ajustes de Android.';
+    bindI18n(systemNotificationsStatus, 'text', () => state.enabled
+      ? t('notifications.allowedSettings')
+      : t('notifications.blockedSettings'));
   } catch {
-    systemNotificationsStatus.textContent = 'No se pudo comprobar el estado de las notificaciones.';
+    bindI18n(systemNotificationsStatus, 'text', () => t('notifications.checkError'));
   } finally {
     systemNotificationsEnabled.disabled = false;
   }
@@ -3313,14 +3430,14 @@ async function refreshSystemNotificationsSetting() {
 async function enableNativePush() {
   if (!nativePush || !nativePushRegistration || !currentSession) return;
   systemNotificationsEnabled.disabled = true;
-  systemNotificationsStatus.textContent = 'Preparando las notificaciones…';
+  bindI18n(systemNotificationsStatus, 'text', () => t('notifications.preparing'));
   try {
     await nativePush.createChannel();
     const currentState = await nativePush.getNotificationState();
     const permissions = await nativePush.checkPermissions();
     if (permissions.receive === 'granted' && currentState.enabled !== true) {
       await nativePush.openNotificationSettings();
-      systemNotificationsStatus.textContent = 'Permite las notificaciones en los ajustes de Android y vuelve a la app.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.enableSettings'));
       return;
     }
     const permission = permissions.receive === 'granted'
@@ -3329,20 +3446,20 @@ async function enableNativePush() {
     if (permission.receive !== 'granted') {
       await nativePushRegistration.register(currentSession, { permissionState: 'denied' });
       systemNotificationsEnabled.checked = false;
-      systemNotificationsStatus.textContent = 'Permiso denegado en Android. La bandeja sigue disponible.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.denied'));
       return;
     }
     await nativePush.register();
     await refreshSystemNotificationsSetting();
     if (systemNotificationsEnabled.checked) {
-      systemNotificationsStatus.textContent = 'Notificaciones permitidas.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.allowed'));
     } else {
       await nativePush.openNotificationSettings();
-      systemNotificationsStatus.textContent = 'Permite las notificaciones en los ajustes de Android y vuelve a la app.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.enableSettings'));
     }
   } catch {
     systemNotificationsEnabled.checked = false;
-    systemNotificationsStatus.textContent = 'No se pudieron activar las notificaciones. La bandeja sigue disponible.';
+    bindI18n(systemNotificationsStatus, 'text', () => t('notifications.enableError'));
   } finally {
     systemNotificationsEnabled.disabled = false;
   }
@@ -3360,14 +3477,14 @@ async function toggleSystemNotifications() {
     const state = await nativePush.getNotificationState();
     systemNotificationsEnabled.checked = state.enabled === true;
     if (state.enabled === true) {
-      systemNotificationsStatus.textContent = 'Gestiona el permiso desde los ajustes de Android.';
+      bindI18n(systemNotificationsStatus, 'text', () => t('notifications.manageSettings'));
       await nativePush.openNotificationSettings();
     } else {
       await syncNativePushPermission();
       await refreshSystemNotificationsSetting();
     }
   } catch {
-    systemNotificationsStatus.textContent = 'No se pudieron abrir los ajustes de notificaciones.';
+    bindI18n(systemNotificationsStatus, 'text', () => t('notifications.settingsError'));
   } finally {
     systemNotificationsEnabled.disabled = false;
   }
@@ -3385,7 +3502,7 @@ async function openPushNotification(notificationId) {
   const row = [...notificationsList.querySelectorAll('[data-notification-id]')]
     .find((element) => element.dataset.notificationId === notificationId);
   if (!row) {
-    notificationsStatus.textContent = 'No se encontró esa notificación en tu bandeja.';
+    bindI18n(notificationsStatus, 'text', () => t('notifications.notFound'));
     return;
   }
   row.classList.add('is-push-target');
@@ -3411,13 +3528,13 @@ async function initializeNativePushListeners() {
         .then((registered) => {
           if (currentSession?.user?.id === session.user.id && !registered
             && profileDialog.open && profileDialogMode === 'settings') {
-            systemNotificationsStatus.textContent = 'No se pudo registrar esta instalación.';
+            bindI18n(systemNotificationsStatus, 'text', () => t('notifications.registrationError'));
           }
         });
     });
     await nativePush.addListener('registrationError', () => {
       if (profileDialog.open && profileDialogMode === 'settings') {
-        systemNotificationsStatus.textContent = 'No se pudieron preparar las notificaciones.';
+        bindI18n(systemNotificationsStatus, 'text', () => t('notifications.prepareError'));
       }
     });
     await nativePush.addListener('pushNotificationReceived', (notification) => {
@@ -3507,13 +3624,13 @@ function clearNotifications() {
   notificationReadRequests.clear();
   notificationReadErrors.clear();
   notificationToastIds.clear();
+  setNotificationsUnreadCount(0);
   pendingNotificationToasts = [];
   notificationsTrigger = null;
   notificationsList.replaceChildren();
   notificationsStatus.textContent = '';
   notificationsStatus.className = 'status';
   notificationsMarkAllButton.parentElement.hidden = true;
-  setNotificationsUnreadCount(0);
   if (notificationsDialog.open) notificationsDialog.close();
 }
 
@@ -3570,7 +3687,7 @@ function renderFriendRows(rows, type) {
     profileButton.type = 'button';
     profileButton.className = 'ranking-expand friends-user-button';
     profileButton.dataset.profileUser = friend.userId;
-    profileButton.setAttribute('aria-label', `Ver perfil de ${friend.username}`);
+    bindI18n(profileButton, 'aria-label', () => t('friends.viewProfile', { username: friend.username }));
     appendRankingSummary(profileButton, {
       displayName: friend.username, avatarUrl: friend.avatarUrl, bricks: friend.bricks ?? 0,
       nivel: friend.level?.id ?? 0, nombreNivel: friend.level?.name ?? 'Duplo',
@@ -3588,8 +3705,8 @@ function renderFriendRows(rows, type) {
       remove.type = 'button';
       remove.className = 'button button-secondary friends-remove';
       remove.dataset.removeFriend = friend.userId;
-      remove.setAttribute('aria-label', `Eliminar amigo ${friend.username}`);
-      remove.title = `Eliminar amigo ${friend.username}`;
+      bindI18n(remove, 'aria-label', () => t('friends.removeNamed', { username: friend.username }));
+      bindI18n(remove, 'title', () => t('friends.removeNamed', { username: friend.username }));
       remove.disabled = friendsActionRequests.has(`remove:${friend.userId}`);
       const icon = document.createElement('img');
       icon.src = '/status_images/friends.png';
@@ -3601,9 +3718,9 @@ function renderFriendRows(rows, type) {
         const accepted = document.createElement('button');
         accepted.type = 'button';
         accepted.className = 'button button-secondary notification-accept-friend friends-accepted-button';
-        accepted.textContent = 'Aceptada';
-        accepted.setAttribute('aria-label', 'Solicitud de amistad aceptada');
-        accepted.title = 'Solicitud de amistad aceptada';
+        bindI18n(accepted, 'text', () => t('friends.accepted'));
+        bindI18n(accepted, 'aria-label', () => t('notifications.accepted'));
+        bindI18n(accepted, 'title', () => t('notifications.accepted'));
         const acceptedIcon = document.createElement('img');
         acceptedIcon.className = 'notification-friend-icon';
         acceptedIcon.src = '/status_images/friends.png';
@@ -3618,8 +3735,8 @@ function renderFriendRows(rows, type) {
       sendButton.type = 'button';
       sendButton.className = 'button button-secondary notification-accept-friend friends-send-request';
       sendButton.dataset.friendSend = friend.userId;
-      sendButton.setAttribute('aria-label', `Solicitar amistad a ${friend.username}`);
-      sendButton.title = `Solicitar amistad a ${friend.username}`;
+      bindI18n(sendButton, 'aria-label', () => t('friends.requestNamed', { username: friend.username }));
+      bindI18n(sendButton, 'title', () => t('friends.requestNamed', { username: friend.username }));
       const plus = document.createElement('span');
       plus.className = 'notification-friend-plus';
       plus.setAttribute('aria-hidden', 'true');
@@ -3637,7 +3754,7 @@ function renderFriendRows(rows, type) {
       revokeButton.type = 'button';
       revokeButton.className = 'button button-secondary button-icon friends-revoke-request';
       revokeButton.dataset.revokeRequest = friend.relationshipId;
-      revokeButton.setAttribute('aria-label', `Revocar solicitud de amistad a ${friend.username}`);
+      bindI18n(revokeButton, 'aria-label', () => t('friends.revokeNamed', { username: friend.username }));
       revokeButton.title = revokeButton.getAttribute('aria-label');
       revokeButton.textContent = '✖';
       revokeButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
@@ -3647,7 +3764,7 @@ function renderFriendRows(rows, type) {
       const acceptedButton = document.createElement('button');
       acceptedButton.type = 'button';
       acceptedButton.className = 'button button-secondary friends-accepted-button';
-      acceptedButton.textContent = 'Aceptada';
+      bindI18n(acceptedButton, 'text', () => t('friends.accepted'));
       acceptedButton.disabled = true;
       item.append(acceptedButton);
     } else if (type === 'received' && ['pending', 'rejected'].includes(friend.status)) {
@@ -3657,7 +3774,7 @@ function renderFriendRows(rows, type) {
       if (friend.status === 'rejected') {
         const state = document.createElement('span');
         state.className = 'friends-request-state state-rejected';
-        state.textContent = 'Rechazada';
+        bindI18n(state, 'text', () => t('friends.rejected'));
         actions.append(state);
       }
       const acceptButton = document.createElement('button');
@@ -3665,8 +3782,8 @@ function renderFriendRows(rows, type) {
       acceptButton.className = 'button button-secondary notification-accept-friend friends-accept-request';
       acceptButton.dataset.requestId = friend.relationshipId;
       acceptButton.dataset.requestAction = 'accept';
-      acceptButton.setAttribute('aria-label', `Aceptar solicitud de amistad de ${friend.username}`);
-      acceptButton.title = `Aceptar solicitud de amistad de ${friend.username}`;
+      bindI18n(acceptButton, 'aria-label', () => t('friends.acceptNamed', { username: friend.username }));
+      bindI18n(acceptButton, 'title', () => t('friends.acceptNamed', { username: friend.username }));
       const plus = document.createElement('span');
       plus.className = 'notification-friend-plus';
       plus.setAttribute('aria-hidden', 'true');
@@ -3685,8 +3802,8 @@ function renderFriendRows(rows, type) {
         rejectButton.className = 'button button-secondary button-icon friends-reject-request';
         rejectButton.dataset.requestId = friend.relationshipId;
         rejectButton.dataset.requestAction = 'reject';
-        rejectButton.setAttribute('aria-label', `Rechazar solicitud de amistad de ${friend.username}`);
-        rejectButton.title = `Rechazar solicitud de amistad de ${friend.username}`;
+        bindI18n(rejectButton, 'aria-label', () => t('friends.rejectNamed', { username: friend.username }));
+        bindI18n(rejectButton, 'title', () => t('friends.rejectNamed', { username: friend.username }));
         rejectButton.textContent = '✖';
         rejectButton.disabled = friendsActionRequests.has(`request:${friend.relationshipId}`);
         if (rejectButton.disabled) rejectButton.setAttribute('aria-busy', 'true');
@@ -3698,10 +3815,10 @@ function renderFriendRows(rows, type) {
       status.className = `friends-request-state state-${friend.status}`;
       const state = type === 'search' ? friend.relationshipStatus : friend.status;
       status.className = `friends-request-state state-${state}`;
-      status.textContent = ({
-        rejected: 'Rechazada', request_rejected: 'Rechazada', accepted: 'Aceptada', friend: 'Amigos',
-        request_sent: 'Enviada', request_received: 'Recibida', pending: 'Pendiente',
-      })[state] ?? 'Pendiente';
+      bindI18n(status, 'text', () => ({
+        rejected: t('friends.rejected'), request_rejected: t('friends.rejected'), accepted: t('friends.accepted'), friend: t('common.friends'),
+        request_sent: t('friends.sent'), request_received: t('friends.received'), pending: t('friends.pending'),
+      })[state] ?? t('friends.pending'));
       item.append(status);
     }
     const error = friendsActionErrors.get(isFriend ? `remove:${friend.userId}`
@@ -3710,7 +3827,7 @@ function renderFriendRows(rows, type) {
       const errorMessage = document.createElement('p');
       errorMessage.className = 'friends-action-error';
       errorMessage.setAttribute('role', 'alert');
-      errorMessage.textContent = error;
+      setMessage(errorMessage, error);
       item.append(errorMessage);
     }
     list.append(item);
@@ -3721,25 +3838,25 @@ function setFriendsCounts(counts) {
   const badge = document.querySelector('#friends-count');
   badge.hidden = counts === null;
   badge.textContent = counts === null ? '' : String(counts.friends);
-  const label = counts === null ? 'Amigos' : `Amigos: ${counts.friends}`;
-  friendsOpenButton.setAttribute('aria-label', label);
-  friendsOpenButton.title = label;
-  for (const [type, title] of [['friends', 'Amigos'], ['sent', 'Solicitudes Enviadas'], ['received', 'Solicitudes Recibidas']]) {
+  const label = () => counts === null ? t('common.friends') : t('friends.count', { count: counts.friends });
+  bindI18n(friendsOpenButton, 'aria-label', label);
+  bindI18n(friendsOpenButton, 'title', label);
+  for (const type of ['friends', 'sent', 'received']) {
     const button = document.querySelector(`#friends-tab-${type}`);
     const count = counts === null ? '?' : counts[type];
-    const titleWithCount = `${title} (${count})`;
+    const titleWithCount = () => t(`friends.${type}Tab`, { count });
     if (type === 'friends') {
-      button.textContent = titleWithCount;
+      bindI18n(button, 'text', titleWithCount);
       continue;
     }
-    button.setAttribute('aria-label', titleWithCount);
+    bindI18n(button, 'aria-label', titleWithCount);
     const fullLabel = document.createElement('span');
     fullLabel.className = 'friends-tab-label-full';
-    fullLabel.textContent = titleWithCount;
+    bindI18n(fullLabel, 'text', titleWithCount);
     const shortLabel = document.createElement('span');
     shortLabel.className = 'friends-tab-label-short';
     shortLabel.setAttribute('aria-hidden', 'true');
-    shortLabel.textContent = `${title.replace('Solicitudes', 'Sol.')} (${count})`;
+    bindI18n(shortLabel, 'text', () => t(`friends.${type}TabShort`, { count }));
     button.replaceChildren(fullLabel, shortLabel);
   }
 }
@@ -3775,12 +3892,12 @@ async function loadFriendsList(tab = friendsActiveTab) {
     if (!response.ok || !Array.isArray(result.users)) throw new Error('friends unavailable');
     if (requestId !== friendsRequestSequence || sessionUserId !== currentSession?.user?.id) return;
     renderFriendRows(result.users, tab);
-    status.textContent = result.users.length ? '' : tab === 'friends' ? 'Todavía no tienes amigos.' : 'No hay solicitudes.';
+    bindI18n(status, 'text', () => result.users.length ? '' : tab === 'friends' ? t('friends.empty') : t('friends.noRequests'));
     status.className = 'status';
   } catch {
     if (requestId === friendsRequestSequence && sessionUserId === currentSession?.user?.id) {
       document.querySelector(`#friends-list-${tab}`).replaceChildren();
-      status.textContent = 'No se pudo cargar esta lista.';
+      bindI18n(status, 'text', () => t('friends.listError'));
       status.className = 'status error';
     }
   }
@@ -3798,13 +3915,13 @@ async function searchFriends(query, sequence) {
     if (!response.ok || !Array.isArray(result.users)) throw new Error('friends search unavailable');
     if (sequence !== friendsSearchSequence || sessionUserId !== currentSession?.user?.id || !friendsDialog.open) return;
     renderFriendRows(result.users, 'search');
-    status.textContent = result.users.length ? '' : 'No hay resultados.';
+    bindI18n(status, 'text', () => result.users.length ? '' : t('friends.noResults'));
     status.className = 'status';
   } catch {
     if (sequence === friendsSearchSequence && sessionUserId === currentSession?.user?.id) {
       document.querySelector('#friends-list-search').replaceChildren();
       friendsRows.search.clear();
-      status.textContent = 'No se pudo realizar la búsqueda.';
+      bindI18n(status, 'text', () => t('friends.searchError'));
       status.className = 'status error';
     }
   }
@@ -3823,7 +3940,7 @@ function scheduleFriendsSearch() {
     status.className = 'status';
     return;
   }
-  status.textContent = 'Preparando búsqueda...';
+  bindI18n(status, 'text', () => t('friends.preparingSearch'));
   status.className = 'status';
   friendsSearchTimer = setTimeout(() => {
     friendsSearchTimer = null;
@@ -3851,13 +3968,13 @@ async function removeFriend(userId, type) {
     if (searchRow) searchRow.relationshipStatus = 'none';
     renderFriendRows([...friendsRows.friends.values()], 'friends');
     renderFriendRows([...friendsRows.search.values()], 'search');
-    document.querySelector('#friends-status-friends').textContent = friendsRows.friends.size ? '' : 'Todavía no tienes amigos.';
+    bindI18n(document.querySelector('#friends-status-friends'), 'text', () => friendsRows.friends.size ? '' : t('friends.empty'));
     refreshSocialGamification();
     void loadFriendsCounts();
     void loadNotifications({ reset: true });
     friendsTabButtons.find(({ dataset }) => dataset.friendsTab === friendsActiveTab)?.focus();
   } catch {
-    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo eliminar la amistad.');
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, tr('friends.removeError'));
   } finally {
     friendsActionRequests.delete(key);
     if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows[type].values()], type);
@@ -3882,7 +3999,7 @@ async function sendFriendRequest(userId) {
     refreshSocialGamification();
     void loadFriendsCounts();
   } catch {
-    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo enviar la solicitud.');
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, tr('friends.sendError'));
   } finally {
     friendsActionRequests.delete(key);
     if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.search.values()], 'search');
@@ -3908,7 +4025,7 @@ async function revokeFriendRequest(requestId) {
     if (searchRow?.relationshipStatus === 'request_sent') searchRow.relationshipStatus = 'none';
     renderFriendRows([...friendsRows.search.values()], 'search');
     if (friendsActiveTab === 'search') scheduleFriendsSearch();
-    document.querySelector('#friends-status-sent').textContent = friendsRows.sent.size ? '' : 'No hay solicitudes.';
+    bindI18n(document.querySelector('#friends-status-sent'), 'text', () => friendsRows.sent.size ? '' : t('friends.noRequests'));
     document.querySelector('#friends-status-sent').className = 'status';
     refreshSocialGamification();
     void loadFriendsCounts();
@@ -3916,7 +4033,7 @@ async function revokeFriendRequest(requestId) {
       friendsTabButtons.find(({ dataset }) => dataset.friendsTab === 'sent')?.focus();
     }
   } catch {
-    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo revocar la solicitud.');
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, tr('friends.revokeError'));
   } finally {
     friendsActionRequests.delete(key);
     if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.sent.values()], 'sent');
@@ -3940,7 +4057,7 @@ async function changeFriendRequest(requestId, action) {
     void loadFriendsCounts();
     if (action === 'accept') void loadNotifications({ reset: true });
   } catch {
-    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, 'No se pudo actualizar la solicitud.');
+    if (sessionUserId === currentSession?.user?.id) friendsActionErrors.set(key, tr('friends.updateError'));
   } finally {
     friendsActionRequests.delete(key);
     if (sessionUserId === currentSession?.user?.id) renderFriendRows([...friendsRows.received.values()], 'received');
@@ -4031,7 +4148,7 @@ function renderPublicProfileFigures(selector, rows, mode = 'price') {
   for (const [index, figure] of rows.slice(0, 5).entries()) {
     const item = document.createElement('li');
     const card = rankingCard({ id: figure.id, nombre: figure.name }, index + 1,
-      mode === 'age' ? figure.year ?? '—' : formatPrice(figure.price), false);
+      () => mode === 'age' ? figure.year ?? '—' : formatPrice(figure.price), false);
     card.dataset.rankingId = figure.id;
     card.dataset.ownerUser = publicProfileData.userId;
     card.setAttribute('aria-label', `${figure.name}, ${figure.id}`);
@@ -4071,8 +4188,7 @@ function renderPublicProfile(profile) {
     centerLabel: document.querySelector('#public-profile-dna-chart .dna-chart-label'),
     percentageLabel: document.querySelector('#public-profile-dna-percentage'), traitLabel: document.querySelector('#public-profile-dna-trait'),
   });
-  document.querySelector('#public-profile-dna-chart').setAttribute('aria-label',
-    `DNA de ${profile.username}: ${DNA_TRAITS.map(({ key, name }) => `${name} ${profile.dna[key]}%`).join(', ')}`);
+  bindI18n(document.querySelector('#public-profile-dna-chart'), 'aria-label', () => t('friends.dnaSummary', { username: profile.username, traits: DNA_TRAITS.map(({ key, name }) => `${name} ${formatAnalyticsHistoryPercent(profile.dna[key])}`).join(', ') }));
   renderPublicProfileFigures('#public-profile-top-price', profile.top5Price);
   renderPublicProfileFigures('#public-profile-top-age', profile.top5Age, 'age');
   renderPublicProfileFigures('#public-profile-latest-collection', profile.collection.latest);
@@ -4087,7 +4203,7 @@ function renderPublicProfile(profile) {
   if (!profile.achievements.length) {
     const empty = document.createElement('li');
     empty.className = 'public-profile-empty';
-    empty.textContent = 'No hay logros.';
+    bindI18n(empty, 'text', () => t('gamification.empty'));
     achievements.append(empty);
   }
 }
@@ -4095,7 +4211,7 @@ function renderPublicProfile(profile) {
 async function loadPublicProfile(userId, requestId) {
   const sessionUserId = currentSession?.user?.id;
   if (!sessionUserId || requestId !== publicProfileRequestSequence) return;
-  publicProfileStatus.textContent = 'Cargando perfil...';
+  bindI18n(publicProfileStatus, 'text', () => t('friends.profileLoading'));
   publicProfileStatus.className = 'status loading-message';
   publicProfileRetryButton.hidden = true;
   try {
@@ -4110,7 +4226,7 @@ async function loadPublicProfile(userId, requestId) {
     if (requestId === publicProfileRequestSequence && sessionUserId === currentSession?.user?.id) {
       clearPublicProfile();
       publicProfileUserId = userId;
-      publicProfileStatus.textContent = 'No se pudo cargar el perfil.';
+      bindI18n(publicProfileStatus, 'text', () => t('friends.profileError'));
       publicProfileStatus.className = 'status error';
       publicProfileRetryButton.hidden = false;
     }
@@ -4319,12 +4435,10 @@ notificationsMarkAllButton.addEventListener('click', async () => {
     renderNotifications();
     notificationsStatus.textContent = '';
   } catch {
-    notificationsStatus.textContent = 'No se pudieron marcar las notificaciones como leídas.';
+    bindI18n(notificationsStatus, 'text', () => t('notifications.markAllError'));
     notificationsMarkAllButton.disabled = false;
   }
 });
-
-setNotificationsUnreadCount(0);
 
 let rankingTrigger = rankingOpenButton;
 function madridDateString(date) {
@@ -4391,7 +4505,7 @@ function renderAnalyticsHistoryTable(key, rows, page = 1) {
     body.append(row);
   }
   pagination.hidden = !paginated || rows.length === 0;
-  pagination.querySelector('[role="status"]').textContent = rows.length ? `Página ${page} de ${pages}` : '';
+  bindI18n(pagination.querySelector('[role="status"]'), 'text', () => rows.length ? t('common.page', { page: page, total: pages }) : '');
   pagination.querySelector('[data-history-page="-1"]').disabled = page === 1;
   pagination.querySelector('[data-history-page="1"]').disabled = page === pages;
 }
@@ -4415,7 +4529,7 @@ function destroyAnalyticsHistoryCharts() {
 }
 
 function formatAnalyticsHistoryDate(dateString) {
-  return new Intl.DateTimeFormat('es-ES', {
+  return new Intl.DateTimeFormat(activeLocale(), {
     timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(new Date(`${dateString}T12:00:00.000Z`));
 }
@@ -4427,13 +4541,13 @@ function formatUniqueAnalyticsHistoryTick(value, index, ticks) {
 }
 
 function formatAnalyticsHistoryPrice(value) {
-  if (!Number.isFinite(value)) return 'Sin datos';
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+  if (!Number.isFinite(value)) return t('common.noData');
+  return new Intl.NumberFormat(activeLocale(), { style: 'currency', currency: 'EUR' }).format(value);
 }
 
 function formatAnalyticsHistoryPercent(value) {
-  if (!Number.isFinite(value)) return 'Sin datos';
-  return `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value)}%`;
+  if (!Number.isFinite(value)) return t('common.noData');
+  return `${new Intl.NumberFormat(activeLocale(), { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
 function chartColorWithAlpha(color, alpha) {
@@ -4506,9 +4620,9 @@ function createAnalyticsChart(canvas, configuration) {
   const formatTooltipLabel = options.plugins.tooltip.callbacks.label;
   options.plugins.tooltip.callbacks.label = (item) => {
     const label = item.dataset?.label ?? configuration.data.datasets[item.datasetIndex]?.label ?? '';
-    if (!Number.isFinite(item.parsed?.y)) return `${label}: Sin datos`;
+    if (!Number.isFinite(item.parsed?.y)) return t('history.missing', { label: label });
     return formatTooltipLabel ? formatTooltipLabel(item)
-      : `${label}: ${new Intl.NumberFormat('es-ES').format(item.parsed.y)}`;
+      : `${label}: ${new Intl.NumberFormat(activeLocale()).format(item.parsed.y)}`;
   };
   Object.assign(options.plugins.tooltip, {
     backgroundColor: '#222222', titleColor: '#ffffff', bodyColor: '#ffffff',
@@ -4565,7 +4679,7 @@ function renderAnalyticsHistoryValue(data) {
     formatAnalyticsHistoryDate(snapshot.snapshotDate),
     formatAnalyticsHistoryPrice(snapshot.totalValue),
     String(snapshot.totalFigures),
-    deltas.get(snapshot.snapshotDate) === null ? 'Sin datos'
+    deltas.get(snapshot.snapshotDate) === null ? t('common.noData')
       : deltas.get(snapshot.snapshotDate) > 0 ? `+${deltas.get(snapshot.snapshotDate)}`
         : String(deltas.get(snapshot.snapshotDate)),
   ]));
@@ -4580,13 +4694,13 @@ function renderAnalyticsHistoryValue(data) {
     data: {
       datasets: [
         {
-          type: 'line', label: 'Valor de colección (€)', data: valueSeries,
+          type: 'line', label: t('history.collectionValueAxis'), data: valueSeries,
           yAxisID: 'value', borderColor: styles.getPropertyValue('--dna-fan').trim(),
           backgroundColor: styles.getPropertyValue('--dna-fan').trim(), pointRadius: 3,
           spanGaps: false, tension: 0.2,
         },
         {
-          type: 'bar', label: 'Colección', data: deltaSeries,
+          type: 'bar', label: t('common.collection'), data: deltaSeries,
           yAxisID: 'figures', backgroundColor: chartColorWithAlpha(styles.getPropertyValue('--yellow').trim(), 0.4),
           borderColor: styles.getPropertyValue('--yellow').trim(),
         },
@@ -4604,22 +4718,22 @@ function renderAnalyticsHistoryValue(data) {
           callbacks: {
             title(items) { return items.length ? formatTick(items[0].parsed.x) : ''; },
             label(item) {
-              if (item.datasetIndex === 0) return `Valor de colección: ${formatAnalyticsHistoryPrice(item.parsed.y)}`;
+              if (item.datasetIndex === 0) return t('history.collectionValueDescription', { value: formatAnalyticsHistoryPrice(item.parsed.y) });
               const change = item.parsed.y > 0 ? `+${item.parsed.y}` : String(item.parsed.y);
-              return `Colección: ${change}`;
+              return t('history.collectionDescription', { count: change });
             },
             afterBody(items) {
               const date = items.length ? new Date(items[0].parsed.x).toISOString().slice(0, 10) : '';
               const snapshot = data.snapshots.find((entry) => entry.snapshotDate === date);
-              return snapshot ? `Figuras en colecci\u00f3n: ${snapshot.totalFigures}` : '';
+              return snapshot ? t('history.figureCount', { count: snapshot.totalFigures }) : '';
             },
           },
         },
       },
       scales: {
-        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
-        value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Valor (€)' } },
-        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Colección' }, grid: { drawOnChartArea: false } },
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: t('history.dateTimezone') } },
+        value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: t('history.valueAxis') } },
+        figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: t('common.collection') }, grid: { drawOnChartArea: false } },
       },
     },
   }));
@@ -4690,7 +4804,7 @@ function renderAnalyticsHistoryDna(data) {
         },
       },
       scales: {
-        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: t('history.dateTimezone') } },
         y: { type: 'linear', min: 0, max: 100, stacked: true, ticks: { callback: (value) => `${value}%` }, title: { display: true, text: 'DNA (%)' } },
       },
     },
@@ -4726,7 +4840,7 @@ function renderAnalyticsHistoryProgression(data) {
           pointRadius: 3, spanGaps: false, tension: 0.2,
         },
         {
-          label: 'Nivel', data: makeSeries('level'), yAxisID: 'level',
+          label: t('common.level'), data: makeSeries('level'), yAxisID: 'level',
           borderColor: styles.getPropertyValue('--blue').trim(),
           backgroundColor: styles.getPropertyValue('--blue').trim(),
           pointRadius: 3, spanGaps: false, stepped: 'after',
@@ -4748,9 +4862,9 @@ function renderAnalyticsHistoryProgression(data) {
         },
       },
       scales: {
-        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: 'Fecha (Europe/Madrid)' } },
+        x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: t('history.dateTimezone') } },
         bricks: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Bricks' } },
-        level: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: 'Nivel' }, grid: { drawOnChartArea: false } },
+        level: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: t('common.level') }, grid: { drawOnChartArea: false } },
       },
     },
   }));
@@ -4762,7 +4876,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
   const sequence = ++analyticsHistoryRequestSequence;
   const userId = currentSession.user?.id;
   clearAnalyticsHistoryData(false);
-  analyticsHistoryStatus.textContent = 'Cargando Progreso...';
+  bindI18n(analyticsHistoryStatus, 'text', () => t('history.loading'));
   analyticsHistoryStatus.className = 'status loading-message';
   analyticsHistoryRetryButton.hidden = true;
   try {
@@ -4775,7 +4889,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
     if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
       || currentSession?.user?.id !== userId) return;
     analyticsHistoryData = data;
-    analyticsHistoryStatus.textContent = data.snapshots.length ? '' : 'No hay datos para este período.';
+    bindI18n(analyticsHistoryStatus, 'text', () => data.snapshots.length ? '' : t('history.empty'));
     analyticsHistoryStatus.className = 'status';
     renderAnalyticsHistoryValue(data);
     renderAnalyticsHistoryDna(data);
@@ -4784,7 +4898,7 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
     if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
       || currentSession?.user?.id !== userId) return;
     analyticsHistoryData = null;
-    analyticsHistoryStatus.textContent = 'No se pudo cargar el histórico.';
+    bindI18n(analyticsHistoryStatus, 'text', () => t('history.error'));
     analyticsHistoryStatus.className = 'status error';
     analyticsHistoryRetryButton.hidden = false;
   }
@@ -4905,7 +5019,7 @@ async function handleRankingListClick(event) {
     const result = await response.json();
     if (!response.ok) {
       if (result.error === 'REGALO_YA_ENVIADO') {
-        gift.textContent = 'Regalo enviado';
+        bindI18n(gift, 'text', () => t('ranking.giftConfirmed'));
         return;
       }
       throw new Error(result.error);
@@ -4916,10 +5030,10 @@ async function handleRankingListClick(event) {
       loadGamification(),
     ]);
     await loadGamificationDna();
-    showToast(`Regalo de ${weekly ? 5 : 50} Bricks enviado.`, 'success');
+    showToast(() => t('ranking.giftAmountConfirmed', { amount: weekly ? 5 : 50 }), 'success');
   } catch {
     gift.disabled = false;
-    showToast('No se pudo enviar el regalo.', 'error');
+    showToast(() => t('ranking.giftError'), 'error');
   }
 }
 
@@ -4953,7 +5067,7 @@ openUserSettingsButton.addEventListener('click', async () => {
   userMenuToggle.setAttribute('aria-expanded', 'false');
   if (!currentUserProfile || !currentSession) return;
   if (!categoriasReady && !await loadCategorias()) {
-    showToast('No se pudieron cargar las categorías favoritas.', 'error');
+    showToast(() => t('profile.favoritesError'), 'error');
     return;
   }
   openProfileDialog(currentUserProfile, false);
@@ -4978,18 +5092,18 @@ gamificationToggleButton.addEventListener('click', () => {
   const expanded = gamificationToggleButton.getAttribute('aria-expanded') !== 'true';
   gamificationToggleButton.setAttribute('aria-expanded', String(expanded));
   gamificationDetails.hidden = !expanded;
-  const label = expanded ? 'Ocultar resumen de colección' : 'Mostrar resumen de colección';
-  gamificationToggleButton.setAttribute('aria-label', label);
-  gamificationToggleButton.title = label;
+  const label = tr(expanded ? 'inventory.hideSummary' : 'inventory.showSummary');
+  bindI18n(gamificationToggleButton, 'aria-label', label);
+  bindI18n(gamificationToggleButton, 'title', label);
 });
 
 function setPanelCollapsed(button, collapsed) {
   button.setAttribute('aria-expanded', String(!collapsed));
   document.getElementById(button.getAttribute('aria-controls')).hidden = collapsed;
   button.closest('section').classList.toggle('panel-collapsed', collapsed);
-  const label = collapsed ? 'Mostrar panel' : 'Ocultar panel';
-  button.setAttribute('aria-label', label);
-  button.title = label;
+  const label = tr(collapsed ? 'inventory.showPanel' : 'inventory.hidePanel');
+  bindI18n(button, 'aria-label', label);
+  bindI18n(button, 'title', label);
 }
 
 document.querySelectorAll('.panel-toggle').forEach((button) => {
@@ -5043,7 +5157,7 @@ async function toggleObserved(minifigura, trigger) {
     const result = await response.json();
     if (!response.ok) {
       if (result.error === 'LIMITE_OBSERVADAS') {
-        showToast('Límite alcanzado: Máximo 10 minipersonas en observación', 'warning');
+        showToast(() => t('inventory.observationLimit'), 'warning');
       } else {
         showToast(messageForErrorCode(result.error), 'error');
       }
@@ -5057,7 +5171,7 @@ async function toggleObserved(minifigura, trigger) {
     applyFilters({ preservePage: true });
     void revalidate();
   } catch {
-    showToast('No se pudo actualizar la observación.', 'error');
+    showToast(() => t('inventory.observationError'), 'error');
   } finally {
     trigger.disabled = false;
   }
@@ -5183,7 +5297,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
   if (isRankingCreate && (!formSynced || !hasFormMetadata())) return;
   const duplicateMessage = currentEditId === null ? duplicateMinifiguraMessage(formIdInput.value) : null;
   if (duplicateMessage) {
-    formError.textContent = duplicateMessage;
+    setMessage(formError, duplicateMessage);
     updateRankingWantedActions();
     return;
   }
@@ -5191,7 +5305,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
   const payload = buildPayloadFromForm();
   const validationError = validatePayload(payload);
   if (validationError) {
-    formError.textContent = validationError;
+    setMessage(formError, validationError);
     return;
   }
 
@@ -5220,7 +5334,7 @@ minifiguraForm.addEventListener('submit', async (event) => {
       }
       if (!isCurrent()) return;
       if (errorCode === 'LIMITE_OBSERVADAS') {
-        formError.textContent = 'Límite alcanzado: Máximo 10 minipersonas en observación';
+        bindI18n(formError, 'text', () => t('inventory.observationLimit'));
         showToast(formError.textContent, 'warning');
         return;
       }
@@ -5235,12 +5349,12 @@ minifiguraForm.addEventListener('submit', async (event) => {
         } catch {
           if (!isCurrent()) return;
         }
-        formError.textContent = duplicateMessage ?? 'No se pudo comprobar el estado de la minipersona. Inténtalo de nuevo.';
+        bindI18n(formError, 'text', () => duplicateMessage ?? t('inventory.checkError'));
         updateRankingWantedActions();
         return;
       }
       const errorMessage = messageForErrorCode(errorCode);
-      formError.textContent = errorMessage;
+      setMessage(formError, errorMessage);
       showToast(errorMessage, 'error');
       return;
     }
@@ -5254,12 +5368,12 @@ minifiguraForm.addEventListener('submit', async (event) => {
     upsertCached(result);
     applyFilters({ preservePage: true });
     closeFormDialog();
-    showToast(isEdit ? 'Minipersona actualizada correctamente.' : 'Minipersona creada correctamente.', 'success');
+    showToast(() => isEdit ? t('inventory.updated') : t('inventory.created'), 'success');
     void revalidate({ notifyAchievements: isEdit });
   } catch {
     if (!isCurrent()) return;
-    const connError = 'No se pudo conectar con el servidor. Intentalo de nuevo.';
-    formError.textContent = connError;
+    const connError = t('inventory.connectionError');
+    setMessage(formError, connError);
     showToast(connError, 'error');
   } finally {
     if (formSequence === imageLookupSequence) {
@@ -5291,10 +5405,10 @@ async function loadFormBricksetData() {
     formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
-    showToast('Datos actualizados.', 'success');
+    showToast(() => t('inventory.dataUpdated'), 'success');
   } catch {
     if (formDialog.open && currentFormMode !== 'view' && imageLookupSequence === lookupSequence && formIdInput.value.trim() === id) {
-      showToast('No se encontraron datos para el ID especificado.', 'error');
+      showToast(() => t('inventory.noIdData'), 'error');
     }
   } finally {
     if (imageLookupSequence === lookupSequence) bricksetLoading.hidden = true;
@@ -5343,10 +5457,10 @@ deleteConfirmButton.addEventListener('click', async () => {
     closeDeleteDialog();
     removeCached(id);
     applyFilters({ preservePage: true });
-    showToast('Minipersona eliminada correctamente.', 'success');
+    showToast(() => t('inventory.deleted'), 'success');
     void revalidate({ notifyAchievements: true });
   } catch {
-    showToast('No se pudo conectar con el servidor. Intentalo de nuevo.', 'error');
+    showToast(() => t('inventory.connectionError'), 'error');
   } finally {
     deleteConfirmButton.disabled = false;
   }
@@ -5389,8 +5503,8 @@ async function apiFetch(url, init = {}) {
 }
 
 function setContactStatus(message, { error = false, loading = false } = {}) {
-  contactStatus.textContent = message;
-  contactStatus.className = loading ? 'status loading-message' : error && message ? 'status error' : 'status';
+  const text = setMessage(contactStatus, message);
+  contactStatus.className = loading ? 'status loading-message' : error && text ? 'status error' : 'status';
   contactStatus.setAttribute('aria-live', error ? 'assertive' : 'polite');
   contactStatus.setAttribute('aria-busy', String(loading));
 }
@@ -5399,9 +5513,9 @@ function updateContactMessageCount() {
   const length = contactMessageInput.value.length;
   const limit = contactMessageInput.maxLength;
   contactMessageCount.textContent = `${length} / ${limit}`;
-  contactMessageLimit.textContent = length >= limit
-    ? `Has alcanzado el límite de ${limit} caracteres.`
-    : '';
+  bindI18n(contactMessageLimit, 'text', () => length >= limit
+    ? t('contact.characterLimit', { limit: limit })
+    : '');
 }
 
 function resetContactForm() {
@@ -5433,7 +5547,7 @@ async function submitContact(event) {
 
   const message = contactMessageInput.value.trim();
   if (!message) {
-    setContactStatus('Escribe un mensaje.', { error: true });
+    setContactStatus(tr('contact.messageRequired'), { error: true });
     contactMessageInput.focus();
     return;
   }
@@ -5443,17 +5557,17 @@ async function submitContact(event) {
     const email = contactEmailInput.value.trim();
     const username = contactUsernameInput.value.trim();
     if (!email && !username) {
-      setContactStatus('Indica tu Email o Usuario.', { error: true });
+      setContactStatus(tr('contact.identityRequired'), { error: true });
       contactEmailInput.focus();
       return;
     }
     if (email && !contactEmailInput.checkValidity()) {
-      setContactStatus('Introduce un Email válido.', { error: true });
+      setContactStatus(tr('contact.emailInvalid'), { error: true });
       contactEmailInput.focus();
       return;
     }
     if (username && !contactUsernameInput.checkValidity()) {
-      setContactStatus('El Usuario debe tener entre 3 y 20 letras, números o guiones bajos.', { error: true });
+      setContactStatus(tr('contact.usernameInvalid'), { error: true });
       contactUsernameInput.focus();
       return;
     }
@@ -5462,7 +5576,7 @@ async function submitContact(event) {
 
   contactSending = true;
   contactSubmitButton.disabled = true;
-  setContactStatus('Enviando mensaje…', { loading: true });
+  setContactStatus(tr('contact.sending'), { loading: true });
   try {
     const init = {
       method: 'POST',
@@ -5473,16 +5587,16 @@ async function submitContact(event) {
       ? await apiFetch('/api/contact', init)
       : await fetch(apiUrl('/api/contact'), init);
     if (!response.ok) {
-      setContactStatus(response.status === 429
-        ? 'Se alcanzó el límite de envíos. Inténtalo de nuevo más tarde.'
-        : 'No se pudo enviar el mensaje. Inténtalo de nuevo.', { error: true });
+      setContactStatus(() => response.status === 429
+        ? t('contact.limit')
+        : t('contact.error'), { error: true });
       return;
     }
     contactMessageInput.value = '';
     updateContactMessageCount();
-    setContactStatus('Mensaje enviado correctamente. Pronto me pondré en contacto contigo por Email.');
+    setContactStatus(tr('contact.sent'));
   } catch {
-    setContactStatus('No se pudo enviar el mensaje. Inténtalo de nuevo.', { error: true });
+    setContactStatus(tr('contact.error'), { error: true });
   } finally {
     contactSending = false;
     contactSubmitButton.disabled = false;
@@ -5539,7 +5653,7 @@ function clearUserData() {
   catalogForOptions = [];
   hasLoadedFullCatalog = false;
   applyFilters();
-  collectionTotal.textContent = formatPrice(0);
+  bindI18n(collectionTotal, 'text', () => formatPrice(0));
   collectionTotalUpdated.textContent = '';
   lastCollectionTotal = null;
   collectionCount.textContent = '0';
@@ -5562,8 +5676,8 @@ function clearUserData() {
   weeklyRankingList.replaceChildren();
   rankingMainGlobe.hidden = true;
   rankingMainGlobe.querySelector('#ranking-main-position').textContent = '';
-  rankingMainGlobe.setAttribute('aria-label', 'En Top Global');
-  rankingMainGlobe.title = 'En Top Global';
+  bindI18n(rankingMainGlobe, 'aria-label', () => t('ranking.inTop'));
+  bindI18n(rankingMainGlobe, 'title', () => t('ranking.inTop'));
   userMenuToggle.removeAttribute('aria-describedby');
   globalRankingList.replaceChildren();
   rankingStatus.textContent = '';
@@ -5576,7 +5690,7 @@ function clearUserData() {
 }
 
 function setAuthMessage(message, { loading = false, error = false } = {}) {
-  authMessage.textContent = message;
+  setMessage(authMessage, message);
   authMessage.className = loading ? 'status loading-message' : error && message ? 'status error' : 'status';
   authMessage.setAttribute('role', loading ? 'status' : 'alert');
   authMessage.setAttribute('aria-live', loading ? 'polite' : 'assertive');
@@ -5624,16 +5738,23 @@ async function loadUserProfile(session, requestId) {
     if (!response.ok) throw new Error('PERFIL_NO_DISPONIBLE');
     const profile = await response.json();
     if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
+    const isCurrent = () => requestId === profileRequestSequence && currentSession?.user?.id === session.user?.id;
+    try {
+      if (!await i18n.setLanguage(profile?.language || 'es', { remember: true, isCurrent })) return;
+    } catch {
+      if (isCurrent()) showProfileGate(() => t('i18n.error'), true);
+      return;
+    }
     currentUserProfile = profile;
     if (profile?.onboardingCompleted !== true || !USERNAME_PATTERN.test(profile.username ?? '')) {
       profileReadyUserId = null;
-      showProfileGate('Completa tu perfil para continuar a tu colección.');
+      showProfileGate(() => t('profile.onboardingRequired'));
       if (!categoriasReady) {
-        setAuthMessage('Cargando categorías...', { loading: true });
+        setAuthMessage(() => t('profile.categoriesLoading'), { loading: true });
         if (!await loadCategorias()) throw new Error('CATEGORIAS_NO_DISPONIBLES');
       }
       if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
-      setAuthMessage('Completa tu perfil para continuar a tu colección.');
+      setAuthMessage(() => t('profile.onboardingRequired'));
       openProfileDialog(profile, true);
       return;
     }
@@ -5643,7 +5764,7 @@ async function loadUserProfile(session, requestId) {
   } catch {
     if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
     profileReadyUserId = null;
-    showProfileGate('No se pudo comprobar tu perfil. Reintenta para continuar.', true);
+    showProfileGate(() => t('profile.checkError'), true);
   }
 }
 
@@ -5738,8 +5859,8 @@ function renderProfileFavoriteOptions() {
     remove.type = 'button';
     remove.className = 'profile-remove-button';
     remove.textContent = '×';
-    remove.setAttribute('aria-label', `Quitar ${categoryDisplayName(category)}`);
-    remove.title = `Quitar ${categoryDisplayName(category)}`;
+    bindI18n(remove, 'aria-label', () => t('profile.removeCategory', { name: categoryDisplayName(category) }));
+    bindI18n(remove, 'title', () => t('profile.removeCategory', { name: categoryDisplayName(category) }));
     remove.addEventListener('click', () => {
       selectedProfileFavorites.delete(category);
       renderProfileFavoriteOptions();
@@ -5762,7 +5883,7 @@ profileAvatarFileInput.addEventListener('change', () => {
   const file = profileAvatarFileInput.files?.[0];
   if (!file || profileSaveButton.disabled) return;
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size === 0 || file.size > 2 * 1024 * 1024) {
-    profileFormMessage.textContent = 'Elige una imagen PNG, JPEG o WebP de hasta 2 MB.';
+    bindI18n(profileFormMessage, 'text', () => t('profile.avatarInvalid'));
     profileAvatarFileInput.value = '';
     return;
   }
@@ -5779,7 +5900,7 @@ profileAvatarFileInput.addEventListener('change', () => {
   };
   reader.onerror = () => {
     if (requestId !== profileAvatarReadSequence) return;
-    profileFormMessage.textContent = 'No se pudo leer la imagen. Inténtalo de nuevo.';
+    bindI18n(profileFormMessage, 'text', () => t('profile.avatarReadError'));
     profileSaveButton.disabled = false;
   };
   reader.readAsDataURL(file);
@@ -5795,7 +5916,7 @@ profileAvatarRemoveButton.addEventListener('click', () => {
 profileAvatarPreview.addEventListener('error', () => {
   if (pendingProfileAvatarFile) {
     pendingProfileAvatarFile = null;
-    profileFormMessage.textContent = 'No se pudo previsualizar la imagen. Elige otra.';
+    bindI18n(profileFormMessage, 'text', () => t('profile.avatarPreviewError'));
   }
   renderProfileAvatarPreview('');
 });
@@ -5826,15 +5947,15 @@ async function removeProfileAvatar(path) {
 function openProfileDialog(profile, onboarding) {
   profileDialogMode = onboarding ? 'onboarding' : 'settings';
   profileDialogTrigger = onboarding ? null : document.activeElement;
-  profileDialogTitle.textContent = onboarding ? 'Completa tu perfil' : 'Preferencias';
+  bindI18n(profileDialogTitle, 'text', () => onboarding ? t('profile.complete') : t('profile.preferences'));
   systemNotificationsSetting.hidden = onboarding || !nativePush?.isAndroid?.();
   profileDialogCloseButton.hidden = onboarding;
   openDeleteAccountButton.hidden = onboarding;
   profileAccountSettings.hidden = onboarding;
   profileEmailInput.value = currentSession?.user?.email || '';
-  openChangePasswordButton.textContent = hasGoogleOnlyIdentity(currentSession?.user)
-    ? 'Crear contraseña'
-    : 'Cambiar contraseña';
+  bindI18n(openChangePasswordButton, 'text', () => hasGoogleOnlyIdentity(currentSession?.user)
+    ? t('auth.createPassword')
+    : t('auth.changePassword'));
   profileUsernameInput.disabled = !onboarding;
   profileUsernameInput.value = profile?.username || currentSession?.user?.user_metadata?.username || '';
   profileAvatarInput.value = profile?.avatarUrl || '';
@@ -5847,7 +5968,7 @@ function openProfileDialog(profile, onboarding) {
   selectedProfileFavorites = new Set((profile?.favoriteCategories ?? []).slice(0, 3));
   profileFavoriteSearch.value = '';
   profileFormMessage.textContent = '';
-  profileSaveButton.textContent = onboarding ? 'Completar perfil' : 'Guardar cambios';
+  bindI18n(profileSaveButton, 'text', () => onboarding ? t('profile.completeAction') : t('profile.saveChanges'));
   renderProfileFavoriteOptions();
   if (!profileDialog.open) openDialog(profileDialog);
   void refreshSystemNotificationsSetting();
@@ -5875,12 +5996,12 @@ async function saveUserProfile(event) {
   const username = profileUsernameInput.value;
   const avatarUrl = profileAvatarInput.value.trim();
   if (!USERNAME_PATTERN.test(username)) {
-    profileFormMessage.textContent = 'El username debe tener entre 3 y 20 letras, números o guiones bajos.';
+    bindI18n(profileFormMessage, 'text', () => t('profile.usernameInvalid'));
     profileUsernameInput.focus();
     return;
   }
   if (!validProfileAvatarUrl(avatarUrl)) {
-    profileFormMessage.textContent = 'Introduce una URL de avatar HTTP o HTTPS válida.';
+    bindI18n(profileFormMessage, 'text', () => t('profile.avatarUrlInvalid'));
     profileAvatarInput.focus();
     return;
   }
@@ -5902,6 +6023,13 @@ async function saveUserProfile(event) {
   profileAvatarRemoveButton.disabled = true;
   profileFormMessage.textContent = '';
   try {
+    try {
+      await i18n.prepare(profile.language);
+    } catch {
+      if (currentSession?.user?.id === savingUserId) setMessage(profileFormMessage, tr('i18n.error'));
+      return;
+    }
+    if (currentSession?.user?.id !== savingUserId) return;
     if (avatarFile) {
       const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[avatarFile.type];
       const path = `${savingUserId}/${crypto.randomUUID()}.${extension}`;
@@ -5921,17 +6049,21 @@ async function saveUserProfile(event) {
     if (currentSession?.user?.id !== savingUserId) return;
     if (!response.ok) {
       const errors = {
-        PERFIL_INVALIDO: 'Revisa los datos del perfil.',
-        CATEGORIA_FAVORITA_INVALIDA: 'Una categoría seleccionada ya no está disponible.',
-        USERNAME_OCUPADO: 'Ese username ya está ocupado. Elige otro.',
-        USERNAME_INMUTABLE: 'El username no se puede cambiar.',
+        PERFIL_INVALIDO: t('profile.invalid'),
+        CATEGORIA_FAVORITA_INVALIDA: t('profile.categoryUnavailable'),
+        USERNAME_OCUPADO: t('profile.usernameTaken'),
+        USERNAME_INMUTABLE: t('profile.usernameImmutable'),
       };
-      profileFormMessage.textContent = errors[result.error] ?? 'No se pudo guardar el perfil. Inténtalo de nuevo.';
+      bindI18n(profileFormMessage, 'text', () => errors[result.error] ?? t('profile.saveError'));
       return;
     }
 
     profileSaved = true;
     currentUserProfile = result;
+    if (!await i18n.setLanguage(result.language, {
+      remember: true,
+      isCurrent: () => currentSession?.user?.id === savingUserId,
+    })) return;
     applyProfileAvatar(result);
     profileDialog.close();
     if (profileDialogMode === 'onboarding') startApplicationForCurrentProfile();
@@ -5939,7 +6071,7 @@ async function saveUserProfile(event) {
       await removeProfileAvatar(ownedProfileAvatarPath(previousAvatarUrl, savingUserId));
     }
   } catch {
-    if (currentSession?.user?.id === savingUserId) profileFormMessage.textContent = 'No se pudo guardar el perfil. Inténtalo de nuevo.';
+    if (currentSession?.user?.id === savingUserId) bindI18n(profileFormMessage, 'text', () => t('profile.saveError'));
   } finally {
     if (uploadedAvatarPath && !profileSaved && currentSession?.user?.id === savingUserId) {
       await removeProfileAvatar(uploadedAvatarPath);
@@ -5952,7 +6084,7 @@ async function saveUserProfile(event) {
 
 function checkUserProfile(session) {
   const requestId = ++profileRequestSequence;
-  showProfileGate('Comprobando tu perfil…', false, true);
+  showProfileGate(() => t('profile.checking'), false, true);
   void loadUserProfile(session, requestId);
 }
 
@@ -6013,7 +6145,7 @@ function showNativeOAuthError() {
   nativeOAuthPending = false;
   clearTimeout(nativeOAuthFinishTimer);
   loginButton.disabled = false;
-  setAuthMessage('No se pudo completar el acceso con Google. Vuelve a intentarlo.', { error: true });
+  setAuthMessage(() => t('auth.googleCallbackError'), { error: true });
 }
 
 async function processNativeOAuthCallback(rawUrl) {
@@ -6056,7 +6188,7 @@ async function processNativeOAuthCallback(rawUrl) {
     if (!isRecoveryCallback) handleSession(data.session);
   } catch {
     if (isRecoveryCallback) {
-      handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+      handleSession(null, t('auth.linkError'));
     } else {
       showNativeOAuthError();
     }
@@ -6177,7 +6309,7 @@ async function createNativeEmailHandoff(email) {
 }
 
 function showNativeEmailHandoffError() {
-  if (!currentSession) setAuthMessage('No se pudo completar la confirmación. Vuelve a intentarlo o inicia sesión.', { error: true });
+  if (!currentSession) setAuthMessage(() => t('auth.confirmationError'), { error: true });
 }
 
 async function pollNativeEmailHandoffs() {
@@ -6273,7 +6405,7 @@ function startNativeEmailHandoffPolling() {
 
 async function initializeAuth() {
   showAuthScreen();
-  setAuthMessage('Preparando el acceso...', { loading: true });
+  setAuthMessage(() => t('auth.prepare'), { loading: true });
   const callbackParameters = new URLSearchParams(window.location.search);
   const tokenHashes = callbackParameters.getAll('token_hash');
   const recoveryTypes = callbackParameters.getAll('type');
@@ -6315,7 +6447,7 @@ async function initializeAuth() {
         nativeEmailHandoffResumeListenerRegistered = true;
       }
     } catch {
-      setAuthMessage('No se pudo preparar el acceso seguro. Inténtalo de nuevo.', { error: true });
+      setAuthMessage(() => t('auth.secureAccessError'), { error: true });
       authRetryButton.hidden = false;
       return;
     }
@@ -6331,7 +6463,7 @@ async function initializeAuth() {
     });
   } catch {
     supabaseClient = null;
-    showAuthScreen('No se pudo iniciar el servicio de autenticación.');
+    showAuthScreen(() => t('auth.serviceError'));
     authRetryButton.hidden = false;
     return;
   }
@@ -6354,7 +6486,7 @@ async function initializeAuth() {
         authCallbackTimeoutId = null;
         if (authCallbackPending) {
           authCallbackPending = false;
-          handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+          handleSession(null, t('auth.linkError'));
         }
       }, 1000);
       return;
@@ -6378,7 +6510,7 @@ async function initializeAuth() {
     }
     if (recoveryTokenHashCallback) {
       if (!recoveryTokenHash) {
-        handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+        handleSession(null, t('auth.linkError'));
         return;
       }
       try {
@@ -6388,7 +6520,7 @@ async function initializeAuth() {
         });
         if (error || !data?.session) throw new Error('RECUPERACION_INVALIDA');
       } catch {
-        handleSession(null, 'No se pudo validar el enlace. Solicita otro e inténtalo de nuevo.');
+        handleSession(null, t('auth.linkError'));
         startNativeEmailHandoffPolling();
         return;
       }
@@ -6397,7 +6529,7 @@ async function initializeAuth() {
     if (!authCallbackPending && !passwordRecoveryPending) handleSession(data?.session ?? null);
     startNativeEmailHandoffPolling();
   } catch {
-    handleSession(null, 'No se pudo recuperar la sesión.');
+    handleSession(null, t('auth.sessionError'));
     startNativeEmailHandoffPolling();
   }
 }
@@ -6405,7 +6537,8 @@ async function initializeAuth() {
 authRetryButton.addEventListener('click', async () => {
   authRetryButton.disabled = true;
   try {
-    await initializeAuth();
+    if (i18nReady) await initializeAuth();
+    else await startTranslatedApplication();
   } finally {
     authRetryButton.disabled = false;
   }
@@ -6413,7 +6546,7 @@ authRetryButton.addEventListener('click', async () => {
 
 loginButton.addEventListener('click', async () => {
   if (!supabaseClient) return;
-  setAuthMessage('Conectando con Google...', { loading: true });
+  setAuthMessage(() => t('auth.connectGoogle'), { loading: true });
   loginButton.disabled = true;
   try {
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
@@ -6434,7 +6567,7 @@ loginButton.addEventListener('click', async () => {
       await nativeAuth.openBrowser(data.url);
     }
   } catch {
-    setAuthMessage('No se pudo iniciar sesión con Google. Inténtalo de nuevo.', { error: true });
+    setAuthMessage(() => t('auth.googleError'), { error: true });
     loginButton.disabled = false;
   }
 });
@@ -6445,8 +6578,8 @@ let recoveryPasswordRepeatBlurred = false;
 function setAuthMode(mode) {
   authMode = mode;
   const registering = mode === 'register';
-  document.querySelector('#auth-google-label').textContent = registering ? 'Usa tu cuenta de Google' : 'Inicia sesión con Google';
-  document.querySelector('#auth-divider').textContent = registering ? 'o crea una nueva cuenta en MiniPeopleDB' : 'o con tu usuario de MiniPeopleDB';
+  bindI18n(document.querySelector('#auth-google-label'), 'text', () => registering ? t('auth.googleUse') : t('auth.googleSignIn'));
+  bindI18n(document.querySelector('#auth-divider'), 'text', () => registering ? t('auth.registerDivider') : t('auth.divider'));
   passwordRepeatBlurred = false;
   openPasswordRecoveryButton.hidden = registering;
   authUsernameField.hidden = registering;
@@ -6464,7 +6597,7 @@ function setAuthMode(mode) {
   authPasswordRepeatInput.value = '';
   authPasswordInput.autocomplete = registering ? 'new-password' : 'current-password';
   validateRegistrationPassword();
-  classicAuthSubmit.textContent = registering ? 'Crear cuenta' : 'Iniciar sesión';
+  bindI18n(classicAuthSubmit, 'text', () => registering ? t('auth.register') : t('auth.signIn'));
   authModeLoginButton.setAttribute('aria-pressed', String(!registering));
   authModeRegisterButton.setAttribute('aria-pressed', String(registering));
   setAuthMessage('');
@@ -6510,9 +6643,9 @@ function validateRegistrationPassword() {
   const rules = passwordRules(password);
   renderPasswordRules(document.querySelector('#auth-password-rules'), rules);
   authPasswordInput.setCustomValidity(authMode === 'register' && !Object.values(rules).every(Boolean)
-    ? 'La contraseña debe cumplir todas las directrices de seguridad.' : '');
+    ? t('auth.passwordRules') : '');
   authPasswordRepeatInput.setCustomValidity(authMode === 'register' && authPasswordRepeatInput.value !== password
-    ? 'Las contraseñas no coinciden.' : '');
+    ? t('auth.passwordMismatch') : '');
   authPasswordRepeatInput.setAttribute('aria-invalid', String(passwordRepeatBlurred && authPasswordRepeatInput.validity.customError));
 }
 
@@ -6520,9 +6653,9 @@ function validateRecoveryPassword() {
   const rules = passwordRules(newPasswordInput.value);
   renderPasswordRules(newPasswordRulesList, rules);
   newPasswordInput.setCustomValidity(Object.values(rules).every(Boolean)
-    ? '' : 'La contraseña debe cumplir todas las directrices de seguridad.');
+    ? '' : t('auth.passwordRules'));
   newPasswordRepeatInput.setCustomValidity(newPasswordRepeatInput.value === newPasswordInput.value
-    ? '' : 'Las contraseñas no coinciden.');
+    ? '' : t('auth.passwordMismatch'));
   newPasswordRepeatInput.setAttribute('aria-invalid',
     String(recoveryPasswordRepeatBlurred && newPasswordRepeatInput.validity.customError));
 }
@@ -6549,13 +6682,13 @@ function setPasswordVisibility(visible, inputs = [authPasswordInput, authPasswor
   buttons = authShowPasswordButtons, plural = authMode === 'register') {
   const type = visible ? 'text' : 'password';
   for (const input of inputs) input.type = type;
-  const label = visible
-    ? (plural ? 'Ocultar contraseñas' : 'Ocultar contraseña')
-    : (plural ? 'Mostrar contraseñas' : 'Mostrar contraseña');
+  const label = () => visible
+    ? (plural ? t('auth.hidePasswords') : t('auth.hidePassword'))
+    : (plural ? t('auth.showPasswords') : t('auth.showPassword'));
   for (const button of buttons) {
     button.setAttribute('aria-pressed', String(visible));
-    button.setAttribute('aria-label', label);
-    button.title = label;
+    bindI18n(button, 'aria-label', label);
+    bindI18n(button, 'title', label);
     button.querySelector('use').setAttribute('href', visible ? '#auth-eye-icon' : '#auth-eye-off-icon');
   }
 }
@@ -6581,11 +6714,11 @@ classicAuthForm.addEventListener('submit', async (event) => {
   const username = authUsernameInput.value;
   setAuthMessage('');
   authUsernameInput.setCustomValidity(authMode === 'register' || USERNAME_PATTERN.test(username)
-    ? '' : 'Usa entre 3 y 20 letras, números o guiones bajos.');
+    ? '' : t('auth.usernameRules'));
   validateRegistrationPassword();
   if (!classicAuthForm.reportValidity()) return;
   classicAuthSubmit.disabled = true;
-  setAuthMessage(authMode === 'register' ? 'Creando tu cuenta...' : 'Iniciando sesión...', { loading: true });
+  setAuthMessage(() => authMode === 'register' ? t('auth.creatingAccount') : t('auth.signingIn'), { loading: true });
   let pendingEmailHandoff = null;
   try {
     if (authMode === 'register') {
@@ -6608,16 +6741,16 @@ classicAuthForm.addEventListener('submit', async (event) => {
         else startNativeEmailHandoffPolling();
         pendingEmailHandoff = null;
       }
-      setAuthMessage(data?.session
-        ? 'Cuenta creada. Completa tu perfil para continuar.'
-        : 'Si el email puede registrarse, recibirás instrucciones para confirmar la cuenta.');
+      setAuthMessage(() => data?.session
+        ? t('auth.accountCreated')
+        : t('auth.confirmationSent'));
     } else {
       const response = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      if (!response.ok) throw new Error('Acceso rechazado');
+      if (!response.ok) throw new Error(t('auth.denied'));
       const tokens = await response.json();
       const { error } = await supabaseClient.auth.setSession(tokens);
       if (error) throw error;
@@ -6631,12 +6764,12 @@ classicAuthForm.addEventListener('submit', async (event) => {
       try {
         await deleteNativeEmailHandoff(pendingEmailHandoff.handoffId);
       } catch {
-        setAuthMessage('No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.', { error: true });
+        setAuthMessage(() => t('auth.registerError'), { error: true });
       }
     }
-    setAuthMessage(authMode === 'register'
-      ? 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.'
-      : 'No se pudo iniciar sesión. Revisa el username y la contraseña.', { error: true });
+    setAuthMessage(() => authMode === 'register'
+      ? t('auth.registerError')
+      : t('auth.credentialsError'), { error: true });
   } finally {
     classicAuthSubmit.disabled = false;
   }
@@ -6650,15 +6783,15 @@ passwordRecoveryForm.addEventListener('submit', async (event) => {
   if (!supabaseClient) return;
   const submitButton = passwordRecoveryForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
-  setAuthMessage('Enviando enlace de recuperación...', { loading: true });
+  setAuthMessage(() => t('auth.sendingRecovery'), { loading: true });
   try {
     const { error } = await supabaseClient.auth.resetPasswordForEmail(recoveryEmailInput.value.trim(), {
       redirectTo: authRedirectUrl(),
     });
     if (error) throw error;
-    setAuthMessage('Si el email puede recuperarse, recibirás un enlace para cambiar la contraseña.');
+    setAuthMessage(() => t('auth.recoverySent'));
   } catch {
-    setAuthMessage('No se pudo solicitar la recuperación. Inténtalo de nuevo.', { error: true });
+    setAuthMessage(() => t('auth.recoveryError'), { error: true });
   } finally {
     submitButton.disabled = false;
   }
@@ -6671,16 +6804,16 @@ passwordUpdateForm.addEventListener('submit', async (event) => {
   if (!passwordUpdateForm.reportValidity()) return;
   const submitButton = passwordUpdateForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
-  setAuthMessage('Actualizando contraseña...', { loading: true });
+  setAuthMessage(() => t('auth.updatingPassword'), { loading: true });
   try {
     const { error } = await supabaseClient.auth.updateUser({ password: newPasswordInput.value });
     if (error) throw error;
     passwordUpdateForm.reset();
     passwordUpdateForm.hidden = true;
     passwordRecoveryPending = false;
-    handleSession(currentSession, 'La contraseña se actualizó correctamente.');
+    handleSession(currentSession, t('auth.passwordUpdated'));
   } catch {
-    setAuthMessage('No se pudo cambiar la contraseña. Inténtalo de nuevo.', { error: true });
+    setAuthMessage(() => t('auth.passwordUpdateError'), { error: true });
   } finally {
     submitButton.disabled = false;
   }
@@ -6723,10 +6856,10 @@ deleteAccountConfirmButton.addEventListener('click', async () => {
     if (currentSession?.user?.id !== deletingUserId) return;
     if (response.status !== 204) throw new Error('CUENTA_NO_ELIMINADA');
     nativePushRegistration?.accountDeleted(deletingUserId);
-    await endSession('Tu cuenta se ha eliminado correctamente.', { skipPushRevocation: true });
+    await endSession(() => t('profile.deleted'), { skipPushRevocation: true });
   } catch {
     if (currentSession?.user?.id === deletingUserId) {
-      deleteAccountError.textContent = 'No se pudo eliminar la cuenta. Inténtalo de nuevo.';
+      bindI18n(deleteAccountError, 'text', () => t('profile.deleteError'));
     }
   } finally {
     accountDeletionInFlight = false;
@@ -6740,9 +6873,9 @@ function validateSettingsPassword() {
   const rules = passwordRules(settingsPasswordInput.value);
   renderPasswordRules(document.querySelector('#settings-password-rules'), rules);
   settingsPasswordInput.setCustomValidity(Object.values(rules).every(Boolean)
-    ? '' : 'La contraseña debe cumplir todas las directrices de seguridad.');
+    ? '' : t('auth.passwordRules'));
   settingsPasswordConfirmInput.setCustomValidity(settingsPasswordConfirmInput.value === settingsPasswordInput.value
-    ? '' : 'Las contraseñas no coinciden.');
+    ? '' : t('auth.passwordMismatch'));
   settingsPasswordConfirmInput.setAttribute('aria-invalid',
     String(settingsPasswordConfirmBlurred && settingsPasswordConfirmInput.validity.customError));
 }
@@ -6786,16 +6919,16 @@ changePasswordForm.addEventListener('submit', async (event) => {
   const userId = currentSession.user.id;
   const request = ++settingsPasswordRequest;
   settingsPasswordSave.disabled = true;
-  settingsPasswordMessage.textContent = 'Actualizando contraseña...';
+  bindI18n(settingsPasswordMessage, 'text', () => t('auth.updatingPassword'));
   try {
     const { error } = await supabaseClient.auth.updateUser({ password: settingsPasswordInput.value });
     if (error) throw error;
     if (request !== settingsPasswordRequest || currentSession?.user?.id !== userId) return;
     changePasswordDialog.close();
-    showToast('La contraseña se actualizó correctamente.');
+    showToast(() => t('auth.passwordUpdated'));
   } catch {
     if (request === settingsPasswordRequest && currentSession?.user?.id === userId) {
-      settingsPasswordMessage.textContent = 'No se pudo cambiar la contraseña. Inténtalo de nuevo.';
+      bindI18n(settingsPasswordMessage, 'text', () => t('auth.passwordUpdateError'));
     }
   } finally {
     if (request === settingsPasswordRequest) settingsPasswordSave.disabled = false;
@@ -6813,7 +6946,11 @@ profileDialog.addEventListener('close', () => {
   pendingProfileAvatarFile = null;
   profileAvatarFileInput.value = '';
   if (!profileAvatarLoadButton.disabled) profileSaveButton.disabled = false;
-  if (profileDialogMode !== 'onboarding' && profileDialogTrigger?.isConnected) profileDialogTrigger.focus();
+  if (profileDialogMode !== 'onboarding') {
+    const trigger = profileDialogTrigger?.isConnected && !profileDialogTrigger.closest('[hidden]')
+      ? profileDialogTrigger : userMenuToggle;
+    trigger.focus();
+  }
   profileDialogTrigger = null;
 });
 
@@ -6829,9 +6966,40 @@ logoutButton.addEventListener('click', async () => {
   handleSession(null);
 });
 
-setCategoriaControlsEnabled(false);
-if (nativePush) {
-  void initializeNativePushListeners().finally(() => initializeAuth());
-} else {
-  void initializeAuth();
+window.addEventListener('minipeople:languagechange', () => {
+  refreshDynamicI18n();
+  if (!i18nReady) return;
+  renderCategoryOptions(officialCategorias);
+  renderYearOptions();
+  if (ownDnaState) renderGamificationDna(ownDnaState);
+  if (ownDnaState && dnaDialog.open && !dnaChart.hidden) renderDnaDialog(ownDnaState);
+  if (analyticsHistoryData && analyticsHistoryDialog.open) {
+    const pages = new Map([...analyticsHistoryTables].map(([key, table]) => [key, table.page]));
+    renderAnalyticsHistoryValue(analyticsHistoryData);
+    renderAnalyticsHistoryDna(analyticsHistoryData);
+    renderAnalyticsHistoryProgression(analyticsHistoryData);
+    for (const [key, page] of pages) renderAnalyticsHistoryTable(key, analyticsHistoryTables.get(key).rows, page);
+  }
+});
+
+async function startTranslatedApplication() {
+  showProfileGate('', false, true);
+  try {
+    await i18n.initialize();
+  } catch {
+    authScreen.hidden = false;
+    authAccessPanel.hidden = false;
+    pageShell.hidden = true;
+    authMessage.textContent = 'No se pudieron cargar las traducciones. Reintenta para continuar.';
+    authRetryButton.hidden = false;
+    return;
+  }
+  i18nReady = true;
+  setNotificationsUnreadCount(0);
+  setCategoriaControlsEnabled(false);
+  refreshDynamicI18n();
+  if (nativePush) await initializeNativePushListeners();
+  await initializeAuth();
 }
+
+void startTranslatedApplication();

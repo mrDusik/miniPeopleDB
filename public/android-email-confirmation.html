@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title>Confirmación de email · MiniPeopleDB</title>
+  <title data-i18n="confirmation.pageTitle">Confirmación de email · MiniPeopleDB</title>
 </head>
 <body>
   <main>
-    <h1>Confirmación de email</h1>
+    <h1 data-i18n="confirmation.title">Confirmación de email</h1>
     <p id="confirmation-message" role="status" aria-live="polite">Comprobando el enlace…</p>
-    <p>Si la app Android no está abierta, vuelve a abrirla para continuar.</p>
+    <p data-i18n="confirmation.androidHint">Si la app Android no está abierta, vuelve a abrirla para continuar.</p>
   </main>
   <script src="/vendor/supabase.js" defer></script>
+  <script src="/vendor/i18next.js" defer></script>
+  <script src="/i18n.js" defer></script>
   <script src="/android-email-confirmation.js" defer></script>
 </body>
 </html>

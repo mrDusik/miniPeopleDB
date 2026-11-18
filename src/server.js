@@ -395,6 +395,9 @@ export function createServer({
   app.get('/vendor/chart.js', (request, response) => {
     response.sendFile(chartBundle);
   });
+  app.get('/vendor/i18next.js', (request, response) => {
+    response.sendFile(resolve(projectRoot, 'node_modules', 'i18next', 'dist', 'umd', 'i18next.min.js'));
+  });
   app.get('/vendor/star.svg', (request, response) => {
     response.sendFile(resolve(projectRoot, 'node_modules', 'lucide-static', 'icons', 'star.svg'));
   });

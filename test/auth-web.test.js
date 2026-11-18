@@ -4,7 +4,7 @@ import test from 'node:test';
 import { webcrypto } from 'node:crypto';
 import { JSDOM } from 'jsdom';
 import { categoriasMockRaw } from '../test-support/fixtures.js';
-import { withSupabaseSession } from '../test-support/browser-auth.js';
+import { withI18n, withSupabaseSession } from '../test-support/browser-auth.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const appScript = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
@@ -222,6 +222,228 @@ function makeNativeAuth({ launchUrl = null } = {}) {
     get closedBrowserCount() { return closedBrowserCount; },
   };
 }
+
+test('idioma ES/EN se confirma al guardar sin perder filtros, contenido externo ni foco', async () => {
+  let rejectSave = false;
+  const { dom, window, $, requests } = startApp({
+    fetchImpl: async (url, init) => {
+      if (url !== '/api/profile' || init.method !== 'PUT') return undefined;
+      return rejectSave
+        ? { ok: false, status: 503, json: async () => ({ error: 'PERFIL_NO_DISPONIBLE' }) }
+        : { ok: true, json: async () => ({ ...completeProfile, ...JSON.parse(init.body) }) };
+    },
+  });
+  try {
+    await waitFor(() => !$('.page-shell').hidden);
+    await waitFor(() => $('#catalog-body').textContent.includes('Astronauta'));
+    $('#nombre').value = 'Astronauta';
+    window.eval('setNotificationsUnreadCount(2); setFriendsCounts({friends:3,sent:2,received:1})');
+    const collapsedPanel = $('.rankings-panel .panel-toggle');
+    collapsedPanel.click();
+    const sourceFields = () => [...$('#catalog-body').querySelectorAll('.id-link,.catalog-mobile-name,td:nth-child(4),td:nth-child(5),td:nth-child(6)')]
+      .map((element) => element.textContent);
+    const before = sourceFields();
+    const open = () => {
+      $('#open-user-settings').focus();
+      $('#open-user-settings').click();
+      assert.equal($('#user-profile-dialog').open, true);
+    };
+    const save = () => $('#user-profile-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    open();
+    assert.equal($('#profile-language').querySelector('[value="es"]').disabled, false);
+    assert.equal($('#profile-language').querySelector('[value="en"]').disabled, false);
+    assert.equal($('#profile-language').querySelector('[value="it"]').disabled, true);
+    assert.equal($('#profile-language').querySelector('[value="fr"]').disabled, true);
+    assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, true);
+    assert.equal(window.document.querySelectorAll('#profile-language').length, 1);
+    $('#profile-language').value = 'en';
+    assert.equal(window.document.documentElement.lang, 'es');
+    $('#user-profile-close').click();
+    assert.equal(window.document.documentElement.lang, 'es');
+    open();
+    assert.equal($('#profile-language').value, 'es');
+    $('#profile-language').value = 'en';
+    rejectSave = true;
+    save();
+    await waitFor(() => $('#profile-form-message').textContent.includes('No se pudo guardar'));
+    assert.equal(window.document.documentElement.lang, 'es');
+    assert.equal($('#profile-language').value, 'en');
+    assert.equal($('#user-profile-dialog').open, true);
+    rejectSave = false;
+    const catalogRequests = requests.filter(({ url }) => url.startsWith('/minifiguras')).length;
+    save();
+    await waitFor(() => window.document.documentElement.lang === 'en' && !$('#user-profile-dialog').open);
+    assert.equal($('#new-minifigura').getAttribute('aria-label'), 'New miniperson');
+    assert.equal($('#open-notifications').getAttribute('aria-label'), 'Notifications, 2 unread');
+    assert.equal($('#open-friends').getAttribute('aria-label'), 'Friends: 3');
+    assert.equal($('#friends-tab-sent').getAttribute('aria-label'), 'Sent requests (2)');
+    assert.equal($('#catalog-body .badge').getAttribute('aria-label'), 'Collection');
+    assert.equal(collapsedPanel.getAttribute('aria-expanded'), 'false');
+    assert.equal(collapsedPanel.title, 'Show panel');
+    assert.equal($('#nombre').value, 'Astronauta');
+    assert.deepEqual(sourceFields(), before);
+    assert.equal(window.localStorage.getItem('minipeople.language'), 'en');
+    assert.equal(window.document.activeElement, $('#user-menu-toggle'));
+    assert.equal(requests.filter(({ url }) => url.startsWith('/minifiguras')).length, catalogRequests);
+    assert.equal(window.eval("formatFilterOption('Space', 53, 500)"), 'Space: 53 of 500 (10.6%)');
+    assert.match(window.eval('formatPrice(1234.5)'), /€1,234\.50/);
+    open();
+    $('#profile-language').value = 'es';
+    save();
+    await waitFor(() => window.document.documentElement.lang === 'es');
+    assert.equal($('#nombre').value, 'Astronauta');
+    assert.equal(window.eval("formatFilterOption('Space', 53, 500)"), 'Space: 53 de 500 (10,6%)');
+    assert.equal($('#catalog-body .badge').getAttribute('aria-label'), 'Colección');
+    assert.equal($('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 2 sin leer');
+    assert.deepEqual(sourceFields(), before);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('no guarda un idioma cuyo catalogo falla y el mismo formulario permite reintentar', async () => {
+  let saves = 0;
+  const { dom, window, $ } = startApp({
+    fetchImpl: async (url, init) => {
+      if (url !== '/api/profile' || init.method !== 'PUT') return undefined;
+      saves += 1;
+      return { ok: true, json: async () => ({ ...completeProfile, ...JSON.parse(init.body) }) };
+    },
+  });
+  try {
+    await waitFor(() => !$('.page-shell').hidden);
+    const resourceFetch = window.fetch;
+    let unavailable = true;
+    window.fetch = (url, init) => url === '/locales/en.json' && unavailable
+      ? Promise.resolve({ ok: false, status: 503 }) : resourceFetch(url, init);
+    $('#open-user-settings').click();
+    $('#profile-language').value = 'en';
+    const save = () => $('#user-profile-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    save();
+    await waitFor(() => $('#profile-form-message').textContent.includes('traducciones'));
+    assert.equal(saves, 0);
+    assert.equal(window.document.documentElement.lang, 'es');
+    assert.equal($('#profile-language').value, 'en');
+    assert.equal($('#user-profile-dialog').open, true);
+    unavailable = false;
+    save();
+    await waitFor(() => window.document.documentElement.lang === 'en');
+    assert.equal(saves, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el perfil de otra cuenta prevalece sobre un catalogo EN que llega tarde', async () => {
+  const sessionA = { access_token: 'token-a', user: { id: 'account-a' } };
+  const sessionB = { access_token: 'token-b', user: { id: 'account-b' } };
+  const { dom, window, $ } = startApp({
+    session: null,
+    fetchImpl: async (url, init) => url === '/api/profile'
+      ? { ok: true, json: async () => ({
+        ...completeProfile,
+        username: init.headers.Authorization === 'Bearer token-a' ? 'FirstAccount' : 'SecondAccount',
+        language: init.headers.Authorization === 'Bearer token-a' ? 'en' : 'es',
+      }) } : undefined,
+  });
+  try {
+    await waitFor(() => !$('#auth-access-panel').hidden);
+    const resourceFetch = window.fetch;
+    let releaseEnglish;
+    window.fetch = (url, init) => url === '/locales/en.json'
+      ? new Promise((resolve) => { releaseEnglish = async () => resolve(await resourceFetch(url, init)); })
+      : resourceFetch(url, init);
+    window.__supabaseStub.setSession('SIGNED_IN', sessionA);
+    await waitFor(() => typeof releaseEnglish === 'function');
+    window.__supabaseStub.setSession('SIGNED_IN', sessionB);
+    await waitFor(() => $('#user-name').textContent === 'SecondAccount');
+    await releaseEnglish();
+    await tick();
+    assert.equal(window.document.documentElement.lang, 'es');
+    assert.equal($('#user-name').textContent, 'SecondAccount');
+    assert.equal(window.localStorage.getItem('minipeople.language'), 'es');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('un perfil EN inicia la app en ingles y localiza logros y avisos historicos sin mutarlos', async () => {
+  const { dom, window, $ } = startApp({ profileData: { ...completeProfile, language: 'en' } });
+  try {
+    await waitFor(() => !$('.page-shell').hidden);
+    assert.equal(window.document.documentElement.lang, 'en');
+    assert.equal($('#new-minifigura').getAttribute('aria-label'), 'New miniperson');
+    window.achievementSource = { id: 'block-by-block', nombre: 'Block by block', descripcion: 'Has añadido una minipersona', cantidad: 1, total: 1 };
+    const original = JSON.stringify(window.achievementSource);
+    const achievement = window.eval('createAchievementItem(achievementSource)');
+    window.document.body.append(achievement);
+    assert.equal(achievement.querySelector('.achievement-name').textContent, 'Block by block');
+    assert.equal(achievement.querySelector('.achievement-description').textContent, 'You have added a miniperson');
+    window.historicalSource = { type: 'ranking_entered', data: { ranking: 'global', position: 8, message: 'Mensaje histórico español que no debe interpretarse.' } };
+    const historical = JSON.stringify(window.historicalSource);
+    const notification = window.eval('renderNotificationMessage(historicalSource)');
+    window.document.body.append(notification);
+    assert.match(notification.textContent, /You entered.*position 8/);
+    window.externalUsername = '<img src=x onerror=alert(1)>';
+    const friend = window.eval("renderNotificationMessage({type:'friend_request',data:{user:externalUsername}})");
+    window.document.body.append(friend);
+    assert.equal(friend.querySelector('img'), null);
+    assert.equal(friend.querySelector('strong').textContent, window.externalUsername);
+    assert.match(friend.textContent, /wants to be your friend/);
+    const diagnostics = [];
+    window.console.warn = (...args) => diagnostics.push(args);
+    const unknown = window.eval("renderNotificationMessage({type:'unknown',data:{message:'private detail'}})");
+    assert.equal(unknown.textContent, 'You have a notification.');
+    assert.equal(JSON.stringify(diagnostics).includes('private detail'), false);
+    assert.ok(diagnostics.length);
+    const incomplete = window.eval("renderNotificationMessage({type:'gift_received',data:{user:'Ada'}})");
+    assert.equal(incomplete.textContent, 'You received a gift.');
+    assert.equal(incomplete.textContent.includes('50'), false);
+    await window.MiniPeopleI18n.setLanguage('es');
+    assert.equal(achievement.querySelector('.achievement-description').textContent, 'Has añadido una minipersona');
+    assert.equal(achievement.querySelector('.achievement-name').textContent, 'Block by block');
+    assert.match(notification.textContent, /puesto 8/);
+    assert.equal(JSON.stringify(window.achievementSource), original);
+    assert.equal(JSON.stringify(window.historicalSource), historical);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el arranque informa y permite recuperar HTTP fallido, JSON invalido y fallo de red sin acceder antes a datos', async () => {
+  for (const failure of ['http', 'json', 'network']) {
+    const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+    const { window } = dom;
+    try {
+      window.eval(withSupabaseSession('', { session: null }));
+      const resourceFetch = window.fetch;
+      let failed = false;
+      const applicationRequests = [];
+      window.fetch = async (url, init) => {
+        if (url === '/locales/es.json' && !failed) {
+          failed = true;
+          if (failure === 'network') throw new TypeError('network failure');
+          return failure === 'http' ? { ok: false, status: 503 } : { ok: true, json: async () => ({ invalid: 42 }) };
+        }
+        if (!url.startsWith('/locales/')) applicationRequests.push(url);
+        return resourceFetch(url, init);
+      };
+      window.eval(appScript);
+      const document = window.document;
+      await waitFor(() => !document.querySelector('#auth-retry').hidden);
+      assert.match(document.querySelector('#auth-message').textContent, /traducciones/);
+      assert.deepEqual(applicationRequests, []);
+      document.querySelector('#auth-retry').click();
+      await waitFor(() => !document.querySelector('#auth-access-panel').hidden
+        && document.querySelector('#auth-retry').hidden);
+      assert.equal(document.querySelector('#login-google').disabled, false);
+      assert.equal(document.documentElement.lang, 'es');
+      assert.equal(applicationRequests.includes('/api/profile'), false);
+    } finally {
+      dom.window.close();
+    }
+  }
+});
 
 test('sin sesion solo se muestra la pantalla de acceso y no se piden datos', async () => {
   const { dom, requests, $ } = startApp({ session: null });
@@ -1219,7 +1441,7 @@ test('onboarding guarda perfil y favoritos antes de iniciar la colección', asyn
   assert.equal($('#profile-username').disabled, false);
   assert.equal($('#profile-favorite-categories').querySelectorAll('input').length, 10);
   assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, true);
-  assert.equal($('#profile-language').querySelector('[value="en"]').disabled, true);
+  assert.equal($('#profile-language').querySelector('[value="en"]').disabled, false);
 
   $('#profile-username').value = 'Space_Fan7';
   $('#profile-avatar-url').value = 'https://example.com/profile.png';
@@ -1690,7 +1912,7 @@ test('Preferencias solo ofrece Cerrar para descartar cambios y restaura el foco'
   assert.equal($('#user-profile-close').hidden, false);
   $('#user-profile-close').click();
   assert.equal($('#user-profile-dialog').open, false);
-  assert.equal(dom.window.document.activeElement, settingsButton);
+  assert.equal(dom.window.document.activeElement, $('#user-menu-toggle'));
   dom.window.close();
 });
 
@@ -1998,7 +2220,7 @@ test('sin configuracion de Supabase se muestra un error y se deshabilita el acce
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   window.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: 'CONFIGURACION_NO_DISPONIBLE' }) });
-  window.eval(appScript);
+  window.eval(withI18n(appScript));
   await tick();
   assert.equal(window.document.querySelector('#auth-screen').hidden, false);
   assert.equal(window.document.querySelector('#auth-message').textContent, 'No se pudo iniciar el servicio de autenticación.');
@@ -2014,7 +2236,8 @@ for (const authenticated of [false, true]) {
         : null,
     });
     try {
-      await waitFor(() => $('#auth-screen').hidden === authenticated);
+      await waitFor(() => $('#auth-screen').hidden === authenticated
+        && (authenticated || !$('#auth-access-panel').hidden));
       const openContact = () => {
         if (authenticated) $('#user-menu-toggle').click();
         $(authenticated ? '#open-contact-profile' : '#open-contact-auth').click();

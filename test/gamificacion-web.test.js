@@ -49,7 +49,7 @@ function state(overrides = {}) {
     nivel: { id: 8, nombre: 'Redbeard', umbral: 750 },
     siguienteNivel: { id: 9, nombre: 'Forestman', umbral: 1000 },
     progreso: { actual: 820, desde: 750, hasta: 1000, porcentaje: 28 },
-    logros: [{ id: 'new-mini-person', nombre: 'New mini person', descripcion: 'Añadir una nueva minifigura.', bricks: 1, cantidad: 12, total: 12 }],
+    logros: [{ id: 'block-by-block', nombre: 'Block by block', descripcion: 'Has añadido una minipersona', bricks: 1, cantidad: 12, total: 12 }],
     ...overrides,
   };
 }
@@ -259,8 +259,8 @@ test('renderiza el nivel, progreso y modal de desglose', async () => {
   assert.equal(achievement.className, 'achievement-item');
   assert.equal(achievement.querySelector('.achievement-icon').textContent, '🏆');
   assert.equal(achievement.querySelector('.achievement-icon').getAttribute('aria-hidden'), 'true');
-  assert.equal(achievement.querySelector('.achievement-name').textContent, 'New mini person');
-  assert.equal(achievement.querySelector('.achievement-description').textContent, 'Añadir una nueva minipersona.');
+  assert.equal(achievement.querySelector('.achievement-name').textContent, 'Block by block');
+  assert.equal(achievement.querySelector('.achievement-description').textContent, 'Has añadido una minipersona');
   assert.equal(achievement.querySelector('.achievement-count').textContent, 'x12');
   assert.equal(achievement.querySelector('.achievement-bricks strong').textContent, '12');
   assert.equal(achievement.querySelector('.achievement-brick-icon').getAttribute('src'), '/toast_images/brick.png');
@@ -346,7 +346,7 @@ test('renderizar logros ajenos no cambia el panel y abrir propios restaura su co
   document.querySelector('#open-achievements').click();
   assert.equal(document.querySelector('#gamification-dialog-title').textContent, 'Logros');
   assert.equal(document.querySelector('#gamification-dialog-bricks').textContent, '820');
-  assert.equal(document.querySelector('.achievement-name').textContent, 'New mini person');
+  assert.equal(document.querySelector('.achievement-name').textContent, 'Block by block');
   dom.window.close();
 });
 
@@ -495,6 +495,47 @@ test('el grafico DNA conserva sectores proporcionales con tooltip recto y tipogr
   }
 });
 
+test('DNA localiza resumen accesible y tooltip ES/EN conservando datos y retorno por teclado', async () => {
+  const dom = createDom();
+  const document = dom.window.document;
+  const dnaState = { principal: 'Collector', porcentajes: { collector: 53.5, explorer: 20, fan: 16.5, rarityHunter: 10 } };
+  const original = JSON.stringify(dnaState);
+  dom.window.fetch = baseFetch([], state(), undefined, dnaState);
+  try {
+    dom.window.eval(script);
+    await nextTurn();
+    const trigger = document.querySelector('#open-dna-inline');
+    trigger.click();
+    await nextTurn();
+    const chart = document.querySelector('#dna-chart');
+    const configuration = () => dom.window.__dnaCharts.at(-1).configuration;
+    const before = Array.from(configuration().data.datasets[0].data);
+    assert.match(chart.getAttribute('aria-label'), /Collector 53,5%/);
+    assert.equal(configuration().options.plugins.tooltip.callbacks.label({ label: 'Collector', raw: 53.5 }), 'Collector: 53,5%');
+    await dom.window.MiniPeopleI18n.setLanguage('en');
+    assert.match(chart.getAttribute('aria-label'), /Collector 53\.5%/);
+    assert.equal(configuration().options.plugins.tooltip.callbacks.label({ label: 'Collector', raw: 53.5 }), 'Collector: 53.5%');
+    assert.deepEqual(Array.from(configuration().data.datasets[0].data), before);
+    assert.equal(JSON.stringify(dnaState), original);
+    assert.equal(document.activeElement.id, 'dna-close');
+    document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    document.querySelector('#dna-dialog').dispatchEvent(new dom.window.Event('close'));
+    assert.equal(document.querySelector('#dna-dialog').open, false);
+    assert.equal(document.activeElement, trigger);
+    dom.window.fetch = baseFetch([], state(), undefined, false);
+    document.querySelector('#open-dna').click();
+    await nextTurn();
+    assert.equal(document.querySelector('#dna-retry').hidden, false);
+    assert.match(document.querySelector('#dna-status').textContent, /Unable to load DNA/);
+    await dom.window.MiniPeopleI18n.setLanguage('es');
+    assert.equal(chart.hidden, true);
+    assert.equal(document.querySelector('#dna-retry').hidden, false);
+    assert.match(document.querySelector('#dna-status').textContent, /No se pudo cargar el DNA/);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento, Newbie y foco de retorno', async () => {
   const dom = createDom();
   const document = dom.window.document;
@@ -525,7 +566,7 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
   assert.equal(centerLabel.hidden, false);
   assert.equal(document.querySelector('#dna-chart-percentage').textContent, '40,6%');
   assert.equal(document.querySelector('#dna-chart-trait').textContent, 'Fan');
-  assert.match(chart.getAttribute('aria-label'), /Fan 40\.56%/);
+  assert.match(chart.getAttribute('aria-label'), /Fan 40,56%/);
   assert.deepEqual([...document.querySelectorAll('.dna-legend-item strong:first-of-type')].map((item) => item.textContent), [
     'Fan', 'Collector', 'Explorer', 'Rarity Hunter',
   ]);

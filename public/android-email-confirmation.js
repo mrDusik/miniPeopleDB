@@ -14,16 +14,13 @@
   window.history.replaceState(null, '', window.location.pathname);
 
   const showError = () => {
-    message.textContent = 'No se pudo confirmar el email. Solicita un nuevo enlace e inténtalo otra vez.';
+    message.textContent = window.MiniPeopleI18n.t('confirmation.error');
   };
 
-  if (!handoffId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handoffId)
+  const invalid = !handoffId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handoffId)
     || !tokenHash || tokenHash.length > 2048 || type !== 'email'
     || parameterNames.some((name) => !allowedParameters.has(name))
-    || parameterNames.length !== 3 || typeof window.crypto?.subtle?.encrypt !== 'function') {
-    showError();
-    return;
-  }
+    || parameterNames.length !== 3 || typeof window.crypto?.subtle?.encrypt !== 'function';
 
   const toBase64Url = (bytes) => {
     let binary = '';
@@ -79,8 +76,23 @@
       }),
     });
     if (!response.ok) throw new Error('HANDOFF_NO_DISPONIBLE');
-    message.textContent = 'Email confirmado. Vuelve a la app Android para continuar.';
+    message.textContent = window.MiniPeopleI18n.t('confirmation.androidSuccess');
   }
 
-  void completeConfirmation().catch(showError);
+  async function start() {
+    try {
+      await window.MiniPeopleI18n.initialize();
+    } catch {
+      message.textContent = 'No se pudieron cargar las traducciones. Reintenta para continuar.';
+      const retry = document.createElement('button');
+      retry.textContent = 'Reintentar';
+      retry.addEventListener('click', () => { retry.remove(); void start(); }, { once: true });
+      message.after(retry);
+      return;
+    }
+    message.textContent = window.MiniPeopleI18n.t('confirmation.checking');
+    if (invalid) showError();
+    else await completeConfirmation().catch(showError);
+  }
+  void start();
 })();

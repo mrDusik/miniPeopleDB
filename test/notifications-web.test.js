@@ -420,8 +420,8 @@ test('renderiza las tarjetas sociales y DNA diario, firma deltas y bloquea el do
     assert.ok([...details.querySelectorAll('.daily-summary-label')].some((label) => label.textContent === 'Nivel'));
     assert.ok(details.querySelector('.daily-ranking-deltas'));
     const dailyText = details.textContent;
-    for (const value of ['Colección-2', 'Valor-3,50 €', 'Bricks+5', 'Nivel-1', 'Ranking Global+1 puestos', 'Ranking Semanal-2 puestos',
-      'Collector-1.25%', 'Explorer+2%', 'Rarity Hunter-0.5%', 'Fan+0.25%']) {
+    for (const value of ['Colección-2', 'Valor-3,50 €', 'Bricks+5', 'Nivel-1', 'Ranking Global+1 puesto', 'Ranking Semanal-2 puestos',
+      'Collector-1,25%', 'Explorer+2%', 'Rarity Hunter-0,5%', 'Fan+0,25%']) {
       assert.ok(dailyText.includes(value), `missing ${value}: ${dailyText}`);
     }
     assert.deepEqual([...details.querySelectorAll('img.daily-summary-icon')].map((image) => image.getAttribute('src')), [
