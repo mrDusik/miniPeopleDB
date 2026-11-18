@@ -45,6 +45,12 @@
 
 ## Evidencia y cierre pendiente
 
+## 7. Incorporar italiano y francés
+
+- [x] 7.1 Habilitar IT/FR en el selector, catálogo de runtime, formatos regionales y los adaptadores de pruebas; verificar el cambio de idioma y sus traducciones.
+- [x] 7.2 Ampliar la validación de perfil, el mock, el esquema Supabase y una migración incremental; verificar guardado válido, rechazo de códigos no soportados y rollback.
+- [x] 7.3 Documentar la disponibilidad y el orden de migraciones, y verificar que ambos catálogos se sirven y empaquetan para Android.
+
 - Seleccion integrada de 18 archivos: 365 pruebas, 362 correctas y tres fallos preexistentes reproducidos con los recursos de `HEAD` (`a985b8c`): orden de segmentos DNA y dos aserciones de selectores CSS en `design-system.test.js`. No se han modificado esos comportamientos ajenos al cambio ni se presenta la suite como completamente verde.
 - Los tests de catalogos verifican paridad de claves y parametros, plurales y las descripciones de los 115 logros vigentes. Los tests de perfil y migracion usan el mock compartido y PGlite. La prueba de recursos construye y comprueba el paquete Android real.
 - `npm run android:web` y `openspec validate add-interface-english --strict` ejecutados correctamente.

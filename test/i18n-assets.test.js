@@ -14,15 +14,20 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('catalogos reales tienen paridad de claves y parametros y cubren todos los logros vigentes', async () => {
-  const es = JSON.parse(await read('public/locales/es.json'));
-  const en = JSON.parse(await read('public/locales/en.json'));
+  const catalogs = Object.fromEntries(await Promise.all(['es', 'en', 'it', 'fr'].map(async (language) => [
+    language, JSON.parse(await read(`public/locales/${language}.json`)),
+  ])));
+  const { es } = catalogs;
   const parameters = (text) => [...new Set([...text.matchAll(/{{\s*(\w+)\s*}}/g)].map((match) => match[1]))].sort();
-  assert.deepEqual(Object.keys(en).sort(), Object.keys(es).sort());
+  for (const [language, catalog] of Object.entries(catalogs)) {
+    assert.deepEqual(Object.keys(catalog).sort(), Object.keys(es).sort(), language);
+  }
   assert.doesNotMatch(Object.values(es).join('\n'), /\bminifiguras?\b/i);
   for (const key of Object.keys(es)) {
-    assert.ok(typeof es[key] === 'string' && es[key].trim(), `ES: ${key}`);
-    assert.ok(typeof en[key] === 'string' && en[key].trim(), `EN: ${key}`);
-    assert.deepEqual(parameters(en[key]), parameters(es[key]), key);
+    for (const [language, catalog] of Object.entries(catalogs)) {
+      assert.ok(typeof catalog[key] === 'string' && catalog[key].trim(), `${language}: ${key}`);
+      assert.deepEqual(parameters(catalog[key]), parameters(es[key]), `${language}: ${key}`);
+    }
   }
   const covered = (key) => Object.hasOwn(es, key)
     || ['one', 'other'].every((plural) => Object.hasOwn(es, `${key}_${plural}`));
@@ -46,12 +51,14 @@ test('catalogos reales tienen paridad de claves y parametros y cubren todos los 
   for (const achievement of OBJETIVOS) {
     const key = `achievements.${achievement.id}.description`;
     assert.equal(es[key], achievement.descripcion, key);
-    assert.ok(en[key] && en[key] !== es[key], key);
-    assert.equal(Object.hasOwn(en, `achievements.${achievement.id}.name`), false);
+    for (const language of ['en', 'it', 'fr']) {
+      assert.ok(catalogs[language][key] && catalogs[language][key] !== es[key], `${language}: ${key}`);
+      assert.equal(Object.hasOwn(catalogs[language], `achievements.${achievement.id}.name`), false);
+    }
   }
 });
 
-test('plurales reales de la interfaz resuelven cero, uno y varios en ES/EN', async () => {
+test('plurales reales de la interfaz resuelven cero, uno y varios en los cuatro idiomas', async () => {
   const dom = new JSDOM('', { url: 'http://localhost/', runScripts: 'outside-only' });
   try {
     dom.window.eval(withI18n(''));
@@ -64,6 +71,14 @@ test('plurales reales de la interfaz resuelven cero, uno y varios en ES/EN', asy
     assert.equal(i18n.t('inventory.setCount', { count: 0 }), '0 minipeople in set');
     assert.equal(i18n.t('inventory.setCount', { count: 1 }), '1 miniperson in set');
     assert.equal(i18n.t('inventory.setCount', { count: 2 }), '2 minipeople in set');
+    await i18n.setLanguage('it');
+    assert.equal(i18n.t('inventory.setCount', { count: 0 }), '0 minipersone nel set');
+    assert.equal(i18n.t('inventory.setCount', { count: 1 }), '1 minipersona nel set');
+    assert.equal(i18n.t('inventory.setCount', { count: 2 }), '2 minipersone nel set');
+    await i18n.setLanguage('fr');
+    assert.equal(i18n.t('inventory.setCount', { count: 0 }), '0 minipersonne dans le set');
+    assert.equal(i18n.t('inventory.setCount', { count: 1 }), '1 minipersonne dans le set');
+    assert.equal(i18n.t('inventory.setCount', { count: 2 }), '2 minipeople dans le set');
   } finally {
     dom.window.close();
   }
@@ -72,7 +87,7 @@ test('plurales reales de la interfaz resuelven cero, uno y varios en ES/EN', asy
 test('Express entrega los catalogos y adaptador con el mismo contenido que el paquete local', async () => {
   const server = await startTestServer();
   try {
-    for (const asset of ['i18n.js', 'locales/es.json', 'locales/en.json']) {
+    for (const asset of ['i18n.js', ...['es', 'en', 'it', 'fr'].map((language) => `locales/${language}.json`)]) {
       const response = await fetch(`${server.baseUrl}/${asset}`);
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), await read(`public/${asset}`), asset);
@@ -82,12 +97,12 @@ test('Express entrega los catalogos y adaptador con el mismo contenido que el pa
   }
 });
 
-test('el paquete Android incluye traducciones ES/EN locales y carga el adaptador antes de sus consumidores', async () => {
+test('el paquete Android incluye los cuatro catálogos locales y carga el adaptador antes de sus consumidores', async () => {
   await execute(process.execPath, [fileURLToPath(new URL('scripts/build-android-web.js', root))], {
     cwd: fileURLToPath(root),
     timeout: 60000,
   });
-  for (const asset of ['i18n.js', 'locales/es.json', 'locales/en.json']) {
+  for (const asset of ['i18n.js', ...['es', 'en', 'it', 'fr'].map((language) => `locales/${language}.json`)]) {
     assert.equal(await read(`dist/android/${asset}`), await read(`public/${asset}`), asset);
   }
   assert.equal(await read('dist/android/vendor/i18next.js'),

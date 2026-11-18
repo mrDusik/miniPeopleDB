@@ -18,6 +18,16 @@ const catalogs = {
     'test.count_one': '{{count}} miniperson',
     'test.count_other': '{{count}} minipeople',
   },
+  it: {
+    'test.greeting': 'Ciao, {{username}}',
+    'test.count_one': '{{count}} minipersona',
+    'test.count_other': '{{count}} minipersone',
+  },
+  fr: {
+    'test.greeting': 'Bonjour, {{username}}',
+    'test.count_one': '{{count}} minipersonne',
+    'test.count_other': '{{count}} minipeople',
+  },
 };
 
 function createBrowser({ fetchCatalog, remembered, unavailableStorage = false } = {}) {
@@ -35,7 +45,7 @@ function createBrowser({ fetchCatalog, remembered, unavailableStorage = false } 
     Object.defineProperty(window, 'localStorage', { get() { throw new Error('Storage disabled'); } });
   }
   window.fetch = async (url) => {
-    const language = /\/(es|en)\.json$/.exec(url)?.[1];
+    const language = /\/(es|en|it|fr)\.json$/.exec(url)?.[1];
     requests.push(language);
     if (fetchCatalog) return fetchCatalog(language);
     return { ok: true, json: async () => catalogs[language] };
@@ -78,7 +88,19 @@ test('idioma inicial, plurales, respaldo diagnosticado y parametros seguros sin 
     await i18n.setLanguage('es');
     assert.equal(i18n.t('test.count', { count: 1 }), '1 minipersona');
     assert.equal(i18n.t('test.count', { count: 2 }), '2 minipersonas');
-    assert.deepEqual(requests, ['es', 'en']);
+    await i18n.setLanguage('fr');
+    assert.equal(i18n.locale, 'fr-FR');
+    assert.equal(window.document.documentElement.lang, 'fr');
+    assert.equal(i18n.formatNumber(12345.6), '12\u202f345,6');
+    assert.equal(i18n.t('test.greeting', { username: 'Collectionneur' }), 'Bonjour, Collectionneur');
+    assert.equal(i18n.t('missing.key'), 'Impossible d’afficher ce texte.');
+    await i18n.setLanguage('it');
+    assert.equal(i18n.locale, 'it-IT');
+    assert.equal(window.document.documentElement.lang, 'it');
+    assert.equal(i18n.formatNumber(12345.6), '12.345,6');
+    assert.equal(i18n.t('test.greeting', { username: 'Collezionista' }), 'Ciao, Collezionista');
+    assert.equal(i18n.t('missing.key'), 'Impossibile visualizzare questo testo.');
+    assert.deepEqual(requests, ['es', 'en', 'fr', 'it']);
   } finally {
     dom.window.close();
   }
@@ -106,7 +128,7 @@ test('un fallo de recursos no aplica ni recuerda ingles y permite reintentar sin
     await i18n.setLanguage('en', { remember: true });
     assert.equal(i18n.language, 'en');
     assert.equal(requests.filter((language) => language === 'es').length, 1);
-    await assert.rejects(i18n.setLanguage('fr'), /IDIOMA_NO_SOPORTADO/);
+    await assert.rejects(i18n.setLanguage('de'), /IDIOMA_NO_SOPORTADO/);
     assert.equal(i18n.language, 'en');
   } finally {
     dom.window.close();
@@ -150,7 +172,7 @@ test('preparacion no cambia idioma y una carga antigua no sustituye la cuenta ac
 test('preferencia recordada valida y storage bloqueado no impiden usar el perfil', async () => {
   const remembered = createBrowser({ remembered: 'en' });
   const blocked = createBrowser({ unavailableStorage: true });
-  const invalid = createBrowser({ remembered: 'fr' });
+  const invalid = createBrowser({ remembered: 'de' });
   try {
     await remembered.i18n.initialize();
     assert.equal(remembered.i18n.language, 'en');

@@ -223,7 +223,7 @@ function makeNativeAuth({ launchUrl = null } = {}) {
   };
 }
 
-test('idioma ES/EN se confirma al guardar sin perder filtros, contenido externo ni foco', async () => {
+test('idioma se confirma al guardar sin perder filtros, contenido externo ni foco', async () => {
   let rejectSave = false;
   const { dom, window, $, requests } = startApp({
     fetchImpl: async (url, init) => {
@@ -252,8 +252,8 @@ test('idioma ES/EN se confirma al guardar sin perder filtros, contenido externo 
     open();
     assert.equal($('#profile-language').querySelector('[value="es"]').disabled, false);
     assert.equal($('#profile-language').querySelector('[value="en"]').disabled, false);
-    assert.equal($('#profile-language').querySelector('[value="it"]').disabled, true);
-    assert.equal($('#profile-language').querySelector('[value="fr"]').disabled, true);
+    assert.equal($('#profile-language').querySelector('[value="it"]').disabled, false);
+    assert.equal($('#profile-language').querySelector('[value="fr"]').disabled, false);
     assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, true);
     assert.equal(window.document.querySelectorAll('#profile-language').length, 1);
     $('#profile-language').value = 'en';
@@ -296,6 +296,20 @@ test('idioma ES/EN se confirma al guardar sin perder filtros, contenido externo 
     assert.equal($('#catalog-body .badge').getAttribute('aria-label'), 'Colección');
     assert.equal($('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 2 sin leer');
     assert.deepEqual(sourceFields(), before);
+    for (const [language, italianLabel, frenchLabel] of [
+      ['it', 'Italiano', 'Francese'],
+      ['fr', 'Italien', 'Français'],
+    ]) {
+      open();
+      assert.equal($('#profile-language').querySelector('[value="it"]').textContent, 'Italiano');
+      $('#profile-language').value = language;
+      save();
+      await waitFor(() => window.document.documentElement.lang === language);
+      open();
+      assert.equal($('#profile-language').querySelector('[value="it"]').textContent, italianLabel);
+      assert.equal($('#profile-language').querySelector('[value="fr"]').textContent, frenchLabel);
+      $('#user-profile-close').click();
+    }
   } finally {
     dom.window.close();
   }
@@ -378,7 +392,7 @@ test('un perfil EN inicia la app en ingles y localiza logros y avisos historicos
     const achievement = window.eval('createAchievementItem(achievementSource)');
     window.document.body.append(achievement);
     assert.equal(achievement.querySelector('.achievement-name').textContent, 'Block by block');
-    assert.equal(achievement.querySelector('.achievement-description').textContent, 'You have added a miniperson');
+    assert.equal(achievement.querySelector('.achievement-description').textContent, "You've added a miniperson");
     window.historicalSource = { type: 'ranking_entered', data: { ranking: 'global', position: 8, message: 'Mensaje histórico español que no debe interpretarse.' } };
     const historical = JSON.stringify(window.historicalSource);
     const notification = window.eval('renderNotificationMessage(historicalSource)');

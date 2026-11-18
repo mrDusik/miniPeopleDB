@@ -27,7 +27,7 @@ npm ci
 npm run android:apk
 ```
 
-El build prepara los recursos locales de `public/`, copia los bundles locales de Supabase JS, Chart.js e i18next junto a los catálogos ES/EN, registra el deep link Android y compila el APK debug. El backend se configura con la URL HTTPS confirmada `https://minipeopledb.onrender.com`. Para usar otro origen en un entorno autorizado, se puede sustituir al compilar:
+El build prepara los recursos locales de `public/`, copia los bundles locales de Supabase JS, Chart.js e i18next junto a los catálogos ES/EN/IT/FR, registra el deep link Android y compila el APK debug. El backend se configura con la URL HTTPS confirmada `https://minipeopledb.onrender.com`. Para usar otro origen en un entorno autorizado, se puede sustituir al compilar:
 
 ```sh
 ANDROID_API_BASE_URL="https://tu-backend.example" npm run android:apk
@@ -52,18 +52,21 @@ El APK se firma con la clave debug local de Android. No compartas esa clave ni l
 
 ## Idioma
 
-Onboarding y Preferencias reutilizan el selector de Español/Inglés de la web.
+Onboarding y Preferencias reutilizan el selector de Español, Inglés, Italiano y Francés de la web.
 El idioma cambia tras guardar el perfil y se recupera desde Supabase en futuras
 sesiones. La aplicación conserva solo el código confirmado en almacenamiento
 local para las pantallas sin sesión; el perfil activo tiene prioridad. No se
 traduce contenido de Brickset ni nombres de logros; sus descripciones sí.
 Los importes siguen siendo EUR, sin conversión de moneda.
 
-Antes de probar el guardado en inglés en una base existente, aplica
-`supabase/interface-languages.sql` en el proyecto autorizado y despliega el
-backend con validación ES/EN. No basta con habilitar el selector en el APK.
+En una base existente, aplica en orden
+`supabase/interface-languages.sql` y
+`supabase/interface-languages-italian-french.sql` en el proyecto autorizado y
+despliega el backend con validación de los cuatro idiomas. No basta con habilitar
+el selector en el APK.
 `npm run android:web` prepara `dist/android/locales/es.json`,
-`dist/android/locales/en.json`, `dist/android/i18n.js` y
+`dist/android/locales/en.json`, `dist/android/locales/it.json`,
+`dist/android/locales/fr.json`, `dist/android/i18n.js` y
 `dist/android/vendor/i18next.js`. Verifica su presencia antes de sincronizar
 Capacitor. No se necesita un CDN para traducir, pero las operaciones de datos
 siguen requiriendo conexión.

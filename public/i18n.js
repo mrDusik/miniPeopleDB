@@ -1,6 +1,12 @@
 (() => {
-  const supportedLanguages = new Set(['es', 'en']);
-  const locales = { es: 'es-ES', en: 'en-GB' };
+  const supportedLanguages = new Set(['es', 'en', 'it', 'fr']);
+  const locales = { es: 'es-ES', en: 'en-GB', it: 'it-IT', fr: 'fr-FR' };
+  const unavailableMessages = {
+    es: 'No se pudo mostrar este texto.',
+    en: 'This text is unavailable.',
+    it: 'Impossibile visualizzare questo testo.',
+    fr: 'Impossible d’afficher ce texte.',
+  };
   const storageKey = 'minipeople.language';
   const pendingCatalogs = new Map();
   const diagnostics = new Set();
@@ -81,7 +87,7 @@
     if (language !== 'es' && engine?.exists(key, { ...options, lng: 'es' })) {
       return engine.t(key, { ...options, lng: 'es' });
     }
-    return language === 'en' ? 'This text is unavailable.' : 'No se pudo mostrar este texto.';
+    return unavailableMessages[language];
   }
 
   function applyStatic(root = document) {

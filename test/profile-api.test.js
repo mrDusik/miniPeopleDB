@@ -11,7 +11,7 @@ const PROFILE = {
   favoriteCategories: ['Castle', 'Space'],
 };
 
-test('el perfil guarda ES/EN y rechaza idiomas o monedas no soportados sin cambios parciales', async () => {
+test('el perfil guarda los cuatro idiomas y rechaza idiomas o monedas no soportados sin cambios parciales', async () => {
   const mock = createSupabaseMock({ users: { [TEST_TOKEN]: TEST_USER, [OTHER_TOKEN]: OTHER_USER } });
   mock.seed('user_profiles', OTHER_USER.id, [{ username: 'OtherFan', language: 'es', onboarding_completed: true }]);
   const context = await startTestServer({ supabase: mock });
@@ -19,14 +19,14 @@ test('el perfil guarda ES/EN y rechaza idiomas o monedas no soportados sin cambi
     method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(profile),
   });
   try {
-    for (const language of ['en', 'es', 'en']) {
+    for (const language of ['it', 'fr', 'es', 'en']) {
       const response = await save({ ...PROFILE, language });
       assert.equal(response.status, 200);
       assert.equal((await response.json()).language, language);
       assert.equal((await (await authFetch()(`${context.baseUrl}/api/profile`)).json()).language, language);
     }
     for (const invalid of [
-      ...['it', 'fr', 'EN', '', null, 1, {}, ['en']].map((language) => ({ language })),
+      ...['de', 'EN', '', null, 1, {}, ['en']].map((language) => ({ language })),
       { currency: 'USD' }, { username: 'ChangedName' },
     ]) {
       const response = await save({ ...PROFILE, ...invalid, favoriteCategories: ['Space'] });

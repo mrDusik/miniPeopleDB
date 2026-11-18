@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Permitir el uso completo de la interfaz propia en espanol e ingles, preservando el contenido original del catalogo, los nombres de logros y los contratos de datos existentes.
+Permitir el uso completo de la interfaz propia en espanol, ingles, italiano y frances, preservando el contenido original del catalogo, los nombres de logros y los contratos de datos existentes.
 
 ## ADDED Requirements
 
-### Requirement: Ofrecer cobertura completa de interfaz en espanol e ingles
+### Requirement: Ofrecer cobertura completa de interfaz en los cuatro idiomas
 
-La aplicacion SHALL ofrecer los idiomas `es` y `en` para todos los textos propios visibles y accesibles de acceso, registro, recuperacion y cambio de contrasena, onboarding, preferencias, inventario, filtros, formularios, rankings, amigos, perfiles, DNA, historico, contacto, notificaciones dentro de la aplicacion y toasts. SHALL incluir encabezados, opciones, estados de carga/vacio/error, validaciones, confirmaciones, leyendas y tooltips de graficos, etiquetas de iconos, placeholders, titulos y textos alternativos significativos. Las paginas propias de confirmacion de email web y Android SHALL usar la misma politica de idioma y respaldo. Los nombres de marca y el contenido explicitamente excluido SHALL conservarse.
+La aplicacion SHALL ofrecer los idiomas `es`, `en`, `it` y `fr` para todos los textos propios visibles y accesibles de acceso, registro, recuperacion y cambio de contrasena, onboarding, preferencias, inventario, filtros, formularios, rankings, amigos, perfiles, DNA, historico, contacto, notificaciones dentro de la aplicacion y toasts. SHALL incluir encabezados, opciones, estados de carga/vacio/error, validaciones, confirmaciones, leyendas y tooltips de graficos, etiquetas de iconos, placeholders, titulos y textos alternativos significativos. Las paginas propias de confirmacion de email web y Android SHALL usar la misma politica de idioma y respaldo. Los nombres de marca y el contenido explicitamente excluido SHALL conservarse.
 
-Los literales espanoles de otras especificaciones SHALL entenderse como la presentacion en `es`; en `en` SHALL mostrarse su equivalente, sin cambiar la accion ni las reglas asociadas. Esta regla SHALL NOT traducir identificadores ni textos explicitamente excluidos. Los emails de proveedores, sus pantallas externas, los dialogos nativos del sistema y el texto de push fuera de la app quedan fuera de esta capacidad.
+Los literales espanoles de otras especificaciones SHALL entenderse como la presentacion en `es`; en `en`, `it` y `fr` SHALL mostrarse su equivalente, sin cambiar la accion ni las reglas asociadas. Esta regla SHALL NOT traducir identificadores ni textos explicitamente excluidos. Los emails de proveedores, sus pantallas externas, los dialogos nativos del sistema y el texto de push fuera de la app quedan fuera de esta capacidad.
 
 #### Scenario: Recorrer la app en ingles
 - **WHEN** una persona con idioma `en` usa las pantallas, modales y acciones disponibles de la aplicacion
@@ -68,7 +68,7 @@ La seleccion del formulario SHALL aplicarse globalmente y recordarse solo tras g
 
 ### Requirement: Mantener traducciones completas con respaldo observable
 
-Los textos propios SHALL resolverse mediante claves estables y catalogos separados por idioma, con frases completas, parametros nombrados y pluralizacion del idioma seleccionado. Los catalogos ES/EN SHALL cubrir las mismas claves y parametros requeridos, incluidas las descripciones de todos los logros vigentes. Las pruebas SHALL fallar ante claves o parametros requeridos ausentes. Si falta una traduccion inglesa en ejecucion, SHALL mostrarse el equivalente espanol y emitirse un diagnostico con la clave y el idioma, sin datos de usuario. Si tampoco existe texto espanol, SHALL mostrarse un mensaje generico localizado y diagnosticarse el fallo, nunca mostrar una clave tecnica al usuario.
+Los textos propios SHALL resolverse mediante claves estables y catalogos separados por idioma, con frases completas, parametros nombrados y pluralizacion del idioma seleccionado. Los catalogos ES/EN/IT/FR SHALL cubrir las mismas claves y parametros requeridos, incluidas las descripciones de todos los logros vigentes. Las pruebas SHALL fallar ante claves o parametros requeridos ausentes. Si falta una traduccion en ejecucion, SHALL mostrarse el equivalente espanol y emitirse un diagnostico con la clave y el idioma, sin datos de usuario. Si tampoco existe texto espanol, SHALL mostrarse un mensaje generico localizado y diagnosticarse el fallo, nunca mostrar una clave tecnica al usuario.
 
 #### Scenario: Singular y plural
 - **WHEN** un contador representa cero, una o varias minipersonas
@@ -88,7 +88,7 @@ Los textos propios SHALL resolverse mediante claves estables y catalogos separad
 
 ### Requirement: Localizar la presentacion sin alterar contratos o magnitudes
 
-La interfaz SHALL presentar fechas, horas, cantidades, porcentajes y moneda conforme a `es-ES` o `en-GB` segun el idioma elegido. SHALL conservar importes y moneda EUR, precision de negocio, orden cronologico, zona horaria funcional y calculos de semanas/fechas existentes. Los valores canonicos de formularios, filtros y peticiones, incluidos `COLECCIÓN` y `BUSCADA`, SHALL permanecer inalterados aunque sus etiquetas se traduzcan. La ordenacion por texto visible SHALL usar el idioma activo sin cambiar comparaciones numericas ni la normalizacion de las busquedas.
+La interfaz SHALL presentar fechas, horas, cantidades, porcentajes y moneda conforme a `es-ES`, `en-GB`, `it-IT` o `fr-FR` segun el idioma elegido. SHALL conservar importes y moneda EUR, precision de negocio, orden cronologico, zona horaria funcional y calculos de semanas/fechas existentes. Los valores canonicos de formularios, filtros y peticiones, incluidos `COLECCIÓN` y `BUSCADA`, SHALL permanecer inalterados aunque sus etiquetas se traduzcan. La ordenacion por texto visible SHALL usar el idioma activo sin cambiar comparaciones numericas ni la normalizacion de las busquedas.
 
 #### Scenario: Formatos locales
 - **WHEN** la interfaz muestra el porcentaje 10.6 y un importe de 1234.5 EUR
@@ -119,7 +119,7 @@ Los errores, estados y avisos propios provenientes del backend SHALL localizarse
 
 ### Requirement: Conservar accesibilidad y distribucion en web y Android
 
-El documento SHALL declarar el idioma activo mediante `lang`. Actualizar textos SHALL preservar el foco, las asociaciones de etiquetas, la semantica de controles, la seguridad del renderizado y los valores editados. Los textos en ambos idiomas SHALL caber en los disenos de escritorio y smartphone sin solaparse ni ocultar acciones. Los recursos de traduccion SHALL distribuirse con la aplicacion web y el paquete Android, sin depender de CDN ni servicios externos de traduccion.
+El documento SHALL declarar el idioma activo mediante `lang`. Actualizar textos SHALL preservar el foco, las asociaciones de etiquetas, la semantica de controles, la seguridad del renderizado y los valores editados. Los textos en ambos idiomas SHALL caber en los disenos de escritorio y smartphone sin solaparse ni ocultar acciones. Los cuatro recursos de traduccion SHALL distribuirse con la aplicacion web y el paquete Android, sin depender de CDN ni servicios externos de traduccion.
 
 #### Scenario: Cambio accesible
 - **WHEN** se aplica ingles despues de guardar las preferencias
@@ -128,5 +128,5 @@ El documento SHALL declarar el idioma activo mediante `lang`. Actualizar textos 
 
 #### Scenario: Paquete Android
 - **WHEN** se generan e instalan los recursos web de Android
-- **THEN** incluyen la libreria y los catalogos ES/EN y resuelven sus rutas desde el origen local de Capacitor
+- **THEN** incluyen la libreria y los catalogos ES/EN/IT/FR y resuelven sus rutas desde el origen local de Capacitor
 - **AND** las traducciones no requieren descargar recursos de un tercero

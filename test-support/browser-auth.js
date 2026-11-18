@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 const i18nextScript = readFileSync(new URL('../node_modules/i18next/dist/umd/i18next.min.js', import.meta.url), 'utf8');
 const i18nScript = readFileSync(new URL('../public/i18n.js', import.meta.url), 'utf8');
-const translationCatalogs = Object.fromEntries(['es', 'en'].map((language) => [
+const translationCatalogs = Object.fromEntries(['es', 'en', 'it', 'fr'].map((language) => [
   language, JSON.parse(readFileSync(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8')),
 ]));
 
@@ -194,7 +194,7 @@ export function withI18n(appScript) {
     const fetchResource = window.fetch;
     window.fetch = async (url, init) => {
       const path = new URL(url, window.location.href).pathname;
-      const match = /^\\/locales\\/(es|en)\\.json$/.exec(path);
+      const match = /^\\/locales\\/(es|en|it|fr)\\.json$/.exec(path);
       if (match) return { ok: true, json: async () => catalogs[match[1]] };
       return fetchResource(url, init);
     };

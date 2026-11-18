@@ -24,23 +24,25 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 ### Idioma de la interfaz
 
 El selector existente de **Idioma** en onboarding y **Preferencias** permite
-elegir Español o Inglés. El cambio se aplica tras guardar correctamente el
-perfil, sin recargar la página ni descartar filtros. Cancelar o fallar el
-guardado conserva el idioma confirmado. Italiano y Francés siguen como opciones
-futuras deshabilitadas; la única moneda habilitada sigue siendo EUR.
+elegir Español, Inglés, Italiano o Francés. El cambio se aplica tras guardar
+correctamente el perfil, sin recargar la página ni descartar filtros. Cancelar
+o fallar el guardado conserva el idioma confirmado. La única moneda habilitada
+sigue siendo EUR.
 
 El perfil de Supabase conserva la preferencia entre dispositivos. Sin perfil se
 usa el último idioma confirmado en ese navegador, o español en la primera visita,
-sin detección automática del navegador. La preferencia local contiene solo `es`
-o `en`; el perfil de la cuenta activa tiene prioridad. Las páginas propias de
-confirmación de email siguen esa preferencia local sin modificar sus enlaces.
+sin detección automática del navegador. La preferencia local contiene solo `es`,
+`en`, `it` o `fr`; el perfil de la cuenta activa tiene prioridad. Las páginas
+propias de confirmación de email siguen esa preferencia local sin modificar sus
+enlaces.
 
-Los catálogos locales `public/locales/es.json` y `public/locales/en.json` usan
-claves semánticas, parámetros nombrados y plurales de i18next. El motor y los
+Los catálogos locales `public/locales/es.json`, `en.json`, `it.json` y `fr.json`
+usan claves semánticas, parámetros nombrados y plurales de i18next. El motor y los
 catálogos se sirven localmente, también en Android, sin CDN ni traducción
-automática. Una traducción inglesa ausente usa español con un diagnóstico;
+automática. Una traducción ausente usa español con un diagnóstico;
 los fallos de carga se muestran y permiten reintentar. Las fechas y cantidades
-usan `es-ES` o `en-GB`, sin convertir importes ni cambiar las reglas de fechas.
+usan `es-ES`, `en-GB`, `it-IT` o `fr-FR`, sin convertir importes ni cambiar
+las reglas de fechas.
 
 **Exclusiones:** los datos extraídos de Brickset y los nombres originales de los
 logros no se traducen. Las descripciones inferiores de los logros sí se traducen.
@@ -49,14 +51,15 @@ Los emails/pantallas de proveedores, diálogos nativos y el texto de push fuera 
 la aplicación quedan fuera; los avisos dentro de la bandeja sí se traducen.
 
 **Despliegue:** en una base existente, aplicar primero
-`supabase/interface-languages.sql` en el SQL Editor del proyecto autorizado,
-antes de desplegar backend, frontend o APK con inglés. Es una migración
-transaccional y reejecutable que amplía únicamente la restricción de idiomas,
-sin reescribir perfiles ni modificar RLS o permisos. Las instalaciones nuevas
-ya lo incluyen en `supabase/schema.sql`. Los archivos locales no migran Supabase
-remoto automáticamente. Para retirar temporalmente inglés, deshabilitar su
-selección manteniendo la validación ES/EN: no volver a una restricción solo ES
-ni a un backend que rechace perfiles EN mientras existan usuarios con ese idioma.
+`supabase/interface-languages.sql` y después
+`supabase/interface-languages-italian-french.sql` en el SQL Editor del proyecto
+autorizado, antes de desplegar backend, frontend o APK con los idiomas nuevos.
+Ambas migraciones son transaccionales y reejecutables; solo amplían la restricción
+de idiomas, sin reescribir perfiles ni modificar RLS o permisos. Las instalaciones
+nuevas ya lo incluyen en `supabase/schema.sql`. Los archivos locales no migran
+Supabase remoto automáticamente. Para retirar temporalmente un idioma, deshabilitar
+su selección manteniendo la validación de los cuatro códigos ya soportados: no
+volver a una restricción o backend que rechace perfiles existentes.
 
 ### Sistema visual de bloques
 

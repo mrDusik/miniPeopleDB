@@ -1007,6 +1007,9 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
     const migration = await readFile(new URL('../supabase/interface-languages.sql', import.meta.url), 'utf8');
     await db.exec(migration);
     await db.exec(migration);
+    const extendedMigration = await readFile(new URL('../supabase/interface-languages-italian-french.sql', import.meta.url), 'utf8');
+    await db.exec(extendedMigration);
+    await db.exec(extendedMigration);
     assert.deepEqual((await db.query('select language from public.user_profiles order by user_id')).rows, [
       { language: 'es' }, { language: 'es' },
     ]);
@@ -1032,7 +1035,16 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
       'Collector_1', 'https://custom.example/avatar.png', 'EUR', 'en', ['Castle', 'Space'],
     ]);
     assert.equal((await db.query('select language from public.user_profiles')).rows[0].language, 'en');
-    for (const language of ['it', 'fr', 'EN', '', null]) {
+    for (const language of ['it', 'fr']) {
+      await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+        'Collector_1', 'https://custom.example/avatar.png', 'EUR', language, ['Castle', 'Space'],
+      ]);
+      assert.equal((await db.query('select language from public.user_profiles')).rows[0].language, language);
+    }
+    await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', 'https://custom.example/avatar.png', 'EUR', 'en', ['Castle', 'Space'],
+    ]);
+    for (const language of ['de', 'EN', '', null]) {
       await assert.rejects(db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
         'Collector_1', 'https://changed.example/avatar.png', 'EUR', language, ['Pirates'],
       ]), /constraint|null/i);
