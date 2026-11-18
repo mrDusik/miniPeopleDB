@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MinifigurasRepository } from '../src/minifiguras-repository.js';
+import { BricksetScraper } from '../src/brickset-scraper.js';
 import { categoriasMock, categoriasMockRaw } from '../test-support/fixtures.js';
 import {
   OTHER_TOKEN,
@@ -1104,6 +1105,46 @@ test('el repositorio no permite operar sin catálogo oficial de temas', async ()
   );
 });
 
+test('GET /valoracion/tipo-cambio usa la cotizacion BCE autenticada y no la cachea en el cliente', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    exchangeRateFetchImpl: async () => {
+      requests += 1;
+      return new Response('<Cube time="2026-11-18"><Cube currency="USD" rate="1.12"/></Cube>');
+    },
+  });
+
+  await withServerOptions('[]', { scraper }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/valoracion/tipo-cambio`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), {
+      baseCurrency: 'EUR',
+      quoteCurrency: 'USD',
+      rate: 1.12,
+      referenceDate: '2026-11-18',
+    });
+
+    const second = await fetch(`${baseUrl}/valoracion/tipo-cambio`);
+    assert.equal(second.status, 200);
+    assert.equal(requests, 1);
+    assert.equal((await fetch(`${baseUrl}/valoracion/tipo-cambio?ignored=1`)).status, 400);
+    assert.equal((await fetch(`${baseUrl}/valoracion/tipo-cambio`, { method: 'POST' })).status, 405);
+  });
+});
+
+test('GET /valoracion/tipo-cambio informa indisponibilidad BCE con error controlado', async () => {
+  const scraper = new BricksetScraper({
+    exchangeRateFetchImpl: async () => new Response('<Cube/>'),
+  });
+
+  await withServerOptions('[]', { scraper }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/valoracion/tipo-cambio`);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'TIPO_CAMBIO_NO_DISPONIBLE' });
+  });
+});
+
 test('las rutas de datos exigen autenticacion y /categorias sigue publica', async () => {
   await withServer(JSON.stringify([makeMinifigura({ id: 'a' })]), async (baseUrl) => {
     for (const [path, method] of [
@@ -1115,6 +1156,7 @@ test('las rutas de datos exigen autenticacion y /categorias sigue publica', asyn
       ['/minifiguras/a/brickset', 'GET'],
       ['/gamificacion', 'GET'],
       ['/valoracion', 'GET'],
+      ['/valoracion/tipo-cambio', 'GET'],
       ['/valor-total', 'GET'],
       ['/sincronizacion/brickset', 'POST'],
     ]) {

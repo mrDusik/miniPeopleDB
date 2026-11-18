@@ -24,10 +24,10 @@ El proyecto se desarrolla con **Spec-Driven Development**: los requisitos se man
 ### Idioma de la interfaz
 
 El selector existente de **Idioma** en onboarding y **Preferencias** permite
-elegir Español, Inglés, Italiano o Francés. El cambio se aplica tras guardar
+elegir Español, Inglés, Italiano o Francés. La moneda admite EUR y USD, y EUR
+sigue siendo la opción predeterminada. Los cambios se aplican tras guardar
 correctamente el perfil, sin recargar la página ni descartar filtros. Cancelar
-o fallar el guardado conserva el idioma confirmado. La única moneda habilitada
-sigue siendo EUR.
+o fallar el guardado conserva las preferencias confirmadas.
 
 El perfil de Supabase conserva la preferencia entre dispositivos. Sin perfil se
 usa el último idioma confirmado en ese navegador, o español en la primera visita,
@@ -149,7 +149,12 @@ Diferencia; Imagen, Seguimiento, Estado y Acciones no son ordenables.
 Cada cabecera ordenable muestra su flecha roja a la derecha;
 un segundo clic invierte el orden y Reestablecer recupera el orden inicial.
 
-Todos los importes se expresan exclusivamente en Euros (€). Cada minifigura puede incluir en su raíz:
+Los campos `precio` y `precioCompra`, la API y los resúmenes se almacenan y
+expresan en EUR. La preferencia del perfil solo controla la presentación: con
+USD se convierte cada importe para mostrarlo usando la cotización diaria BCE
+(USD por EUR), sin reescribir los valores guardados. Los precios de compra
+introducidos en USD se convierten a EUR y se redondean a céntimos al guardar.
+Cada minifigura puede incluir en su raíz:
 
 * `precioCompra`: precio pagado, opcional y no negativo.
 * `fechaCompra`: fecha opcional con formato `YYYY-MM-DD`; cuando se edita en el modal no puede ser posterior a hoy (fecha local del navegador).
@@ -157,7 +162,17 @@ Todos los importes se expresan exclusivamente en Euros (€). Cada minifigura pu
 
 El valor total solo incluye figuras `COLECCIÓN`. Para cada una se prioriza `precio` y se usa `precioCompra` como alternativa cuando no hay precio de Brickset. Las figuras `BUSCADA` se contabilizan, pero no contribuyen al total ni a los rankings.
 
-La consulta usa scraping/fetch directo de `https://brickset.com/minifigs/<ID>` y extrae `Current Value - New`. Si una consulta falla, se conserva el precio anterior.
+El cliente obtiene la cotización mediante `GET /valoracion/tipo-cambio`, una
+ruta autenticada sin caché HTTP que reutiliza la cotización BCE del scraper
+(caché de 24 horas). Si no hay una cotización válida, la interfaz informa el
+fallo y permite reintentar; no etiqueta importes EUR como USD ni guarda una
+entrada USD sin convertir. La consulta Brickset usa scraping/fetch directo de
+`https://brickset.com/minifigs/<ID>` y extrae `Current Value - New`. Si una
+consulta falla, se conserva el precio anterior.
+
+Antes de desplegar código que permita guardar la moneda USD, aplica la
+migración reejecutable `supabase/profile-currency-usd.sql`. Esta conserva EUR
+como valor predeterminado y no modifica precios existentes.
 
 Las consultas de metadatos del modal reutilizan una cache en memoria del backend durante cinco minutos, con un maximo de 500 figuras y desalojo de la menos consultada recientemente. El ID se normaliza sin distinguir mayusculas y espacios exteriores; las consultas simultaneas del mismo ID se agrupan cuando no tienen cancelacion independiente. Solo se guardan respuestas completas y correctas de datos publicos de Brickset, incluido su precio EUR; no se guardan errores ni datos privados del usuario. La categoria se sigue validando contra el catalogo local en cada respuesta. La sincronizacion de precios no usa esta cache y conserva sus consultas frescas y limites de peticiones. La primera consulta de un ID nuevo sigue dependiendo de Brickset; la cache se vacia al reiniciar el backend y no requiere migracion de base de datos.
 

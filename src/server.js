@@ -69,7 +69,7 @@ const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.
 const publicDirectory = resolve(projectRoot, 'public');
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
-const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/push\/registrations(?:\/[^/]+)?|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
+const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion(?:\/tipo-cambio)?|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/push\/registrations(?:\/[^/]+)?|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONTACT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_MESSAGE_MAX_LENGTH = 1000;
@@ -1661,6 +1661,29 @@ export function createServer({
           return;
         }
         sendJson(response, 500, { error: 'ERROR_INTERNO' });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === '/valoracion/tipo-cambio') {
+      response.setHeader('cache-control', 'no-store');
+      if (request.method !== 'GET') {
+        response.setHeader('allow', 'GET');
+        sendJson(response, 405, { error: 'METODO_NO_PERMITIDO' });
+        return;
+      }
+      if (requestUrl.search || await hasRequestBody(request)) {
+        sendJson(response, 400, { error: 'PARAMETRO_INVALIDO' });
+        return;
+      }
+      try {
+        sendJson(response, 200, await brickset.getExchangeRate());
+      } catch (error) {
+        if (error instanceof BricksetPriceError && error.code === 'BRICKSET_TIPO_CAMBIO_NO_DISPONIBLE') {
+          sendJson(response, 503, { error: 'TIPO_CAMBIO_NO_DISPONIBLE' });
+        } else {
+          sendJson(response, 500, { error: 'ERROR_INTERNO' });
+        }
       }
       return;
     }

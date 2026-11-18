@@ -260,7 +260,7 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
     if (avatarUrl && !/^https?:\/\//i.test(avatarUrl)) {
       return { data: null, error: { code: '23514', message: 'AVATAR_URL_INVALIDA' } };
     }
-    if (currency !== 'EUR' || !['es', 'en', 'it', 'fr'].includes(language) || !Array.isArray(favorites) || favorites.length > 3) {
+    if (!['EUR', 'USD'].includes(currency) || !['es', 'en', 'it', 'fr'].includes(language) || !Array.isArray(favorites) || favorites.length > 3) {
       return { data: null, error: { code: '23514', message: 'PERFIL_INVALIDO' } };
     }
 

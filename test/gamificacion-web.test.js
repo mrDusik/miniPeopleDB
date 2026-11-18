@@ -556,7 +556,8 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
   assert.equal(document.querySelector('#open-dna-inline').getAttribute('aria-label'), 'Abrir DNA: 40,6% Fan');
   const instance = dom.window.__dnaCharts.at(-1);
   assert.equal(instance.configuration.type, 'doughnut');
-  assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [10, 20, 30, 40.56]);
+  assert.deepEqual(Array.from(instance.configuration.data.labels), ['Collector', 'Explorer', 'Fan', 'Rarity Hunter']);
+  assert.deepEqual(Array.from(instance.configuration.data.datasets[0].data), [30, 20, 40.56, 10]);
   assert.equal(instance.configuration.options.plugins.tooltip.callbacks.label({ label: 'Fan', raw: 40.56 }), 'Fan: 40,56%');
   const centerLabel = document.querySelector('#dna-chart .dna-chart-label');
   assert.equal(centerLabel.hidden, false);
@@ -575,10 +576,10 @@ test('el dialogo DNA representa proporciones con un decimal, leyenda, reintento,
     'dna-swatch dna-swatch-fan', 'dna-swatch dna-swatch-collector', 'dna-swatch dna-swatch-explorer', 'dna-swatch dna-swatch-rarity',
   ]);
   assert.equal(document.querySelector('#dna-status').parentElement, document.querySelector('#dna-legend').parentElement);
-  assert.match(document.querySelector('#dna-legend').textContent, /Busca piezas raras y valiosas/);
-  assert.match(document.querySelector('#dna-legend').textContent, /Descubre categorías y subcategorías/);
-  assert.match(document.querySelector('#dna-legend').textContent, /Amplía y completa la colección/);
-  assert.match(document.querySelector('#dna-legend').textContent, /afinidad por temáticas/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Persigues piezas raras y valiosas/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Abres nuevas rutas entre categorías/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Amplías tu colección y completas series/);
+  assert.match(document.querySelector('#dna-legend').textContent, /Sigues tus temáticas favoritas/);
   document.querySelector('#dna-close').click();
   dialog.dispatchEvent(new dom.window.Event('close'));
   assert.equal(dialog.open, false);

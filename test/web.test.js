@@ -872,7 +872,7 @@ test('la pagina referencia los modales, las acciones por fila y el contenedor de
     assert.equal(details.children[3].className, 'summary-sync-row');
     assert.equal(details.children[3].querySelector('.collection-value img').getAttribute('src'), '/toast_images/billete.png');
     assert.equal(details.children[3].querySelector('.collection-value img').title, 'Valor total de tu colección');
-    assert.equal(details.children[3].querySelector('#collection-total').textContent, '€0,00');
+    assert.equal(details.children[3].querySelector('#collection-total').textContent, '0,00');
     assert.equal(details.children[3].children[0].id, 'sync-prices');
     assert.equal(details.children[3].children[1].className, 'collection-total-group');
     assert.equal(details.children[3].querySelector('#collection-total-updated').textContent, '');

@@ -254,7 +254,7 @@ test('idioma se confirma al guardar sin perder filtros, contenido externo ni foc
     assert.equal($('#profile-language').querySelector('[value="en"]').disabled, false);
     assert.equal($('#profile-language').querySelector('[value="it"]').disabled, false);
     assert.equal($('#profile-language').querySelector('[value="fr"]').disabled, false);
-    assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, true);
+    assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, false);
     assert.equal(window.document.querySelectorAll('#profile-language').length, 1);
     $('#profile-language').value = 'en';
     assert.equal(window.document.documentElement.lang, 'es');
@@ -1454,7 +1454,7 @@ test('onboarding guarda perfil y favoritos antes de iniciar la colección', asyn
   assert.equal($('#user-profile-dialog-title').textContent, 'Completa tu perfil');
   assert.equal($('#profile-username').disabled, false);
   assert.equal($('#profile-favorite-categories').querySelectorAll('input').length, 10);
-  assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, true);
+  assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, false);
   assert.equal($('#profile-language').querySelector('[value="en"]').disabled, false);
 
   $('#profile-username').value = 'Space_Fan7';
@@ -1478,6 +1478,127 @@ test('onboarding guarda perfil y favoritos antes de iniciar la colección', asyn
   assert.equal($('#user-profile-dialog').open, false);
   assert.equal($('.page-shell').hidden, false);
   assert.equal(requests.filter(({ url }) => url === '/api/profile').length, 2);
+  dom.window.close();
+});
+
+test('la preferencia USD se guarda, se recupera y convierte importes para mostrarlos', async () => {
+  let savedProfile = { ...completeProfile };
+  let quoteRequests = 0;
+  const usdFigure = {
+    id: 'A-1', nombre: 'Astronauta', categoria: 'Space', anio: 2024,
+    estadoColeccion: 'COLECCIÓN', precio: 10, precioCompra: 5, precioBrickset: 10,
+  };
+  const { dom, window, requests, $ } = startApp({
+    fetchImpl: async (url, init = {}) => {
+      if (url === '/api/profile' && init.method === 'PUT') {
+        savedProfile = { ...savedProfile, ...JSON.parse(init.body) };
+        return { ok: true, status: 200, json: async () => savedProfile };
+      }
+      if (url === '/api/profile') return { ok: true, status: 200, json: async () => savedProfile };
+      if (url.startsWith('/minifiguras')) return { ok: true, status: 200, json: async () => [usdFigure] };
+      if (url === '/valoracion') return { ok: true, status: 200, json: async () => ({
+        total: 10, enColeccion: 1, buscadas: 0, top5: [usdFigure], top5Antiguas: [],
+        observadas: [{ ...usdFigure, observada: true }],
+      }) };
+      if (url === '/valoracion/tipo-cambio') {
+        quoteRequests += 1;
+        return { ok: true, status: 200, json: async () => ({
+          baseCurrency: 'EUR', quoteCurrency: 'USD', rate: 1.12, referenceDate: '2026-11-18',
+        }) };
+      }
+      return undefined;
+    },
+  });
+  await waitFor(() => !$('.page-shell').hidden && $('#catalog-body').textContent.includes('Astronauta'));
+  $('#open-user-settings').click();
+  assert.equal($('#profile-currency').querySelector('[value="EUR"]').disabled, false);
+  assert.equal($('#profile-currency').querySelector('[value="USD"]').disabled, false);
+  $('#profile-currency').value = 'USD';
+  $('#user-profile-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => savedProfile.currency === 'USD' && !$('#user-profile-dialog').open);
+  assert.equal(quoteRequests, 1);
+  assert.ok(requests.some(({ url, init }) => url === '/api/profile' && init.method === 'PUT'
+    && JSON.parse(init.body).currency === 'USD'));
+  assert.match(window.eval('formatPrice(10)'), /11,20/);
+  assert.match(window.eval('formatPrice(10)'), /US\$/);
+  assert.match($('#catalog-body').textContent, /11,20 US\$/);
+  assert.equal($('#collection-total').textContent, '11,20 US$');
+  assert.match($('#top-five-list').textContent, /11,20 US\$/);
+  assert.match($('#watchlist-list').textContent, /11,20 US\$/);
+  window.eval(`openFormDialog('edit', ${JSON.stringify({
+    ...usdFigure,
+  })})`);
+  assert.equal($('#form-precio').value, '11.2');
+  assert.equal($('#form-precioCompra').value, '5.6');
+  assert.match($('#form-purchase-price-label').textContent, /\(\$\)/);
+  $('#form-cancel').click();
+  $('#open-user-settings').click();
+  assert.equal($('#profile-currency').value, 'USD');
+  dom.window.close();
+});
+
+test('el fallo de cotización al guardar conserva USD y el precio para reintentar', async () => {
+  let savedProfile = { ...completeProfile };
+  let quoteRequests = 0;
+  let submittedPayload;
+  const { dom, window, requests, $ } = startApp({
+    fetchImpl: async (url, init = {}) => {
+      if (url === '/valoracion/tipo-cambio') {
+        quoteRequests += 1;
+        return quoteRequests === 1 || quoteRequests === 3
+          ? { ok: false, status: 503, json: async () => ({ error: 'TIPO_CAMBIO_NO_DISPONIBLE' }) }
+          : { ok: true, status: 200, json: async () => ({
+            baseCurrency: 'EUR', quoteCurrency: 'USD', rate: 1.12, referenceDate: '2026-11-18',
+          }) };
+      }
+      if (url === '/api/profile' && init.method === 'PUT') {
+        savedProfile = { ...savedProfile, ...JSON.parse(init.body) };
+        return { ok: true, status: 200, json: async () => savedProfile };
+      }
+      if (url === '/api/profile') return { ok: true, status: 200, json: async () => savedProfile };
+      if (url === '/minifiguras/A-1' && init.method === 'PUT') {
+        submittedPayload = JSON.parse(init.body);
+        return { ok: true, status: 200, json: async () => submittedPayload };
+      }
+      return undefined;
+    },
+  });
+  await waitFor(() => !$('.page-shell').hidden);
+  $('#open-user-settings').click();
+  $('#profile-currency').value = 'USD';
+  $('#user-profile-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#profile-form-message').textContent.includes('tipo de cambio'));
+  assert.equal(savedProfile.currency, 'EUR');
+  assert.equal($('#profile-currency').value, 'EUR');
+  assert.equal($('#user-profile-dialog').open, true);
+  $('#profile-currency').value = 'USD';
+  $('#user-profile-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => savedProfile.currency === 'USD' && !$('#user-profile-dialog').open);
+  assert.equal(quoteRequests, 2);
+  const figure = {
+    id: 'A-1', nombre: 'Astronauta', categoria: 'Space', anio: 2024, precio: 10,
+    precioCompra: 5, estadoColeccion: 'COLECCIÓN',
+  };
+  window.eval(`openFormDialog('edit', ${JSON.stringify(figure)})`);
+  assert.equal($('#form-precioCompra').value, '5.6');
+  $('#form-cancel').click();
+  assert.deepEqual(figure, {
+    id: 'A-1', nombre: 'Astronauta', categoria: 'Space', anio: 2024, precio: 10,
+    precioCompra: 5, estadoColeccion: 'COLECCIÓN',
+  });
+  window.eval(`openFormDialog('edit', ${JSON.stringify(figure)})`);
+  $('#form-precioCompra').value = '6.72';
+  assert.equal(window.eval('validatePayload(buildPayloadFromForm())'), null);
+  $('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => $('#form-error').textContent.includes('tipo de cambio'));
+  assert.equal($('#form-precioCompra').value, '6.72');
+  assert.equal(submittedPayload, undefined);
+  $('#minifigura-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => submittedPayload !== undefined);
+  assert.equal(quoteRequests, 4);
+  assert.ok(requests.some(({ url, init }) => url === '/minifiguras/A-1' && init.method === 'PUT'));
+  assert.equal(submittedPayload.precioCompra, 6);
+  assert.equal(submittedPayload.precio, 10);
   dom.window.close();
 });
 

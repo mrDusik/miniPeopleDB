@@ -1525,7 +1525,7 @@ create table if not exists public.user_profiles (
   updated_at timestamptz not null default now(),
   constraint user_profiles_username_check check (username ~ '^[A-Za-z0-9_]{3,20}$'),
   constraint user_profiles_avatar_url_check check (avatar_url is null or avatar_url ~* '^https?://[^[:space:]]+$'),
-  constraint user_profiles_currency_check check (currency in ('EUR')),
+  constraint user_profiles_currency_check check (currency in ('EUR', 'USD')),
   constraint user_profiles_language_check check (language in ('es', 'en', 'it', 'fr'))
 );
 

@@ -9,7 +9,7 @@ const html = await readFile(new URL('../public/index.html', import.meta.url), 'u
 const appScript = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const stylesheet = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 
-function startApp({ fetchImpl, session } = {}) {
+function startApp({ fetchImpl, session, profileFallback = true } = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
   const { window } = dom;
   const chartConfigs = [];
@@ -51,12 +51,20 @@ function startApp({ fetchImpl, session } = {}) {
     if (url === '/sincronizacion/brickset') return { ok: true, status: 200, json: async () => ({ estado: 'inactiva' }) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
-  window.eval(withSupabaseSession(appScript, { session }));
+  window.eval(withSupabaseSession(appScript, { session, profileFallback }));
   return { dom, window, document: window.document, requests, chartConfigs, chartInstances };
 }
 
 function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (predicate()) return;
+    await tick();
+  }
+  assert.equal(predicate(), true);
 }
 
 function loadHistoryRange(window, from, to) {
@@ -404,6 +412,7 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
             ],
           }),
         });
+
       }
       if (query.get('from') === '2026-11-01') {
         return Promise.resolve({
@@ -467,6 +476,49 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     await tick();
     const noBaselineChart = [...chartConfigs].reverse().find(({ type }) => type === 'bar');
     assert.equal(noBaselineChart.data.datasets[1].data[0].y, null);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el histórico y sus gráficos presentan USD sin convertir los snapshots canónicos', async () => {
+  const session = {
+    access_token: 'usd-history-token',
+    user: { id: 'usd-history-user', email: 'usd@example.invalid', user_metadata: {} },
+  };
+  const { dom, window, document, chartConfigs } = startApp({
+    session,
+    profileFallback: false,
+    fetchImpl(url) {
+      if (url === '/api/profile') return { ok: true, status: 200, json: async () => ({
+        username: 'DollarFan', avatarUrl: null, currency: 'USD', language: 'es',
+        onboardingCompleted: true, favoriteCategories: [],
+      }) };
+      if (url === '/valoracion/tipo-cambio') return { ok: true, status: 200, json: async () => ({
+        baseCurrency: 'EUR', quoteCurrency: 'USD', rate: 1.12, referenceDate: '2026-11-18',
+      }) };
+      if (url.startsWith('/api/analytics/history?')) return { ok: true, status: 200, json: async () => ({
+        baseline: null,
+        snapshots: [{
+          snapshotDate: '2026-11-18', totalFigures: 1, totalValue: 10, bricks: 0, level: 0,
+          dna: { collector: 0, explorer: 0, rarityHunter: 0, fan: 0 },
+        }],
+      }) };
+      return undefined;
+    },
+  });
+  try {
+    await waitFor(() => !document.querySelector('.page-shell').hidden);
+    document.querySelector('#open-analytics-history').click();
+    await loadHistoryRange(window, '2026-11-18', '2026-11-18');
+    await waitFor(() => chartConfigs.some(({ type }) => type === 'bar'));
+    const chart = [...chartConfigs].reverse().find(({ type }) => type === 'bar');
+    assert.equal(chart.data.datasets[0].data[0].y, 10);
+    assert.equal(chart.data.datasets[0].label, 'Valor de colección ($)');
+    assert.equal(chart.options.scales.value.ticks.callback(10), '11,20 US$');
+    assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 10 } }), 'Valor de colección: 11,20 US$');
+    assert.deepEqual([...document.querySelector('#analytics-history-value-table tbody tr:first-child').children]
+      .map((cell) => cell.textContent), ['18/11/2026', '11,20 US$', '1', 'Sin datos']);
   } finally {
     dom.window.close();
   }

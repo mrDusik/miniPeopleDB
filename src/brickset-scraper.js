@@ -226,8 +226,15 @@ export class BricksetScraper {
       const xml = await response.text();
       const rateMatch = xml.match(/<Cube\b(?=[^>]*\bcurrency=["']USD["'])(?=[^>]*\brate=["']([0-9]+(?:\.[0-9]+)?)["'])[^>]*\/?\s*>/i);
       const rate = rateMatch ? Number(rateMatch[1]) : NaN;
-      if (!Number.isFinite(rate) || rate <= 0) throw new Error('ECB USD rate missing');
-      this.usdToEurRate = { rate, fetchedAt: this.now() };
+      const dateMatch = xml.match(/<Cube\b[^>]*\btime=["'](\d{4}-\d{2}-\d{2})["'][^>]*>/i);
+      const referenceDate = dateMatch?.[1];
+      const parsedDate = referenceDate ? new Date(`${referenceDate}T00:00:00Z`) : null;
+      if (!Number.isFinite(rate) || rate <= 0
+        || !parsedDate || Number.isNaN(parsedDate.getTime())
+        || parsedDate.toISOString().slice(0, 10) !== referenceDate) {
+        throw new Error('ECB USD rate missing or invalid');
+      }
+      this.usdToEurRate = { rate, referenceDate, fetchedAt: this.now() };
       this.usdToEurRetryAfter = 0;
       return rate;
     } catch {
@@ -255,6 +262,19 @@ export class BricksetScraper {
     } finally {
       if (this.usdToEurPromise === request) this.usdToEurPromise = null;
     }
+  }
+
+  async getExchangeRate({ signal } = {}) {
+    await this._getUsdToEurRate(signal);
+    if (!this.usdToEurRate) {
+      throw new BricksetPriceError('BRICKSET_TIPO_CAMBIO_NO_DISPONIBLE');
+    }
+    return {
+      baseCurrency: 'EUR',
+      quoteCurrency: 'USD',
+      rate: this.usdToEurRate.rate,
+      referenceDate: this.usdToEurRate.referenceDate,
+    };
   }
 
   async _priceInEur(quote, signal) {

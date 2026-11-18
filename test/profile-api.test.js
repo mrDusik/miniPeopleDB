@@ -25,9 +25,16 @@ test('el perfil guarda los cuatro idiomas y rechaza idiomas o monedas no soporta
       assert.equal((await response.json()).language, language);
       assert.equal((await (await authFetch()(`${context.baseUrl}/api/profile`)).json()).language, language);
     }
+    for (const currency of ['EUR', 'USD']) {
+      const response = await save({ ...PROFILE, language: 'en', currency });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).currency, currency);
+      assert.equal((await (await authFetch()(`${context.baseUrl}/api/profile`)).json()).currency, currency);
+    }
+    assert.equal((await save({ ...PROFILE, language: 'en' })).status, 200);
     for (const invalid of [
       ...['de', 'EN', '', null, 1, {}, ['en']].map((language) => ({ language })),
-      { currency: 'USD' }, { username: 'ChangedName' },
+      { currency: 'GBP' }, { currency: '' }, { username: 'ChangedName' },
     ]) {
       const response = await save({ ...PROFILE, ...invalid, favoriteCategories: ['Space'] });
       assert.equal(response.status, Object.hasOwn(invalid, 'username') ? 409 : 400);

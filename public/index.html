@@ -184,7 +184,7 @@
           <label data-i18n="profile.currency" for="profile-currency">Moneda</label>
           <select id="profile-currency" name="currency">
             <option data-i18n="profile.euro" value="EUR">Euro (€)</option>
-            <option data-i18n="profile.dollarFuture" value="USD" disabled>Dólar ($), próximamente</option>
+            <option data-i18n="profile.dollar" value="USD">Dólar ($)</option>
           </select>
         </div>
       </div>
@@ -335,7 +335,7 @@ Esta acción no se puede deshacer.</p>
             <div class="summary-sync-row">
               <button data-i18n="sync.action" type="button" id="sync-prices" class="button button-secondary summary-sync" hidden>🔄 Sincronizar Precios</button>
               <div class="collection-total-group">
-                <span class="collection-value"><img data-i18n-alt="inventory.totalValue" data-i18n-title="inventory.totalValue" class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">€0,00</strong></span>
+                <span class="collection-value"><img data-i18n-alt="inventory.totalValue" data-i18n-title="inventory.totalValue" class="count-icon status-icon-image" src="/toast_images/billete.png" alt="Valor total de tu colección" title="Valor total de tu colección"><strong id="collection-total">0,00</strong></span>
                 <small id="collection-total-updated" class="collection-total-updated" aria-live="polite"></small>
               </div>
             </div>
@@ -525,7 +525,7 @@ Esta acción no se puede deshacer.</p>
                 <input id="form-fechaCompra" name="fechaCompra" type="date">
               </label>
               <label>
-                <span data-i18n="inventory.purchasePrice">Precio de compra (€)</span>
+                <span id="form-purchase-price-label" data-i18n="inventory.purchasePrice">Precio de compra</span>
                 <input id="form-precioCompra" name="precioCompra" type="number" min="0" step="0.01">
               </label>
             </div>
@@ -545,7 +545,7 @@ Esta acción no se puede deshacer.</p>
                 <input id="form-anio" name="anio" type="number" class="input-readonly" readonly required>
               </label>
               <label>
-                <span data-i18n="inventory.bricksetPrice">Precio Brickset (€)</span>
+                <span id="form-brickset-price-label" data-i18n="inventory.bricksetPrice">Precio Brickset</span>
                 <input id="form-precio" name="precio" type="number" min="0" step="0.01" class="input-readonly" readonly required>
               </label>
             </div>

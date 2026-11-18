@@ -151,8 +151,10 @@ const formAnioInput = document.querySelector('#form-anio');
 const formEstadoInput = document.querySelector('#form-estadoColeccion');
 const formStateToggleButtons = [...document.querySelectorAll('[data-form-state]')];
 const formPrecioCompraInput = document.querySelector('#form-precioCompra');
+const formPurchasePriceLabel = document.querySelector('#form-purchase-price-label');
 const formFechaCompraInput = document.querySelector('#form-fechaCompra');
 const formPrecioInput = document.querySelector('#form-precio');
+const formBricksetPriceLabel = document.querySelector('#form-brickset-price-label');
 const formObservedButton = document.querySelector('#form-observada');
 const formPreviewImage = document.querySelector('#form-preview-image');
 const bricksetLoading = document.querySelector('#brickset-loading');
@@ -475,6 +477,10 @@ let lastCollectionTotal = null;
 let profileRequestSequence = 0;
 let profileReadyUserId = null;
 let currentUserProfile = null;
+let exchangeRate = null;
+let exchangeRateLoadedAt = 0;
+let exchangeRateRequest = null;
+let currentFormPriceEur = null;
 let profileDialogMode = 'settings';
 let profileDialogTrigger = null;
 let accountDeletionUserId = null;
@@ -705,9 +711,60 @@ function cell(value) {
 }
 
 function formatPrice(value) {
-  return Number.isFinite(value)
-    ? new Intl.NumberFormat(activeLocale(), { style: 'currency', currency: 'EUR' }).format(value)
-    : t('common.priceMissing');
+  if (!Number.isFinite(value)) return t('common.priceMissing');
+  const amount = convertEurToActiveCurrency(value);
+  return amount === null ? t('common.unavailable') : formatCurrencyAmount(amount);
+}
+
+function activeCurrency() {
+  return currentUserProfile?.currency === 'USD' ? 'USD' : 'EUR';
+}
+
+function hasFreshExchangeRate() {
+  return Number.isFinite(exchangeRate?.rate) && exchangeRate.rate > 0
+    && Date.now() - exchangeRateLoadedAt < 24 * 60 * 60 * 1000;
+}
+
+function formatCurrencyAmount(value, currency = activeCurrency()) {
+  return new Intl.NumberFormat(activeLocale(), { style: 'currency', currency }).format(value);
+}
+
+function roundToCents(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function convertEurToActiveCurrency(value) {
+  if (!Number.isFinite(value)) return null;
+  if (activeCurrency() === 'EUR') return value;
+  if (!hasFreshExchangeRate()) return null;
+  return value * exchangeRate.rate;
+}
+
+function purchasePriceForDisplay(value) {
+  if (!Number.isFinite(value)) return '';
+  const amount = convertEurToActiveCurrency(value);
+  return amount === null ? '' : String(roundToCents(amount));
+}
+
+async function loadExchangeRate({ force = false } = {}) {
+  if (!force && hasFreshExchangeRate()) return exchangeRate;
+  if (exchangeRateRequest) return exchangeRateRequest;
+  exchangeRateRequest = (async () => {
+    const response = await apiFetch('/valoracion/tipo-cambio');
+    const quote = await response.json();
+    if (!response.ok || quote.baseCurrency !== 'EUR' || quote.quoteCurrency !== 'USD'
+      || !Number.isFinite(quote.rate) || quote.rate <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(quote.referenceDate ?? '')) {
+      throw new Error('TIPO_CAMBIO_NO_DISPONIBLE');
+    }
+    exchangeRate = quote;
+    exchangeRateLoadedAt = Date.now();
+    return quote;
+  })();
+  try {
+    return await exchangeRateRequest;
+  } finally {
+    exchangeRateRequest = null;
+  }
 }
 
 function priceCell(value) {
@@ -2486,6 +2543,7 @@ function openFormDialog(mode, minifigura, trigger = null) {
   formSending = false;
   imageLookupSequence += 1;
   currentEditId = mode === 'edit' ? minifigura.id : null;
+  currentFormPriceEur = mode !== 'create' ? minifigura.precio ?? null : null;
   formSynced = mode !== 'create' && mode !== 'ranking-create';
   minifiguraForm.reset();
   setFormCategories();
@@ -2502,9 +2560,9 @@ function openFormDialog(mode, minifigura, trigger = null) {
     setFormCategories(minifigura.categoria ?? '', minifigura.subcategoria ?? '');
     formAnioInput.value = minifigura.anio ?? '';
     formEstadoInput.value = minifigura.estadoColeccion ?? '';
-    formPrecioCompraInput.value = minifigura.precioCompra ?? '';
+    formPrecioCompraInput.value = purchasePriceForDisplay(minifigura.precioCompra);
     formFechaCompraInput.value = minifigura.fechaCompra ?? '';
-    formPrecioInput.value = minifigura.precio ?? '';
+    formPrecioInput.value = purchasePriceForDisplay(minifigura.precio);
     formObservedButton.setAttribute('aria-pressed', String(Boolean(minifigura.observada)));
     formPreviewImage.src = imagenUrlPara(minifigura.id);
     formPreviewImage.alt = minifigura.nombre ?? '';
@@ -2588,6 +2646,8 @@ function updateFormMode() {
   });
   formFechaCompraInput.type = formFechaCompraInput.disabled && !formFechaCompraInput.value ? 'text' : 'date';
   bindI18n(formPrecioInput, 'placeholder', () => formSynced && !formPrecioInput.value ? t('common.priceMissing') : '');
+  bindI18n(formPurchasePriceLabel, 'text', () => `${t('inventory.purchasePrice')} (${activeCurrency() === 'USD' ? '$' : '€'})`);
+  bindI18n(formBricksetPriceLabel, 'text', () => `${t('inventory.bricksetPrice')} (${activeCurrency() === 'USD' ? '$' : '€'})`);
   formStateToggleButtons.forEach((button) => { button.disabled = isView || isRankingCreate || (isCreate && !formSynced); });
   bricksetFields.forEach((field) => {
     field.disabled = isView || (isCreate && !formSynced);
@@ -2728,7 +2788,9 @@ function buildPayloadFromForm() {
     payload.fechaCompra = fechaCompra;
   }
   const precioRaw = formPrecioInput.value.trim();
-  if (precioRaw !== '') {
+  if (activeCurrency() === 'USD') {
+    if (Number.isFinite(currentFormPriceEur)) payload.precio = currentFormPriceEur;
+  } else if (precioRaw !== '') {
     payload.precio = Number(precioRaw);
   }
 
@@ -3158,9 +3220,9 @@ function formatSignedNumber(value) {
 
 function formatSignedCurrency(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  const amount = i18n.formatNumber(Math.abs(value), {
-    style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).replace(/\u00a0/g, ' ');
+  const converted = convertEurToActiveCurrency(Math.abs(value));
+  if (converted === null) return t('common.unavailable');
+  const amount = formatCurrencyAmount(converted).replace(/\u00a0/g, ' ');
   return `${value > 0 ? '+' : value < 0 ? '-' : ''}${amount}`;
 }
 
@@ -4541,8 +4603,7 @@ function formatUniqueAnalyticsHistoryTick(value, index, ticks) {
 }
 
 function formatAnalyticsHistoryPrice(value) {
-  if (!Number.isFinite(value)) return t('common.noData');
-  return new Intl.NumberFormat(activeLocale(), { style: 'currency', currency: 'EUR' }).format(value);
+  return Number.isFinite(value) ? formatPrice(value) : t('common.noData');
 }
 
 function formatAnalyticsHistoryPercent(value) {
@@ -4694,7 +4755,7 @@ function renderAnalyticsHistoryValue(data) {
     data: {
       datasets: [
         {
-          type: 'line', label: t('history.collectionValueAxis'), data: valueSeries,
+          type: 'line', label: `${t('history.collectionValueAxis')} (${activeCurrency() === 'USD' ? '$' : '€'})`, data: valueSeries,
           yAxisID: 'value', borderColor: styles.getPropertyValue('--dna-fan').trim(),
           backgroundColor: styles.getPropertyValue('--dna-fan').trim(), pointRadius: 3,
           spanGaps: false, tension: 0.2,
@@ -4732,7 +4793,11 @@ function renderAnalyticsHistoryValue(data) {
       },
       scales: {
         x: { type: 'linear', ...xBounds, ticks: { maxTicksLimit: 8, callback: formatUniqueAnalyticsHistoryTick }, title: { display: true, text: t('history.dateTimezone') } },
-        value: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: t('history.valueAxis') } },
+        value: {
+          type: 'linear', position: 'left', beginAtZero: true,
+          ticks: { callback: (tickValue) => formatAnalyticsHistoryPrice(Number(tickValue)) },
+          title: { display: true, text: `${t('history.valueAxis')} (${activeCurrency() === 'USD' ? '$' : '€'})` },
+        },
         figures: { type: 'linear', position: 'right', beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: t('common.collection') }, grid: { drawOnChartArea: false } },
       },
     },
@@ -5317,6 +5382,16 @@ minifiguraForm.addEventListener('submit', async (event) => {
   formSubmitButton.disabled = true;
 
   try {
+    if (activeCurrency() === 'USD' && payload.precioCompra !== undefined) {
+      try {
+        const quote = await loadExchangeRate({ force: true });
+        if (!isCurrent()) return;
+        payload.precioCompra = roundToCents(payload.precioCompra / quote.rate);
+      } catch {
+        if (isCurrent()) setMessage(formError, t('currency.rateUnavailable'));
+        return;
+      }
+    }
     const url = isEdit ? `/minifiguras/${encodeURIComponent(currentEditId)}` : '/minifiguras';
     const response = await apiFetch(url, {
       method: isEdit ? 'PUT' : 'POST',
@@ -5401,7 +5476,8 @@ async function loadFormBricksetData() {
     formDescripcionInput.value = result.descripcion ?? '';
     setFormCategories(result.categoria, result.subcategoria ?? '');
     formAnioInput.value = Number.isInteger(result.anio) && result.anio > 0 ? result.anio : currentYear;
-    formPrecioInput.value = result.precio ?? '';
+    currentFormPriceEur = Number.isFinite(result.precio) ? result.precio : null;
+    formPrecioInput.value = purchasePriceForDisplay(result.precio);
     formSynced = currentFormMode === 'ranking-create' ? hasFormMetadata() : true;
     formPreviewImage.alt = formNombreInput.value || id;
     updateFormMode();
@@ -5612,6 +5688,10 @@ function clearUserData() {
   profileRequestSequence += 1;
   profileReadyUserId = null;
   currentUserProfile = null;
+  exchangeRate = null;
+  exchangeRateLoadedAt = 0;
+  exchangeRateRequest = null;
+  currentFormPriceEur = null;
   selectedProfileFavorites.clear();
   profileDialogTrigger = null;
   if (profileDialog.open) profileDialog.close();
@@ -5759,8 +5839,18 @@ async function loadUserProfile(session, requestId) {
       return;
     }
 
+    let rateUnavailable = false;
+    if (profile.currency === 'USD') {
+      try {
+        await loadExchangeRate();
+      } catch {
+        rateUnavailable = true;
+      }
+      if (!isCurrent()) return;
+    }
     applyProfileAvatar(profile);
     startApplicationForCurrentProfile();
+    if (rateUnavailable) showToast(() => t('currency.rateUnavailable'), 'error');
   } catch {
     if (requestId !== profileRequestSequence || currentSession?.user?.id !== session.user?.id) return;
     profileReadyUserId = null;
@@ -6009,6 +6099,7 @@ async function saveUserProfile(event) {
   const savingUserId = currentSession.user.id;
   const avatarFile = pendingProfileAvatarFile;
   const previousAvatarUrl = currentUserProfile?.avatarUrl;
+  const previousCurrency = currentUserProfile?.currency || 'EUR';
   let uploadedAvatarPath = null;
   let profileSaved = false;
   const profile = {
@@ -6030,6 +6121,17 @@ async function saveUserProfile(event) {
       return;
     }
     if (currentSession?.user?.id !== savingUserId) return;
+    if (profile.currency === 'USD' && previousCurrency !== 'USD') {
+      try {
+        await loadExchangeRate({ force: true });
+      } catch {
+        if (currentSession?.user?.id === savingUserId) {
+          profileCurrencyInput.value = previousCurrency;
+          bindI18n(profileFormMessage, 'text', () => t('currency.rateUnavailable'));
+        }
+        return;
+      }
+    }
     if (avatarFile) {
       const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[avatarFile.type];
       const path = `${savingUserId}/${crypto.randomUUID()}.${extension}`;
@@ -6065,10 +6167,24 @@ async function saveUserProfile(event) {
       isCurrent: () => currentSession?.user?.id === savingUserId,
     })) return;
     applyProfileAvatar(result);
+    if (previousCurrency !== result.currency) await refreshCurrencyViews();
     profileDialog.close();
     if (profileDialogMode === 'onboarding') startApplicationForCurrentProfile();
     if (previousAvatarUrl !== result.avatarUrl) {
       await removeProfileAvatar(ownedProfileAvatarPath(previousAvatarUrl, savingUserId));
+    }
+
+    async function refreshCurrencyViews() {
+      if (!currentSession || !currentUserProfile) return;
+      applyFilters({ preservePage: true });
+      if (notificationsDialog.open) renderNotifications();
+      if (analyticsHistoryData && analyticsHistoryDialog.open) {
+        const page = analyticsHistoryTables.get('value')?.page ?? 1;
+        renderAnalyticsHistoryValue(analyticsHistoryData);
+        const table = analyticsHistoryTables.get('value');
+        if (table) renderAnalyticsHistoryTable('value', table.rows, page);
+      }
+      await Promise.all([loadTotal(), loadGlobalRanking({ showState: false })]);
     }
   } catch {
     if (currentSession?.user?.id === savingUserId) bindI18n(profileFormMessage, 'text', () => t('profile.saveError'));
@@ -6980,6 +7096,13 @@ window.addEventListener('minipeople:languagechange', () => {
     renderAnalyticsHistoryProgression(analyticsHistoryData);
     for (const [key, page] of pages) renderAnalyticsHistoryTable(key, analyticsHistoryTables.get(key).rows, page);
   }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || currentUserProfile?.currency !== 'USD' || hasFreshExchangeRate()) return;
+  void loadExchangeRate({ force: true })
+    .then(() => refreshCurrencyViews())
+    .catch(() => showToast(() => t('currency.rateUnavailable'), 'error'));
 });
 
 async function startTranslatedApplication() {

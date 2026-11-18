@@ -126,6 +126,12 @@ test('convierte New en USD a EUR con el tipo del BCE y reutiliza la cotizacion',
     },
   });
 
+  assert.deepEqual(await scraper.getExchangeRate(), {
+    baseCurrency: 'EUR',
+    quoteCurrency: 'USD',
+    rate: 1.1181,
+    referenceDate: '2026-10-12',
+  });
   assert.equal(await scraper.getPrice('SH0684'), 1.94);
   assert.deepEqual(await scraper.getDetails('SH0684'), {
     categoria: 'Super Heroes',
@@ -134,6 +140,38 @@ test('convierte New en USD a EUR con el tipo del BCE y reutiliza la cotizacion',
     precio: 1.94,
   });
   assert.equal(exchangeRateRequests, 1);
+});
+
+test('comparte una cotizacion BCE en caché y rechaza una fecha ausente o inválida', async () => {
+  let requests = 0;
+  const scraper = new BricksetScraper({
+    exchangeRateFetchImpl: async () => {
+      requests += 1;
+      return new Response('<Cube time="2026-11-18"><Cube currency="USD" rate="1.12"/></Cube>');
+    },
+  });
+
+  assert.deepEqual(await scraper.getExchangeRate(), {
+    baseCurrency: 'EUR',
+    quoteCurrency: 'USD',
+    rate: 1.12,
+    referenceDate: '2026-11-18',
+  });
+  assert.deepEqual(await scraper.getExchangeRate(), {
+    baseCurrency: 'EUR',
+    quoteCurrency: 'USD',
+    rate: 1.12,
+    referenceDate: '2026-11-18',
+  });
+  assert.equal(requests, 1);
+
+  const invalidDateScraper = new BricksetScraper({
+    exchangeRateFetchImpl: async () => new Response('<Cube time="2026-02-31"><Cube currency="USD" rate="1.12"/></Cube>'),
+  });
+  await assert.rejects(
+    () => invalidDateScraper.getExchangeRate(),
+    (error) => error.code === 'BRICKSET_TIPO_CAMBIO_NO_DISPONIBLE',
+  );
 });
 
 test('no devuelve USD como EUR si el tipo de cambio del BCE no esta disponible', async () => {

@@ -136,9 +136,8 @@ test('el icono Bricks conserva una altura visual comparable a emojis e iconos ce
   withStyles((rules) => {
     const declarations = new Map(rules.filter(({ selectorText }) => selectorText).map(({ selectorText, style }) => [selectorText, style]));
     assert.equal(declarations.get('.toast-icon[src$="/brick.png"]').getPropertyValue('height'), '20px');
-    assert.equal(declarations.get('.daily-summary-icon[src$="/brick.png"]').getPropertyValue('height'), '22px');
-    assert.equal(declarations.get('.daily-summary-metric.has-icon:has(.daily-summary-icon[src$="/brick.png"])')
-      .getPropertyValue('grid-template-columns'), '36px minmax(0, 1fr)');
+    assert.equal(declarations.get('.daily-summary-icon').getPropertyValue('height'), '22px');
+    assert.equal(declarations.get('.daily-summary-metric.has-icon').getPropertyValue('grid-template-columns'), '24px minmax(0, 1fr)');
     assert.equal(declarations.get('.public-profile-stat-icon[src$="/brick.png"]').getPropertyValue('height'), '24px');
     assert.equal(declarations.get('.first-minifigura-icon').getPropertyValue('width'), '84px');
   });
@@ -180,17 +179,20 @@ test('las tarjetas de seguimiento mantienen icono codigo y precio en una linea',
   });
 });
 
-test('los emojis de seguimiento tienen el mismo tamano que los filtros de consulta', () => {
+test('los iconos de seguimiento conservan tamanos adecuados en escritorio y movil', () => {
   withStyles((rules) => {
     const mobile = rules.filter(({ cssRules }) => cssRules);
     const desktopFilter = rules.find(({ selectorText }) => selectorText === '.filter-toggle .filter-symbol, .filter-toggle .eye-symbol').style;
     const desktopWatchlist = rules.find(({ selectorText }) => selectorText === '.watchlist-state-icon .status-icon-image').style;
     const mobileFilter = mobile.flatMap(({ cssRules }) => [...cssRules]).find(({ selectorText }) => selectorText === '#filters-form .filter-toggle .filter-symbol, #filters-form .filter-toggle .eye-symbol').style;
-    const mobileWatchlist = mobile.flatMap(({ cssRules }) => [...cssRules]).find(({ selectorText }) => selectorText === '.watchlist-state-icon .status-icon-image').style;
+    const mobileWatchlist = mobile.flatMap(({ cssRules }) => [...cssRules]).find(({ selectorText }) => selectorText === '.watchlist-card .watchlist-state-icon .status-icon-image').style;
     for (const property of ['width', 'height', 'font-size']) {
       assert.equal(desktopWatchlist.getPropertyValue(property), desktopFilter.getPropertyValue(property));
-      assert.equal(mobileWatchlist.getPropertyValue(property), mobileFilter.getPropertyValue(property));
+      assert.equal(mobileWatchlist.getPropertyValue(property), '1rem');
     }
+    assert.equal(mobileFilter.getPropertyValue('width'), '1.656rem');
+    assert.equal(mobileFilter.getPropertyValue('height'), '1.656rem');
+    assert.equal(mobileFilter.getPropertyValue('font-size'), '1.656rem');
   });
 });
 

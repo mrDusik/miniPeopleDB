@@ -65,7 +65,7 @@ function isValidProfile(profile) {
     && isValidUsername(profile.username)
     && isValidAvatarUrl(profile.avatarUrl)
     && (profile.avatarUrl === null || typeof profile.avatarUrl === 'string')
-    && profile.currency === 'EUR'
+    && ['EUR', 'USD'].includes(profile.currency)
     && ['es', 'en', 'it', 'fr'].includes(profile.language)
     && Array.isArray(profile.favoriteCategories)
     && profile.favoriteCategories.length <= 3

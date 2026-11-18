@@ -973,6 +973,60 @@ test('schema persiste perfiles y favoritos con unicidad, RLS y borrado en cascad
   }
 });
 
+test('la migracion de moneda habilita USD, conserva EUR y es reejecutable', async () => {
+  const db = new PGlite();
+  const euroUser = '00000000-0000-4000-8000-0000000000e1';
+  const dollarUser = '00000000-0000-4000-8000-0000000000e2';
+  try {
+    await db.exec(`
+      create schema auth;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+      create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
+      create function auth.role() returns text language sql as $$ select null::text $$;
+      create table auth.users (id uuid primary key, email text unique);
+    `);
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
+    await db.query('insert into auth.users(id, email) values ($1, $2), ($3, $4)', [
+      euroUser, 'euro@example.invalid', dollarUser, 'dollar@example.invalid',
+    ]);
+    await db.query('insert into public.user_profiles(user_id, username) values ($1, $2)', [euroUser, 'EuroUser']);
+    await db.query('insert into public.user_profiles(user_id, username, currency) values ($1, $2, $3)', [
+      dollarUser, 'DollarUser', 'USD',
+    ]);
+    assert.equal((await db.query('select currency from public.user_profiles where user_id = $1', [dollarUser])).rows[0].currency, 'USD');
+    await db.query('update public.user_profiles set currency = $1 where user_id = $2', ['EUR', dollarUser]);
+    await db.exec(`
+      alter table public.user_profiles drop constraint user_profiles_currency_check;
+      alter table public.user_profiles add constraint user_profiles_currency_check check (currency in ('EUR'));
+    `);
+
+    const migration = await readFile(new URL('../supabase/profile-currency-usd.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+
+    await db.query('update public.user_profiles set currency = $1 where user_id = $2', ['USD', dollarUser]);
+    await assert.rejects(
+      db.query('update public.user_profiles set currency = $1 where user_id = $2', ['GBP', dollarUser]),
+      /user_profiles_currency_check/,
+    );
+    assert.deepEqual((await db.query('select currency from public.user_profiles order by user_id')).rows, [
+      { currency: 'EUR' }, { currency: 'USD' },
+    ]);
+    assert.deepEqual((await db.query(`
+      select column_default, is_nullable
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'user_profiles' and column_name = 'currency'
+    `)).rows, [{ column_default: "'EUR'::text", is_nullable: 'NO' }]);
+    assert.equal((await db.query("select relrowsecurity from pg_class where oid = 'public.user_profiles'::regclass")).rows[0].relrowsecurity, true);
+    assert.equal((await db.query("select has_table_privilege('anon', 'public.user_profiles', 'SELECT') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_table_privilege('authenticated', 'public.user_profiles', 'SELECT') as allowed")).rows[0].allowed, true);
+  } finally {
+    await db.close();
+  }
+});
+
 test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y rollback atomico', async () => {
   const db = new PGlite();
   const userId = '00000000-0000-4000-8000-0000000000c1';
@@ -1032,6 +1086,12 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
     ]);
     assert.equal((await db.query('select display_name, avatar_url from public.perfiles_publicos')).rows[0].avatar_url, 'https://custom.example/avatar.png');
     await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', 'https://custom.example/avatar.png', 'USD', 'en', ['Castle', 'Space'],
+    ]);
+    assert.deepEqual((await db.query('select currency, language from public.user_profiles')).rows[0], {
+      currency: 'USD', language: 'en',
+    });
+    await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
       'Collector_1', 'https://custom.example/avatar.png', 'EUR', 'en', ['Castle', 'Space'],
     ]);
     assert.equal((await db.query('select language from public.user_profiles')).rows[0].language, 'en');
@@ -1055,6 +1115,12 @@ test('guardar_perfil_usuario aplica preferencias con JWT, username inmutable y r
         { category_name: 'Castle' }, { category_name: 'Space' },
       ]);
     }
+    await assert.rejects(db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', [
+      'Collector_1', 'https://changed.example/avatar.png', 'GBP', 'en', ['Pirates'],
+    ]), /user_profiles_currency_check/);
+    assert.deepEqual((await db.query('select currency, language, avatar_url from public.user_profiles')).rows, [
+      { currency: 'EUR', language: 'en', avatar_url: 'https://custom.example/avatar.png' },
+    ]);
     assert.equal((await db.query("update public.user_profiles set language = 'en' where user_id = $1 returning user_id", [otherId])).rows.length, 0);
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [otherId]);
     await db.query('select public.guardar_perfil_usuario($1, $2, $3, $4, $5)', ['OtherCollector', null, 'EUR', 'en', []]);
