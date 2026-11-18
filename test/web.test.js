@@ -202,8 +202,18 @@ test('los campos de fecha mantienen el contenido centrado', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const document = new JSDOM(html).window.document;
   assert.equal(document.querySelectorAll('input[type="date"]').length, 2);
-  assert.match(css, /input\[type="date"\]\s*\{[^}]*text-align:\s*center/s);
-  assert.match(css, /input\[type="date"\]::-webkit-date-and-time-value\s*\{[^}]*text-align:\s*center/s);
+  assert.match(css, /input\[type="date"\]\s*\{[^}]*text-align:\s*center[^}]*text-align-last:\s*center/s);
+  assert.match(css, /input\[type="date"\]::-webkit-date-and-time-value\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center[^}]*text-align:\s*center/s);
+  assert.match(css, /input\[type="date"\]::-webkit-datetime-edit\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center/s);
+  assert.match(css, /input\[type="date"\]::-webkit-datetime-edit-fields-wrapper\s*\{[^}]*justify-content:\s*center/s);
+});
+
+test('el campo descripción del modal no se puede redimensionar', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const document = new JSDOM(html).window.document;
+  assert.equal(document.querySelectorAll('#form-descripcion').length, 1);
+  assert.match(css, /\.modal \.description-field textarea\s*\{[^}]*resize:\s*none/s);
 });
 
 test('cualquier modal bloquea el scroll del fondo hasta cerrar el ultimo dialogo', async () => {

@@ -312,8 +312,10 @@ span.toast-icon { display: grid; place-items: center; font-size: 1.25rem; line-h
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 label { display: grid; justify-items: center; gap: 8px; color: var(--muted); font: 700 0.78rem/1.2 var(--font-body); text-align: center; text-transform: uppercase; }
 input, select { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 8px 12px; color: var(--ink); background: white; font: 1rem var(--font-body); text-align: center; }
-input[type="date"] { text-align: center; }
-input[type="date"]::-webkit-date-and-time-value { text-align: center; }
+input[type="date"] { text-align: center; text-align-last: center; }
+input[type="date"]::-webkit-date-and-time-value { display: flex; justify-content: center; width: 100%; margin: 0; text-align: center; }
+input[type="date"]::-webkit-datetime-edit { display: flex; justify-content: center; width: 100%; padding: 0; }
+input[type="date"]::-webkit-datetime-edit-fields-wrapper { display: flex; justify-content: center; width: 100%; }
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select { min-height: 36px; }
 .modal label { justify-items: stretch; text-align: left; }
 input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -577,7 +579,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 #form-dialog.view-mode .state-toggle.active:disabled, #form-dialog.view-mode .eye-icon.active:disabled { opacity: 1; filter: saturate(1.3); }
 .eye-toggle { justify-self: center; }
 .modal textarea { width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 3px; padding: 8px 12px; color: var(--ink); background: white; font: 1rem var(--font-body); text-align: center; resize: vertical; }
-.modal .description-field textarea { min-height: 0; }
+.modal .description-field textarea { min-height: 0; resize: none; }
 .modal textarea:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-error { min-height: 20px; margin: 0; color: var(--accent-dark); font: 0.85rem var(--font-body); }
 .modal ul { display: grid; gap: 8px; margin: 0 0 18px; padding-left: 20px; color: var(--muted); font: 0.95rem/1.4 var(--font-body); }
