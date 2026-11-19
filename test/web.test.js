@@ -372,6 +372,47 @@ test('la carga ocupa un hueco permanente de cabecera sin ocupar altura en el cue
   }
 });
 
+test('los indicadores de carga de los modales comparten una separación fija del cierre', async () => {
+  const [html, css] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+  ]);
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.append(style);
+    const rules = [...style.sheet.cssRules];
+    const activeRule = rules.find((rule) => rule.selectorText?.includes('#form-dialog:has(#brickset-loading') && rule.style?.visibility === 'visible');
+    const headingRule = rules.find((rule) => rule.selectorText === '.modal-dialog-heading:has(> .modal-loading-indicator)');
+    assert.equal(headingRule.style.getPropertyValue('column-gap'), '8px');
+    for (const [dialogId, statusId, isHidden] of [
+      ['form-dialog', 'brickset-loading', true],
+      ['set-number-dialog', 'set-number-status', false],
+      ['public-profile-dialog', 'public-profile-status', false],
+      ['dna-dialog', 'dna-status', false],
+    ]) {
+      const dialog = document.getElementById(dialogId);
+      const status = document.getElementById(statusId);
+      const indicator = dialog.querySelector('.modal-loading-indicator');
+      assert.equal(indicator.nextElementSibling.classList.contains('modal-close'), true, dialogId);
+      assert.equal(indicator.matches(activeRule.selectorText), false, dialogId);
+      if (isHidden) status.hidden = false;
+      else status.classList.add('loading-message');
+      assert.equal(indicator.matches(activeRule.selectorText), true, dialogId);
+      if (isHidden) status.hidden = true;
+      else status.classList.remove('loading-message');
+      assert.equal(indicator.matches(activeRule.selectorText), false, dialogId);
+    }
+    for (const indicator of document.querySelectorAll('.modal-loading-indicator')) {
+      assert.equal(indicator.nextElementSibling.classList.contains('modal-close'), true);
+    }
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('los ajustes responsive quedan aislados de escritorio y ordenan los controles', async () => {
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM('<style></style>');
@@ -493,7 +534,7 @@ test('smartphone limita tarjetas y columnas; tablet vertical recupera nombre y c
   const smartphoneProfileRules = rules.filter((rule) => rule.conditionText?.includes('(max-width: 600px)')).flatMap((rule) => [...rule.cssRules]);
   assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-tops')?.style.getPropertyValue('grid-template-columns'), 'minmax(0, 1fr)');
   const profileHeading = smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading');
-  assert.equal(profileHeading?.style.getPropertyValue('grid-template-columns'), '42px minmax(0, 1fr) auto');
+  assert.equal(profileHeading?.style.getPropertyValue('grid-template-columns'), '42px minmax(0, 1fr) 20px auto');
   assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading h2')?.style.getPropertyValue('grid-column'), '2');
   assert.equal(smartphoneProfileRules.find((rule) => rule.selectorText === '.public-profile-heading h2')?.style.getPropertyValue('grid-row'), '1');
   const profileFigures = rules.find((rule) => rule.selectorText === '.modal-public-profile .public-profile-figures');
@@ -1014,7 +1055,7 @@ test('el modal distribuye los campos en filas y mantiene preview y acciones en d
   assert.equal(heading.nextElementSibling.id, 'creation-mode-tabs');
   assert.equal(heading.nextElementSibling.nextElementSibling, form);
   assert.equal(heading.querySelector('#form-dialog-title').textContent, 'Añadir a inventario');
-  assert.equal(heading.querySelector('#form-cancel').textContent, 'Cerrar');
+  assert.equal(heading.querySelector('#form-cancel').textContent, '×');
   assert.equal(heading.querySelector('#form-cancel').type, 'button');
   assert.equal(form.querySelector('#form-cancel'), null);
   assert.equal(form.parentElement.getAttribute('aria-labelledby'), 'form-dialog-title');
@@ -2425,7 +2466,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(window.document.querySelector('#form-submit').hidden, true);
   assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(window.document.querySelector('#form-id').disabled, true);
-  assert.equal(window.document.querySelector('#form-cancel').textContent, 'Cerrar');
+  assert.equal(window.document.querySelector('#form-cancel').textContent, '×');
   assert.equal(window.document.querySelector('#form-fechaCompra').value, '');
   assert.equal(window.document.querySelector('#form-fechaCompra').type, 'text');
   const collectionToggle = window.document.querySelector('[data-form-state="COLECCIÓN"]');
@@ -2456,7 +2497,7 @@ test('el modal aplica los modos de alta y visualizacion', async () => {
   assert.equal(lookups, 1);
   assert.equal(window.document.querySelector('#form-precio').value, '18');
   assert.equal(window.document.querySelector('#form-dialog').classList.contains('view-mode'), false);
-  assert.equal(window.document.querySelector('#form-cancel').textContent, 'Cerrar');
+  assert.equal(window.document.querySelector('#form-cancel').textContent, '×');
   assert.equal(window.document.querySelector('#lookup-brickset'), null);
   assert.equal(collectionToggle.disabled, false);
   wantedToggle.click();
@@ -2664,7 +2705,7 @@ test('el modo Añadir por set distingue resultados de búsqueda, permite reinten
   assert.equal(document.querySelector('#set-number-continue').disabled, false);
   assert.equal(document.querySelector('#set-number-cancel'), null);
   const closeButton = document.querySelector('#set-number-close');
-  assert.equal(closeButton.textContent, 'Cerrar');
+  assert.equal(closeButton.textContent, '×');
   closeButton.click();
   assert.equal(document.querySelector('#set-number-dialog').open, false);
   assert.equal(document.querySelector('#form-dialog').open, true);

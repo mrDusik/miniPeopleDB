@@ -2662,7 +2662,6 @@ function updateFormMode() {
   formSubmitButton.disabled = isView || formSending || (isSetCreate
     ? !selectedSetNumber || Boolean(setPurchaseValidationError())
     : (isRankingCreate && !formSynced) || !isFormValid());
-  bindI18n(formCancelButton, 'text', () => t('common.close'));
   formPreviewImage.hidden = false;
 }
 

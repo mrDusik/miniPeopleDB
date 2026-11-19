@@ -2428,7 +2428,7 @@ test('Contacto desde acceso permite email o usuario, confirma el envío y restau
   $('#open-contact-auth').click();
   assert.equal($('#contact-dialog').open, true);
   assert.equal($('#contact-title').textContent, 'Contacto');
-  assert.deepEqual([...$('#contact-dialog').querySelectorAll('button')].map((button) => button.textContent), ['Cerrar', 'Enviar']);
+  assert.deepEqual([...$('#contact-dialog').querySelectorAll('button')].map((button) => button.textContent), ['×', 'Enviar']);
   assert.equal($('#contact-email').disabled, false);
   assert.equal($('#contact-username').disabled, false);
   assert.equal($('#contact-message').disabled, false);

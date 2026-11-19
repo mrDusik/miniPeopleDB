@@ -82,6 +82,32 @@ test('la interfaz no muestra Brickset en etiquetas o mensajes del formulario', a
   }
 });
 
+test('los botones de cierre conservan la X y traducen su nombre accesible', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const source = new JSDOM(html);
+  const realCatalogs = Object.fromEntries(await Promise.all(['es', 'en', 'it', 'fr'].map(async (language) => [
+    language, JSON.parse(await readFile(new URL(`../public/locales/${language}.json`, import.meta.url), 'utf8')),
+  ])));
+  const { dom, window, i18n } = createBrowser({
+    fetchCatalog: async (language) => ({ ok: true, json: async () => realCatalogs[language] }),
+  });
+  try {
+    const buttons = [...source.window.document.querySelectorAll('[data-i18n-aria-label="common.close"]')];
+    assert.equal(buttons.length, 13);
+    for (const button of buttons) window.document.body.append(button.cloneNode(true));
+    for (const language of ['es', 'en', 'it', 'fr']) {
+      await i18n.setLanguage(language);
+      for (const button of window.document.querySelectorAll('.modal-close')) {
+        assert.equal(button.textContent, '×', button.id);
+        assert.equal(button.getAttribute('aria-label'), realCatalogs[language]['common.close'], button.id);
+      }
+    }
+  } finally {
+    source.window.close();
+    dom.window.close();
+  }
+});
+
 test('idioma inicial, plurales, respaldo diagnosticado y parametros seguros sin traducir datos externos', async () => {
   const { dom, window, i18n, requests, warnings } = createBrowser();
   try {

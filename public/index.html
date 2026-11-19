@@ -117,7 +117,7 @@
     <div class="form-dialog-heading modal-dialog-heading">
       <h2 data-i18n="common.contact" id="contact-title" tabindex="-1">Contacto</h2>
       <span class="modal-loading-indicator" aria-hidden="true"></span>
-      <button data-i18n="common.close" type="button" id="contact-close" class="button button-secondary">Cerrar</button>
+      <button data-i18n-aria-label="common.close" type="button" id="contact-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
     </div>
     <form id="contact-form" class="contact-form" novalidate>
       <label for="contact-email">Email
@@ -140,7 +140,7 @@
   <dialog id="user-profile-dialog" class="modal user-profile-dialog" aria-labelledby="user-profile-dialog-title">
     <div class="form-dialog-heading profile-dialog-heading">
       <h2 data-i18n="profile.complete" id="user-profile-dialog-title" tabindex="-1">Completa tu perfil</h2>
-      <button data-i18n="common.close" type="button" id="user-profile-close" class="button button-secondary" hidden>Cerrar</button>
+      <button data-i18n-aria-label="common.close" type="button" id="user-profile-close" class="button button-secondary modal-close" aria-label="Cerrar" hidden>&times;</button>
     </div>
     <form id="user-profile-form" class="user-profile-form" novalidate>
       <div class="profile-two-column-row">
@@ -487,7 +487,8 @@ Esta acción no se puede deshacer.</p>
     <dialog id="form-dialog" class="modal" aria-labelledby="form-dialog-title">
       <div class="form-dialog-heading modal-dialog-heading">
         <h2 data-i18n="inventory.add" id="form-dialog-title">Añadir a inventario</h2>
-        <button data-i18n="common.close" type="button" id="form-cancel" class="button button-secondary">Cerrar</button>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
+        <button data-i18n-aria-label="common.close" type="button" id="form-cancel" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div data-i18n-aria-label="inventory.creationMode" id="creation-mode-tabs" class="creation-mode-tabs" role="group" aria-label="Modo de alta" hidden>
         <button data-i18n="inventory.new" type="button" class="button button-secondary" data-creation-mode="individual" aria-pressed="true">Nueva minipersona</button>
@@ -589,7 +590,6 @@ Esta acción no se puede deshacer.</p>
         </section>
         <div class="form-actions">
           <span id="brickset-loading" class="brickset-loading" role="status" aria-live="polite" hidden>
-            <span class="brickset-loading-icon" aria-hidden="true"></span>
             <span data-i18n="inventory.autocompleting">Autocompletando...</span>
           </span>
           <button data-i18n="common.save" type="submit" id="form-submit" class="button button-primary">Guardar</button>
@@ -600,7 +600,8 @@ Esta acción no se puede deshacer.</p>
     <dialog id="set-number-dialog" class="modal set-number-dialog" aria-labelledby="set-number-title">
       <div class="form-dialog-heading modal-dialog-heading">
         <h2 data-i18n="inventory.searchSet" id="set-number-title">Buscar set</h2>
-        <button data-i18n="common.close" type="button" id="set-number-close" class="button button-secondary">Cerrar</button>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
+        <button data-i18n-aria-label="common.close" type="button" id="set-number-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <label data-i18n="inventory.setNumber" for="set-number-input">Número de set</label>
       <input id="set-number-input" inputmode="text" autocomplete="off">
@@ -616,7 +617,7 @@ Esta acción no se puede deshacer.</p>
         <h2 id="image-modal-title">ID</h2>
         <p id="image-modal-name"></p>
         <img id="image-modal-image" alt="">
-        <button data-i18n="common.close" type="button" id="image-modal-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="image-modal-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
     </dialog>
 
@@ -640,7 +641,7 @@ Esta acción no se puede deshacer.</p>
           <strong id="gamification-dialog-bricks">0</strong>
           <img class="gamification-brick-icon" src="/toast_images/brick.png" alt="Bricks">
         </span>
-        <button data-i18n="common.close" type="button" id="gamification-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="gamification-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <p id="achievements-status" class="status" role="status" aria-live="polite"></p>
       <ul id="gamification-achievements" class="achievements-list"></ul>
@@ -653,7 +654,7 @@ Esta acción no se puede deshacer.</p>
           <h2 data-i18n="common.notifications" id="notifications-dialog-title">Notificaciones</h2>
         </div>
         <span class="modal-loading-indicator" aria-hidden="true"></span>
-        <button data-i18n="common.close" type="button" id="notifications-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="notifications-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div class="notifications-toolbar" hidden>
         <button data-i18n="notifications.markAll" type="button" id="notifications-mark-all" class="button button-secondary" disabled>Marcar todas como leídas</button>
@@ -667,7 +668,7 @@ Esta acción no se puede deshacer.</p>
         <img src="/status_images/friends.png" alt="" aria-hidden="true">
         <h2 data-i18n="common.friends" id="friends-dialog-title">Amigos</h2>
         <span class="modal-loading-indicator" aria-hidden="true"></span>
-        <button data-i18n="common.close" type="button" id="friends-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="friends-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div data-i18n-aria-label="friends.title" class="friends-tabs" role="tablist" aria-label="Amigos y solicitudes">
         <button data-i18n="common.friends" type="button" id="friends-tab-friends" class="button button-secondary" role="tab" aria-selected="true" aria-controls="friends-panel-friends" data-friends-tab="friends">Amigos</button>
@@ -700,7 +701,8 @@ Esta acción no se puede deshacer.</p>
         <img id="public-profile-avatar" class="public-profile-avatar" alt="" hidden>
         <span id="public-profile-avatar-fallback" class="public-profile-avatar-fallback" aria-hidden="true">👤</span>
         <h2 id="public-profile-title"></h2>
-        <button data-i18n="common.close" type="button" id="public-profile-close" class="button button-secondary">Cerrar</button>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
+        <button data-i18n-aria-label="common.close" type="button" id="public-profile-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <p id="public-profile-status" class="status" role="status" aria-live="polite"></p>
       <button data-i18n="common.retry" type="button" id="public-profile-retry" class="button button-secondary" hidden>Reintentar</button>
@@ -751,7 +753,8 @@ Esta acción no se puede deshacer.</p>
     <dialog id="dna-dialog" class="modal modal-dna" aria-labelledby="dna-dialog-title">
       <div class="dna-dialog-heading modal-dialog-heading">
         <h2 id="dna-dialog-title">DNA</h2>
-        <button data-i18n="common.close" type="button" id="dna-close" class="button button-secondary">Cerrar</button>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
+        <button data-i18n-aria-label="common.close" type="button" id="dna-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div class="dna-dialog-body">
         <div data-i18n-aria-label="gamification.dnaTitle" id="dna-chart" class="dna-chart" role="img" aria-label="DNA de tu colección" hidden>
@@ -772,7 +775,7 @@ Esta acción no se puede deshacer.</p>
           <h2 data-i18n="ranking.global" id="ranking-dialog-title">Ranking Global</h2>
         </div>
         <span class="modal-loading-indicator" aria-hidden="true"></span>
-        <button data-i18n="common.close" type="button" id="ranking-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="ranking-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <p id="ranking-status" class="status" role="status" aria-live="polite"></p>
       <div class="ranking-order-toolbar">
@@ -794,7 +797,7 @@ Esta acción no se puede deshacer.</p>
           <h2 data-i18n="ranking.weekly" id="weekly-ranking-title">Ranking Semanal</h2>
         </div>
         <span class="modal-loading-indicator" aria-hidden="true"></span>
-        <button data-i18n="common.close" type="button" id="weekly-ranking-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="weekly-ranking-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <p id="weekly-ranking-status" class="status" role="status" aria-live="polite"></p>
       <div id="weekly-ranking-list" class="global-ranking-list"></div>
@@ -804,7 +807,7 @@ Esta acción no se puede deshacer.</p>
       <div class="analytics-history-heading modal-dialog-heading">
         <h2 data-i18n="gamification.progress" id="analytics-history-title">Progreso</h2>
         <span class="modal-loading-indicator" aria-hidden="true"></span>
-        <button data-i18n="common.close" type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
+        <button data-i18n-aria-label="common.close" type="button" id="analytics-history-close" class="button button-secondary modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div class="analytics-history-controls">
         <div data-i18n-aria-label="history.period" id="analytics-history-ranges" class="analytics-history-ranges" role="group" aria-label="Rango temporal">

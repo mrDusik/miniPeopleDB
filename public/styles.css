@@ -559,13 +559,14 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .brickset-loading, .loading-message { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 700 0.9rem var(--font-body); }
 .modal .loading-message, .modal .brickset-loading { padding-left: 4px; }
 .brickset-loading[hidden] { display: none; }
-.modal-loading-indicator::before, .brickset-loading-icon, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
+.modal-loading-indicator::before, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
+.modal:has(> .modal-dialog-heading > .modal-loading-indicator) .loading-message::before { display: none; }
 .modal:not(#form-dialog):not(#set-number-dialog):not(.modal-live-content):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message)) { display: none; }
 #dna-dialog:has(#dna-status.loading-message) .dna-dialog-body { display: block; }
 #dna-dialog:has(#dna-status.loading-message) .dna-legend-panel { width: 100%; }
 #dna-status.loading-message { justify-content: flex-start; text-align: left; }
 @keyframes brickset-spinner { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .modal-loading-indicator::before, .brickset-loading-icon, .loading-message::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .modal-loading-indicator::before, .loading-message::before { animation: none; } }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
 .filters-form .form-actions #filter-submit { margin-left: 0; }
 .form-state-toggles { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
@@ -799,6 +800,9 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
 .modal-dialog-heading { margin-bottom: 12px; }
+.modal-dialog-heading:has(> .modal-loading-indicator) { justify-content: flex-start; column-gap: 8px; }
+.modal-dialog-heading:has(> .modal-loading-indicator) > h2 { min-width: 0; overflow-wrap: anywhere; }
+.modal .modal-dialog-heading .modal-close, .modal .profile-dialog-heading .modal-close, .modal-overlay .modal-content .modal-close { flex: 0 0 36px; width: 36px; height: 36px; min-height: 36px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .modal-live-content:not(.modal-contact)[open] { display: flex; flex-direction: column; height: min(640px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); overflow: hidden; }
 .modal-live-content > .modal-dialog-heading,
 .modal-live-content > .notifications-toolbar,
@@ -807,10 +811,14 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .modal-live-content > .friends-tabs { flex-shrink: 0; }
 .modal-live-content > .modal-dialog-heading > h2,
 .modal-live-content > .ranking-dialog-heading > div { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.modal-loading-indicator { display: grid; flex: 0 0 20px; place-items: center; width: 20px; height: 20px; visibility: hidden; }
+.modal-loading-indicator { display: grid; flex: 0 0 20px; place-items: center; width: 20px; height: 20px; margin-left: auto; visibility: hidden; }
 .modal-live-content:has(> .status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
 .modal-contact:has(#contact-status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
-.modal-friends:has(> .friends-panel:not([hidden]) .loading-message) > .modal-dialog-heading > .modal-loading-indicator { visibility: visible; }
+.modal-friends:has(> .friends-panel:not([hidden]) .loading-message) > .modal-dialog-heading > .modal-loading-indicator,
+#form-dialog:has(#brickset-loading:not([hidden])) > .modal-dialog-heading > .modal-loading-indicator,
+#set-number-dialog:has(#set-number-status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
+#public-profile-dialog:has(#public-profile-status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
+#dna-dialog:has(#dna-status.loading-message) > .modal-dialog-heading > .modal-loading-indicator { visibility: visible; }
 .modal-live-content .status:empty { display: none; }
 .modal-live-content .status.loading-message { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .modal-live-content > .global-ranking-list,
@@ -1172,9 +1180,10 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .modal { width: calc(100% - 24px); padding: 14px; }
   .modal-public-profile { max-height: calc(100dvh - 24px); }
   .public-profile-tops { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .public-profile-heading { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 8px; }
+  .public-profile-heading { display: grid; grid-template-columns: 42px minmax(0, 1fr) 20px auto; gap: 8px; }
   .public-profile-heading h2 { grid-column: 2; grid-row: 1; font-size: 1rem; }
-  .public-profile-heading .button { grid-column: 3; grid-row: 1; justify-self: end; min-height: 36px; padding: 0 10px; }
+  .public-profile-heading .modal-loading-indicator { grid-column: 3; grid-row: 1; }
+  .public-profile-heading .button { grid-column: 4; grid-row: 1; justify-self: end; min-height: 36px; padding: 0 10px; }
   .public-profile-dna-body { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .public-profile-dna-body .dna-chart { width: min(220px, 100%); }
   #form-dialog .modal-form-column, #form-dialog .modal-fields { gap: 6px; }
