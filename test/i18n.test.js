@@ -30,6 +30,19 @@ const catalogs = {
   },
 };
 
+test('el catálogo español usa minipersona en el histórico y en los contadores', async () => {
+  const spanish = JSON.parse(await readFile(new URL('../public/locales/es.json', import.meta.url), 'utf8'));
+  assert.equal(spanish['common.figures'], 'Minipersonas');
+  assert.equal(spanish['history.figureCount'], 'Minipersonas en colección: {{count}}');
+  assert.equal(spanish['inventory.count_one'], '{{count}} minipersona');
+  assert.equal(spanish['inventory.count_other'], '{{count}} minipersonas');
+});
+
+test('la descripción francesa de Collector usa una frase corta para el modal DNA', async () => {
+  const french = JSON.parse(await readFile(new URL('../public/locales/fr.json', import.meta.url), 'utf8'));
+  assert.equal(french['gamification.collectorDescription'], 'Collectionnez et complétez des séries.');
+});
+
 function createBrowser({ fetchCatalog, remembered, unavailableStorage = false } = {}) {
   const dom = new JSDOM(`<!doctype html><html lang="es"><body>
     <span data-i18n="test.fallback"></span>

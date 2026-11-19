@@ -465,7 +465,7 @@ test('valor y cambio neto muestran baseline adyacente, descensos y huecos como n
     assert.equal(deltaDataset.backgroundColor, 'rgba(255, 213, 0, 0.4)');
     assert.equal(deltaDataset.label, 'Colecci\u00f3n');
     assert.equal(chart.options.scales.figures.title.text, 'Colecci\u00f3n');
-    assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Figuras en colecci\u00f3n: 9');
+    assert.equal(chart.options.plugins.tooltip.callbacks.afterBody([{ parsed: { x: Date.parse('2026-10-02T00:00:00.000Z') } }]), 'Minipersonas en colecci\u00f3n: 9');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 0, parsed: { y: 17 } }), 'Valor de colección: 17,00 €');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: -3 } }), 'Colecci\u00f3n: -3');
     assert.equal(chart.options.plugins.tooltip.callbacks.label({ datasetIndex: 1, parsed: { y: null } }), 'Colecci\u00f3n: Sin datos');

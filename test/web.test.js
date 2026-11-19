@@ -1679,7 +1679,7 @@ test('los iconos recalculan categorias, subcategorias y años sin opciones de to
     assert.deepEqual(options('anio'), ['Todos (4)', '2024 (2)', '2020 (1)', '1980 (1)']);
     year.value = '2024';
     window.document.querySelector('#filters-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
-    assert.equal(window.document.querySelector('#result-count').textContent, '2 figuras');
+    assert.equal(window.document.querySelector('#result-count').textContent, '2 minipersonas');
     assert.deepEqual(catalogRequests, ['/minifiguras']);
   } finally {
     dom.window.close();
