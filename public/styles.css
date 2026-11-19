@@ -149,7 +149,6 @@ body {
 }
 .notifications-toolbar { display: flex; justify-content: flex-start; padding: 2px 0 0; }
 .notifications-toolbar[hidden] { display: none; }
-#notifications-dialog #notifications-status { min-height: 0; margin: 0; }
 #notifications-dialog .achievements-list { margin-top: 0; margin-bottom: 4px; }
 .notifications-list .notification-item { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .notification-content { grid-column: 1; display: grid; gap: 6px; width: 100%; min-width: 0; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 4px; background: var(--surface); box-shadow: var(--shadow); }
@@ -334,7 +333,7 @@ button { min-height: 36px; }
 .status { min-height: 24px; margin-bottom: 14px; color: var(--muted); font: 0.95rem var(--font-body); }
 #status:empty { display: none; }
 .status.error { color: var(--accent-dark); }
-#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty { display: none; }
+#achievements-status:empty { display: none; }
 .table-wrap { overflow-x: auto; }
 .catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; color: var(--muted); font: 700 0.8rem var(--font-body); }
 .catalog-pagination .button, .analytics-history-pagination .button { width: 36px; min-width: 36px; padding: 0; }
@@ -560,13 +559,13 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .brickset-loading, .loading-message { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 700 0.9rem var(--font-body); }
 .modal .loading-message, .modal .brickset-loading { padding-left: 4px; }
 .brickset-loading[hidden] { display: none; }
-.brickset-loading-icon, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
-.modal:not(#form-dialog):not(#set-number-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message)) { display: none; }
+.modal-loading-indicator::before, .brickset-loading-icon, .loading-message::before { flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: brickset-spinner 0.8s linear infinite; content: ''; }
+.modal:not(#form-dialog):not(#set-number-dialog):not(.modal-live-content):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message)) { display: none; }
 #dna-dialog:has(#dna-status.loading-message) .dna-dialog-body { display: block; }
 #dna-dialog:has(#dna-status.loading-message) .dna-legend-panel { width: 100%; }
 #dna-status.loading-message { justify-content: flex-start; text-align: left; }
 @keyframes brickset-spinner { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .brickset-loading-icon, .loading-message::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .modal-loading-indicator::before, .brickset-loading-icon, .loading-message::before { animation: none; } }
 .filters-form .form-actions { grid-column: 9; grid-row: 1; align-self: end; padding: 0; border: 0; justify-content: center; }
 .filters-form .form-actions #filter-submit { margin-left: 0; }
 .form-state-toggles { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
@@ -773,7 +772,6 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .analytics-history-ranges .button:first-child { border-radius: 4px 0 0 4px; }
 .analytics-history-ranges .button:last-child { border-radius: 0 4px 4px 0; }
 .analytics-history-ranges .button[aria-pressed="true"] { border-color: var(--blue); color: white; background: var(--blue); }
-#analytics-history-status { min-height: 22px; margin: 6px 0; }
 .analytics-history-charts { display: grid; gap: 24px; }
 .analytics-history-chart { min-width: 0; padding: 20px 0 0; border-top: 1px solid var(--line); }
 .analytics-history-chart h3 { margin: 0 0 10px; color: var(--ink); font: 700 1.1rem var(--font-body); }
@@ -801,6 +799,24 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
 .ranking-dialog-heading .eyebrow { margin-bottom: 4px; }
 .ranking-dialog-heading h2 { margin: 0; }
 .modal-dialog-heading { margin-bottom: 12px; }
+.modal-live-content:not(.modal-contact)[open] { display: flex; flex-direction: column; height: min(640px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); overflow: hidden; }
+.modal-live-content > .modal-dialog-heading,
+.modal-live-content > .notifications-toolbar,
+.modal-live-content > .analytics-history-controls,
+.modal-live-content > .ranking-order-toolbar,
+.modal-live-content > .friends-tabs { flex-shrink: 0; }
+.modal-live-content > .modal-dialog-heading > h2,
+.modal-live-content > .ranking-dialog-heading > div { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.modal-loading-indicator { display: grid; flex: 0 0 20px; place-items: center; width: 20px; height: 20px; visibility: hidden; }
+.modal-live-content:has(> .status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
+.modal-contact:has(#contact-status.loading-message) > .modal-dialog-heading > .modal-loading-indicator,
+.modal-friends:has(> .friends-panel:not([hidden]) .loading-message) > .modal-dialog-heading > .modal-loading-indicator { visibility: visible; }
+.modal-live-content .status:empty { display: none; }
+.modal-live-content .status.loading-message { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.modal-live-content > .global-ranking-list,
+.modal-live-content > .notifications-list,
+.modal-live-content > .friends-panel:not([hidden]),
+.modal-live-content > .analytics-history-charts { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
 .ranking-order-toolbar { display: flex; justify-content: flex-start; padding: 0 4px 8px 0; }
 .ranking-criterion-icon { width: 1.25rem; height: 1.25rem; }
 .global-ranking-list { display: grid; align-content: start; gap: 8px; max-height: calc(100vh - 240px); overflow-y: auto; padding: 4px 4px 4px 0; }
@@ -1175,6 +1191,7 @@ span.achievement-icon { display: grid; place-items: center; font-size: 1.6rem; l
   .achievement-item { grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 6px; }
   .achievement-item .achievement-bricks { white-space: nowrap; }
   .ranking-dialog-heading, .achievements-heading, .dna-dialog-heading, .form-dialog-heading, .friends-dialog-heading { height: 66px; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .modal-live-content > .modal-dialog-heading { height: auto; min-height: 66px; }
   .ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button, .friends-dialog-heading .button { flex: 0 0 auto; height: 36px; min-height: 36px; padding: 0 10px; }
   .achievements-heading-icon, .friends-dialog-heading img { width: 32px; height: 32px; }
   .achievements-heading-text { min-width: 0; }

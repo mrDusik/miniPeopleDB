@@ -26,6 +26,49 @@ El registro clasico SHALL pedir solo email, contraseña y confirmacion. SHALL oc
 
 Los campos de contraseña del acceso y registro SHALL tener la misma altura y tipografia que Username y Email, independientemente de sus contenedores y toggles de visibilidad.
 
+### Requirement: Actualizar modales sin vaciar el contenido
+
+Los modales de ranking global, ranking semanal, Progreso y notificaciones SHALL conservar el contenido ya cargado durante una actualizacion, con un indicador de carga localizado que no oculte sus controles ni datos. El espacio del indicador SHALL mantenerse estable para evitar saltos al aparecer o desaparecer. La primera carga SHALL seguir mostrando su estado de carga.
+
+En esos modales, Amigos y Contacto, el indicador visual SHALL ocupar un hueco permanente de 20px en la cabecera, junto al boton de cierre. Los textos de carga SHALL conservar su anuncio localizado mediante `role=status` y `aria-live=polite`, sin ocupar espacio en el cuerpo. Los errores y estados vacios SHALL seguir siendo visibles. En Amigos solo SHALL activarse el indicador por la pestana visible, incluida la espera del buscador. SHALL respetarse la preferencia de movimiento reducido.
+
+Ranking global, ranking semanal, Progreso, notificaciones y Amigos SHALL conservar una altura estable de 640px, limitada a la altura disponible de pantalla con margenes de 12px, desde la primera carga. Sus listas o graficos SHALL disponer de scroll interior sin desplazar la cabecera ni los selectores. Contacto SHALL conservar la altura natural de su formulario, sin variaciones por el indicador de envio.
+
+Los cambios de criterio o periodo SHALL sustituir los datos solo al recibir la respuesta vigente. Si falla la actualizacion SHALL conservarse la ultima vista correcta y mostrarse el error, con reintento en Progreso. Los datos conservados SHALL mantener su criterio o rango original al cambiar idioma o moneda mientras hay una peticion pendiente. Cerrar sesion o cambiar de cuenta SHALL seguir limpiando los datos privados e invalidando respuestas anteriores.
+
+La paginacion de notificaciones SHALL mantener las filas existentes no actualizadas por la respuesta, sus elementos desplegados, el foco y el desplazamiento, incorporando los nuevos avisos sin duplicados. Abrir o refrescar la bandeja SHALL conservar su contenido hasta resolver la peticion, tambien ante errores. La accion de marcar todas como leidas SHALL permanecer visible si hay avisos y deshabilitada durante la carga.
+
+Amigos SHALL conservar visibles sus pestanas y listas al actualizar y mantener la ultima lista correcta ante un error. El buscador SHALL conservar los resultados durante el debounce, la peticion y los errores; solo SHALL sustituirlos con la respuesta vigente o limpiarlos cuando la consulta tenga menos de tres caracteres. Las respuestas obsoletas SHALL NOT modificar los resultados actuales.
+
+Contacto SHALL mantener visibles campos, mensaje y acciones durante el envio. Los campos SHALL ser de solo lectura mientras se envia y recuperar su estado editable al terminar, sin habilitar la identidad autenticada. Un fallo SHALL conservar el texto para reintentar. Cerrar y reabrir el formulario SHALL invalidar las respuestas anteriores para no modificar un borrador nuevo.
+
+Las acciones de lectura, agradecimiento y aceptacion de notificaciones SHALL actualizar solo la fila afectada y conservar las otras filas. Todas las acciones, incluida marcar todas como leidas, SHALL mantener desplegados y desplazamiento, y restaurar el foco al control correspondiente o a su fila si el control queda deshabilitado. Las actualizaciones de datos de una fila SHALL seguir reflejandose sin duplicarla.
+
+#### Scenario: Cambiar un selector con datos visibles
+- **WHEN** se cambia el criterio del ranking o el periodo de Progreso
+- **THEN** los datos anteriores permanecen visibles mientras llega la nueva respuesta
+- **AND** una respuesta obsoleta no sustituye los datos y un fallo no vacia el modal
+
+#### Scenario: Paginar notificaciones
+- **WHEN** se solicitan mas notificaciones al hacer scroll
+- **THEN** la lista permanece visible durante la carga
+- **AND** las filas no modificadas conservan sus nodos, expansion, foco y posicion de scroll tras incorporar la pagina
+
+#### Scenario: Mostrar carga sin cambiar las dimensiones
+- **WHEN** empieza o termina una carga en un modal incremental, incluido el envio de Contacto
+- **THEN** el indicador aparece o desaparece en el hueco de cabecera sin mover los controles ni cambiar las dimensiones del modal
+- **AND** el texto de carga sigue accesible y un fallo muestra el error sin borrar los datos
+
+#### Scenario: Actualizar una busqueda de amigos
+- **WHEN** se modifica una consulta valida con resultados ya visibles
+- **THEN** los resultados anteriores permanecen durante la espera y la carga
+- **AND** un error no los borra y una respuesta de una consulta anterior no los sustituye
+
+#### Scenario: Leer una notificacion desplegada
+- **WHEN** se marca como leido un resumen diario abierto
+- **THEN** el resumen permanece desplegado y las otras filas conservan sus nodos
+- **AND** se actualizan la lectura y los controles sin perder el contexto de navegacion
+
 ### Requirement: Terminologia visible minipersona
 
 La interfaz SHALL usar `minipersona` y `minipersonas` en lugar de `minifigura` y `minifiguras` en textos de acciones, dialogos, estados vacios, errores, confirmaciones, accesibilidad, logros, notificaciones y toasts. SHALL conservar mayusculas y plurales. Los mensajes de sistema y logros recibidos del backend SHALL adaptarse exclusivamente al renderizar, sin mutar los objetos originales.

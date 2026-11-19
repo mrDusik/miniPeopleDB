@@ -2464,6 +2464,49 @@ test('Contacto desde acceso permite email o usuario, confirma el envío y restau
   dom.window.close();
 });
 
+test('Contacto conserva visibles los campos y el mensaje durante el envio y tras un error', async () => {
+  let finish;
+  const { dom, window, $ } = startApp({
+    session: null,
+    fetchImpl: (url) => url === '/api/contact'
+      ? new Promise((resolve) => { finish = resolve; }) : undefined,
+  });
+  try {
+    await tick();
+    await tick();
+    const style = window.document.createElement('style');
+    style.textContent = styles;
+    window.document.head.append(style);
+    const hideSelector = [...style.sheet.cssRules].find((rule) =>
+      rule.selectorText?.includes(':not(.modal-live-content):has(.loading-message)')).selectorText;
+    $('#open-contact-auth').click();
+    $('#contact-email').value = 'person@example.com';
+    $('#contact-message').value = 'Mi mensaje pendiente.';
+    $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal($('#contact-status').classList.contains('loading-message'), true);
+    assert.equal($('#contact-message').matches(hideSelector), false);
+    assert.equal($('#contact-submit').matches(hideSelector), false);
+    assert.equal($('#contact-message').value, 'Mi mensaje pendiente.');
+    assert.equal($('#contact-message').readOnly, true);
+    finish({ ok: false, status: 503 });
+    await tick();
+    assert.equal($('#contact-message').value, 'Mi mensaje pendiente.');
+    assert.equal($('#contact-submit').disabled, false);
+    assert.equal($('#contact-message').readOnly, false);
+    assert.equal($('#contact-status').className, 'status error');
+    $('#contact-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    $('#contact-close').click();
+    $('#open-contact-auth').click();
+    $('#contact-message').value = 'Un borrador nuevo.';
+    finish({ ok: true, status: 200 });
+    await tick();
+    assert.equal($('#contact-message').value, 'Un borrador nuevo.');
+    assert.equal($('#contact-status').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('Contacto autenticado muestra identidad fija y envía solo el mensaje con JWT', async () => {
   const session = { access_token: 'token-contact', user: { id: 'user-a', email: 'account@example.com' } };
   let submittedRequest;

@@ -113,9 +113,10 @@
       <button data-i18n="common.retryConnection" type="button" id="auth-retry" class="auth-text-button" hidden>Reintentar conexión</button>
     </div>
   </section>
-  <dialog id="contact-dialog" class="modal modal-contact" aria-labelledby="contact-title">
+  <dialog id="contact-dialog" class="modal modal-contact modal-live-content" aria-labelledby="contact-title">
     <div class="form-dialog-heading modal-dialog-heading">
       <h2 data-i18n="common.contact" id="contact-title" tabindex="-1">Contacto</h2>
+      <span class="modal-loading-indicator" aria-hidden="true"></span>
       <button data-i18n="common.close" type="button" id="contact-close" class="button button-secondary">Cerrar</button>
     </div>
     <form id="contact-form" class="contact-form" novalidate>
@@ -645,12 +646,13 @@ Esta acción no se puede deshacer.</p>
       <ul id="gamification-achievements" class="achievements-list"></ul>
     </dialog>
 
-    <dialog id="notifications-dialog" class="modal modal-achievements" aria-labelledby="notifications-dialog-title">
+    <dialog id="notifications-dialog" class="modal modal-achievements modal-live-content" aria-labelledby="notifications-dialog-title">
       <div class="achievements-heading modal-dialog-heading">
         <img class="achievements-heading-icon" src="/status_images/sobre.png" alt="">
         <div class="achievements-heading-text">
           <h2 data-i18n="common.notifications" id="notifications-dialog-title">Notificaciones</h2>
         </div>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
         <button data-i18n="common.close" type="button" id="notifications-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="notifications-toolbar" hidden>
@@ -660,10 +662,11 @@ Esta acción no se puede deshacer.</p>
       <ul id="notifications-list" class="achievements-list notifications-list"></ul>
     </dialog>
 
-    <dialog id="friends-dialog" class="modal modal-friends" aria-labelledby="friends-dialog-title">
+    <dialog id="friends-dialog" class="modal modal-friends modal-live-content" aria-labelledby="friends-dialog-title">
       <div class="friends-dialog-heading modal-dialog-heading">
         <img src="/status_images/friends.png" alt="" aria-hidden="true">
         <h2 data-i18n="common.friends" id="friends-dialog-title">Amigos</h2>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
         <button data-i18n="common.close" type="button" id="friends-close" class="button button-secondary">Cerrar</button>
       </div>
       <div data-i18n-aria-label="friends.title" class="friends-tabs" role="tablist" aria-label="Amigos y solicitudes">
@@ -763,11 +766,12 @@ Esta acción no se puede deshacer.</p>
       <button data-i18n="common.retry" type="button" id="dna-retry" class="button button-secondary" hidden>Reintentar</button>
     </dialog>
 
-    <dialog id="ranking-dialog" class="modal modal-ranking" aria-labelledby="ranking-dialog-title">
+    <dialog id="ranking-dialog" class="modal modal-ranking modal-live-content" aria-labelledby="ranking-dialog-title">
       <div class="ranking-dialog-heading modal-dialog-heading">
         <div>
           <h2 data-i18n="ranking.global" id="ranking-dialog-title">Ranking Global</h2>
         </div>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
         <button data-i18n="common.close" type="button" id="ranking-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="ranking-status" class="status" role="status" aria-live="polite"></p>
@@ -784,20 +788,22 @@ Esta acción no se puede deshacer.</p>
       <div id="global-ranking-list" class="global-ranking-list"></div>
     </dialog>
 
-    <dialog id="weekly-ranking-dialog" class="modal modal-ranking" aria-labelledby="weekly-ranking-title">
+    <dialog id="weekly-ranking-dialog" class="modal modal-ranking modal-live-content" aria-labelledby="weekly-ranking-title">
       <div class="ranking-dialog-heading modal-dialog-heading">
         <div>
           <h2 data-i18n="ranking.weekly" id="weekly-ranking-title">Ranking Semanal</h2>
         </div>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
         <button data-i18n="common.close" type="button" id="weekly-ranking-close" class="button button-secondary">Cerrar</button>
       </div>
       <p id="weekly-ranking-status" class="status" role="status" aria-live="polite"></p>
       <div id="weekly-ranking-list" class="global-ranking-list"></div>
     </dialog>
 
-    <dialog id="analytics-history-dialog" class="modal modal-analytics-history" aria-labelledby="analytics-history-title">
+    <dialog id="analytics-history-dialog" class="modal modal-analytics-history modal-live-content" aria-labelledby="analytics-history-title">
       <div class="analytics-history-heading modal-dialog-heading">
         <h2 data-i18n="gamification.progress" id="analytics-history-title">Progreso</h2>
+        <span class="modal-loading-indicator" aria-hidden="true"></span>
         <button data-i18n="common.close" type="button" id="analytics-history-close" class="button button-secondary">Cerrar</button>
       </div>
       <div class="analytics-history-controls">

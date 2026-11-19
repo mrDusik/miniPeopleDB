@@ -10,6 +10,7 @@
     "android:sync": "npm run android:web && cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "migrate:gamification-v2": "node scripts/migrate-gamification-v2.js",
+    "cleanup:launch-users": "node scripts/cleanup-launch-users.js",
     "test": "node --test"
   },
   "dependencies": {

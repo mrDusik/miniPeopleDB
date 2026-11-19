@@ -22,6 +22,26 @@ La migración `supabase/android-push-notifications.sql` es aditiva respecto del 
 
 Los tests automatizados PGlite de `test/android-push-supabase.test.js` ejercitan esos permisos y el alcance de las RPC. No sustituyen la revisión del proyecto Supabase propietario antes de ejecutar la migración remota. Esta migración no debe ejecutarse desde el arranque de la aplicación ni desde una ruta HTTP.
 
+### Horario del resumen diario
+
+El push Android de `daily_summary` queda disponible a las 10:00 de `Europe/Madrid`
+del día del snapshot (con cambio automático verano/invierno), o al confirmarse el
+resumen si termina más tarde, incluso al día siguiente. La bandeja y Realtime
+siguen recibiendo el resumen al terminar el proceso. Las demás categorías no
+cambian de horario.
+
+En bases con push ya instalado, pausa el worker y ejecuta
+`supabase/android-push-daily-summary-schedule.sql` antes de reactivarlo.
+La migración es transaccional y reejecutable: actualiza el trigger y programa
+también los resúmenes en cola que aún no se han reclamado. No reenvía eventos
+completados ni modifica entregas en curso o reintentos. Para instalaciones nuevas,
+`supabase/android-push-notifications.sql` ya incluye el horario.
+
+El outbox conserva la espera entre reinicios. El worker consulta cada 10 segundos:
+las 10:00 son la hora de disponibilidad de envío, no una garantía de presentación
+exacta en el dispositivo (depende del backend, FCM, conexión y permisos Android).
+El TTL de 24 horas cuenta desde la disponibilidad de envío, no desde las 04:15.
+
 ## Activación del servidor
 
 - Carga `FIREBASE_SERVICE_ACCOUNT_JSON` únicamente como secreto del servicio backend. Debe contener la credencial de Firebase Admin del proyecto propietario; nunca la añadas a `sup.env.example`, al repositorio, a logs, al navegador, a `google-services.json` o al APK.
@@ -34,6 +54,12 @@ Los tests automatizados PGlite de `test/android-push-supabase.test.js` ejercitan
 Consulta `docs/android-installation.md`. Hace falta un proyecto Firebase controlado por el propietario y registrar exactamente `com.mrdusik.minipeopledb`. El archivo cliente `android/app/google-services.json` es opcional para compilar pero necesario para obtener tokens FCM; permanece local e ignorado por Git. No contiene la clave privada de servidor.
 
 En Android, Preferencias muestra el toggle «Notificaciones del sistema» según el permiso de la app y el canal configurado. Al encenderlo solicita `POST_NOTIFICATIONS` si hace falta; al apagarlo abre los ajustes nativos de notificaciones, y el estado se consulta de nuevo al regresar. Denegar o revocar el permiso conserva la bandeja. La app actualiza el permiso al reanudarse; la revocación de sesión se intenta antes de cerrar sesión. Si el dispositivo estaba offline, conserva un marcador local sin credenciales y bloquea el registro de otra cuenta hasta que el propietario anterior pueda revocar el token con su propia sesión. No se intenta borrar una instalación ajena con el JWT de una cuenta nueva.
+
+Al tocar un push, el modal mantiene «Cargando notificaciones...» durante la
+consulta y un único reintento tras un segundo si falla la red o el servidor
+responde HTTP 5xx. Si tampoco se recupera, muestra el error de carga real sin
+seguir paginando ni indicar por error que la notificación no existe. Esta mejora
+del cliente requiere reconstruir y reinstalar el APK; no requiere SQL adicional.
 
 ## Rollback
 

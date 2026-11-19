@@ -445,6 +445,7 @@ let supabaseClient = null;
 let currentSession = null;
 let contactDialogTrigger = null;
 let contactSending = false;
+let contactRequestSequence = 0;
 let authCallbackPending = false;
 let authCallbackTimeoutId = null;
 let passwordRecoveryPending = false;
@@ -494,6 +495,7 @@ let rankingEntries = [];
 let defaultRankingEntries = [];
 let rankingRequestId = 0;
 let selectedRankingCriterion = 'nivel';
+let displayedRankingCriterion = 'nivel';
 let expandedRankingUserId = null;
 let weeklyRankingEntries = [];
 let weeklyRankingRequestId = 0;
@@ -531,6 +533,7 @@ let analyticsHistoryRequestSequence = 0;
 let analyticsHistoryTrigger = null;
 let analyticsHistoryRange = null;
 let analyticsHistoryData = null;
+let analyticsHistoryDisplayedRange = null;
 
 formAnioInput.max = String(currentYear);
 
@@ -1809,7 +1812,7 @@ function renderGlobalRanking() {
   if (currentUserIndex === -1) userMenuToggle.removeAttribute('aria-describedby');
   else userMenuToggle.setAttribute('aria-describedby', 'ranking-main-globe');
   renderRankingRows({
-    entries: rankingEntries, list: globalRankingList, criterion: selectedRankingCriterion,
+    entries: rankingEntries, list: globalRankingList, criterion: displayedRankingCriterion,
     expandedUserId: expandedRankingUserId, dialog: rankingDialog, closeButton: rankingCloseButton,
   });
 }
@@ -1975,7 +1978,6 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   if (showState) {
     bindI18n(rankingStatus, 'text', () => t('ranking.loading'));
     rankingStatus.className = 'status loading-message';
-    globalRankingList.replaceChildren();
   }
   try {
     const getRanking = async (url) => {
@@ -1991,6 +1993,7 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
     ]);
     if (sessionUserId !== currentSession?.user?.id || requestId !== rankingRequestId) return [];
     rankingEntries = result;
+    displayedRankingCriterion = criterio;
     defaultRankingEntries = defaultResult ?? result;
     renderGlobalRanking();
     bindI18n(rankingStatus, 'text', () => result.length ? '' : t('ranking.empty'));
@@ -1999,8 +2002,6 @@ async function loadGlobalRanking({ showState = rankingDialog.open } = {}) {
   } catch {
     if (sessionUserId !== currentSession?.user?.id || requestId !== rankingRequestId) return [];
     if (!showState) return [];
-    rankingEntries = [];
-    renderGlobalRanking();
     if (showState) {
       bindI18n(rankingStatus, 'text', () => t('ranking.globalError'));
       rankingStatus.className = 'status error';
@@ -2015,7 +2016,6 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
   if (showState) {
     bindI18n(weeklyRankingStatus, 'text', () => t('ranking.loading'));
     weeklyRankingStatus.className = 'status loading-message';
-    weeklyRankingList.replaceChildren();
   }
   try {
     const response = await apiFetch('/api/ranking/semanal');
@@ -2031,8 +2031,6 @@ async function loadWeeklyRanking({ showState = weeklyRankingDialog.open } = {}) 
     weeklyRankingStatus.className = 'status';
   } catch {
     if (sessionUserId !== currentSession?.user?.id || requestId !== weeklyRankingRequestId || !showState) return;
-    weeklyRankingEntries = [];
-    renderWeeklyRanking();
     bindI18n(weeklyRankingStatus, 'text', () => t('ranking.weeklyError'));
     weeklyRankingStatus.className = 'status error';
   }
@@ -2965,7 +2963,7 @@ function setNotificationsUnreadCount(count) {
   const label = () => unreadCount > 0 ? t('notifications.unread', { count: unreadCount }) : t('common.notifications');
   notificationsUnreadBadge.hidden = unreadCount === 0;
   notificationsUnreadBadge.textContent = unreadCount === 0 ? '' : String(unreadCount);
-  notificationsMarkAllButton.disabled = unreadCount === 0;
+  notificationsMarkAllButton.disabled = notificationsLoading || unreadCount === 0;
   bindI18n(notificationsOpenButton, 'aria-label', label);
   bindI18n(notificationsOpenButton, 'title', label);
 }
@@ -3088,21 +3086,39 @@ function renderNotificationMessage(notification) {
   return message;
 }
 
-function renderNotifications() {
-  notificationsMarkAllButton.parentElement.hidden = notificationsLoading || notificationsItems.length === 0;
-  notificationsList.replaceChildren();
+function renderNotifications({ updatedIds = notificationsItems.map(({ id }) => id) } = {}) {
+  notificationsMarkAllButton.parentElement.hidden = notificationsItems.length === 0;
+  const updated = new Set(updatedIds);
+  const previousRows = new Map([...notificationsList.querySelectorAll('.notification-item')]
+    .map((node) => [node.dataset.notificationId, node]));
+  const scrollTop = notificationsList.scrollTop;
+  const focused = document.activeElement;
+  const focusedId = focused?.closest('.notification-item')?.dataset.notificationId;
+  const focusSelector = focused?.matches('summary') ? 'summary'
+    : ['notification-mark-read', 'notification-thank', 'notification-accept-friend', 'notification-open-weekly-ranking']
+      .filter((className) => focused?.classList.contains(className)).map((className) => `.${className}`)[0];
+  const headings = new Map([...notificationsList.querySelectorAll('.notification-date-group')]
+    .map((node) => [node.textContent, node]));
+  const nodes = [];
   const now = notificationsClock();
   let currentGroup = null;
   for (const notification of notificationsItems) {
     const group = notificationDateGroup(notification.createdAt, now);
     if (group !== currentGroup) {
-      const heading = document.createElement('li');
+      const heading = headings.get(group) ?? document.createElement('li');
       heading.className = 'notification-date-group';
-      const label = document.createElement('h3');
-      bindI18n(label, 'text', () => notificationDateGroup(notification.createdAt, now));
-      heading.append(label);
-      notificationsList.append(heading);
+      if (!heading.hasChildNodes()) {
+        const label = document.createElement('h3');
+        bindI18n(label, 'text', () => notificationDateGroup(notification.createdAt, now));
+        heading.append(label);
+      }
+      nodes.push(heading);
       currentGroup = group;
+    }
+    const previousRow = previousRows.get(notification.id);
+    if (previousRow && !updated.has(notification.id)) {
+      nodes.push(previousRow);
+      continue;
     }
     const item = document.createElement('li');
     item.className = 'notification-item';
@@ -3119,7 +3135,9 @@ function renderNotifications() {
     time.textContent = notificationClockTime(notification.createdAt);
     content.append(time);
     if (notification.type === 'daily_summary') {
-      content.append(renderDailyNotification(notification));
+      const details = renderDailyNotification(notification);
+      details.open = previousRow?.querySelector('.daily-notification')?.open ?? false;
+      content.append(details);
     } else {
       content.append(renderNotificationMessage(notification));
     }
@@ -3209,8 +3227,25 @@ function renderNotifications() {
       content.append(errorMessage);
     }
     item.append(content, controls);
-    notificationsList.append(item);
+    item.classList.toggle('is-push-target', previousRow?.classList.contains('is-push-target') ?? false);
+    nodes.push(item);
   }
+  let cursor = notificationsList.firstChild;
+  for (const node of nodes) {
+    if (node === cursor) cursor = cursor.nextSibling;
+    else notificationsList.insertBefore(node, cursor);
+  }
+  while (cursor) {
+    const next = cursor.nextSibling;
+    cursor.remove();
+    cursor = next;
+  }
+  if (focusedId && !focused.isConnected && notificationsDialog.open) {
+    const row = nodes.find((node) => node.dataset.notificationId === focusedId);
+    const control = focusSelector ? row?.querySelector(focusSelector) : null;
+    (control && !control.disabled ? control : row ?? notificationsCloseButton).focus({ preventScroll: true });
+  }
+  notificationsList.scrollTop = scrollTop;
 }
 
 function formatSignedNumber(value) {
@@ -3319,7 +3354,7 @@ async function acceptFriendNotification(notificationId) {
     || notification.canAccept === false || notificationFriendAcceptRequests.has(notificationId) || !sessionUserId) return;
   notificationFriendAcceptRequests.add(notificationId);
   notificationFriendAcceptErrors.delete(notificationId);
-  renderNotifications();
+  renderNotifications({ updatedIds: [notificationId] });
   try {
     const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/aceptar`, { method: 'POST' });
     const result = await response.json();
@@ -3337,7 +3372,7 @@ async function acceptFriendNotification(notificationId) {
     }
   } finally {
     notificationFriendAcceptRequests.delete(notificationId);
-    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+    if (sessionUserId === currentSession?.user?.id) renderNotifications({ updatedIds: [notificationId] });
   }
 }
 
@@ -3348,7 +3383,7 @@ async function thankNotification(notificationId) {
     || notificationThankRequests.has(notificationId) || !sessionUserId) return;
   notificationThankRequests.add(notificationId);
   notificationThankErrors.delete(notificationId);
-  renderNotifications();
+  renderNotifications({ updatedIds: [notificationId] });
   try {
     const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/agradecer`, { method: 'POST' });
     if (sessionUserId !== currentSession?.user?.id) return;
@@ -3362,7 +3397,7 @@ async function thankNotification(notificationId) {
     if (sessionUserId === currentSession?.user?.id) notificationThankErrors.set(notificationId, tr('notifications.thanksError'));
   } finally {
     notificationThankRequests.delete(notificationId);
-    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+    if (sessionUserId === currentSession?.user?.id) renderNotifications({ updatedIds: [notificationId] });
   }
 }
 
@@ -3372,7 +3407,7 @@ async function markNotificationRead(notificationId) {
   if (!notification || notification.isRead || notificationReadRequests.has(notificationId) || !sessionUserId) return;
   notificationReadRequests.add(notificationId);
   notificationReadErrors.delete(notificationId);
-  renderNotifications();
+  renderNotifications({ updatedIds: [notificationId] });
   try {
     const response = await apiFetch(`/api/notificaciones/${encodeURIComponent(notificationId)}/leer`, { method: 'POST' });
     const result = await response.json();
@@ -3384,24 +3419,19 @@ async function markNotificationRead(notificationId) {
     if (sessionUserId === currentSession?.user?.id) notificationReadErrors.set(notificationId, tr('notifications.readError'));
   } finally {
     notificationReadRequests.delete(notificationId);
-    if (sessionUserId === currentSession?.user?.id) renderNotifications();
+    if (sessionUserId === currentSession?.user?.id) renderNotifications({ updatedIds: [notificationId] });
   }
 }
 
-async function loadNotifications({ reset = false, preserveItems = false } = {}) {
+async function loadNotifications({ reset = false, preserveItems = false, retryTransient = false } = {}) {
   const sessionUserId = currentSession?.user?.id;
   if (!sessionUserId || (!reset && (notificationsLoading || !notificationsHasMore))) return;
   const requestId = ++notificationsRequestSequence;
   const previousCursor = notificationsNextCursor;
   const previousHasMore = notificationsHasMore;
-  if (reset && !preserveItems) {
-    notificationsItems = [];
-    notificationsNextCursor = null;
-    notificationsHasMore = true;
-    renderNotifications();
-  }
   notificationsLoading = true;
-  notificationsMarkAllButton.parentElement.hidden = true;
+  notificationsMarkAllButton.disabled = true;
+  notificationsMarkAllButton.parentElement.hidden = notificationsItems.length === 0;
   if (notificationsDialog.open) {
     bindI18n(notificationsStatus, 'text', () => t('notifications.loading'));
     notificationsStatus.className = 'status loading-message';
@@ -3409,32 +3439,45 @@ async function loadNotifications({ reset = false, preserveItems = false } = {}) 
   const cursor = reset ? null : notificationsNextCursor;
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   try {
-    const response = await apiFetch(`/api/notificaciones${query}`);
-    const result = await response.json();
-    if (requestId !== notificationsRequestSequence || sessionUserId !== currentSession?.user?.id) return;
-    if (!response.ok || !Array.isArray(result.notifications) || !Number.isInteger(result.unreadCount)) {
-      throw new Error('notifications unavailable');
-    }
-    const merged = new Map((reset && !preserveItems ? [] : notificationsItems).map((item) => [item.id, item]));
-    for (const item of result.notifications) merged.set(item.id, item);
-    notificationsItems = [...merged.values()].sort((left, right) =>
-      right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
-    notificationsNextCursor = preserveItems && previousCursor ? previousCursor : result.nextCursor;
-    notificationsHasMore = preserveItems
-      ? previousHasMore || result.nextCursor !== null
-      : result.nextCursor !== null;
-    setNotificationsUnreadCount(result.unreadCount);
-    renderNotifications();
-    bindI18n(notificationsStatus, 'text', () => notificationsItems.length ? '' : t('notifications.empty'));
-  } catch {
-    if (requestId === notificationsRequestSequence && sessionUserId === currentSession?.user?.id) {
-      bindI18n(notificationsStatus, 'text', () => t('notifications.loadError'));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let response;
+      try {
+        response = await apiFetch(`/api/notificaciones${query}`);
+        const result = await response.json();
+        if (requestId !== notificationsRequestSequence || sessionUserId !== currentSession?.user?.id) return false;
+        if (!response.ok || !Array.isArray(result.notifications) || !Number.isInteger(result.unreadCount)) {
+          throw new Error('notifications unavailable');
+        }
+        const merged = new Map((reset && !preserveItems ? [] : notificationsItems).map((item) => [item.id, item]));
+        for (const item of result.notifications) merged.set(item.id, item);
+        notificationsItems = [...merged.values()].sort((left, right) =>
+          right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+        notificationsNextCursor = preserveItems && previousCursor ? previousCursor : result.nextCursor;
+        notificationsHasMore = preserveItems
+          ? previousHasMore || result.nextCursor !== null
+          : result.nextCursor !== null;
+        setNotificationsUnreadCount(result.unreadCount);
+        renderNotifications({ updatedIds: result.notifications.map((item) => item.id) });
+        bindI18n(notificationsStatus, 'text', () => notificationsItems.length ? '' : t('notifications.empty'));
+        return true;
+      } catch (error) {
+        if (requestId !== notificationsRequestSequence || sessionUserId !== currentSession?.user?.id) return false;
+        if (retryTransient && attempt === 0
+          && ((!response && error instanceof TypeError) || (response?.status >= 500 && response.status < 600))) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (requestId !== notificationsRequestSequence || sessionUserId !== currentSession?.user?.id) return false;
+          continue;
+        }
+        bindI18n(notificationsStatus, 'text', () => t('notifications.loadError'));
+        return false;
+      }
     }
   } finally {
     if (requestId === notificationsRequestSequence) {
       notificationsLoading = false;
       notificationsStatus.classList.remove('loading-message');
       notificationsMarkAllButton.parentElement.hidden = notificationsItems.length === 0;
+      notificationsMarkAllButton.disabled = notificationsUnreadBadge.hidden;
     }
   }
 }
@@ -3553,14 +3596,16 @@ async function toggleSystemNotifications() {
 }
 
 async function openPushNotification(notificationId) {
-  if (!currentSession?.user?.id || !UUID_PATTERN.test(notificationId)) return;
+  const sessionUserId = currentSession?.user?.id;
+  if (!sessionUserId || !UUID_PATTERN.test(notificationId)) return;
   if (!notificationsDialog.open) openNotifications(notificationsOpenButton, { load: false });
-  await loadNotifications({ reset: true });
+  if (!await loadNotifications({ reset: true, retryTransient: true })) return;
   let pages = 0;
   while (!notificationsItems.some(({ id }) => id === notificationId) && notificationsHasMore && pages < 20) {
-    await loadNotifications();
+    if (!await loadNotifications({ retryTransient: true })) return;
     pages += 1;
   }
+  if (sessionUserId !== currentSession?.user?.id || !notificationsDialog.open) return;
   const row = [...notificationsList.querySelectorAll('[data-notification-id]')]
     .find((element) => element.dataset.notificationId === notificationId);
   if (!row) {
@@ -3952,7 +3997,6 @@ async function loadFriendsList(tab = friendsActiveTab) {
     status.className = 'status';
   } catch {
     if (requestId === friendsRequestSequence && sessionUserId === currentSession?.user?.id) {
-      document.querySelector(`#friends-list-${tab}`).replaceChildren();
       bindI18n(status, 'text', () => t('friends.listError'));
       status.className = 'status error';
     }
@@ -3975,8 +4019,6 @@ async function searchFriends(query, sequence) {
     status.className = 'status';
   } catch {
     if (sequence === friendsSearchSequence && sessionUserId === currentSession?.user?.id) {
-      document.querySelector('#friends-list-search').replaceChildren();
-      friendsRows.search.clear();
       bindI18n(status, 'text', () => t('friends.searchError'));
       status.className = 'status error';
     }
@@ -3989,15 +4031,15 @@ function scheduleFriendsSearch() {
   const sequence = friendsSearchSequence;
   const query = friendsSearchInput.value.trim();
   const status = document.querySelector('#friends-status-search');
-  document.querySelector('#friends-list-search').replaceChildren();
-  friendsRows.search.clear();
   if (query.length < 3) {
+    document.querySelector('#friends-list-search').replaceChildren();
+    friendsRows.search.clear();
     status.textContent = '';
     status.className = 'status';
     return;
   }
   bindI18n(status, 'text', () => t('friends.preparingSearch'));
-  status.className = 'status';
+  status.className = 'status loading-message';
   friendsSearchTimer = setTimeout(() => {
     friendsSearchTimer = null;
     void searchFriends(query, sequence);
@@ -4537,6 +4579,7 @@ function setAnalyticsHistoryRange(range, presetDays = null) {
 
 function clearAnalyticsHistoryData(clearStatus = true) {
   analyticsHistoryData = null;
+  analyticsHistoryDisplayedRange = null;
   if (clearStatus) analyticsHistoryStatus.textContent = '';
   analyticsHistoryRetryButton.hidden = true;
   destroyAnalyticsHistoryCharts();
@@ -4557,7 +4600,7 @@ function renderAnalyticsHistoryTable(key, rows, page = 1) {
   const section = analyticsHistoryDialog.querySelector(`[data-history-section="${key}"]`);
   const body = section.querySelector('tbody');
   const pagination = section.querySelector('.analytics-history-pagination');
-  const paginated = Date.parse(analyticsHistoryRange.to) - Date.parse(analyticsHistoryRange.from) >= 7 * 86400000;
+  const paginated = Date.parse(analyticsHistoryDisplayedRange.to) - Date.parse(analyticsHistoryDisplayedRange.from) >= 7 * 86400000;
   const pageSize = paginated ? 7 : Math.max(1, rows.length);
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   page = Math.max(1, Math.min(page, pages));
@@ -4630,12 +4673,12 @@ function analyticsHistoryValuePoints(data) {
   const valueSeries = [];
   const deltaSeries = [];
   const deltas = new Map();
-  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) {
+  for (let date = analyticsHistoryDisplayedRange.from; date <= analyticsHistoryDisplayedRange.to; date = shiftCalendarDate(date, 1)) {
     const timestamp = Date.parse(`${date}T00:00:00.000Z`);
     const snapshot = byDate.get(date);
     valueSeries.push({ x: timestamp, y: snapshot ? snapshot.totalValue : null });
     let previous = byDate.get(shiftCalendarDate(date, -1));
-    if (!previous && date === analyticsHistoryRange.from
+    if (!previous && date === analyticsHistoryDisplayedRange.from
       && data.baseline?.snapshotDate === shiftCalendarDate(date, -1)) {
       previous = { totalFigures: data.baseline.totalFigures };
     }
@@ -4647,8 +4690,8 @@ function analyticsHistoryValuePoints(data) {
 }
 
 function analyticsHistoryXAxisBounds() {
-  const min = Date.parse(`${analyticsHistoryRange.from}T00:00:00.000Z`);
-  const max = Date.parse(`${analyticsHistoryRange.to}T00:00:00.000Z`);
+  const min = Date.parse(`${analyticsHistoryDisplayedRange.from}T00:00:00.000Z`);
+  const max = Date.parse(`${analyticsHistoryDisplayedRange.to}T00:00:00.000Z`);
   return min === max
     ? { min: min - 43200000, max: max + 43200000 }
     : { min, max };
@@ -4824,7 +4867,7 @@ function renderAnalyticsHistoryDna(data) {
 
   const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
   const dates = [];
-  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
+  for (let date = analyticsHistoryDisplayedRange.from; date <= analyticsHistoryDisplayedRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
   const traits = [
     ['collector', 'Collector', '--dna-collector'],
     ['explorer', 'Explorer', '--dna-explorer'],
@@ -4892,7 +4935,7 @@ function renderAnalyticsHistoryProgression(data) {
 
   const byDate = new Map(data.snapshots.map((snapshot) => [snapshot.snapshotDate, snapshot]));
   const dates = [];
-  for (let date = analyticsHistoryRange.from; date <= analyticsHistoryRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
+  for (let date = analyticsHistoryDisplayedRange.from; date <= analyticsHistoryDisplayedRange.to; date = shiftCalendarDate(date, 1)) dates.push(date);
   const styles = getComputedStyle(document.documentElement);
   const xBounds = analyticsHistoryXAxisBounds();
   const makeSeries = (key) => dates.map((date) => ({
@@ -4946,7 +4989,6 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
   analyticsHistoryRange = { ...range };
   const sequence = ++analyticsHistoryRequestSequence;
   const userId = currentSession.user?.id;
-  clearAnalyticsHistoryData(false);
   bindI18n(analyticsHistoryStatus, 'text', () => t('history.loading'));
   analyticsHistoryStatus.className = 'status loading-message';
   analyticsHistoryRetryButton.hidden = true;
@@ -4959,7 +5001,9 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
     const data = await response.json();
     if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
       || currentSession?.user?.id !== userId) return;
+    clearAnalyticsHistoryData(false);
     analyticsHistoryData = data;
+    analyticsHistoryDisplayedRange = { ...range };
     bindI18n(analyticsHistoryStatus, 'text', () => data.snapshots.length ? '' : t('history.empty'));
     analyticsHistoryStatus.className = 'status';
     renderAnalyticsHistoryValue(data);
@@ -4968,7 +5012,6 @@ async function loadAnalyticsHistory(range = analyticsHistoryRange) {
   } catch {
     if (sequence !== analyticsHistoryRequestSequence || !analyticsHistoryDialog.open
       || currentSession?.user?.id !== userId) return;
-    analyticsHistoryData = null;
     bindI18n(analyticsHistoryStatus, 'text', () => t('history.error'));
     analyticsHistoryStatus.className = 'status error';
     analyticsHistoryRetryButton.hidden = false;
@@ -5601,7 +5644,9 @@ function updateContactMessageCount() {
 }
 
 function resetContactForm() {
+  contactRequestSequence += 1;
   contactForm.reset();
+  for (const input of [contactEmailInput, contactUsernameInput, contactMessageInput]) input.readOnly = false;
   updateContactMessageCount();
   contactEmailInput.disabled = false;
   contactUsernameInput.disabled = false;
@@ -5657,6 +5702,8 @@ async function submitContact(event) {
   }
 
   contactSending = true;
+  const requestId = ++contactRequestSequence;
+  for (const input of [contactEmailInput, contactUsernameInput, contactMessageInput]) input.readOnly = true;
   contactSubmitButton.disabled = true;
   setContactStatus(tr('contact.sending'), { loading: true });
   try {
@@ -5668,6 +5715,7 @@ async function submitContact(event) {
     const response = currentSession
       ? await apiFetch('/api/contact', init)
       : await fetch(apiUrl('/api/contact'), init);
+    if (requestId !== contactRequestSequence) return;
     if (!response.ok) {
       setContactStatus(() => response.status === 429
         ? t('contact.limit')
@@ -5678,10 +5726,13 @@ async function submitContact(event) {
     updateContactMessageCount();
     setContactStatus(tr('contact.sent'));
   } catch {
-    setContactStatus(tr('contact.error'), { error: true });
+    if (requestId === contactRequestSequence) setContactStatus(tr('contact.error'), { error: true });
   } finally {
-    contactSending = false;
-    contactSubmitButton.disabled = false;
+    if (requestId === contactRequestSequence) {
+      contactSending = false;
+      contactSubmitButton.disabled = false;
+      for (const input of [contactEmailInput, contactUsernameInput, contactMessageInput]) input.readOnly = false;
+    }
   }
 }
 
@@ -5751,6 +5802,7 @@ function clearUserData() {
   rankingEntries = [];
   defaultRankingEntries = [];
   selectedRankingCriterion = 'nivel';
+  displayedRankingCriterion = 'nivel';
   for (const button of rankingOrderButtons) button.setAttribute('aria-pressed', String(button.dataset.rankingCriterion === 'nivel'));
   rankingRequestId += 1;
   expandedRankingUserId = null;

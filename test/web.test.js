@@ -252,7 +252,7 @@ test('cualquier modal bloquea el scroll del fondo hasta cerrar el ultimo dialogo
   }
 });
 
-test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a la izquierda', async () => {
+test('la carga conserva contenido en los modales incrementales sin alterar los demas', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   const dom = new JSDOM(html);
@@ -261,7 +261,7 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     const style = document.createElement('style');
     style.textContent = css;
     document.head.append(style);
-    const selector = '.modal:not(#form-dialog):not(#set-number-dialog):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message))';
+    const selector = '.modal:not(#form-dialog):not(#set-number-dialog):not(.modal-live-content):has(.loading-message) :not(.modal-dialog-heading, .modal-dialog-heading *, .loading-message, .loading-message *, .toast-region, .toast-region *):not(:has(.loading-message))';
     const rule = [...style.sheet.cssRules].find((entry) => entry.selectorText === selector);
     const indicatorRule = [...style.sheet.cssRules].find((entry) => entry.selectorText === '.modal .loading-message, .modal .brickset-loading');
     assert.equal(rule?.style.display, 'none');
@@ -271,13 +271,15 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
       ['weekly-ranking-dialog', 'weekly-ranking-status', ['#weekly-ranking-list']],
       ['notifications-dialog', 'notifications-status', ['.notifications-toolbar', '#notifications-list']],
       ['analytics-history-dialog', 'analytics-history-status', ['.analytics-history-controls', '.analytics-history-charts', '#analytics-history-retry']],
+      ['friends-dialog', 'friends-status-friends', ['.friends-tabs', '#friends-list-friends']],
+      ['contact-dialog', 'contact-status', ['#contact-message', '#contact-submit']],
       ['gamification-dialog', 'achievements-status', ['#gamification-achievements']],
       ['dna-dialog', 'dna-status', ['#dna-retry', '#dna-chart', '#dna-legend']],
     ]) {
       const dialog = document.getElementById(dialogId);
       const status = document.getElementById(statusId);
       status.classList.add('loading-message');
-      assert.equal(dom.window.getComputedStyle(status).paddingLeft, '4px', dialogId);
+      assert.equal(dom.window.getComputedStyle(status).paddingLeft, dialog.classList.contains('modal-live-content') ? '0px' : '4px', dialogId);
       assert.equal(dialog.querySelector('.modal-dialog-heading').matches(selector), false);
       assert.equal(dialog.querySelector('.modal-dialog-heading button').matches(selector), false);
       assert.equal(status.matches(selector), false);
@@ -288,8 +290,9 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
       assert.equal(toastRegion.matches(selector), false);
       assert.equal(toastRegion.firstElementChild.matches(selector), false);
       toastRegion.remove();
+      const preservesContent = ['ranking-dialog', 'weekly-ranking-dialog', 'notifications-dialog', 'analytics-history-dialog', 'friends-dialog', 'contact-dialog'].includes(dialogId);
       for (const contentSelector of contentSelectors) {
-        assert.equal(dialog.querySelector(contentSelector).matches(selector), true, `${dialogId}: ${contentSelector}`);
+        assert.equal(dialog.querySelector(contentSelector).matches(selector), !preservesContent, `${dialogId}: ${contentSelector}`);
       }
       status.classList.remove('loading-message');
       assert.equal(dialog.querySelector(contentSelectors[0]).matches(selector), false);
@@ -307,6 +310,63 @@ test('los modales en carga solo muestran cabecera e indicador y DNA lo alinea a 
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-dialog-body \{ display: block; \}/);
     assert.match(css, /#dna-dialog:has\(#dna-status\.loading-message\) \.dna-legend-panel \{ width: 100%; \}/);
     assert.match(css, /#dna-status\.loading-message \{ justify-content: flex-start; text-align: left; \}/);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('la carga ocupa un hueco permanente de cabecera sin ocupar altura en el cuerpo', async () => {
+  const [html, css] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+  ]);
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.append(style);
+    const activeRule = [...style.sheet.cssRules].find((rule) =>
+      rule.selectorText?.includes(':has(') && rule.style?.visibility === 'visible');
+    for (const dialog of document.querySelectorAll('.modal-live-content')) {
+      for (const status of dialog.querySelectorAll('.status')) {
+        status.className = 'status';
+        status.textContent = '';
+      }
+      const indicator = dialog.querySelector(':scope > .modal-dialog-heading > .modal-loading-indicator');
+      assert.ok(indicator, dialog.id);
+      assert.equal(indicator.getAttribute('aria-hidden'), 'true');
+      assert.equal(dom.window.getComputedStyle(indicator).width, '20px');
+      assert.equal(dom.window.getComputedStyle(indicator).height, '20px');
+      assert.equal(indicator.matches(activeRule.selectorText), false);
+      for (const status of dialog.querySelectorAll('.status')) {
+        status.textContent = 'Cargando...';
+        status.classList.add('loading-message');
+        const loadingStyle = dom.window.getComputedStyle(status);
+        assert.equal(loadingStyle.position, 'absolute', status.id);
+        assert.equal(loadingStyle.height, '1px', status.id);
+        assert.equal(loadingStyle.minHeight, '0', status.id);
+        assert.equal(status.getAttribute('role'), 'status');
+        assert.equal(status.getAttribute('aria-live'), 'polite');
+        assert.notEqual(loadingStyle.display, 'none', status.id);
+        assert.equal(indicator.matches(activeRule.selectorText), !status.closest('.friends-panel[hidden]'), status.id);
+        const hiddenPanel = status.closest('.friends-panel[hidden]');
+        if (hiddenPanel) {
+          hiddenPanel.hidden = false;
+          assert.equal(indicator.matches(activeRule.selectorText), true, status.id);
+          hiddenPanel.hidden = true;
+          assert.equal(indicator.matches(activeRule.selectorText), false, status.id);
+        }
+        status.className = 'status error';
+        status.textContent = 'No se pudo actualizar';
+        assert.notEqual(dom.window.getComputedStyle(status).position, 'absolute', status.id);
+        assert.notEqual(dom.window.getComputedStyle(status).display, 'none', status.id);
+        assert.equal(indicator.matches(activeRule.selectorText), false);
+        status.className = 'status';
+        status.textContent = '';
+        assert.equal(dom.window.getComputedStyle(status).display, 'none', status.id);
+      }
+    }
   } finally {
     dom.window.close();
   }
@@ -628,7 +688,7 @@ test('las cabeceras de modales en smartphone comparten altura y cierre sin separ
   assert.equal(headings.style.getPropertyValue('margin-bottom'), '12px');
   const emptyCatalogStatus = rules.find((rule) => rule.selectorText === '#status:empty');
   assert.equal(emptyCatalogStatus.style.getPropertyValue('display'), 'none');
-  const emptyStatuses = rules.find((rule) => rule.selectorText === '#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty');
+  const emptyStatuses = rules.find((rule) => rule.selectorText === '#achievements-status:empty');
   assert.equal(emptyStatuses.style.getPropertyValue('display'), 'none');
   const buttons = smartphoneRules.find((rule) => rule.selectorText === '.ranking-dialog-heading .button, .achievements-heading .button, .dna-dialog-heading .button, .form-dialog-heading .button, .friends-dialog-heading .button');
   assert.equal(buttons.style.getPropertyValue('flex'), '0 0 auto');

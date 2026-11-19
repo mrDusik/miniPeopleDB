@@ -95,10 +95,10 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-test('el toque push ignora payload externo y abre la fila autenticada sin marcarla leída', async () => {
-  const notificationId = '20000000-0000-4000-8000-0000000000a1';
+function createNativePushStub() {
   const listeners = new Map();
-  const nativePush = {
+  return {
+    listeners,
     isNative: () => true,
     createRegistrationLifecycle: () => ({
       register: async () => true,
@@ -108,6 +108,57 @@ test('el toque push ignora payload externo y abre la fila autenticada sin marcar
     addListener: async (event, listener) => { listeners.set(event, listener); },
     checkPermissions: async () => ({ receive: 'prompt' }),
   };
+}
+
+test('las acciones de notificaciones conservan las filas ajenas, los desplegados, el foco y el scroll', async (context) => {
+  for (const action of ['read', 'thank', 'accept', 'all']) {
+    await context.test(action, async () => {
+      const { dom, window } = startApp({ initialPage: {
+        notifications: [
+          createNotification('daily-9', 'Ada', false, { type: 'daily_summary', data: {} }),
+          createNotification('gift-8', 'Ada', false, { type: 'gift_received', data: { user: 'Ada', amount: 50 } }),
+          createNotification('friend-7', 'Ada', false, { type: 'friend_request', data: { user: 'Ada' } }),
+          createNotification('thanks-6', 'Ada', false, { data: { user: 'Ada', amount: 5 } }),
+        ],
+        unreadCount: 4, nextCursor: null,
+      } });
+      try {
+        await tick();
+        await tick();
+        const { document } = window;
+        document.querySelector('#open-notifications').click();
+        await tick();
+        const list = document.querySelector('#notifications-list');
+        const untouched = list.querySelector('[data-notification-id="thanks-6"]');
+        const daily = list.querySelector('[data-notification-id="daily-9"]');
+        daily.querySelector('details').open = true;
+        daily.querySelector('summary').focus();
+        list.scrollTop = 120;
+        const selectors = {
+          read: '[data-notification-id="daily-9"] .notification-mark-read',
+          thank: '.notification-thank',
+          accept: '.notification-accept-friend',
+          all: '#notifications-mark-all',
+        };
+        document.querySelector(selectors[action]).click();
+        await tick();
+        const updatedDaily = list.querySelector('[data-notification-id="daily-9"]');
+        assert.equal(updatedDaily.querySelector('details').open, true);
+        assert.equal(document.activeElement, updatedDaily.querySelector('summary'));
+        assert.equal(list.scrollTop, 120);
+        if (action !== 'all') assert.equal(list.querySelector('[data-notification-id="thanks-6"]'), untouched);
+        assert.equal(new Set([...list.querySelectorAll('.notification-item')].map((node) => node.dataset.notificationId)).size, 4);
+      } finally {
+        dom.window.close();
+      }
+    });
+  }
+});
+
+test('el toque push ignora payload externo y abre la fila autenticada sin marcarla leída', async () => {
+  const notificationId = '20000000-0000-4000-8000-0000000000a1';
+  const nativePush = createNativePushStub();
+  const { listeners } = nativePush;
   const { dom, window, requests, setNotificationPage } = startApp({ nativePush });
   try {
     await tick();
@@ -145,7 +196,144 @@ test('el toque push ignora payload externo y abre la fila autenticada sin marcar
   }
 });
 
-test('comparte el indicador animado del ranking y oculta la limpieza durante carga, vacío y error', async () => {
+test('abrir un push mantiene la carga ante un fallo transitorio y enfoca la notificación tras recuperarse', async (context) => {
+  for (const failure of ['network', 'server']) {
+    await context.test(failure, async () => {
+      const notificationId = '20000000-0000-4000-8000-0000000000a1';
+      const nativePush = createNativePushStub();
+      const { dom, window } = startApp({ nativePush });
+      try {
+        await tick();
+        await tick();
+        const status = window.document.querySelector('#notifications-status');
+        const originalFetch = window.fetch;
+        const originalSetTimeout = window.setTimeout.bind(window);
+        let resumeRetry;
+        window.setTimeout = (callback, delay, ...args) => {
+          if (delay === 1000) {
+            resumeRetry = () => callback(...args);
+            return 0;
+          }
+          return originalSetTimeout(callback, delay, ...args);
+        };
+        let attempts = 0;
+        let finishRequest;
+        window.fetch = async (url, init) => {
+          if (url !== '/api/notificaciones') return originalFetch(url, init);
+          attempts += 1;
+          if (attempts === 1) {
+            if (failure === 'network') throw new window.TypeError('Failed to fetch');
+            return { ok: false, status: 503, json: async () => ({ error: 'NOTIFICACIONES_NO_DISPONIBLES' }) };
+          }
+          return new Promise((resolve) => { finishRequest = resolve; });
+        };
+        nativePush.listeners.get('pushNotificationActionPerformed')({
+          notification: { data: { notification_id: notificationId, category: 'daily_summary' } },
+        });
+        await tick();
+        assert.equal(status.textContent, 'Cargando notificaciones...');
+        assert.equal(status.className, 'status loading-message');
+        assert.equal(attempts, 1);
+        assert.equal(typeof resumeRetry, 'function');
+        resumeRetry();
+        await tick();
+        assert.equal(attempts, 2);
+        assert.equal(status.textContent, 'Cargando notificaciones...');
+        finishRequest({
+          ok: true, json: async () => ({
+            notifications: [createNotification(notificationId, 'Ada')],
+            unreadCount: 1, nextCursor: null,
+          }),
+        });
+        await tick();
+        assert.equal(status.textContent, '');
+        assert.equal(window.document.activeElement.dataset.notificationId, notificationId);
+        assert.equal(window.document.querySelector('.is-push-target')?.dataset.notificationId, notificationId);
+      } finally {
+        dom.window.close();
+      }
+    });
+  }
+});
+
+test('abrir un push detiene la paginación si una página no se recupera, sin confundirlo con una notificación inexistente', async () => {
+  const notificationId = '20000000-0000-4000-8000-0000000000a1';
+  const nativePush = createNativePushStub();
+  const { dom, window } = startApp({ nativePush });
+  try {
+    await tick();
+    await tick();
+    const originalFetch = window.fetch;
+    const originalSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = (callback, delay, ...args) => originalSetTimeout(callback, delay === 1000 ? 0 : delay, ...args);
+    let attempts = 0;
+    window.fetch = async (url, init) => {
+      if (url === '/api/notificaciones') {
+        return { ok: true, json: async () => ({ notifications: [], unreadCount: 1, nextCursor: 'page-2' }) };
+      }
+      if (url !== '/api/notificaciones?cursor=page-2') return originalFetch(url, init);
+      attempts += 1;
+      return { ok: false, status: 503, json: async () => ({ error: 'NOTIFICACIONES_NO_DISPONIBLES' }) };
+    };
+    nativePush.listeners.get('pushNotificationActionPerformed')({
+      notification: { data: { notification_id: notificationId, category: 'daily_summary' } },
+    });
+    await tick();
+    await tick();
+    await tick();
+    assert.equal(attempts, 2);
+    assert.equal(window.document.querySelector('#notifications-status').textContent, 'No se pudieron cargar las notificaciones.');
+    assert.equal(window.document.querySelector('#notifications-status').className, 'status');
+    assert.equal(window.document.querySelector('.is-push-target'), null);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('una actualización Realtime cancela el reintento push obsoleto sin mostrar errores ni enfocar otra fila', async () => {
+  const notificationId = '20000000-0000-4000-8000-0000000000a1';
+  const nativePush = createNativePushStub();
+  const { dom, window } = startApp({ nativePush });
+  try {
+    await tick();
+    await tick();
+    const originalFetch = window.fetch;
+    const originalSetTimeout = window.setTimeout.bind(window);
+    let resumeRetry;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 1000) {
+        resumeRetry = () => callback(...args);
+        return 0;
+      }
+      return originalSetTimeout(callback, delay, ...args);
+    };
+    let attempts = 0;
+    window.fetch = async (url, init) => {
+      if (url !== '/api/notificaciones') return originalFetch(url, init);
+      attempts += 1;
+      return attempts === 1
+        ? { ok: false, status: 503, json: async () => ({}) }
+        : { ok: true, json: async () => ({ notifications: [], unreadCount: 0, nextCursor: null }) };
+    };
+    nativePush.listeners.get('pushNotificationActionPerformed')({
+      notification: { data: { notification_id: notificationId, category: 'daily_summary' } },
+    });
+    await tick();
+    window.__supabaseStub.channels[0].emit({ eventType: 'UPDATE', new: {} });
+    await tick();
+    assert.equal(typeof resumeRetry, 'function');
+    resumeRetry();
+    await tick();
+    assert.equal(attempts, 2);
+    assert.equal(window.document.querySelector('#notifications-status').textContent, '');
+    assert.equal(window.document.querySelectorAll('.notification-item').length, 15);
+    assert.equal(window.document.querySelector('.is-push-target'), null);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('comparte el indicador animado y conserva la limpieza deshabilitada al actualizar contenido', async () => {
   const { dom, window } = startApp();
   try {
     await tick();
@@ -167,7 +355,8 @@ test('comparte el indicador animado del ranking y oculta la limpieza durante car
     open();
     assert.equal(status.textContent, 'Cargando notificaciones...');
     assert.equal(status.className, 'status loading-message');
-    assert.equal(toolbar.hidden, true);
+    assert.equal(toolbar.hidden, false);
+    assert.equal(button.disabled, true);
     assert.match(styles, /\.loading-message::before \{[^}]*animation: brickset-spinner/);
     assert.match(styles, /\.notifications-toolbar\[hidden\] \{ display: none; \}/);
     await finish([createNotification('a1', 'Ada')]);
@@ -178,7 +367,8 @@ test('comparte el indicador animado del ranking y oculta la limpieza durante car
 
     window.__supabaseStub.channels[0].emit({ new: { id: 'loading-refresh' } });
     assert.equal(window.document.querySelectorAll('.notification-item').length, 1);
-    assert.equal(toolbar.hidden, true);
+    assert.equal(toolbar.hidden, false);
+    assert.equal(button.disabled, true);
     await finish([createNotification('a1', 'Ada', true)]);
     assert.equal(toolbar.hidden, false);
     assert.equal(button.disabled, true);
@@ -195,6 +385,68 @@ test('comparte el indicador animado del ranking y oculta la limpieza durante car
     assert.equal(status.textContent, 'No se pudieron cargar las notificaciones.');
     assert.equal(status.className, 'status');
     assert.equal(toolbar.hidden, true);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('paginar notificaciones conserva las filas, el foco y el scroll durante y despues de la carga', async () => {
+  const { dom, window } = startApp({ initialPage: {
+    notifications: [
+      createNotification('a15', 'User A', false, { type: 'daily_summary', data: {} }),
+      createNotification('a14', 'User A'),
+    ],
+    unreadCount: 2, nextCursor: 'page-2',
+  } });
+  try {
+    await tick();
+    await tick();
+    const style = window.document.createElement('style');
+    style.textContent = styles;
+    window.document.head.append(style);
+    window.document.querySelector('#open-notifications').click();
+    await tick();
+    const list = window.document.querySelector('#notifications-list');
+    const row = list.querySelector('.notification-item');
+    const button = row.querySelector('button');
+    const details = row.querySelector('details');
+    details.open = true;
+    list.scrollTop = 320;
+    button.focus();
+    let finish;
+    const fetch = window.fetch;
+    window.fetch = (url, options) => url.includes('cursor=page-2')
+      ? new Promise((resolve) => {
+        finish = () => resolve({ ok: true, json: async () => ({
+          notifications: [
+            createNotification('a14', 'User A', true),
+            { ...createNotification('a16', 'User A'), createdAt: '2026-10-08T10:00:00Z' },
+          ],
+          unreadCount: 2, nextCursor: null,
+        }) });
+      }) : fetch(url, options);
+    list.dispatchEvent(new window.Event('scroll'));
+    assert.notEqual(window.getComputedStyle(list).display, 'none');
+    assert.equal(list.querySelector('.notification-item'), row);
+    assert.equal(list.scrollTop, 320);
+    finish();
+    await tick();
+    assert.equal(list.querySelector('.notification-item'), row);
+    assert.equal(window.document.activeElement, button);
+    assert.equal(list.scrollTop, 320);
+    assert.equal(details.open, true);
+    assert.equal(list.querySelectorAll('.notification-item').length, 3);
+    assert.equal(list.querySelectorAll('[data-notification-id="a14"].notification-item').length, 1);
+    assert.equal(list.querySelector('[data-notification-id="a14"].notification-item').classList.contains('is-read'), true);
+
+    window.fetch = (url, options) => url === '/api/notificaciones'
+      ? new Promise((resolve) => { finish = resolve; }) : fetch(url, options);
+    window.document.querySelector('#open-notifications').click();
+    assert.equal(list.querySelector('.notification-item'), row);
+    finish({ ok: false, status: 503, json: async () => ({}) });
+    await tick();
+    assert.equal(list.querySelector('.notification-item'), row);
+    assert.equal(window.document.querySelector('#notifications-status').textContent, 'No se pudieron cargar las notificaciones.');
   } finally {
     dom.window.close();
   }
@@ -264,6 +516,7 @@ test('carga quince, pagina sin duplicados, recupera Realtime y solo limpiar glob
     assert.equal(thanksToast.querySelector('.toast-icon').textContent, '🎁');
 
     window.document.querySelector('#open-notifications').click();
+    await tick();
     assert.equal(window.document.querySelector('#notifications-dialog').open, true);
     assert.equal(window.document.querySelector('#notifications-close'), window.document.activeElement);
     assert.equal(window.document.querySelector('#open-notifications').getAttribute('aria-label'), 'Notificaciones, 3 sin leer');

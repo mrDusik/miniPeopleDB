@@ -70,6 +70,117 @@ test('la migración es repetible, encola solo inserts y preserva las notificacio
   }
 });
 
+test('el resumen espera hasta las 10:00 de Madrid con DST y se reclama inmediatamente si termina tarde', async () => {
+  const db = await databaseWithPushSchema();
+  try {
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [USER_A, 'schedule@example.invalid']);
+    await db.exec(`
+      create or replace function pg_catalog.clock_timestamp() returns timestamptz
+      language sql volatile as $$
+        select current_setting('test.push_now')::timestamptz
+      $$;
+    `);
+    const cases = [
+      ['2026-11-19', '2026-11-19T03:15:00Z', '2026-11-19T09:00:00Z'],
+      ['2026-07-19', '2026-07-19T02:15:00Z', '2026-07-19T08:00:00Z'],
+      ['2026-03-29', '2026-03-29T02:15:00Z', '2026-03-29T08:00:00Z'],
+      ['2026-10-25', '2026-10-25T03:15:00Z', '2026-10-25T09:00:00Z'],
+      ['2026-11-19', '2026-11-19T08:59:59Z', '2026-11-19T09:00:00Z'],
+      ['2026-11-19', '2026-11-19T09:00:00Z', '2026-11-19T09:00:00Z'],
+      ['2026-11-19', '2026-11-19T10:15:00Z', '2026-11-19T10:15:00Z'],
+      ['2026-11-19', '2026-11-20T03:15:00Z', '2026-11-20T03:15:00Z'],
+    ];
+    for (const [snapshotDate, completedAt, availableAt] of cases) {
+      await db.query("select set_config('test.push_now', $1, false)", [completedAt]);
+      await db.query(`insert into public.notificaciones
+        (id, user_id, type, payload, snapshot_date, created_at)
+        values ($1, $2, 'daily_summary', '{"hasPrevious":false}', $3, $4)`,
+      [NOTIFICATION_A, USER_A, snapshotDate, completedAt]);
+      const event = (await db.query(`select available_at, expires_at, attempts, resolved_at
+        from private.android_push_outbox where notification_id = $1`, [NOTIFICATION_A])).rows[0];
+      assert.equal(event.available_at.toISOString(), new Date(availableAt).toISOString());
+      assert.equal(event.expires_at.getTime() - event.available_at.getTime(), 24 * 60 * 60 * 1000);
+      assert.equal(event.attempts, 0);
+      assert.equal(event.resolved_at, null);
+      assert.deepEqual((await db.query('select payload from public.notificaciones where id = $1',
+        [NOTIFICATION_A])).rows[0].payload, { hasPrevious: false });
+
+      await db.query("select set_config('test.push_now', $1, false)",
+        [new Date(new Date(availableAt).getTime() - 1).toISOString()]);
+      assert.equal((await asServiceRole(db, 'select * from public.android_push_claim_events(10, 60)')).rows.length, 0);
+      assert.equal((await db.query('select attempts from private.android_push_outbox where notification_id = $1',
+        [NOTIFICATION_A])).rows[0].attempts, 0);
+      await db.query("select set_config('test.push_now', $1, false)", [availableAt]);
+      const claimed = (await asServiceRole(db, 'select * from public.android_push_claim_events(10, 60)')).rows;
+      assert.equal(claimed.length, 1);
+      assert.equal(claimed[0].notification_id, NOTIFICATION_A);
+      assert.equal((await asServiceRole(db, 'select * from public.android_push_claim_events(10, 60)')).rows.length, 0);
+      await db.query('delete from public.notificaciones where id = $1', [NOTIFICATION_A]);
+    }
+
+    await db.query("select set_config('test.push_now', '2026-11-19T03:15:00Z', false)");
+    await db.query(`insert into public.notificaciones
+      (id, user_id, type, payload, snapshot_date, created_at)
+      values ($1, $2, 'daily_summary', '{}', '2026-11-19', '2026-11-19T03:15:00Z'),
+        ($3, $2, 'weekly_ranking_available', '{}', null, '2026-11-19T03:15:00Z')`,
+    [NOTIFICATION_A, USER_A, NOTIFICATION_B]);
+    assert.deepEqual((await asServiceRole(db, 'select * from public.android_push_claim_events(10, 60)'))
+      .rows.map(({ notification_id }) => notification_id), [NOTIFICATION_B]);
+  } finally {
+    await db.close();
+  }
+});
+
+test('la migración de horario conserva reintentos y eventos terminados y programa la cola sin duplicarla', async () => {
+  const db = await databaseWithPushSchema();
+  try {
+    await db.query('insert into auth.users(id, email) values ($1, $2)', [USER_A, 'schedule-migration@example.invalid']);
+    const ids = [];
+    for (const [index, status, attempts, type] of [
+      [1, 'queued', 0, 'daily_summary'],
+      [2, 'queued', 1, 'daily_summary'],
+      [3, 'processing', 1, 'daily_summary'],
+      [4, 'completed', 1, 'daily_summary'],
+      [5, 'queued', 0, 'weekly_ranking_available'],
+    ]) {
+      const id = `20000000-0000-4000-8000-00000000000${index}`;
+      ids.push(id);
+      await db.query(`insert into public.notificaciones
+        (id, user_id, type, payload, snapshot_date, created_at)
+        values ($1, $2, $3, '{}', $4, '2026-11-19T03:15:00Z')`,
+      [id, USER_A, type, type === 'daily_summary' ? `2026-11-${18 + index}` : null]);
+      await db.query(`update private.android_push_outbox
+        set available_at = '2026-11-19T03:15:00Z', expires_at = '2026-11-20T03:15:00Z',
+          status = $2, attempts = $3 where notification_id = $1`, [id, status, attempts]);
+    }
+    const migration = await readFile(new URL('../supabase/android-push-daily-summary-schedule.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    const scheduled = (await db.query(`select notification_id, available_at, expires_at, status, attempts
+      from private.android_push_outbox order by notification_id`)).rows;
+    assert.equal(scheduled.length, 5);
+    assert.equal(scheduled[0].available_at.toISOString(), '2026-11-19T09:00:00.000Z');
+    assert.equal(scheduled[0].expires_at.toISOString(), '2026-11-20T09:00:00.000Z');
+    for (const event of scheduled.slice(1)) {
+      assert.equal(event.available_at.toISOString(), '2026-11-19T03:15:00.000Z');
+      assert.equal(event.expires_at.toISOString(), '2026-11-20T03:15:00.000Z');
+    }
+    await db.exec(migration);
+    assert.deepEqual((await db.query(`select notification_id, available_at, expires_at, status, attempts
+      from private.android_push_outbox order by notification_id`)).rows, scheduled);
+    await db.query('delete from public.notificaciones where id = any($1::uuid[])', [ids]);
+    await db.query(`insert into public.notificaciones
+      (id, user_id, type, payload, snapshot_date, created_at)
+      values ($1, $2, 'daily_summary', '{}', '2026-07-19', '2026-07-19T02:15:00Z')`,
+    [NOTIFICATION_A, USER_A]);
+    assert.equal((await db.query('select available_at from private.android_push_outbox where notification_id = $1',
+      [NOTIFICATION_A])).rows[0].available_at.toISOString(), '2026-07-19T08:00:00.000Z');
+    assert.equal((await db.query(`select has_function_privilege(
+      'authenticated', 'private.enqueue_android_push_notification()', 'EXECUTE') as allowed`)).rows[0].allowed, false);
+  } finally {
+    await db.close();
+  }
+});
+
 test('JWT y RLS confinan registros; service_role no tiene acceso directo ni anon/auth pueden ejecutar RPC', async () => {
   const db = await databaseWithPushSchema();
   try {

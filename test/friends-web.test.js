@@ -121,6 +121,101 @@ function createApp({
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+test('las listas de Amigos permanecen visibles y conservan sus filas si falla una actualizacion', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.append(style);
+    const hideSelector = [...style.sheet.cssRules].find((rule) =>
+      rule.selectorText?.includes(':not(.modal-live-content):has(.loading-message)')).selectorText;
+    document.querySelector('#open-friends').click();
+    await tick();
+    const fetch = window.fetch;
+    for (const tab of ['friends', 'sent', 'received']) {
+      document.querySelector(`#friends-tab-${tab}`).click();
+      await tick();
+      const list = document.querySelector(`#friends-list-${tab}`);
+      const row = list.firstElementChild;
+      assert.ok(row);
+      let finish;
+      window.fetch = (url, init) => url === `/api/amigos?tipo=${tab}`
+        ? new Promise((resolve) => { finish = resolve; }) : fetch(url, init);
+      document.querySelector(`#friends-tab-${tab}`).click();
+      assert.equal(list.firstElementChild, row);
+      assert.equal(list.matches(hideSelector), false);
+      assert.equal(document.querySelector(`#friends-tab-${tab}`).matches(hideSelector), false);
+      finish({ ok: false, status: 503, json: async () => ({}) });
+      await tick();
+      assert.equal(list.firstElementChild, row);
+      assert.equal(document.querySelector(`#friends-status-${tab}`).className, 'status error');
+      window.fetch = fetch;
+    }
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('el buscador de Amigos conserva resultados durante debounce, carga y error y descarta respuestas obsoletas', async () => {
+  const { dom, window } = createApp();
+  try {
+    await tick();
+    await tick();
+    const { document } = window;
+    const setTimeout = window.setTimeout.bind(window);
+    let searchNow;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay !== 250) return setTimeout(callback, delay, ...args);
+      searchNow = () => callback(...args);
+      return 0;
+    };
+    document.querySelector('#open-friends').click();
+    document.querySelector('#friends-tab-search').click();
+    const input = document.querySelector('#friends-search');
+    const search = (query) => {
+      input.value = query;
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    };
+    search('Spa');
+    searchNow();
+    await tick();
+    const list = document.querySelector('#friends-list-search');
+    const row = list.firstElementChild;
+    assert.ok(row);
+    const fetch = window.fetch;
+    const pending = [];
+    window.fetch = (url, init) => url.startsWith('/api/amigos/buscar?')
+      ? new Promise((resolve) => pending.push(resolve)) : fetch(url, init);
+    search('Space');
+    assert.equal(list.firstElementChild, row);
+    assert.equal(document.querySelector('#friends-status-search').className, 'status loading-message');
+    searchNow();
+    assert.equal(list.firstElementChild, row);
+    pending.shift()({ ok: false, status: 503, json: async () => ({}) });
+    await tick();
+    assert.equal(list.firstElementChild, row);
+    assert.equal(document.querySelector('#friends-status-search').className, 'status error');
+    search('Castle');
+    searchNow();
+    search('City');
+    searchNow();
+    pending.shift()({ ok: true, json: async () => ({ users: [] }) });
+    await tick();
+    assert.equal(list.firstElementChild, row);
+    pending.shift()({ ok: true, json: async () => ({ users: [{ ...friendRows.friends[0], username: 'CityFan' }] }) });
+    await tick();
+    assert.equal(list.querySelector('.friends-username').textContent, 'CityFan');
+    search('Ci');
+    assert.equal(list.childElementCount, 0);
+    assert.equal(document.querySelector('#friends-status-search').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('aceptar y rechazar tienen iguales dimensiones tactiles en portrait', () => {
   const dom = new JSDOM(`<style>${styles}</style>`);
   try {

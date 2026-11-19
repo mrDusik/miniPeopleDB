@@ -349,6 +349,59 @@ test('Historico envía rangos con apiFetch y descarta respuestas fuera de orden'
   }
 });
 
+test('Progreso conserva graficos y tablas al cambiar rango y permite reintentar sin vaciarlos', async () => {
+  const pending = [];
+  const { dom, document, chartInstances } = startApp({
+    fetchImpl(url) {
+      if (url.startsWith('/api/analytics/history?')) return new Promise((resolve) => pending.push(resolve));
+      return undefined;
+    },
+  });
+  const response = (bricks) => ({
+    ok: true, json: async () => ({
+      baseline: null,
+      snapshots: [{ snapshotDate: '2026-11-19', totalValue: 5, totalFigures: 1, bricks, level: 1,
+        dna: { collector: 25, explorer: 25, rarityHunter: 25, fan: 25 } }],
+    }),
+  });
+  try {
+    await tick();
+    document.querySelector('#open-analytics-history').click();
+    await tick();
+    pending.shift()(response(10));
+    await tick();
+    const charts = chartInstances.slice();
+    const row = document.querySelector('#analytics-history-value-table tbody tr');
+    document.querySelector('[data-history-section="value"]').open = true;
+    document.querySelector('[data-history-days="30"]').click();
+    assert.notEqual(dom.window.getComputedStyle(document.querySelector('.analytics-history-charts')).display, 'none');
+    assert.equal(document.querySelector('#analytics-history-value-table tbody tr'), row);
+    assert.equal(charts.some((chart) => chart.destroyed), false);
+    pending.shift()({ ok: false, status: 503 });
+    await tick();
+    assert.equal(document.querySelector('#analytics-history-value-table tbody tr'), row);
+    assert.equal(charts.some((chart) => chart.destroyed), false);
+    assert.equal(document.querySelector('#analytics-history-retry').hidden, false);
+    document.querySelector('#analytics-history-retry').click();
+    await tick();
+    const originalBounds = charts[0].configuration.options.scales.x;
+    await dom.window.MiniPeopleI18n.setLanguage('en');
+    const retainedChart = chartInstances.at(-3).configuration;
+    assert.equal(retainedChart.data.datasets[0].data.length, 7);
+    assert.equal(retainedChart.options.scales.x.min, originalBounds.min);
+    assert.equal(retainedChart.options.scales.x.max, originalBounds.max);
+    pending.shift()(response(20));
+    await tick();
+    assert.equal(charts.every((chart) => chart.destroyed), true);
+    assert.equal(chartInstances.length, 9);
+    assert.equal(document.querySelector('[data-history-section="value"]').open, true);
+    assert.match(document.querySelector('#analytics-history-progression-table tbody').textContent, /20/);
+    assert.equal(document.querySelector('#analytics-history-status').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('Historico permite reintentar errores e invalida carga al cerrar o cambiar de cuenta', async () => {
   let attempts = 0;
   const { dom, window, document } = startApp({

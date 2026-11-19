@@ -193,6 +193,22 @@ Una notificacion persistida SHALL generar una entrega FCM a cada instalacion And
 - **WHEN** no existe token activo o el permiso de notificaciones esta denegado
 - **THEN** no se envia una alerta a esa instalacion y la notificacion permanece disponible en la bandeja
 
+### Requirement: Programar el push del resumen diario a las 10:00 de Madrid
+El push Android de tipo `daily_summary` SHALL quedar disponible para envio a las 10:00 de `Europe/Madrid` de su `snapshot_date`, o al confirmarse el resumen si ocurre despues. SHALL respetar los cambios de horario de verano e invierno. La espera SHALL persistir en el outbox y sobrevivir a reinicios sin consumir intentos ni bloquear otras categorias. El TTL de 24 horas SHALL comenzar cuando el envio queda disponible. La bandeja y Realtime SHALL seguir mostrando el resumen al confirmarse, sin esperar al push.
+
+#### Scenario: Proceso terminado antes de las 10:00
+- **WHEN** el resumen de hoy se confirma a las 04:15 de Madrid
+- **THEN** el worker no reclama su push antes de las 10:00 y puede reclamarlo desde las 10:00
+- **AND** el resumen ya esta disponible en la bandeja
+
+#### Scenario: Proceso terminado a las 10:00 o despues
+- **WHEN** el resumen se confirma a las 10:00 o mas tarde, incluso si el proceso cruza medianoche
+- **THEN** su push queda disponible inmediatamente sin esperar a las 10:00 del dia siguiente
+
+#### Scenario: Otras notificaciones durante la espera
+- **WHEN** se confirma una notificacion de otra categoria antes de las 10:00
+- **THEN** su entrega conserva el comportamiento inmediato y no espera al resumen diario
+
 ### Requirement: Registrar y revocar tokens FCM por cuenta e instalacion
 El registro de un token FCM SHALL requerir una sesion autenticada; el servidor SHALL derivar la cuenta del JWT y SHALL NOT aceptar un `user_id` objetivo. Cada token SHALL pertenecer a una sola cuenta activa, y la app SHALL actualizar tokens rotados y revocar el registro al cerrar sesion o eliminar la cuenta.
 
@@ -253,6 +269,13 @@ El payload FCM SHALL limitarse a un identificador opaco de notificacion, una cat
 - **WHEN** el usuario toca una alerta y su sesion es valida
 - **THEN** la app abre la bandeja en la notificacion identificada y obtiene su contenido actual desde la API autenticada
 - **AND** abrirla no la marca automaticamente como leida
+
+#### Scenario: Recuperacion transitoria al abrir una alerta
+- **WHEN** la consulta de la bandeja al abrir un push falla por red o HTTP 5xx
+- **THEN** el modal mantiene el indicador de carga y reintenta una sola vez tras un segundo
+- **AND** no muestra un error durante esa recuperacion ni pagina tras una consulta fallida
+- **AND** si el reintento falla muestra el error de carga, no el aviso de notificacion inexistente
+- **AND** una respuesta de otra sesion o una carga sustituida no produce avisos ni enfoca filas
 
 #### Scenario: Abrir sin sesion o con identificador no disponible
 - **WHEN** el usuario toca la alerta sin sesion o la notificacion ya no puede consultarse

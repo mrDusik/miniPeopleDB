@@ -156,6 +156,34 @@ test('abre y cierra el dialogo semanal de forma independiente y restaura el foco
   dom.window.close();
 });
 
+test('el ranking semanal conserva la ultima lista al reabrir y si falla la actualizacion', async () => {
+  const dom = createDom();
+  try {
+    const { window } = dom;
+    installFetch(window, [], {}, { available: true, entries: [entry({ bricksSemanales: 15 })] });
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const document = window.document;
+    document.querySelector('#open-weekly-ranking').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const row = document.querySelector('#weekly-ranking-list .global-ranking-entry');
+    assert.ok(row);
+    document.querySelector('#weekly-ranking-close').click();
+    const fetch = window.fetch;
+    let finish;
+    window.fetch = (url, options) => url === '/api/ranking/semanal'
+      ? new Promise((resolve) => { finish = resolve; }) : fetch(url, options);
+    document.querySelector('#open-weekly-ranking').click();
+    assert.equal(document.querySelector('#weekly-ranking-list .global-ranking-entry'), row);
+    finish({ ok: false, status: 503 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('#weekly-ranking-list .global-ranking-entry'), row);
+    assert.equal(document.querySelector('#weekly-ranking-status').className, 'status error');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el ranking semanal muestra spinner y texto hasta recibir respuesta', async () => {
   const dom = createDom();
   const calls = installFetch(dom.window, [entry()]);
@@ -375,6 +403,40 @@ test('el selector encima de los regalos solicita cada criterio y conserva la pos
   dom.window.close();
 });
 
+test('el ranking conserva las filas y la expansion al cambiar criterio, incluso si falla la carga', async () => {
+  const dom = createDom();
+  try {
+    const { window } = dom;
+    const document = window.document;
+    installFetch(window, [entry()]);
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    document.querySelector('#open-global-ranking').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const row = document.querySelector('#global-ranking-list .global-ranking-entry');
+    row.querySelector('.ranking-expand').click();
+    const fetch = window.fetch;
+    let finish;
+    window.fetch = (url, options) => url.startsWith('/api/ranking?')
+      ? new Promise((resolve) => { finish = resolve; }) : fetch(url, options);
+    document.querySelector('[data-ranking-criterion="coleccion"]').click();
+    assert.equal(document.querySelector('#global-ranking-list .global-ranking-entry'), row);
+    assert.equal(row.querySelector('.ranking-expand').getAttribute('aria-expanded'), 'true');
+    assert.equal(document.querySelector('#ranking-status').classList.contains('loading-message'), true);
+    finish({ ok: false, status: 503 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('#global-ranking-list .global-ranking-entry'), row);
+    assert.equal(document.querySelector('#ranking-status').className, 'status error');
+    document.querySelector('[data-ranking-criterion="fan"]').click();
+    finish({ ok: true, json: async () => [entry({ displayName: 'New winner' })] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('#global-ranking-list .ranking-name').textContent, 'New w.');
+    assert.equal(document.querySelector('#ranking-status').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('cambios rapidos de criterio ignoran respuestas anteriores y el cierre de sesion restaura Nivel', async () => {
   const dom = createDom();
   installFetch(dom.window, [entry({ userId: 'user-a' })], { fan: [entry({ displayName: 'Fan winner' })] });
@@ -424,7 +486,7 @@ test('el panel de nivel y el modal limitan su ancho en móvil', () => {
   assert.match(styles, /\.achievements-heading \{ display: flex; align-items: center;/);
   assert.match(styles, /\.achievements-heading-text \{ min-width: 0; \}/);
   assert.match(styles, /\.ranking-dialog-heading \{[^}]*border-bottom: 4px solid var\(--blue\);/);
-  assert.match(styles, /#ranking-status:empty, #achievements-status:empty, #weekly-ranking-status:empty \{ display: none; \}/);
+  assert.match(styles, /#achievements-status:empty \{ display: none; \}/);
   assert.match(styles, /\.modal-ranking \{ width: min\(960px, calc\(100% - 24px\)\)/);
   assert.doesNotMatch(styles, /\.modal-ranking \{[^}]*border-top:/);
   assert.match(styles, /\.ranking-highlight-group \.ranking-row \{ display: flex; flex-wrap: nowrap; min-width: 0; overflow-x: auto;/);

@@ -77,9 +77,16 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public, private, pg_temp
 as $$
+declare
+  v_available_at timestamptz := new.created_at;
 begin
-  insert into private.android_push_outbox (notification_id)
-  values (new.id)
+  if new.type = 'daily_summary' then
+    v_available_at := greatest(new.created_at,
+      (new.snapshot_date + time '10:00') at time zone 'Europe/Madrid');
+  end if;
+
+  insert into private.android_push_outbox (notification_id, available_at, expires_at)
+  values (new.id, v_available_at, v_available_at + interval '24 hours')
   on conflict (notification_id) do nothing;
   return new;
 end;

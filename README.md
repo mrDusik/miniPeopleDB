@@ -516,3 +516,26 @@ Estos scripts son exclusivamente para el proyecto Supabase **miniPeopleDB_prueba
 Ambos scripts usan transacciones. El insert rechaza una segunda ejecucion o colisiones de UUID/correo: ejecuta primero el rollback para volver a poblar. El rollback se puede repetir, pero rechaza UUIDs de usuarios ajenos y regalos de los ficticios a cuentas no ficticias, para no dejar sus Bricks incoherentes. Si hay un error y SQL Editor conserva la transaccion abierta, ejecuta `ROLLBACK;` antes de continuar. No se necesitan claves de servicio.
 
 La prueba de `test/supabase.test.js` ejecuta estos SQL con PostgreSQL embebido (PGlite), usa el mock de Supabase para validar los repositorios y compara gamificacion con el calculo real de la app. Verifica tambien reejecucion, colisiones, Top 10 y conservacion de las cuentas originales. No ejecuta cambios en Supabase remoto ni sustituye la validacion del esquema Auth de tu proyecto.
+
+### Limpieza de cuentas antes de abrir el registro
+
+`npm run cleanup:launch-users` es una operación puntual: conserva las cuentas `davidcardenas`, `mrDusik` y `onichan` y sus colecciones; elimina **todas** las demás cuentas de Auth y sus datos en cascada, incluidas las cuentas sin perfil. Retira regalos, agradecimientos y sus avisos, y recalcula Bricks, niveles y logros con el catálogo V2 a partir de las colecciones y relaciones que quedan.
+
+El semanal pierde las capturas desde el domingo de referencia inclusive (hora de Madrid), sus puestos guardados y el aviso de disponibilidad de esa semana. Las capturas anteriores de las tres cuentas se conservan. El semanal volverá a estar disponible cuando el trabajo diario produzca una nueva base dominical y una captura comparable; no se fabrican capturas ni se cambia la fecha de activación de V2.
+
+1. Ensaya primero en una copia aislada. Para el corte real, impide las altas en Supabase Auth y pausa el cron y las escrituras de la app (consulta el [runbook de mantenimiento](./docs/gamificacion-v2-runbook.md#antes-del-corte)). Espera a que termine cualquier trabajo de analítica y verifica una copia de seguridad restaurable que incluya Auth.
+2. Desde la raíz del proyecto, configura `SUPABASE_DB_URL` en el entorno con la conexión PostgreSQL del Dashboard, usando el rol propietario y TLS verificado. La URL admite `sslmode=verify-full` y `sslrootcert` con la ruta al certificado CA (si es relativa, se resuelve desde el directorio de ejecución). El script no carga archivos `.env` por sí solo ni usa claves de API. Comprueba el identificador de proyecto y ejecuta la simulación de solo lectura:
+
+   ```powershell
+   npm.cmd run cleanup:launch-users -- --confirm-project PROJECT_REF
+   ```
+
+   Si la variable está en un archivo aparte, puedes cargarlo con Node, por ejemplo: `node --env-file=.\supProd.env .\scripts\cleanup-launch-users.js --confirm-project PROJECT_REF`. Las variables ya definidas en la terminal tienen prioridad.
+
+3. Revisa los UUID de las tres cuentas, la **lista completa de cuentas que se borrarán**, el antes/después de gamificación y el corte semanal. Si hay una sola cuenta que no puedas identificar como prueba, no apliques el plan. Copia la `huella` de la simulación revisada y, manteniendo el cierre de altas y escrituras, ejecuta:
+
+   ```powershell
+   npm.cmd run cleanup:launch-users -- --confirm-project PROJECT_REF --apply --confirm-plan HUELLA --confirm-backup --confirm-maintenance
+   ```
+
+   La transacción comprueba la huella al tomar los bloqueos; si cambia el plan, aborta sin borrar. Retira las relaciones de amistad y la gamificación de las cuentas descartadas antes de borrar sus filas de Auth, para que el ranking no intente volver a incluirlas durante el borrado en cascada. Antes de reabrir el registro, verifica que `aplicado` sea `true`, que queden solo las tres cuentas y que sus colecciones y gamificación se muestren correctamente. No vuelvas a generar y aplicar un plan una vez abierto el registro: borraría también las cuentas reales nuevas.
