@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eliminar tu cuenta de MiniPeopleDB</title>
+  <link rel="stylesheet" href="/privacidad.css">
+  <script src="/solicitud-borrado.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Eliminar tu cuenta de MiniPeopleDB</h1>
+  <p>Solicita la eliminación de tu cuenta y sus datos asociados sin instalar la app ni iniciar sesión. Soporte te indicará cómo verificar la titularidad. Si no puedes acceder a tu cuenta, te orientará hacia la recuperación.</p>
+  <p>El plazo de tramitación es de <strong>7 días desde la verificación de la titularidad</strong>, no desde el envío del formulario. Enviar la solicitud no elimina la cuenta.</p>
+  <p>El borrado incluye la cuenta de acceso a MiniPeopleDB, el perfil, los avatares subidos, las preferencias, la colección, el historial y los datos de progreso, amistad, notificaciones y registro push asociados. El correo de soporte y los registros técnicos se conservan para el seguimiento y la operación del servicio según los plazos descritos en la <a href="/privacidad">política de privacidad</a>.</p>
+  <p id="solicitud-ayuda">No envíes contraseñas, códigos, tokens ni documentos de identidad.</p>
+  <form id="solicitud-borrado" method="post" action="/api/solicitar-borrado" aria-describedby="solicitud-ayuda" hidden>
+    <label for="solicitud-email">Correo de respuesta</label>
+    <input id="solicitud-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+    <label for="solicitud-username">Username (opcional)</label>
+    <input id="solicitud-username" name="username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}">
+    <button type="submit">Enviar solicitud</button>
+  </form>
+  <p id="solicitud-estado" role="status"></p>
+  <p>Si no puedes usar el formulario, <a href="mailto:mrdusik.gh@gmail.com?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20cuenta%20MiniPeopleDB">solicita el borrado por correo</a>.</p>
+  <p><a href="/">Volver a MiniPeopleDB</a></p>
+</main>
+</body>
+</html>

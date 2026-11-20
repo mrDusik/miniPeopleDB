@@ -133,7 +133,7 @@ export class NotificacionesRepository {
         type: row.type,
         createdAt: new Date(row.created_at).toISOString(),
         isRead: row.is_read === true,
-        data: publicData(row.type, row.payload),
+        data: row.type === 'friend_request' && row.social_request_id == null ? {} : publicData(row.type, row.payload),
         ...(row.type === 'gift_received' ? { canThank: row.gift_thanked_at == null } : {}),
         ...(row.type === 'friend_request' ? {
           accepted: row.social_request_accepted === true,

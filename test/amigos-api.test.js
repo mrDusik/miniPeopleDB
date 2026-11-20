@@ -102,11 +102,11 @@ test('el rechazo elimina la solicitud y permite reenviar antes de aceptar', asyn
     assert.equal(staleAccept.status, 404);
     assert.deepEqual(await staleAccept.json(), { error: 'SOLICITUD_NO_ENCONTRADA' });
     assert.deepEqual((await (await receiver(`${context.baseUrl}/api/amigos?tipo=received`)).json()).users, []);
-    assert.deepEqual(mock.rows('notificaciones', USER_B), [{ ...originalNotification, social_request_id: null }]);
+    assert.deepEqual(mock.rows('notificaciones', USER_B), [{ ...originalNotification, social_request_id: null, payload: {} }]);
     const inboxAfterReject = await (await receiver(`${context.baseUrl}/api/notificaciones`)).json();
     assert.equal(inboxAfterReject.notifications.length, 1);
     assert.equal(inboxAfterReject.notifications[0].id, originalNotification.id);
-    assert.equal(inboxAfterReject.notifications[0].data.user, 'SpaceFan');
+    assert.deepEqual(inboxAfterReject.notifications[0].data, {});
     assert.equal(inboxAfterReject.notifications[0].canAccept, false);
     assert.equal((await receiver(`${context.baseUrl}/api/notificaciones/${originalNotification.id}/aceptar`, { method: 'POST' })).status, 404);
     assert.deepEqual((await (await sender(`${context.baseUrl}/api/amigos?tipo=sent`)).json()).users, []);
@@ -121,6 +121,7 @@ test('el rechazo elimina la solicitud y permite reenviar antes de aceptar', asyn
     assert.equal(request.status, 'pending');
     assert.notEqual(request.requestId, rejectedRequestId);
     assert.deepEqual(mock.rows('notificaciones', USER_B).map(({ social_request_id }) => social_request_id), [null, request.requestId]);
+    assert.equal(mock.rows('notificaciones', USER_B)[1].payload.user, 'SpaceFan');
     assert.deepEqual((await (await receiver(`${context.baseUrl}/api/amigos?tipo=received`)).json()).users.map(({ status }) => status), ['pending']);
 
     const accepted = await receiver(`${context.baseUrl}/api/amigos/solicitudes/${request.requestId}/aceptar`, { method: 'POST' });

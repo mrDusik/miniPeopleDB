@@ -20,12 +20,17 @@ export function createResendContactMailer({
   recipientEmail,
   fetchImpl = globalThis.fetch,
 } = {}) {
-  return async function sendContactEmail({ email = null, username = null, message } = {}) {
+  return async function sendContactEmail({ email = null, username = null, message, kind } = {}) {
     if (!apiKey || !fromEmail || !recipientEmail || typeof fetchImpl !== 'function') {
       throw new ContactEmailUnavailableError();
     }
 
-    const text = [
+    const deletion = kind === 'account-deletion';
+    const text = deletion ? [
+      'Solicitud de eliminación de cuenta de MiniPeopleDB. Verificar la titularidad antes de tramitarla.',
+      `Correo de respuesta: ${email}`,
+      `Usuario declarado: ${username || 'No proporcionado'}`,
+    ].join('\n') : [
       'Nuevo mensaje desde el formulario de contacto de MiniPeopleDB.',
       `Email: ${email || 'No proporcionado'}`,
       `Usuario: ${username || 'No proporcionado'}`,
@@ -36,7 +41,7 @@ export function createResendContactMailer({
     const payload = {
       from: fromEmail,
       to: [recipientEmail],
-      subject: 'Contacto desde MiniPeopleDB',
+      subject: deletion ? 'Solicitud de eliminación de cuenta de MiniPeopleDB' : 'Contacto desde MiniPeopleDB',
       text,
       ...(email ? { reply_to: email } : {}),
     };

@@ -761,7 +761,10 @@ export function createSupabaseMock({ users = {}, passwords = {}, passwordSignInE
         if (failure) return { data: null, error: failure };
         for (const notification of tables.notificaciones) {
           if (notification.type === 'friend_request' && notification.social_request_id === request.id
-            && notification.user_id === uid) notification.social_request_id = null;
+            && notification.user_id === uid) {
+            notification.social_request_id = null;
+            notification.payload = {};
+          }
         }
         tables.friend_requests = tables.friend_requests.filter((row) => row !== request);
         rebuildSocialGamification(request.sender_id);

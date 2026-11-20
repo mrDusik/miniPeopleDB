@@ -76,6 +76,8 @@
         </form>
         <button data-i18n="auth.forgotPassword" type="button" id="open-password-recovery" class="auth-text-button">He olvidado mi contraseña</button>
         <button data-i18n="common.contact" type="button" id="open-contact-auth" class="auth-text-button">Contacto</button>
+        <a class="auth-text-button" data-privacy-link data-i18n="common.privacyPolicy" href="/privacidad">Política de privacidad</a>
+        <p class="status error privacy-link-status" role="status"></p>
       </div>
       <form id="password-recovery-form" class="auth-form" hidden>
         <label>
@@ -211,6 +213,8 @@
       </div>
     </form>
     <div class="profile-account-actions">
+      <a data-privacy-link data-i18n="common.privacyPolicy" href="/privacidad">Política de privacidad</a>
+      <p class="status error privacy-link-status" role="status"></p>
       <button data-i18n="profile.deleteAccount" type="button" id="open-delete-account" class="logout-link" hidden>Eliminar cuenta</button>
     </div>
   </dialog>

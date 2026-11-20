@@ -794,6 +794,32 @@ test('acepta solicitudes desde la bandeja sin leerlas, duplica eventos ni permit
   }
 });
 
+test('el historial de rechazo no muestra al emisor ni permite aceptar; el reenvío sí', async () => {
+  const history = createNotification('rejected-1', 'Grace', true, {
+    type: 'friend_request', data: {}, accepted: false, canAccept: false,
+  });
+  const resend = createNotification('resent-1', 'Grace', false, {
+    type: 'friend_request', data: { user: 'Grace' }, accepted: false, canAccept: true,
+  });
+  const { dom, window } = startApp({
+    initialPage: { notifications: [history, resend], unreadCount: 1, nextCursor: null },
+  });
+  try {
+    await tick();
+    await tick();
+    const row = window.document.querySelector('[data-notification-id="rejected-1"]');
+    assert.equal(row.querySelector('.notification-message').textContent, 'Solicitud de amistad rechazada.');
+    assert.doesNotMatch(row.textContent, /Grace/);
+    assert.equal(row.querySelector('.notification-accept-friend'), null);
+    assert.equal(row.classList.contains('is-read'), true);
+    const resent = window.document.querySelector('[data-notification-id="resent-1"]');
+    assert.match(resent.textContent, /Grace/);
+    assert.equal(resent.querySelector('.notification-accept-friend').disabled, false);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('la aceptación de amistad destaca el username como texto seguro en negrita', async () => {
   const username = '<b>Collector</b>';
   const accepted = createNotification('accepted-1', username, false, {

@@ -403,8 +403,9 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .user-profile-dialog { width: min(520px, calc(100% - 32px)); max-height: min(760px, calc(100dvh - 32px)); overflow: hidden; }
 .user-profile-dialog[open] { display: flex; flex-direction: column; }
 #user-profile-dialog .profile-account-actions { flex-shrink: 0; }
-.profile-account-actions { display: flex; justify-content: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
-.profile-account-actions:has(> [hidden]) { display: none; }
+.profile-account-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.profile-account-actions .privacy-link-status { flex-basis: 100%; text-align: center; }
+.privacy-link-status:empty { display: none; }
 #open-delete-account { font-size: 0.75rem; }
 .profile-dialog-heading { margin-bottom: 12px; }
 .profile-dialog-heading h2 { margin: 0; }

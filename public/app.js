@@ -450,6 +450,19 @@ let authCallbackPending = false;
 let authCallbackTimeoutId = null;
 let passwordRecoveryPending = false;
 const nativeAuth = window.NativeAuth?.isNative() ? window.NativeAuth : null;
+for (const link of document.querySelectorAll('[data-privacy-link]')) {
+  link.href = apiUrl('/privacidad');
+  if (nativeAuth) link.addEventListener('click', async (event) => {
+    event.preventDefault();
+    const status = link.nextElementSibling;
+    setMessage(status, '');
+    try {
+      await nativeAuth.openBrowser(link.href);
+    } catch {
+      setMessage(status, tr('common.privacyPolicyOpenError'));
+    }
+  });
+}
 const nativePush = window.NativePush?.isNative() ? window.NativePush : null;
 let nativePushRegistration = null;
 let pendingPushNotificationId = null;
@@ -3009,10 +3022,18 @@ function appendNotificationBrick(container) {
   container.append(icon);
 }
 
+function isRejectedFriendRequest(notification) {
+  return notification.type === 'friend_request' && notification.canAccept === false && notification.accepted === false;
+}
+
 function renderNotificationMessage(notification) {
   const data = notification.data ?? {};
   const message = document.createElement('p');
   message.className = 'notification-message';
+  if (isRejectedFriendRequest(notification)) {
+    bindI18n(message, 'text', () => t('notifications.friendRequestRejected'));
+    return message;
+  }
   const genericKeys = {
     friend_request: 'notifications.friendRequestGeneric',
     friend_request_accepted: 'notifications.friendAcceptedGeneric',
@@ -3155,7 +3176,7 @@ function renderNotifications({ updatedIds = notificationsItems.map(({ id }) => i
       openButton.append(rankingEmoji);
       actions.append(openButton);
     }
-    if (notification.type === 'friend_request') {
+    if (notification.type === 'friend_request' && !isRejectedFriendRequest(notification)) {
       const acceptButton = document.createElement('button');
       const isPending = notificationFriendAcceptRequests.has(notification.id);
       const isAccepted = notification.accepted === true || notification.canAccept === false;

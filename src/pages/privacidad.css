@@ -1,0 +1,9 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #faf8f3; color: #242424; font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 46rem; margin-inline: auto; padding: 1.25rem; overflow-wrap: anywhere; }
+h1, h2 { line-height: 1.2; }
+a { color: #004f8a; }
+form:not([hidden]) { display: grid; gap: .5rem; max-width: 30rem; }
+input, button { font: inherit; padding: .5rem; }
+button { justify-self: start; }
+[data-error] { color: #a00000; }

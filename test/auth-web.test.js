@@ -223,6 +223,29 @@ function makeNativeAuth({ launchUrl = null } = {}) {
   };
 }
 
+test('Acceso y Preferencias enlazan la política web y Android la abre fuera de Capacitor', async () => {
+  const nativeAuth = makeNativeAuth();
+  const web = startApp({ session: null });
+  const android = startApp({ session: null, url: 'https://localhost/', apiBaseUrl: 'https://app.example.test', nativeAuth });
+  try {
+    for (const selector of ['#auth-screen [data-privacy-link]', '#user-profile-dialog [data-privacy-link]']) {
+      assert.equal(web.$(selector).href, 'http://localhost/privacidad');
+      assert.equal(android.$(selector).href, 'https://app.example.test/privacidad');
+      android.$(selector).click();
+    }
+    assert.deepEqual(nativeAuth.openedUrls, ['https://app.example.test/privacidad', 'https://app.example.test/privacidad']);
+    await waitFor(() => !android.$('#auth-screen').hidden);
+    nativeAuth.openBrowser = async () => { throw new Error('Unavailable'); };
+    const link = android.$('#auth-screen [data-privacy-link]');
+    link.click();
+    await waitFor(() => link.nextElementSibling.textContent.includes('reintentar'));
+    assert.equal(android.window.location.href, 'https://localhost/');
+  } finally {
+    web.dom.window.close();
+    android.dom.window.close();
+  }
+});
+
 test('idioma se confirma al guardar sin perder filtros, contenido externo ni foco', async () => {
   let rejectSave = false;
   const { dom, window, $, requests } = startApp({

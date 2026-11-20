@@ -67,6 +67,13 @@ import {
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultCategoriasPath = resolve(projectRoot, 'data', 'categorias-brickset.json');
 const publicDirectory = resolve(projectRoot, 'public');
+const privacyPages = new Map([
+  ['/privacidad', 'privacidad.html'],
+  ['/eliminar-cuenta', 'eliminar-cuenta.html'],
+  ['/privacidad.css', 'privacidad.css'],
+  ['/solicitud-borrado.js', 'solicitud-borrado.js'],
+]);
+const deletionRequestPath = '/api/solicitar-borrado';
 const supabaseBrowserBundle = resolve(projectRoot, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js');
 const chartBundle = resolve(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 const protectedPath = /^\/(?:minifiguras(?:\/.*)?|gamificacion(?:\/dna|\/logros\/[^/]+\/destacado)?|valoracion(?:\/tipo-cambio)?|valor-total|sincronizacion\/brickset|api\/analytics\/history|api\/profile|api\/push\/registrations(?:\/[^/]+)?|api\/amigos(?:\/.*)?|api\/notificaciones(?:\/leer-todas|\/[^/]+\/(?:leer|agradecer|aceptar))?|api\/ranking(?:\/semanal(?:\/regalar)?|\/regalar|\/[^/]+\/logros)?)$/;
@@ -320,7 +327,10 @@ export function createServer({
   });
 
   app.use((request, response, next) => {
-    if (!maintenanceEnabled || (request.method === 'GET' && ['/health', '/health/push'].includes(request.path))) {
+    if (!maintenanceEnabled
+      || (request.method === 'GET' && ['/health', '/health/push'].includes(request.path))
+      || (['GET', 'HEAD'].includes(request.method) && privacyPages.has(request.path))
+      || (request.method === 'POST' && request.path === deletionRequestPath)) {
       next();
       return;
     }
@@ -388,6 +398,45 @@ export function createServer({
       setGamificationFeatured: (id, value) => gamificacionRepository.setFeatured(id, value),
     };
   }
+
+  for (const [path, file] of privacyPages) {
+    app.get(path, (_request, response) => {
+      response.set('X-Content-Type-Options', 'nosniff');
+      response.set('Referrer-Policy', 'no-referrer');
+      response.sendFile(resolve(projectRoot, 'src', 'pages', file));
+    });
+  }
+
+  app.post(deletionRequestPath, async (request, response) => {
+    response.set('cache-control', 'no-store');
+    let body;
+    try {
+      if (!request.is('application/json') || request.originalUrl.includes('?')) {
+        return sendJson(response, 400, { error: 'SOLICITUD_INVALIDA' });
+      }
+      body = await readJsonBody(request, 8192);
+    } catch {
+      return sendJson(response, 400, { error: 'SOLICITUD_INVALIDA' });
+    }
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    if (Object.keys(body).some((key) => key !== 'email' && key !== 'username')
+      || !isContactEmail(email)
+      || (Object.hasOwn(body, 'username') && typeof body.username !== 'string')
+      || (username && !isValidUsername(username))) {
+      return sendJson(response, 400, { error: 'SOLICITUD_INVALIDA' });
+    }
+    if (!allowContactSubmission(request.ip || request.socket.remoteAddress || 'unknown')) {
+      response.set('retry-after', String(CONTACT_SUBMISSION_WINDOW_MS / 1000));
+      return sendJson(response, 429, { error: 'CONTACTO_LIMITE_EXCEDIDO' });
+    }
+    try {
+      await sendContactEmail({ email, username: username || null, kind: 'account-deletion' });
+    } catch {
+      return sendJson(response, 503, { error: 'CONTACTO_NO_DISPONIBLE' });
+    }
+    return sendJson(response, 200, { ok: true });
+  });
 
   app.get('/vendor/supabase.js', (request, response) => {
     response.sendFile(supabaseBrowserBundle);
