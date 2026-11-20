@@ -25,33 +25,46 @@ El sistema SHALL permitir a una persona autenticada buscar usuarios por coincide
 
 ### Requirement: Gestionar solicitudes de amistad
 
-Una persona autenticada SHALL poder enviar una solicitud a otro usuario, pero SHALL NOT poder enviársela a sí misma, duplicar una solicitud activa, solicitar a un amigo confirmado ni reenviar directamente una solicitud rechazada. Tras revocar una solicitud propia pendiente o rechazada, SHALL poder iniciar una solicitud nueva al mismo usuario. El sistema SHALL conservar el emisor, receptor y estado de cada solicitud mientras exista. El emisor SHALL poder revocar sus solicitudes pendientes o rechazadas; la revocación SHALL retirar la solicitud de las listas de enviadas y recibidas, SHALL NOT permitir revocar una solicitud aceptada y SHALL NOT alterar amistades ni datos de colección. Una persona distinta del emisor SHALL NOT poder revocarla. La persona receptora SHALL poder rechazar una solicitud pendiente sin notificar al emisor; el rechazo SHALL permanecer consultable y la persona receptora SHALL poder aceptar más tarde esa misma solicitud. La aceptación desde la pestaña recibida o una notificación SHALL crear una única relación de amistad bidireccional y actualizar la solicitud a aceptada de forma atómica. Una misma acción repetida SHALL NOT duplicar relaciones ni notificaciones.
+Una persona autenticada SHALL poder enviar una solicitud a otro usuario, pero SHALL NOT poder enviársela a sí misma, duplicar una solicitud pendiente ni solicitar a un amigo confirmado. El sistema SHALL conservar el emisor, receptor y estado de cada solicitud mientras exista. El emisor SHALL poder revocar sus propias solicitudes pendientes e iniciar una solicitud nueva después; la revocación SHALL retirar la solicitud de ambas listas, SHALL NOT permitir revocar una solicitud aceptada y SHALL NOT alterar amistades ni datos de colección.
+
+La persona receptora SHALL poder rechazar una solicitud pendiente sin notificar al emisor. El rechazo SHALL eliminar la solicitud, pero conservar la notificación original en la bandeja del receptor, desvinculada y sin acción para aceptar. Después, el emisor SHALL poder enviar una nueva solicitud, con una referencia y una notificación nuevas. Rechazar SHALL NOT alterar una amistad ya aceptada. La aceptación desde la pestaña recibida o una notificación SHALL crear una única relación de amistad bidireccional y actualizar la solicitud a aceptada de forma atómica. Una misma acción repetida SHALL NOT duplicar relaciones ni notificaciones. Las operaciones SHALL ejecutarse con la identidad JWT autenticada y SHALL NOT usar `service_role`.
 
 #### Scenario: Enviar una solicitud válida
 - **WHEN** una persona envía una solicitud a otro usuario sin relación ni solicitud previa
 - **THEN** queda una solicitud pendiente y el receptor recibe una notificación
 
-#### Scenario: Impedir autorrelación y reenvío
-- **WHEN** se intenta solicitar amistad consigo mismo, con un amigo, con una solicitud existente o con una solicitud rechazada que no se ha revocado
+#### Scenario: Impedir autorrelación y solicitudes duplicadas
+- **WHEN** se intenta solicitar amistad consigo mismo, con un amigo o con una solicitud pendiente para la misma pareja
 - **THEN** la operación se rechaza sin crear otra solicitud ni alterar el estado existente
 
-#### Scenario: Revocar una solicitud enviada pendiente o rechazada
-- **WHEN** el emisor revoca una de sus solicitudes pendientes o rechazadas
+#### Scenario: Revocar una solicitud enviada pendiente
+- **WHEN** el emisor revoca una de sus solicitudes pendientes
 - **THEN** la solicitud deja de aparecer en sus solicitudes enviadas y en las solicitudes recibidas del destinatario
 - **AND** una consulta posterior del destinatario ya no muestra esa solicitud
 
 #### Scenario: Volver a solicitar después de revocar
-- **WHEN** una persona envía una solicitud nueva después de revocar la anterior, incluso si esta se había rechazado
+- **WHEN** una persona envía una solicitud nueva después de revocar la anterior
 - **THEN** se crea una solicitud pendiente nueva y el destinatario recibe una notificación
 
 #### Scenario: Impedir revocaciones ajenas o de solicitudes aceptadas
 - **WHEN** otra persona intenta revocar la solicitud o el emisor intenta revocar una solicitud aceptada
 - **THEN** la operación falla sin modificar la solicitud, la amistad, las notificaciones ni la gamificación
 
-#### Scenario: Rechazar y aceptar posteriormente
-- **WHEN** el receptor rechaza una solicitud pendiente y después decide aceptarla
-- **THEN** la misma solicitud pasa de rechazada a aceptada y ambos usuarios aparecen como amigos
+#### Scenario: Rechazar una solicitud
+- **WHEN** la persona receptora rechaza una solicitud pendiente
+- **THEN** la solicitud deja de existir y desaparece de ambas listas y de los contadores
+- **AND** la notificación original permanece en su bandeja como historial y ya no permite aceptar la solicitud
 - **AND** el rechazo no genera una notificación para el emisor
+
+#### Scenario: Reenviar después de un rechazo
+- **WHEN** el emisor vuelve a enviar una solicitud después de que la anterior haya sido rechazada
+- **THEN** se crea una solicitud pendiente con un identificador nuevo
+- **AND** el receptor recibe una nueva notificación
+- **AND** la notificación anterior sigue disponible sin estar vinculada a la solicitud nueva
+
+#### Scenario: Rechazar una solicitud aceptada
+- **WHEN** se intenta rechazar una solicitud ya aceptada
+- **THEN** la operación falla y la amistad permanece intacta
 
 #### Scenario: Botón para rechazar una solicitud
 - **WHEN** el modal Amigos muestra una solicitud recibida pendiente
@@ -64,9 +77,14 @@ Una persona autenticada SHALL poder enviar una solicitud a otro usuario, pero SH
 
 ### Requirement: Consultar listas de amistades y solicitudes
 
-El usuario autenticado SHALL poder consultar sus amistades confirmadas, solicitudes enviadas pendientes o rechazadas y solicitudes recibidas pendientes o rechazadas. La lista recibida SHALL conservar las rechazadas para permitir su aceptación posterior. Las consultas SHALL derivar la identidad del JWT y SHALL NOT aceptar un identificador de usuario objetivo. Un usuario SHALL aparecer como amigo de ambas partes solo después de aceptar la solicitud.
+El usuario autenticado SHALL poder consultar sus amistades confirmadas, solicitudes enviadas pendientes y solicitudes recibidas pendientes. Los rechazos no SHALL persistir ni aparecer en listas, resultados de búsqueda o contadores. Las consultas SHALL derivar la identidad del JWT y SHALL NOT aceptar un identificador de usuario objetivo. Un usuario SHALL aparecer como amigo de ambas partes solo después de aceptar la solicitud.
 
-Las filas devueltas SHALL incluir la misma proyección limitada de identidad y resumen de ranking que el Buscador, además del estado y referencia de solicitud cuando corresponda. Los totales de amistades, solicitudes enviadas y solicitudes recibidas SHALL consultarse mediante una operación autenticada sin selector de identidad; SHALL contar únicamente las relaciones de `auth.uid()` y, para solicitudes, estados pendiente y rechazado.
+Las filas devueltas SHALL incluir la misma proyección limitada de identidad y resumen de ranking que el Buscador, además del estado y referencia de solicitud cuando corresponda. Los totales de amistades, solicitudes enviadas y solicitudes recibidas SHALL consultarse mediante una operación autenticada sin selector de identidad; SHALL contar únicamente las relaciones de `auth.uid()` y, para solicitudes, el estado pendiente.
+
+#### Scenario: Consultar después de un rechazo
+- **WHEN** cualquiera de las personas consulta listas, búsqueda o contadores después del rechazo
+- **THEN** no aparece una solicitud para esa pareja y la relación aparece como `none`
+- **AND** el emisor puede enviar una solicitud nueva
 
 #### Scenario: Listar amistades confirmadas
 - **WHEN** el usuario consulta su lista de amigos
@@ -94,21 +112,21 @@ Las filas de Amigos, Buscador y solicitudes SHALL reutilizar la estructura y est
 - **AND** las solicitudes enviadas que no muestran acción SHALL NOT reservar una columna lateral vacía
 - **AND** los botones de aceptar y rechazar se alinean al borde derecho del listado sin reservar columnas vacías
 - **AND** en móvil portrait y Android, las acciones de una solicitud recibida pendiente se apilan en una columna; ambos botones tienen el mismo ancho de 60px y una altura minima tactil de 44px
-- **AND** el resumen del usuario aprovecha el espacio liberado y las solicitudes rechazadas conservan su estado junto al botón de aceptar
+- **AND** el resumen del usuario aprovecha el espacio liberado
 
 #### Scenario: Listar solicitudes por dirección y estado
 - **WHEN** el usuario consulta solicitudes enviadas o recibidas
-- **THEN** cada pestaña devuelve únicamente las solicitudes propias de esa dirección con estado pendiente o rechazado
+- **THEN** cada pestaña devuelve únicamente las solicitudes propias pendientes de esa dirección
 - **AND** una solicitud aceptada desaparece de ambas listas de solicitudes y aparece en ambas listas de amigos
 
 #### Scenario: Contar relaciones propias
 - **WHEN** un usuario consulta los contadores sociales
-- **THEN** obtiene solo sus totales de amigos, enviadas y recibidas, incluyendo solicitudes rechazadas y excluyendo aceptadas
+- **THEN** obtiene solo sus totales de amigos y de solicitudes pendientes enviadas y recibidas
 - **AND** una sesión ausente recibe `401` y los selectores de otra identidad se rechazan
 
 ### Requirement: Eliminar una amistad recíprocamente
 
-Cualquiera de los dos amigos SHALL poder eliminar una amistad confirmada mediante su JWT. La operacion SHALL eliminar atomicamente la relacion canonica y su solicitud aceptada, con sus notificaciones vinculadas por cascada; SHALL permitir nuevas solicitudes entre ambos despues. SHALL NOT eliminar solicitudes pendientes o rechazadas, modificar colecciones ni regalos, generar una nueva notificacion de eliminacion ni permitir que terceros alteren la relacion. A diferencia de V1, SHALL actualizar la gamificacion de ambos participantes conforme a los requisitos vigentes de logros V2. Repetir la eliminacion SHALL ser idempotente y aceptar tarde la antigua solicitud SHALL NOT recrear la amistad.
+Cualquiera de los dos amigos SHALL poder eliminar una amistad confirmada mediante su JWT. La operacion SHALL eliminar atomicamente la relacion canonica y su solicitud aceptada, con sus notificaciones vinculadas por cascada; SHALL permitir nuevas solicitudes entre ambos despues. SHALL NOT eliminar solicitudes pendientes, modificar colecciones ni regalos, generar una nueva notificacion de eliminacion ni permitir que terceros alteren la relacion. A diferencia de V1, SHALL actualizar la gamificacion de ambos participantes conforme a los requisitos vigentes de logros V2. Repetir la eliminacion SHALL ser idempotente y aceptar tarde la antigua solicitud SHALL NOT recrear la amistad.
 
 #### Scenario: Eliminar desde cualquiera de las dos cuentas
 - **WHEN** uno de los amigos confirma la eliminacion
@@ -151,14 +169,14 @@ Todo usuario autenticado SHALL poder consultar el perfil resumido de otro usuari
 
 ### Requirement: Reflejar las relaciones vigentes en los logros V2
 
-Cada envio, rechazo, aceptacion o eliminacion confirmado SHALL actualizar las fuentes y consecuencias de gamificacion V2 de los participantes afectados antes de exponer la operacion como completada. SHALL distinguir emisor y receptor de solicitudes aceptadas para First contact y Handshake; no SHALL contar rechazadas como pendientes a efectos de logros aunque las listas existentes las conserven. Los hitos de amigos SHALL contar relaciones aceptadas actuales. Los reintentos y las operaciones concurrentes SHALL NOT duplicar cantidades, Bricks ni notificaciones. La eliminacion de cuenta SHALL retirar tambien las contribuciones de amistad a la cuenta superviviente cuando proceda, sin borrar sus otros datos.
+Cada envio, rechazo, aceptacion o eliminacion confirmado SHALL actualizar las fuentes y consecuencias de gamificacion V2 de los participantes afectados antes de exponer la operacion como completada. SHALL distinguir emisor y receptor de solicitudes aceptadas para First contact y Handshake; las solicitudes eliminadas por rechazo no SHALL contar como pendientes a efectos de logros. Los hitos de amigos SHALL contar relaciones aceptadas actuales. Los reintentos y las operaciones concurrentes SHALL NOT duplicar cantidades, Bricks ni notificaciones. La eliminacion de cuenta SHALL retirar tambien las contribuciones de amistad a la cuenta superviviente cuando proceda, sin borrar sus otros datos.
 
 Estas mutaciones SHALL seguir usando JWT y operaciones acotadas a la relacion autorizada; recalcular los efectos sobre el otro participante SHALL NOT conceder acceso global ni permitir elegir cuentas arbitrarias. Los fallos SHALL conservar un estado coherente de relacion y gamificacion, no confirmar parcialmente recompensas.
 
 #### Scenario: Solicitud enviada y rechazada
 - **WHEN** se envia la unica solicitud de A y B la rechaza
 - **THEN** A obtiene First contact al enviarla y lo pierde al rechazarse si no tiene otra fuente vigente
-- **AND** la solicitud rechazada sigue consultable y aceptable conforme al contrato existente
+- **AND** la solicitud rechazada deja de existir y no se puede aceptar
 
 #### Scenario: Aceptacion desde cualquier vista
 - **WHEN** B acepta desde Amigos o Notificaciones una solicitud de A
