@@ -56,6 +56,8 @@ El username SHALL ser obligatorio, cumplir exactamente `/^[a-zA-Z0-9_]{3,20}$/` 
 
 El onboarding SHALL permitir establecer avatar, moneda, idioma y categorías favoritas. La configuración de usuario SHALL permitir actualizar esos mismos campos posteriormente. El avatar SHALL cargarse desde el dispositivo con botón Cargar y vista previa local, aceptando PNG/JPEG/WebP de hasta 2 MiB; solo Guardar SHALL subir el archivo y persistir su URL HTTP/HTTPS. Las URLs anteriores SHALL seguir siendo compatibles y podrá mantenerse la imagen del proveedor si no hay avatar personalizado. Euro y Dólar SHALL ser las únicas monedas activas. Los idiomas admitidos SHALL seguir los disponibles en la capacidad de internacionalización vigente. Las favoritas SHALL corresponder al catálogo vigente y admitir de cero a tres categorías.
 
+El nombre accesible y las etiquetas del formulario SHALL seguir el idioma activo.
+
 #### Scenario: Formulario compacto y selección visible
 - **WHEN** se abre Preferencias o el onboarding
 - **THEN** la primera fila contiene Username y avatar con Cargar/vista previa, la segunda Idioma y Moneda y la tercera el selector de categorías
@@ -72,6 +74,7 @@ El onboarding SHALL permitir establecer avatar, moneda, idioma y categorías fav
 - **WHEN** el usuario guarda un avatar válido, moneda EUR o USD, un idioma admitido y entre cero y tres categorías existentes
 - **THEN** el sistema persiste las preferencias y las muestra al volver a abrir la configuración
 - **AND** el avatar actualizado se refleja en la sesión y en la proyección pública existente donde corresponda
+- **AND** el idioma confirmado se aplica a la interfaz y se recupera en futuras sesiones
 
 #### Scenario: Opciones futuras no seleccionables
 - **WHEN** el usuario abre los selectores de moneda e idioma
@@ -89,6 +92,10 @@ El onboarding SHALL permitir establecer avatar, moneda, idioma y categorías fav
 
 #### Scenario: Moneda no soportada
 - **WHEN** una petición intenta guardar una moneda distinta de `EUR` o `USD`
+- **THEN** la API y la persistencia rechazan el valor sin guardar parcialmente el resto de preferencias
+
+#### Scenario: Idioma no soportado
+- **WHEN** una petición de perfil intenta guardar un idioma no admitido por la capacidad de internacionalización, incluido un valor vacío o nulo
 - **THEN** la API y la persistencia rechazan el valor sin guardar parcialmente el resto de preferencias
 
 ### Requirement: Acceder y guardar la configuración de usuario

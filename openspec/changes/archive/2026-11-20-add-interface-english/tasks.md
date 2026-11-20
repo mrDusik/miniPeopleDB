@@ -40,10 +40,8 @@
 
 - [x] 6.1 Actualizar README y la documentacion existente de despliegue/Android con idiomas disponibles, selector, momento de aplicacion, exclusiones, catalogos y migracion previa del perfil; verificar que las instrucciones coinciden con los comandos y recursos implementados.
 - [x] 6.2 Ejecutar una seleccion conjunta de tests Node que cubra internacionalizacion, perfil API/PGlite, autenticacion, inventario/filtros, gamificacion, ranking/social, notificaciones, analitica y confirmacion Android afectadas; verificar cobertura representativa de cada area y todos los escenarios nuevos, ampliando a `npm test` solo si los resultados indican riesgo de regresion transversal.
-- [ ] 6.3 Validar ambos idiomas en navegador de escritorio y viewport smartphone, incluyendo Preferencias, rankings, logros, errores, texto largo y tooltips; verificar visualmente ausencia de solapamiento/recorte y funcionamiento de teclado, foco y retorno de los modales.
+- [x] 6.3 Validar ambos idiomas en navegador de escritorio y viewport smartphone, incluyendo Preferencias, rankings, logros, errores, texto largo y tooltips; verificar visualmente ausencia de solapamiento/recorte y funcionamiento de teclado, foco y retorno de los modales.
 - [x] 6.4 Ejecutar `openspec validate add-interface-english --strict` y contrastar el resultado implementado con cada requisito/escenario del cambio; verificar que no quedan claves ausentes, areas sin traducir fuera de exclusiones ni tareas marcadas sin evidencia.
-
-## Evidencia y cierre pendiente
 
 ## 7. Incorporar italiano y francés
 
@@ -51,9 +49,11 @@
 - [x] 7.2 Ampliar la validación de perfil, el mock, el esquema Supabase y una migración incremental; verificar guardado válido, rechazo de códigos no soportados y rollback.
 - [x] 7.3 Documentar la disponibilidad y el orden de migraciones, y verificar que ambos catálogos se sirven y empaquetan para Android.
 
+## Evidencia de validación
+
 - Seleccion integrada de 18 archivos: 365 pruebas, 362 correctas y tres fallos preexistentes reproducidos con los recursos de `HEAD` (`a985b8c`): orden de segmentos DNA y dos aserciones de selectores CSS en `design-system.test.js`. No se han modificado esos comportamientos ajenos al cambio ni se presenta la suite como completamente verde.
 - Los tests de catalogos verifican paridad de claves y parametros, plurales y las descripciones de los 115 logros vigentes. Los tests de perfil y migracion usan el mock compartido y PGlite. La prueba de recursos construye y comprueba el paquete Android real.
 - `npm run android:web` y `openspec validate add-interface-english --strict` ejecutados correctamente.
 - Navegador con backend sintetico, escritorio 1440x1000 y smartphone 375x812: Preferencias ES/EN, guardado, formatos, filtros conservados, rankings, logros con nombres largos, DNA, tooltips y fallo HTTP con reintento. Se corrigieron desbordamientos de botones y encabezado de Logros y la sustitucion incorrecta de un error DNA por datos anteriores al cambiar idioma.
-- La tarea 6.3 permanece abierta: las capturas y los eventos de entrada del navegador integrado dejaron de reflejar consistentemente el DOM. Falta completar la comprobacion visual final y el recorrido con teclado nativo; las pruebas automatizadas de foco, Escape y retorno de modales pasan, pero no sustituyen esa comprobacion.
-- No se ha aplicado SQL remoto, desplegado ni archivado el cambio. Aplicar `supabase/interface-languages.sql` antes de desplegar.
+- El propietario confirmó el 20 de noviembre de 2026 que completó la comprobación visual y de teclado de la tarea 6.3. No se repitió la prueba al cerrar la tarea.
+- El cierre de la tarea 6.3 no acredita el despliegue ni la aplicación de `supabase/interface-languages.sql` en un entorno remoto.
