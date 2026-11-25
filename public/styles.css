@@ -504,7 +504,7 @@ tbody tr:hover { background: rgba(255, 253, 248, 0.95); }
 .set-purchase-date { grid-column: 2; grid-row: 1; }
 .set-create-empty { grid-column: 1 / -1; grid-row: 2; margin: 0; color: var(--muted); font: 0.9rem var(--font-body); }
 .set-create-heading[hidden], .set-create-empty[hidden], #set-purchase-date-label[hidden], #set-minifigures-wrap[hidden] { display: none; }
-.set-minifigures-wrap { grid-column: 1 / -1; grid-row: 3; max-height: 50vh; overflow: auto; }
+#form-dialog.set-create-mode .set-minifigures-wrap { grid-column: 1 / -1; grid-row: 3; max-height: 50vh; overflow: auto; }
 #set-create-error { grid-column: 1 / -1; grid-row: 4; }
 .set-minifigures-table { min-width: 760px; table-layout: auto; }
 .set-minifigures-table th, .set-minifigures-table td { padding: 8px 10px; }
