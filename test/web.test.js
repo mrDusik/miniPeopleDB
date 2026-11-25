@@ -2606,6 +2606,25 @@ test('la fecha de actualización del valor solo cambia cuando cambia el total', 
   dom.window.close();
 });
 
+test('la lista de figuras de un set conserva desplazamiento vertical en los diseños responsivos', async () => {
+  const styles = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const dom = new JSDOM(`<style>${styles}</style>`);
+  try {
+    const rules = [...dom.window.document.styleSheets[0].cssRules];
+    const selector = '#form-dialog.set-create-mode .set-minifigures-wrap';
+    const base = rules.find((rule) => rule.selectorText === selector);
+    assert.ok(base, 'El contenedor del set debe prevalecer sobre las reglas generales de tablas');
+    assert.equal(base.style.getPropertyValue('overflow'), 'auto');
+    const mobile = rules.flatMap((rule) => rule.cssRules ? [...rule.cssRules] : [])
+      .find((rule) => rule.selectorText === selector);
+    assert.ok(mobile);
+    assert.equal(mobile.style.getPropertyValue('overflow-x'), 'hidden');
+    assert.notEqual(mobile.style.getPropertyValue('overflow-y'), 'hidden');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('el modo Añadir por set distingue resultados de búsqueda, permite reintentar y cerrar', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = await readSessionScript();
