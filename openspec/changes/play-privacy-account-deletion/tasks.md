@@ -23,5 +23,5 @@
 
 ## 5. Validación y publicación
 
-- [ ] 5.1 Documentar el despliegue y el procedimiento de soporte; tras el despliegue autorizado, verificar ambas URL sin sesión, la recepción de una solicitud de prueba y los recorridos de titularidad verificada, pérdida de acceso y borrado con cuentas de prueba autorizadas.
+- [x] 5.1 Documentar el despliegue y el procedimiento de soporte; tras el despliegue autorizado, verificar ambas URL sin sesión, la recepción de una solicitud de prueba y los recorridos de titularidad verificada, pérdida de acceso y borrado con cuentas de prueba autorizadas.
 - [ ] 5.2 Con aprobación del propietario y comprobaciones previas superadas, registrar las URL de privacidad y borrado en los campos correspondientes de Play Console y verificar que ambas quedan guardadas y apuntan a páginas públicas funcionales.
