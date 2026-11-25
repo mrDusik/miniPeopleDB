@@ -28,4 +28,4 @@
 
 - [x] 5.1 Actualizar `AGENTS.md` (persistencia de minifiguras/gamificación en Supabase; categorías en JSON local) y `README.md` (variables `SUPABASE_*`, configuración del proveedor Google y Redirect URLs); verificar revisando el diff
 - [x] 5.2 Ejecutar `npm test` completo sin `sup.env` ni variables `SUPABASE_*` y verificar que todo pasa; ejecutar `git diff --check`
-- [ ] 5.3 Prueba manual: arrancar el servidor con credenciales reales, iniciar sesión con Google, crear/editar/borrar una minifigura y comprobar en Supabase que las filas llevan el `user_id` del usuario
+- [x] 5.3 Prueba manual: arrancar el servidor con credenciales reales, iniciar sesión con Google, crear/editar/borrar una minifigura y comprobar en Supabase que las filas llevan el `user_id` del usuario

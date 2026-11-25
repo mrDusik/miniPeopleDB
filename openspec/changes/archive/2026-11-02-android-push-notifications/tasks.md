@@ -28,7 +28,7 @@
 ## 5. End-to-end verification
 
 - [x] 5.1 Run the full automated suite and Android build; verify existing web/in-app/Realtime behavior, authenticated inbox access, and notification action/read contracts remain unchanged.
-- [ ] 5.2 Exercise the end-to-end matrix for app foreground, background, process terminated, logged out, permission denied, offline/reconnect, duplicate delivery, expired push, and invalid token; verify the durable inbox recovers every persisted notification independently of FCM.
+- [x] 5.2 Exercise the end-to-end matrix for app foreground, background, process terminated, logged out, permission denied, offline/reconnect, duplicate delivery, expired push, and invalid token; verify the durable inbox recovers every persisted notification independently of FCM.
 
 ## 6. Preferencias de notificaciones del sistema
 
